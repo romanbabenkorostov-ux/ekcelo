@@ -297,16 +297,16 @@ async function addLocalPhoto(file) {
 // ─────────────────────────────────────────────────────────────────────────────
 // ЯНДЕКС.ДИСК
 //
-// Принцип: НЕ скачиваем бинарные файлы вообще.
-//   1. API Яндекс.Диска отдаёт GPS прямо в метаданных (item.exif.gps_latitude/lon)
-//   2. <img src="item.file"> работает кросс-доменно — браузер грузит картинки без CORS
-//   3. item.preview — готовый маленький превью-URL от Яндекса
-//   Итог: 0 бинарных запросов, 0 CORS-ошибок, мгновенная загрузка.
+// Принцип:
+//   1. API отдаёт GPS в item.exif и preview-URL в item.preview (нужен &preview_size=L)
+//   2. Превью показываем через <img src="item.preview"> — работает кросс-доменно
+//   3. Полный размер для лайтбокса — ленивый запрос /resources/download (1 запрос при клике)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Несколько прокси для API-запроса (только метаданные, ~1 КБ на файл)
+let ydPublicKey = ''; // сохраняем для ленивой загрузки download-URL
+
 const API_PROXIES = [
-  url => url,                                               // напрямую (иногда работает)
+  url => url,
   url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
   url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
 ];
@@ -316,53 +316,56 @@ async function fetchWithFallback(url) {
     try {
       const res = await fetch(proxy(url), { signal: AbortSignal.timeout(8000) });
       if (res.ok) return res;
-    } catch (e) { /* попробуем следующий */ }
+    } catch (e) { /* следующий прокси */ }
   }
   throw new Error('Все прокси недоступны');
+}
+
+// Получить прямую ссылку для скачивания конкретного файла (вызывается лениво при открытии лайтбокса)
+async function fetchDownloadUrl(publicKey, path) {
+  try {
+    const apiUrl = 'https://cloud-api.yandex.net/v1/disk/public/resources/download'
+      + `?public_key=${encodeURIComponent(publicKey)}&path=${encodeURIComponent(path)}`;
+    const res  = await fetchWithFallback(apiUrl);
+    const data = await res.json();
+    return data.href || null;
+  } catch (e) { return null; }
 }
 
 async function loadFromYandexDisk() {
   const statusEl  = document.getElementById('yd-status');
   const ydBtn     = document.getElementById('yd-btn');
-  const publicKey = document.getElementById('yd-url').value.trim();
+  ydPublicKey     = document.getElementById('yd-url').value.trim();
 
-  if (!publicKey) { statusEl.textContent = 'Введите ссылку на папку'; return; }
+  if (!ydPublicKey) { statusEl.textContent = 'Введите ссылку на папку'; return; }
 
   ydBtn.disabled = true;
   setProgress(2);
 
-  // ── 1. Получаем список файлов через API ────────────────────────────────────
-  // Запрашиваем только нужные поля чтобы ответ был компактным
-  const FIELDS = '_embedded.items.name,_embedded.items.file,_embedded.items.preview,'
-               + '_embedded.items.size,_embedded.items.type,_embedded.items.exif,'
-               + '_embedded.items.media_type,_embedded.total';
-
-  let allItems = [];
-  let offset = 0, limit = 100;
-
+  // ── 1. Список файлов с превью и GPS ───────────────────────────────────────
+  // &preview_size=L — обязательно, иначе item.preview будет пустым
+  // &path=/ в полях — нужен для ленивого /resources/download
+  let allItems = [], offset = 0, limit = 100;
   statusEl.textContent = 'Получаем список файлов…';
 
   try {
     while (true) {
       const apiUrl = 'https://cloud-api.yandex.net/v1/disk/public/resources'
-        + `?public_key=${encodeURIComponent(publicKey)}`
-        + `&limit=${limit}&offset=${offset}&fields=${encodeURIComponent(FIELDS)}`;
+        + `?public_key=${encodeURIComponent(ydPublicKey)}`
+        + `&limit=${limit}&offset=${offset}&preview_size=L&preview_crop=false`;
 
       const res  = await fetchWithFallback(apiUrl);
       const data = await res.json();
-
       if (data.error) throw new Error(data.description || data.error);
 
       const items = (data._embedded?.items || [])
         .filter(i => i.type === 'file' && /\.(jpg|jpeg)$/i.test(i.name));
-
       allItems.push(...items);
 
       const total = data._embedded?.total ?? 0;
       offset += limit;
       statusEl.textContent = `Сканируем: ${allItems.length} из ${total}…`;
       setProgress(Math.round(2 + allItems.length / Math.max(total, 1) * 18));
-
       if (offset >= total || items.length === 0) break;
     }
   } catch (e) {
@@ -376,51 +379,46 @@ async function loadFromYandexDisk() {
     setProgress(0); ydBtn.disabled = false; return;
   }
 
-  // ── 2. Создаём фото из метаданных — без скачивания бинарей! ───────────────
-  //  GPS координаты берём из item.exif (поля gps_latitude/gps_longitude)
-  //  Картинку показываем по item.file — <img> грузит кросс-доменно без CORS
-  //  Превью в сайдбаре — item.preview (готовый thumb от Яндекса)
-
+  // ── 2. Создаём записи из метаданных ───────────────────────────────────────
   let added = 0, noGps = 0;
 
   for (let i = 0; i < allItems.length; i++) {
-    const item  = allItems[i];
-    const exif  = item.exif || {};
-
-    // Дедупликация
+    const item = allItems[i];
+    const exif = item.exif || {};
     if (photos.find(p => p.name === item.name)) continue;
 
-    // Координаты из API (decimal degrees, уже готовые)
-    const lat      = exif.gps_latitude    ?? null;
-    const lon      = exif.gps_longitude   ?? null;
-    const bearing  = exif.gps_img_direction != null ? parseFloat(exif.gps_img_direction) : null;
-    const altitude = exif.gps_altitude    ?? null;
-    const date     = exif.date_time       ?? '';
-
+    const lat      = exif.gps_latitude       ?? null;
+    const lon      = exif.gps_longitude      ?? null;
+    const bearing  = exif.gps_img_direction  != null ? parseFloat(exif.gps_img_direction) : null;
+    const altitude = exif.gps_altitude       ?? null;
+    const date     = exif.date_time          ?? '';
     if (lat === null || lon === null) noGps++;
 
-    // item.file — прямая ссылка. Работает в <img> без CORS (изображения = кросс-доменны)
-    // item.preview — маленький thumb (если есть, иначе тоже item.file)
-    const displayUrl = item.file;
-    const thumbUrl   = item.preview || item.file;
+    // thumbUrl = item.preview (работает как <img src> без CORS при preview_size=L)
+    // displayUrl = null → загрузится лениво при открытии лайтбокса
+    // ydPath = путь относительно папки, нужен для /resources/download
+    const thumbUrl  = item.preview || null;
+    const ydPath    = item.path   || ('/' + item.name); // путь вида "/IMG_001.jpg"
 
-    addPhoto({ name: item.name, size: item.size, displayUrl, thumbUrl, lat, lon, bearing, altitude, date, isRemote: true });
+    addPhoto({
+      name: item.name, size: item.size,
+      thumbUrl, displayUrl: null, ydPath,
+      lat, lon, bearing, altitude, date, isRemote: true
+    });
     added++;
 
-    // Обновляем UI каждые 10 фото
     if (added % 10 === 0 || added === allItems.length) {
       setProgress(Math.round(20 + added / allItems.length * 80));
       statusEl.textContent = `Обработано ${added} / ${allItems.length}…`;
       updateStats(); renderList();
       if (added === 10) fitMapToPhotos();
-      await new Promise(r => setTimeout(r, 0)); // дать браузеру отрисоваться
+      await new Promise(r => setTimeout(r, 0));
     }
   }
 
   fitMapToPhotos();
   setTimeout(() => setProgress(0), 400);
   updateStats(); renderList();
-
   const gpsInfo = noGps > 0 ? ` (${noGps} без GPS)` : '';
   statusEl.textContent = `Загружено: ${added} фото${gpsInfo}`;
   showToast(`ЯДиск: ${added} фото добавлено`);
@@ -586,7 +584,7 @@ function deletePhoto(idx) {
 // ─────────────────────────────────────────────────────────────────────────────
 // LIGHTBOX
 // ─────────────────────────────────────────────────────────────────────────────
-function openLightbox(idx, latlng) {
+async function openLightbox(idx, latlng) {
   const p = photos[idx]; if (!p) return;
   activeIdx = idx; lbLL = latlng; lbScale = 1;
 
@@ -595,7 +593,8 @@ function openLightbox(idx, latlng) {
   if (item) { item.classList.add('active'); item.scrollIntoView({ block: 'nearest' }); }
 
   const lbImg = document.getElementById('lb-img');
-  lbImg.src = p.displayUrl;       // полноразмерная картинка
+  // Для удалённых фото: показываем превью сразу, затем подгружаем полный размер
+  lbImg.src = p.thumbUrl || '';
   lbImg.style.transform = 'scale(1)';
   document.getElementById('lb-zoom-val').textContent = '100%';
   document.getElementById('lb-name').textContent = p.name;
@@ -603,6 +602,13 @@ function openLightbox(idx, latlng) {
   document.getElementById('lightbox').classList.add('visible');
   setActiveMarker(idx);
   requestAnimationFrame(() => posLightbox(latlng));
+
+  // Ленивая загрузка полноразмерного URL (только для ЯД-фото)
+  if (p.isRemote && !p.displayUrl) {
+    p.displayUrl = await fetchDownloadUrl(ydPublicKey, p.ydPath);
+  }
+  // Подменяем на полный размер, если лайтбокс ещё открыт для этого фото
+  if (activeIdx === idx && p.displayUrl) lbImg.src = p.displayUrl;
 }
 
 function posLightbox(latlng) {
@@ -640,6 +646,21 @@ function navPhoto(dir) {
   openLightbox(next, L.latLng(p.lat, p.lon));
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DATE FORMAT  "2026-03-04T08:46:29+00:00" / "2026:03:04 08:46:29" → "04.03.2026 в 08:46:29"
+// ─────────────────────────────────────────────────────────────────────────────
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  if (dateStr instanceof Date) {
+    const pad = n => String(n).padStart(2, '0');
+    return `${pad(dateStr.getDate())}.${pad(dateStr.getMonth()+1)}.${dateStr.getFullYear()} в ${pad(dateStr.getHours())}:${pad(dateStr.getMinutes())}:${pad(dateStr.getSeconds())}`;
+  }
+  // Универсальный regex: "2026:03:04 08:46:29" и "2026-03-04T08:46:29..."
+  const m = String(dateStr).match(/(\d{4})[-:](\d{2})[-:](\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);
+  if (m) return `${m[3]}.${m[2]}.${m[1]} в ${m[4]}:${m[5]}:${m[6]}`;
+  return dateStr;
+}
+
 function buildRows(p) {
   const rows = [];
   const add = (l, v) => {
@@ -649,7 +670,7 @@ function buildRows(p) {
   };
   if (p.lat !== null) { add('Широта', p.lat.toFixed(6)); add('Долгота', p.lon.toFixed(6)); }
   if (p.bearing !== null && !isNaN(p.bearing)) add('Направление', p.bearing.toFixed(1) + '°');
-  if (p.date) add('Дата', p.date);
+  if (p.date) add('Дата', formatDate(p.date));
   if (p.altitude !== null) add('Высота над ур.м.', parseFloat(p.altitude).toFixed(1) + ' м');
   // Камера / Выдержка / Диафрагма / ISO / Фокусное — убраны
   return rows.join('');
@@ -676,7 +697,9 @@ document.getElementById('lb-img-wrap').addEventListener('click', () => openViewe
 // FULLSCREEN
 // ─────────────────────────────────────────────────────────────────────────────
 function openViewer() {
-  const src = document.getElementById('lb-img').src;
+  // Берём текущий src лайтбокса (уже может быть полноразмерным)
+  const p   = activeIdx !== null ? photos[activeIdx] : null;
+  const src = (p && (p.displayUrl || p.thumbUrl)) || document.getElementById('lb-img').src;
   if (!src) return;
   document.getElementById('viewer-img').src = src;
   document.getElementById('viewer').classList.add('open');
