@@ -12,6 +12,7 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;overflow:hidden}
 #app{display:grid;grid-template-rows:52px 1fr;grid-template-columns:320px 1fr;height:100vh}
+/* ── HEADER ─────────────────────────────────────── */
 #header{grid-column:1/-1;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;padding:0 20px;position:relative;z-index:1000}
 #logo{font-size:18px;font-weight:800;letter-spacing:-.5px;color:var(--accent);white-space:nowrap}
 #logo span{color:var(--text)}
@@ -24,9 +25,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .stat-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.5px}
 #clear-btn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:var(--r);padding:5px 10px;font-size:12px;font-family:'JetBrains Mono',monospace;cursor:pointer;transition:all .15s}
 #clear-btn:hover{border-color:var(--danger);color:var(--danger)}
-
 /* ── SIDEBAR ─────────────────────────────────────── */
-#sidebar{background:var(--surface);border-right:1px solid var(--border);overflow:hidden;display:flex;flex-direction:column}
+#sidebar{background:var(--surface);border-right:1px solid var(--border);overflow:hidden;display:flex;flex-direction:column;min-height:0}
 #yd-wrap{padding:10px 10px 6px;flex-shrink:0;border-bottom:1px solid var(--border)}
 #yd-wrap label{font-size:10px;color:var(--muted);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px;font-family:'JetBrains Mono',monospace}
 #yd-row{display:flex;gap:6px}
@@ -35,30 +35,34 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #yd-url::placeholder{color:var(--muted)}
 #yd-btn{background:var(--accent2);color:#0d0f14;border:none;border-radius:var(--r);padding:5px 10px;font-family:'Syne',sans-serif;font-weight:700;font-size:11px;cursor:pointer;transition:opacity .15s;white-space:nowrap;flex-shrink:0}
 #yd-btn:hover{opacity:.8}
-#yd-status{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);margin-top:5px;min-height:14px}
-
+#yd-btn:disabled{opacity:.4;cursor:not-allowed}
+#yd-status{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);margin-top:5px;min-height:13px;line-height:1.4;word-break:break-all}
 /* ── PHOTO LIST ──────────────────────────────────── */
-#photo-list{flex:1;padding:6px 6px 14px;overflow-y:auto;overflow-x:hidden}
+#photo-list{flex:1;padding:6px 6px 14px;overflow-y:auto;overflow-x:hidden;min-height:0}
 #photo-list::-webkit-scrollbar{width:6px}
-#photo-list::-webkit-scrollbar-track{background:#0f1117}
-#photo-list::-webkit-scrollbar-thumb{background:#2e3547;border-radius:3px}
-#photo-list::-webkit-scrollbar-thumb:hover{background:#3d4a62}
-
-.photo-item{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:var(--r);cursor:pointer;transition:background .15s;border:1px solid transparent;margin-bottom:3px}
+#photo-list::-webkit-scrollbar-track{background:#0a0c10}
+#photo-list::-webkit-scrollbar-thumb{background:#2a3247;border-radius:3px}
+#photo-list::-webkit-scrollbar-thumb:hover{background:#3a4a62}
+.photo-item{display:flex;align-items:flex-start;gap:8px;padding:6px 7px;border-radius:var(--r);transition:background .15s;border:1px solid transparent;margin-bottom:3px;position:relative}
 .photo-item:hover{background:rgba(255,255,255,.04)}
 .photo-item.active{background:rgba(232,255,71,.08);border-color:rgba(232,255,71,.25)}
-.photo-item.no-gps{opacity:.4;cursor:default}
-.thumb{width:84px;height:84px;border-radius:5px;object-fit:cover;flex-shrink:0;background:var(--border)}
-.photo-meta{flex:1;min-width:0}
-.photo-name{font-size:9px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.photo-coords{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);margin-top:3px}
-.gps-badge{font-size:9px;padding:2px 5px;border-radius:3px;flex-shrink:0;font-family:'JetBrains Mono',monospace;align-self:flex-start;margin-top:2px}
+.photo-item.no-gps{opacity:.45}
+.thumb-click{cursor:pointer;flex-shrink:0}
+.photo-item.no-gps .thumb-click{cursor:default;pointer-events:none}
+.thumb{width:84px;height:84px;border-radius:5px;object-fit:cover;background:var(--border);display:block}
+.photo-meta{flex:1;min-width:0;padding-top:2px;cursor:pointer}
+.photo-item.no-gps .photo-meta{cursor:default;pointer-events:none}
+.photo-name{font-size:8px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
+.photo-coords{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--muted);margin-top:3px;line-height:1.5}
+.gps-badge{font-size:8px;padding:1px 4px;border-radius:3px;font-family:'JetBrains Mono',monospace;margin-top:4px;display:inline-block}
 .gps-ok{background:rgba(232,255,71,.15);color:var(--accent)}
 .gps-no{background:rgba(255,92,92,.12);color:var(--danger)}
-#no-photos{padding:20px 14px;text-align:center;color:var(--muted);font-size:12px;line-height:1.7}
-
+.del-btn{position:absolute;top:5px;right:5px;width:18px;height:18px;background:rgba(13,15,20,.75);border:1px solid var(--border);border-radius:50%;color:var(--muted);font-size:12px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,background .15s,color .15s,border-color .15s;padding:0}
+.photo-item:hover .del-btn{opacity:1}
+.del-btn:hover{background:rgba(255,92,92,.2);border-color:var(--danger);color:var(--danger)}
+#no-photos{padding:20px 14px;text-align:center;color:var(--muted);font-size:11px;line-height:1.7}
 /* ── MAP ─────────────────────────────────────────── */
-#map-wrap{position:relative}
+#map-wrap{position:relative;overflow:hidden}
 #map{width:100%;height:100%;background:#0d1117}
 .leaflet-container{background:#0d1117 !important}
 .leaflet-tile{filter:brightness(.72) saturate(.65)}
@@ -67,44 +71,40 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .leaflet-control-attribution{background:rgba(13,15,20,.7) !important;color:var(--muted) !important;font-size:10px !important}
 .leaflet-control-attribution a{color:var(--muted) !important}
 .leaflet-control-scale-line{background:rgba(13,15,20,.7) !important;border-color:var(--muted) !important;color:var(--muted) !important;font-family:'JetBrains Mono',monospace !important;font-size:10px !important}
-
 #map-hint{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;pointer-events:none;z-index:500;transition:opacity .4s}
 #map-hint.hidden{opacity:0}
 .hint-icon{font-size:44px;opacity:.16}
 .hint-text{font-size:14px;color:var(--muted);text-align:center;line-height:1.7}
-
 /* ── MARKERS ─────────────────────────────────────── */
 .pm-wrap{position:relative}
-.marker-dot{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:11px;height:11px;background:var(--accent);border:2px solid #0d0f14;border-radius:50%;cursor:pointer;transition:transform .15s,background .15s;z-index:1}
-.pm-wrap:hover .marker-dot{transform:translate(-50%,-50%) scale(1.6)}
-.marker-dot.active{background:#ff4040 !important;border-color:#fff;box-shadow:0 0 8px rgba(255,64,64,.7);width:14px;height:14px}
-
+.marker-dot{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:11px;height:11px;background:var(--accent);border:2px solid #0d0f14;border-radius:50%;cursor:pointer;transition:transform .15s,background .15s,box-shadow .15s,width .15s,height .15s;z-index:1}
+.pm-wrap:hover .marker-dot{transform:translate(-50%,-50%) scale(1.55)}
+.marker-dot.active{background:#ff3c3c !important;border-color:#fff !important;box-shadow:0 0 10px rgba(255,60,60,.85) !important;width:15px !important;height:15px !important}
 /* ── LIGHTBOX ────────────────────────────────────── */
 #lightbox{display:none;position:absolute;z-index:2000;pointer-events:none}
 #lightbox.visible{display:block;pointer-events:all}
-#lb-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;width:330px;box-shadow:0 20px 60px rgba(0,0,0,.75);animation:pop-in .2s cubic-bezier(.34,1.56,.64,1) both}
+#lb-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;width:330px;box-shadow:0 20px 60px rgba(0,0,0,.8);animation:pop-in .2s cubic-bezier(.34,1.56,.64,1) both}
 @keyframes pop-in{from{transform:scale(.88) translateY(8px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}
 #lb-img-wrap{position:relative;width:100%;height:200px;overflow:hidden;background:#080a0e;cursor:zoom-in}
-#lb-img{width:100%;height:100%;object-fit:contain;transition:transform .2s;transform-origin:center center}
-#lb-close{position:absolute;top:8px;right:8px;width:26px;height:26px;background:rgba(0,0,0,.6);border:none;border-radius:50%;color:#fff;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;z-index:10}
-#lb-close:hover{background:rgba(255,92,92,.7)}
-#lb-zoom-bar{display:flex;align-items:center;gap:5px;padding:4px 8px;background:#0a0c12;border-top:1px solid var(--border)}
-.lbz-btn{background:rgba(255,255,255,.07);border:1px solid var(--border);color:var(--text);border-radius:3px;width:20px;height:20px;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+#lb-img{width:100%;height:100%;object-fit:contain;transition:transform .18s ease;transform-origin:center center}
+#lb-close{position:absolute;top:8px;right:8px;width:24px;height:24px;background:rgba(0,0,0,.65);border:none;border-radius:50%;color:#fff;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;z-index:10}
+#lb-close:hover{background:rgba(255,92,92,.75)}
+#lb-zoom-bar{display:flex;align-items:center;gap:5px;padding:3px 8px;background:#0a0c12;border-top:1px solid var(--border)}
+.lbz-btn{background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text);border-radius:3px;width:20px;height:20px;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
 .lbz-btn:hover{border-color:var(--accent);color:var(--accent)}
-#lb-zoom-val{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);min-width:36px;text-align:center}
+#lb-zoom-val{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);min-width:34px;text-align:center}
 .lbz-sep{flex:1}
-#lb-fullscreen-btn{background:rgba(255,255,255,.07);border:1px solid var(--border);color:var(--text);border-radius:3px;height:20px;padding:0 7px;font-size:10px;font-family:'JetBrains Mono',monospace;cursor:pointer;transition:all .15s}
+#lb-fullscreen-btn{background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text);border-radius:3px;height:20px;padding:0 7px;font-size:9px;font-family:'JetBrains Mono',monospace;cursor:pointer;transition:all .15s}
 #lb-fullscreen-btn:hover{border-color:var(--accent2);color:var(--accent2)}
-#lb-info{padding:10px 12px}
-#lb-name{font-weight:700;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:7px;color:var(--muted)}
+#lb-info{padding:8px 11px}
+#lb-name{font-weight:700;font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:6px;color:var(--muted)}
 #lb-table{width:100%;border-collapse:collapse;font-family:'JetBrains Mono',monospace;font-size:11px}
 #lb-table td{padding:2.5px 0}
 #lb-table td:first-child{color:var(--muted);width:88px}
 #lb-table td:last-child{color:var(--text)}
-#lb-nav{display:flex;gap:6px;margin-top:9px}
+#lb-nav{display:flex;gap:6px;margin-top:8px}
 .lb-nav-btn{flex:1;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-size:11px;font-family:'JetBrains Mono',monospace;padding:5px;cursor:pointer;transition:all .15s}
 .lb-nav-btn:hover{border-color:var(--accent);color:var(--accent)}
-
 /* ── MAP BUTTONS ─────────────────────────────────── */
 #layer-btn{position:absolute;top:12px;right:12px;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 11px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);cursor:pointer;transition:all .15s}
 #layer-btn:hover{border-color:var(--accent2);color:var(--accent2)}
@@ -113,17 +113,15 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #progress-bar{position:absolute;bottom:0;left:0;height:2px;background:var(--accent);transition:width .2s;z-index:600;border-radius:0 2px 2px 0}
 #toast{position:absolute;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 16px;font-size:12px;white-space:nowrap;z-index:900;transition:transform .3s cubic-bezier(.34,1.56,.64,1),opacity .3s;opacity:0;pointer-events:none}
 #toast.show{transform:translateX(-50%) translateY(0);opacity:1}
-
-/* ── FULLSCREEN VIEWER ───────────────────────────── */
-#viewer{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;align-items:center;justify-content:center;cursor:zoom-out}
+/* ── FULLSCREEN ───────────────────────────────────── */
+#viewer{display:none;position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:9999;align-items:center;justify-content:center;cursor:zoom-out}
 #viewer.open{display:flex}
 #viewer img{max-width:90vw;max-height:90vh;object-fit:contain;border-radius:4px;box-shadow:0 0 80px rgba(0,0,0,.8)}
 #viewer-close{position:fixed;top:20px;right:24px;font-size:28px;color:#fff;cursor:pointer;opacity:.7;background:none;border:none;line-height:1}
 #viewer-close:hover{opacity:1}
-
 ::-webkit-scrollbar{width:6px}
-::-webkit-scrollbar-track{background:#0f1117}
-::-webkit-scrollbar-thumb{background:#2e3547;border-radius:3px}
+::-webkit-scrollbar-track{background:#0a0c10}
+::-webkit-scrollbar-thumb{background:#2a3247;border-radius:3px}
 </style>
 </head>
 <body>
@@ -148,19 +146,15 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 </header>
 
 <aside id="sidebar">
-  <!-- Яндекс.Диск -->
   <div id="yd-wrap">
     <label>📁 Папка Яндекс.Диска</label>
     <div id="yd-row">
-      <input type="text" id="yd-url" placeholder="https://disk.yandex.ru/d/..." />
+      <input type="text" id="yd-url" placeholder="https://disk.yandex.ru/d/…"/>
       <button id="yd-btn" onclick="loadFromYandexDisk()">Загрузить</button>
     </div>
     <div id="yd-status"></div>
   </div>
-  <!-- Список фото -->
-  <div id="photo-list">
-    <div id="no-photos">Фотографии не добавлены</div>
-  </div>
+  <div id="photo-list"></div>
 </aside>
 
 <div id="map-wrap">
@@ -174,38 +168,36 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     <div id="lb-card">
       <div id="lb-img-wrap" title="Нажмите для полноэкранного просмотра">
         <img id="lb-img" src="" alt=""/>
-        <button id="lb-close" onclick="closeLightbox()">×</button>
+        <button id="lb-close" onclick="closeLightbox()">x</button>
       </div>
-      <!-- Масштаб фото -->
       <div id="lb-zoom-bar">
-        <button class="lbz-btn" onclick="lbZoomOut()" title="Уменьшить">−</button>
+        <button class="lbz-btn" onclick="lbZoomOut()" title="Уменьшить">-</button>
         <span id="lb-zoom-val">100%</span>
         <button class="lbz-btn" onclick="lbZoomIn()" title="Увеличить">+</button>
-        <button class="lbz-btn" onclick="lbZoomReset()" title="Сбросить масштаб">⊡</button>
+        <button class="lbz-btn" onclick="lbZoomReset()" title="Сбросить">o</button>
         <span class="lbz-sep"></span>
-        <button id="lb-fullscreen-btn" onclick="openViewer()">⛶ на весь экран</button>
+        <button id="lb-fullscreen-btn" onclick="openViewer()">полный экран</button>
       </div>
       <div id="lb-info">
         <div id="lb-name"></div>
         <table id="lb-table"><tbody id="lb-tbody"></tbody></table>
         <div id="lb-nav">
-          <button class="lb-nav-btn" onclick="navPhoto(-1)">← пред.</button>
-          <button class="lb-nav-btn" onclick="navPhoto(1)">след. →</button>
+          <button class="lb-nav-btn" onclick="navPhoto(-1)">pред.</button>
+          <button class="lb-nav-btn" onclick="navPhoto(1)">след.</button>
         </div>
       </div>
     </div>
   </div>
 
-  <button id="fit-btn" onclick="fitMapToPhotos()">⊡ По фото</button>
-  <button id="layer-btn" onclick="toggleLayer()">🛰 Спутник</button>
+  <button id="fit-btn" onclick="fitMapToPhotos()">По фото</button>
+  <button id="layer-btn" onclick="toggleLayer()">Спутник</button>
   <div id="progress-bar" style="width:0"></div>
   <div id="toast"></div>
 </div>
 </div>
 
-<!-- Полноэкранный просмотр -->
 <div id="viewer" onclick="closeViewer()">
-  <button id="viewer-close" onclick="closeViewer()">×</button>
+  <button id="viewer-close" onclick="closeViewer()">x</button>
   <img id="viewer-img" src="" alt=""/>
 </div>
 
@@ -213,223 +205,273 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <script src="https://unpkg.com/exifr@7.1.3/dist/full.umd.js"></script>
 <script>
 // ── MAP ───────────────────────────────────────────────────────────────────────
-const map = L.map('map', { center:[55.75,37.61], zoom:5, zoomControl:true });
-L.control.scale({ imperial:false, metric:true, position:'bottomleft' }).addTo(map);
-
-const TILES = {
-  osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ attribution:'© OpenStreetMap', maxZoom:19 }),
-  sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{ attribution:'© Esri', maxZoom:19 })
+const map = L.map('map',{center:[55.75,37.61],zoom:5,zoomControl:true});
+L.control.scale({imperial:false,metric:true,position:'bottomleft'}).addTo(map);
+const TILES={
+  osm:L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}),
+  sat:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri',maxZoom:19})
 };
 TILES.osm.addTo(map);
-let currentLayer = 'osm';
-
-function toggleLayer() {
-  const btn = document.getElementById('layer-btn');
-  if (currentLayer==='osm') { map.removeLayer(TILES.osm); TILES.sat.addTo(map); currentLayer='sat'; btn.textContent='🗺 OSM'; }
-  else { map.removeLayer(TILES.sat); TILES.osm.addTo(map); currentLayer='osm'; btn.textContent='🛰 Спутник'; }
+let currentLayer='osm';
+function toggleLayer(){
+  const btn=document.getElementById('layer-btn');
+  if(currentLayer==='osm'){map.removeLayer(TILES.osm);TILES.sat.addTo(map);currentLayer='sat';btn.textContent='OSM';}
+  else{map.removeLayer(TILES.sat);TILES.osm.addTo(map);currentLayer='osm';btn.textContent='Спутник';}
 }
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
-let photos=[], activeIdx=null, lbLL=null, lbScale=1;
+let photos=[],activeIdx=null,lbLL=null,lbScale=1;
 
 // ── FILE I/O ──────────────────────────────────────────────────────────────────
-document.getElementById('file-input').addEventListener('change', e=>{ handleFiles([...e.target.files]); e.target.value=''; });
+document.getElementById('file-input').addEventListener('change',e=>{handleFiles([...e.target.files]);e.target.value='';});
+document.getElementById('map-wrap').addEventListener('dragover',e=>e.preventDefault());
+document.getElementById('map-wrap').addEventListener('drop',e=>{
+  e.preventDefault();
+  const fs=[...e.dataTransfer.files].filter(f=>/jpe?g/i.test(f.type));
+  if(fs.length) handleFiles(fs);
+});
 
-// Drag&drop on map area
-document.getElementById('map-wrap').addEventListener('dragover', e=>e.preventDefault());
-document.getElementById('map-wrap').addEventListener('drop', e=>{ e.preventDefault(); pick(e); });
-function pick(e) { const fs=[...e.dataTransfer.files].filter(f=>/jpe?g/i.test(f.type)); if(fs.length) handleFiles(fs); }
-
-async function handleFiles(files) {
-  setProgress(0);
-  let added=0;
-  for(let i=0;i<files.length;i++) {
+async function handleFiles(files){
+  setProgress(0);let added=0;
+  for(let i=0;i<files.length;i++){
     if(await processFile(files[i])) added++;
     setProgress(Math.round((i+1)/files.length*100));
   }
   setTimeout(()=>setProgress(0),500);
-  updateStats(); renderList(); fitMapToPhotos();
-  showToast('Добавлено: '+added+' / '+files.length+' фото');
+  updateStats();renderList();fitMapToPhotos();
+  showToast('Добавлено: '+added+'/'+files.length+' фото');
 }
 
-async function processFile(file) {
+async function processFile(file){
   if(photos.find(p=>p.name===file.name&&p.size===file.size)) return false;
   const url=URL.createObjectURL(file);
   let lat=null,lon=null,bearing=null,ex={};
-  try {
+  try{
     const e=await exifr.parse(file,{gps:true,tiff:true,exif:true,ifd0:true,translateValues:true});
-    if(e) {
-      ex=e;
-      lat=e.latitude??e.GPSLatitude??null;
-      lon=e.longitude??e.GPSLongitude??null;
+    if(e){
+      ex=e;lat=e.latitude??e.GPSLatitude??null;lon=e.longitude??e.GPSLongitude??null;
       const r=e.GPSImgDirection??e.ImgDirection??e.GPSDestBearing??null;
       bearing=r!==null?parseFloat(r):null;
     }
-  } catch(err){ console.warn('EXIF:',file.name,err); }
+  }catch(err){console.warn('EXIF:',file.name,err);}
   const photo={file,name:file.name,size:file.size,objectUrl:url,lat,lon,bearing,exif:ex,marker:null};
   photos.push(photo);
-  if(lat!==null&&lon!==null) addMarker(photo, photos.length-1);
+  if(lat!==null&&lon!==null) addMarker(photo,photos.length-1);
   return true;
 }
 
-// ── ЯНДЕКС ДИСК ──────────────────────────────────────────────────────────────
-async function loadFromYandexDisk() {
-  const urlInput = document.getElementById('yd-url');
-  const statusEl = document.getElementById('yd-status');
-  const url = urlInput.value.trim();
-  if (!url) { statusEl.textContent = 'Введите ссылку на папку'; return; }
+// ── ЯНДЕКС.ДИСК (через CORS-прокси corsproxy.io) ─────────────────────────────
+const PROXY=url=>'https://corsproxy.io/?'+encodeURIComponent(url);
+const CONCURRENCY=5;
 
-  document.getElementById('yd-btn').disabled = true;
-  statusEl.textContent = 'Подключение к Яндекс.Диску…';
-  setProgress(5);
+async function fetchAny(url){
+  // Пробуем напрямую, если не удалось — через прокси
+  try{
+    const r=await fetch(url,{signal:AbortSignal.timeout(5000)});
+    if(r.ok) return r;
+  }catch(e){}
+  return fetch(PROXY(url));
+}
 
-  try {
-    // Получаем список файлов через Яндекс.Диск публичное API
-    let offset = 0, limit = 100, allImages = [];
-    while (true) {
-      const apiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources?public_key=${encodeURIComponent(url)}&limit=${limit}&offset=${offset}&media_type=image`;
-      const res = await fetch(apiUrl);
-      if (!res.ok) {
-        const err = await res.json().catch(()=>({error:'HTTP '+res.status}));
-        throw new Error(err.description || err.error || 'Ошибка API');
+async function loadFromYandexDisk(){
+  const statusEl=document.getElementById('yd-status');
+  const ydBtn=document.getElementById('yd-btn');
+  const url=document.getElementById('yd-url').value.trim();
+  if(!url){statusEl.textContent='Введите ссылку на папку';return;}
+  ydBtn.disabled=true;
+  statusEl.textContent='Получаем список файлов...';
+  setProgress(3);
+
+  let allImages=[];
+  try{
+    let offset=0,limit=100;
+    while(true){
+      const apiUrl=`https://cloud-api.yandex.net/v1/disk/public/resources?public_key=${encodeURIComponent(url)}&limit=${limit}&offset=${offset}&media_type=image`;
+      const res=await fetchAny(apiUrl);
+      if(!res.ok){
+        let em='HTTP '+res.status;
+        try{const j=await res.json();em=j.description||j.error||em;}catch(e){}
+        throw new Error(em);
       }
-      const data = await res.json();
-      const items = (data._embedded?.items || []).filter(i => i.type==='file' && /\.(jpg|jpeg)$/i.test(i.name));
+      const data=await res.json();
+      const items=(data._embedded?.items||[]).filter(i=>i.type==='file'&&/\.(jpg|jpeg)$/i.test(i.name));
       allImages.push(...items);
-      const total = data._embedded?.total || 0;
-      offset += limit;
-      if (offset >= total || items.length === 0) break;
+      const total=data._embedded?.total||0;
+      offset+=limit;
+      statusEl.textContent=`Сканируем: ${allImages.length} из ${total}...`;
+      if(offset>=total||items.length===0) break;
     }
-
-    if (!allImages.length) {
-      statusEl.textContent = 'Нет JPEG-файлов в папке';
-      setProgress(0);
-      document.getElementById('yd-btn').disabled = false;
-      return;
-    }
-
-    statusEl.textContent = `Найдено: ${allImages.length} фото, загружаем…`;
-    let added = 0, failed = 0;
-
-    for (let i = 0; i < allImages.length; i++) {
-      const item = allImages[i];
-      setProgress(Math.round(5 + (i+1)/allImages.length*90));
-      statusEl.textContent = `Загружаем ${i+1}/${allImages.length}: ${item.name}`;
-      try {
-        const response = await fetch(item.file, { mode:'cors' });
-        if (!response.ok) throw new Error('HTTP ' + response.status);
-        const blob = await response.blob();
-        const file = new File([blob], item.name, { type: 'image/jpeg' });
-        if (await processFile(file)) added++;
-      } catch(e) {
-        console.warn('Не удалось загрузить:', item.name, e);
-        failed++;
-      }
-    }
-
-    setTimeout(()=>setProgress(0), 500);
-    updateStats(); renderList(); fitMapToPhotos();
-    const msg = failed > 0
-      ? `Загружено: ${added}/${allImages.length} (${failed} ошибок — CORS)`
-      : `Загружено: ${added}/${allImages.length} фото`;
-    statusEl.textContent = msg;
-    showToast(`ЯДиск: ${added} фото добавлено`);
-
-  } catch(e) {
-    console.error('Яндекс.Диск:', e);
-    statusEl.textContent = 'Ошибка: ' + e.message;
-    setProgress(0);
-    showToast('Ошибка загрузки с Яндекс.Диска');
+  }catch(e){
+    statusEl.textContent='Ошибка API: '+e.message;
+    setProgress(0);ydBtn.disabled=false;
+    showToast('Не удалось получить список файлов');return;
   }
 
-  document.getElementById('yd-btn').disabled = false;
+  if(!allImages.length){
+    statusEl.textContent='Нет JPEG-файлов в папке';
+    setProgress(0);ydBtn.disabled=false;return;
+  }
+
+  statusEl.textContent='Найдено: '+allImages.length+' фото. Загружаем...';
+  let added=0,failed=0,done=0;
+
+  async function loadOne(item){
+    try{
+      // Файлы качаем только через прокси (прямые ссылки блокируются CORS)
+      const res=await fetch(PROXY(item.file));
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const blob=await res.blob();
+      const file=new File([blob],item.name,{type:'image/jpeg'});
+      if(await processFile(file)) added++;
+    }catch(e){
+      console.warn('Ошибка:',item.name,e.message);
+      failed++;
+    }
+    done++;
+    setProgress(Math.round(5+done/allImages.length*90));
+    statusEl.textContent=`Загружено ${done}/${allImages.length}  ok:${added}  err:${failed}`;
+  }
+
+  // Параллельная загрузка батчами по CONCURRENCY
+  for(let i=0;i<allImages.length;i+=CONCURRENCY){
+    await Promise.all(allImages.slice(i,i+CONCURRENCY).map(loadOne));
+    updateStats();renderList();
+    if(i===0) fitMapToPhotos();
+  }
+
+  fitMapToPhotos();
+  setTimeout(()=>setProgress(0),500);
+  statusEl.textContent=failed>0
+    ?`Готово: ${added}/${allImages.length} (${failed} ошибок)`
+    :`Готово: ${added}/${allImages.length} фото`;
+  showToast('ЯДиск: '+added+' фото добавлено');
+  ydBtn.disabled=false;
 }
 
 // ── MARKERS ───────────────────────────────────────────────────────────────────
-function fovSvg(bearing, R) {
+function fovSvg(bearing,R){
   if(bearing===null||isNaN(bearing)) return '';
-  const fov=55, cx=R, cy=R;
-  const al=((bearing-fov-90)*Math.PI/180), ar=((bearing+fov-90)*Math.PI/180);
-  const x1=cx+R*Math.cos(al), y1=cy+R*Math.sin(al);
-  const x2=cx+R*Math.cos(ar), y2=cy+R*Math.sin(ar);
-  const nx=cx+R*0.5*Math.cos((bearing-90)*Math.PI/180);
-  const ny=cy+R*0.5*Math.sin((bearing-90)*Math.PI/180);
-  return '<svg width="'+(R*2)+'" height="'+(R*2)+'" viewBox="0 0 '+(R*2)+' '+(R*2)+'" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none">'
-    +'<path d="M'+cx+','+cy+' L'+x1+','+y1+' A'+R+','+R+' 0 0,1 '+x2+','+y2+' Z" fill="rgba(232,255,71,.13)" stroke="#e8ff47" stroke-width="1.2" stroke-linejoin="round"/>'
-    +'<line x1="'+cx+'" y1="'+cy+'" x2="'+nx+'" y2="'+ny+'" stroke="#e8ff47" stroke-width="1.5" stroke-linecap="round" opacity=".9"/>'
-    +'</svg>';
+  const fov=55,cx=R,cy=R;
+  const al=((bearing-fov-90)*Math.PI/180),ar=((bearing+fov-90)*Math.PI/180);
+  const x1=cx+R*Math.cos(al),y1=cy+R*Math.sin(al),x2=cx+R*Math.cos(ar),y2=cy+R*Math.sin(ar);
+  const nx=cx+R*.5*Math.cos((bearing-90)*Math.PI/180),ny=cy+R*.5*Math.sin((bearing-90)*Math.PI/180);
+  const S=R*2;
+  return `<svg width="${S}" height="${S}" viewBox="0 0 ${S} ${S}" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none">`
+    +`<path d="M${cx},${cy} L${x1},${y1} A${R},${R} 0 0,1 ${x2},${y2} Z" fill="rgba(232,255,71,.13)" stroke="#e8ff47" stroke-width="1.2" stroke-linejoin="round"/>`
+    +`<line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="#e8ff47" stroke-width="1.5" stroke-linecap="round" opacity=".9"/></svg>`;
 }
 
-function addMarker(photo, idx) {
-  const hb=photo.bearing!==null&&!isNaN(photo.bearing);
-  const S=hb?100:20;
-  const html='<div class="pm-wrap" style="width:'+S+'px;height:'+S+'px">'+(hb?fovSvg(photo.bearing,S/2):'')+
-    '<div class="marker-dot"></div></div>';
+function addMarker(photo,idx){
+  const hb=photo.bearing!==null&&!isNaN(photo.bearing),S=hb?100:20;
+  const html=`<div class="pm-wrap" style="width:${S}px;height:${S}px">${hb?fovSvg(photo.bearing,S/2):''}<div class="marker-dot"></div></div>`;
   const icon=L.divIcon({html,className:'',iconSize:[S,S],iconAnchor:[S/2,S/2]});
-  const marker=L.marker([photo.lat,photo.lon],{icon}).addTo(map).on('click',()=>openLightbox(idx,marker.getLatLng()));
+  const marker=L.marker([photo.lat,photo.lon],{icon}).addTo(map)
+    .on('click',()=>openLightbox(photos.indexOf(photo),marker.getLatLng()));
   photo.marker=marker;
 }
 
-// Подсветка активного маркера красным
-function setActiveMarker(idx) {
-  photos.forEach((p, i) => {
-    if (!p.marker) return;
-    const el = p.marker.getElement();
-    if (!el) return;
-    const dot = el.querySelector('.marker-dot');
-    if (!dot) return;
-    if (i === idx) dot.classList.add('active');
-    else dot.classList.remove('active');
+function rebuildMarkerListeners(){
+  photos.forEach((p,i)=>{
+    if(!p.marker) return;
+    p.marker.off('click');
+    p.marker.on('click',()=>openLightbox(i,p.marker.getLatLng()));
   });
 }
 
-function clearActiveMarker() {
-  photos.forEach(p => {
-    if (!p.marker) return;
-    const el = p.marker.getElement();
-    if (!el) return;
-    const dot = el.querySelector('.marker-dot');
-    if (dot) dot.classList.remove('active');
+function setActiveMarker(idx){
+  photos.forEach((p,i)=>{
+    if(!p.marker) return;
+    const el=p.marker.getElement();if(!el) return;
+    const dot=el.querySelector('.marker-dot');if(!dot) return;
+    dot.classList.toggle('active',i===idx);
+  });
+}
+function clearActiveMarker(){
+  photos.forEach(p=>{
+    if(!p.marker) return;
+    const el=p.marker.getElement();if(!el) return;
+    const dot=el.querySelector('.marker-dot');if(dot) dot.classList.remove('active');
   });
 }
 
 // ── FIT MAP ───────────────────────────────────────────────────────────────────
-function fitMapToPhotos() {
-  const pts=photos.filter(p=>p.lat!==null);
-  if(!pts.length) return;
+function fitMapToPhotos(){
+  const pts=photos.filter(p=>p.lat!==null);if(!pts.length) return;
   document.getElementById('map-hint').classList.add('hidden');
   if(pts.length===1) map.setView([pts[0].lat,pts[0].lon],16);
   else map.fitBounds(L.latLngBounds(pts.map(p=>[p.lat,p.lon])),{padding:[60,60],maxZoom:17});
 }
 
 // ── SIDEBAR ───────────────────────────────────────────────────────────────────
-function renderList() {
-  const list=document.getElementById('photo-list'), none=document.getElementById('no-photos');
-  if(!photos.length){ none.style.display='block'; list.innerHTML=''; list.appendChild(none); return; }
-  none.style.display='none'; list.innerHTML='';
+function renderList(){
+  const list=document.getElementById('photo-list');
+  // Очищаем без innerHTML='' — чтобы не терять ссылки на элементы
+  while(list.firstChild) list.removeChild(list.firstChild);
+
+  if(!photos.length){
+    const el=document.createElement('div');
+    el.id='no-photos';el.textContent='Фотографии не добавлены';
+    list.appendChild(el);return;
+  }
+
   photos.forEach((p,i)=>{
     const item=document.createElement('div');
     item.className='photo-item'+(p.lat===null?' no-gps':'')+(activeIdx===i?' active':'');
     item.dataset.idx=i;
+
+    // Превью
+    const tw=document.createElement('div');tw.className='thumb-click';
+    const img=document.createElement('img');img.className='thumb';img.src=p.objectUrl;img.alt='';
+    tw.appendChild(img);
+
+    // Мета
+    const meta=document.createElement('div');meta.className='photo-meta';
     const coords=p.lat!==null?p.lat.toFixed(5)+', '+p.lon.toFixed(5):'нет GPS';
-    item.innerHTML='<img class="thumb" src="'+p.objectUrl+'" alt=""/>'
-      +'<div class="photo-meta"><div class="photo-name">'+esc(p.name)+'</div>'
-      +'<div class="photo-coords">'+coords+'</div></div>'
+    meta.innerHTML='<div class="photo-name">'+esc(p.name)+'</div>'
+      +'<div class="photo-coords">'+esc(coords)+'</div>'
       +'<span class="gps-badge '+(p.lat!==null?'gps-ok':'gps-no')+'">'+(p.lat!==null?'GPS':'нет')+'</span>';
-    if(p.lat!==null) item.addEventListener('click',()=>{ map.setView([p.lat,p.lon],Math.max(map.getZoom(),15),{animate:true}); openLightbox(i,L.latLng(p.lat,p.lon)); });
+
+    // Кнопка удаления
+    const del=document.createElement('button');
+    del.className='del-btn';del.title='Удалить';del.textContent='x';
+    del.addEventListener('click',ev=>{ev.stopPropagation();deletePhoto(i);});
+
+    item.appendChild(tw);item.appendChild(meta);item.appendChild(del);
+
+    // Обработчик клика (только для фото с GPS)
+    if(p.lat!==null){
+      const go=()=>{map.setView([p.lat,p.lon],Math.max(map.getZoom(),15),{animate:true});openLightbox(i,L.latLng(p.lat,p.lon));};
+      tw.addEventListener('click',go);meta.addEventListener('click',go);
+    }
     list.appendChild(item);
   });
 }
 
+// ── УДАЛЕНИЕ ОДНОГО ФОТО ─────────────────────────────────────────────────────
+function deletePhoto(idx){
+  const p=photos[idx];if(!p) return;
+  if(activeIdx===idx) closeLightbox();
+  if(p.marker) map.removeLayer(p.marker);
+  URL.revokeObjectURL(p.objectUrl);
+  photos.splice(idx,1);
+  if(activeIdx!==null){
+    if(activeIdx===idx) activeIdx=null;
+    else if(activeIdx>idx) activeIdx--;
+  }
+  rebuildMarkerListeners();
+  updateStats();renderList();
+  if(!photos.some(p=>p.lat!==null)) document.getElementById('map-hint').classList.remove('hidden');
+}
+
 // ── LIGHTBOX ──────────────────────────────────────────────────────────────────
-function openLightbox(idx, latlng) {
-  const p=photos[idx]; activeIdx=idx; lbLL=latlng;
-  lbScale=1;
+function openLightbox(idx,latlng){
+  const p=photos[idx];if(!p) return;
+  activeIdx=idx;lbLL=latlng;lbScale=1;
   document.querySelectorAll('.photo-item').forEach(el=>el.classList.remove('active'));
   const item=document.querySelector('.photo-item[data-idx="'+idx+'"]');
-  if(item){ item.classList.add('active'); item.scrollIntoView({block:'nearest'}); }
-  document.getElementById('lb-img').src=p.objectUrl;
-  document.getElementById('lb-img').style.transform='scale(1)';
+  if(item){item.classList.add('active');item.scrollIntoView({block:'nearest'});}
+  const lbImg=document.getElementById('lb-img');
+  lbImg.src=p.objectUrl;lbImg.style.transform='scale(1)';
   document.getElementById('lb-zoom-val').textContent='100%';
   document.getElementById('lb-name').textContent=p.name;
   document.getElementById('lb-tbody').innerHTML=buildRows(p);
@@ -438,105 +480,91 @@ function openLightbox(idx, latlng) {
   requestAnimationFrame(()=>posLightbox(latlng));
 }
 
-function posLightbox(latlng) {
-  const lb=document.getElementById('lightbox'), card=document.getElementById('lb-card');
-  const mw=document.getElementById('map-wrap'), pt=map.latLngToContainerPoint(latlng);
-  const cw=card.offsetWidth||330, ch=card.offsetHeight||380;
-  const W=mw.offsetWidth, H=mw.offsetHeight, gap=34;
-  let left=pt.x+gap, top=pt.y-ch/2;
+function posLightbox(latlng){
+  const lb=document.getElementById('lightbox'),card=document.getElementById('lb-card');
+  const mw=document.getElementById('map-wrap'),pt=map.latLngToContainerPoint(latlng);
+  const cw=card.offsetWidth||330,ch=card.offsetHeight||380;
+  const W=mw.offsetWidth,H=mw.offsetHeight,gap=36;
+  let left=pt.x+gap,top=pt.y-ch/2;
   if(left+cw>W-gap) left=pt.x-cw-gap;
-  if(left<gap) left=gap;
-  if(top<gap) top=gap;
-  if(top+ch>H-gap) top=H-ch-gap;
-  lb.style.left=left+'px'; lb.style.top=top+'px';
+  if(left<gap) left=gap;if(top<gap) top=gap;if(top+ch>H-gap) top=H-ch-gap;
+  lb.style.left=left+'px';lb.style.top=top+'px';
 }
 
-function closeLightbox() {
+function closeLightbox(){
   document.getElementById('lightbox').classList.remove('visible');
   document.querySelectorAll('.photo-item').forEach(el=>el.classList.remove('active'));
-  clearActiveMarker();
-  activeIdx=null;
+  clearActiveMarker();activeIdx=null;
 }
 
-map.on('click', ()=>closeLightbox());
-map.on('move zoom', ()=>{ if(lbLL&&document.getElementById('lightbox').classList.contains('visible')) posLightbox(lbLL); });
+map.on('click',()=>closeLightbox());
+map.on('move zoom',()=>{if(lbLL&&document.getElementById('lightbox').classList.contains('visible')) posLightbox(lbLL);});
 
-function navPhoto(dir) {
-  const gi=photos.map((p,i)=>p.lat!==null?i:-1).filter(i=>i>=0);
-  if(!gi.length) return;
-  const pos=gi.indexOf(activeIdx), next=gi[(pos+dir+gi.length)%gi.length], p=photos[next];
+function navPhoto(dir){
+  const gi=photos.map((p,i)=>p.lat!==null?i:-1).filter(i=>i>=0);if(!gi.length) return;
+  const pos=gi.indexOf(activeIdx),next=gi[(pos+dir+gi.length)%gi.length],p=photos[next];
   map.setView([p.lat,p.lon],map.getZoom(),{animate:true});
   openLightbox(next,L.latLng(p.lat,p.lon));
 }
 
-function buildRows(p) {
-  const rows=[], add=(l,v)=>{ if(v!==null&&v!==undefined&&v!=='') rows.push('<tr><td>'+l+'</td><td>'+esc(String(v))+'</td></tr>'); };
-  if(p.lat!==null){ add('Широта',p.lat.toFixed(6)); add('Долгота',p.lon.toFixed(6)); }
+function buildRows(p){
+  const rows=[],add=(l,v)=>{if(v!==null&&v!==undefined&&v!=='') rows.push('<tr><td>'+l+'</td><td>'+esc(String(v))+'</td></tr>');};
+  if(p.lat!==null){add('Широта',p.lat.toFixed(6));add('Долгота',p.lon.toFixed(6));}
   if(p.bearing!==null&&!isNaN(p.bearing)) add('Направление',p.bearing.toFixed(1)+'°');
   const e=p.exif;
   add('Дата',e.DateTimeOriginal||e.DateTime||'');
-  const alt=e.GPSAltitude??e.GPSAltitudeRef??null;
-  if(alt!==null&&alt!==undefined) add('Высота над ур.м.',parseFloat(alt).toFixed(1)+' м');
-  // Камера, Выдержка, Диафрагма, ISO, Фокусное — убраны
+  const alt=e.GPSAltitude??null;
+  if(alt!==null) add('Высота над ур.м.',parseFloat(alt).toFixed(1)+' м');
   return rows.join('');
 }
 
-// ── МАСШТАБ ФОТО В ЛАЙТБОКСЕ ─────────────────────────────────────────────────
-function applyLbZoom() {
-  const img = document.getElementById('lb-img');
-  img.style.transform = 'scale('+lbScale+')';
-  document.getElementById('lb-zoom-val').textContent = Math.round(lbScale*100)+'%';
+// ── МАСШТАБ ФОТО ─────────────────────────────────────────────────────────────
+function applyLbZoom(){
+  document.getElementById('lb-img').style.transform='scale('+lbScale+')';
+  document.getElementById('lb-zoom-val').textContent=Math.round(lbScale*100)+'%';
 }
-function lbZoomIn()    { lbScale = Math.min(5, lbScale * 1.25); applyLbZoom(); }
-function lbZoomOut()   { lbScale = Math.max(0.25, lbScale / 1.25); applyLbZoom(); }
-function lbZoomReset() { lbScale = 1; applyLbZoom(); }
+function lbZoomIn(){lbScale=Math.min(5,lbScale*1.25);applyLbZoom();}
+function lbZoomOut(){lbScale=Math.max(0.2,lbScale/1.25);applyLbZoom();}
+function lbZoomReset(){lbScale=1;applyLbZoom();}
+document.getElementById('lb-img-wrap').addEventListener('wheel',e=>{e.preventDefault();if(e.deltaY<0)lbZoomIn();else lbZoomOut();},{passive:false});
+document.getElementById('lb-img-wrap').addEventListener('click',()=>openViewer());
 
-document.getElementById('lb-img-wrap').addEventListener('wheel', e=>{
-  e.preventDefault();
-  if(e.deltaY < 0) lbZoomIn(); else lbZoomOut();
-}, { passive:false });
-
-// ── FULLSCREEN VIEWER ─────────────────────────────────────────────────────────
-function openViewer() {
-  const src=document.getElementById('lb-img').src;
-  if(!src) return;
-  document.getElementById('viewer-img').src=src;
-  document.getElementById('viewer').classList.add('open');
-}
-document.getElementById('lb-img-wrap').addEventListener('click', ()=>openViewer());
-function closeViewer() { document.getElementById('viewer').classList.remove('open'); }
+// ── FULLSCREEN ────────────────────────────────────────────────────────────────
+function openViewer(){const src=document.getElementById('lb-img').src;if(!src) return;document.getElementById('viewer-img').src=src;document.getElementById('viewer').classList.add('open');}
+function closeViewer(){document.getElementById('viewer').classList.remove('open');}
 
 // ── MISC ──────────────────────────────────────────────────────────────────────
-function updateStats() {
+function updateStats(){
   document.getElementById('stat-total').textContent=photos.length;
   document.getElementById('stat-gps').textContent=photos.filter(p=>p.lat!==null).length;
   document.getElementById('stat-angle').textContent=photos.filter(p=>p.bearing!==null).length;
 }
 
-function clearAll() {
-  photos.forEach(p=>{ if(p.marker) map.removeLayer(p.marker); URL.revokeObjectURL(p.objectUrl); });
-  photos=[]; activeIdx=null;
-  closeLightbox();
-  updateStats(); renderList();
-  // Очищаем file input
+function clearAll(){
+  closeLightbox();closeViewer();
+  photos.forEach(p=>{if(p.marker) map.removeLayer(p.marker);URL.revokeObjectURL(p.objectUrl);});
+  photos=[];activeIdx=null;
   document.getElementById('file-input').value='';
-  // Очищаем поле Яндекс.Диска
   document.getElementById('yd-status').textContent='';
+  updateStats();renderList();
   document.getElementById('map-hint').classList.remove('hidden');
   showToast('Все фото удалены');
 }
 
-function setProgress(pct){ document.getElementById('progress-bar').style.width=pct+'%'; }
+function setProgress(pct){document.getElementById('progress-bar').style.width=pct+'%';}
 
 let _tt;
-function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('show'),2600); }
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>t.classList.remove('show'),2800);}
 
-function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
-document.addEventListener('keydown', e=>{
-  if(e.key==='Escape'){ if(document.getElementById('viewer').classList.contains('open')){ closeViewer(); return; } closeLightbox(); return; }
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){if(document.getElementById('viewer').classList.contains('open')){closeViewer();return;}closeLightbox();return;}
   if((e.key==='ArrowRight'||e.key==='ArrowLeft')&&activeIdx!==null) navPhoto(e.key==='ArrowRight'?1:-1);
 });
+
+// Первоначальный рендер
+renderList();
 </script>
 </body>
 </html>
