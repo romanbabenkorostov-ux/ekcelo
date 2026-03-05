@@ -248,117 +248,71 @@ let currentLayer = 'osm';
 // ─────────────────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
-// КАДАСТРОВЫЙ СЛОЙ — НСПД nspd.gov.ru (single-image режим)
+// ─────────────────────────────────────────────────────────────────────────────
+// КАДАСТРОВЫЙ СЛОЙ — НСПД nspd.gov.ru (тайловый WMS)
 //
-// Тайловый WMS даёт «лоскутный» эффект: каждый тайл грузится отдельно
-// в разное время → видны прямоугольники разных зумов.
+// Ключевые параметры против «лоскутного» эффекта:
+//   keepBuffer: 8      — Leaflet хранит в DOM в 8 тайлов вокруг вьюпорта,
+//                        старые тайлы НЕ удаляются пока новые не загрузились
+//   updateWhenIdle     — тайлы запрашиваются только когда карта остановилась,
+//                        не во время панорамирования
+//   updateWhenZooming:false — при зуме не перезапрашивает до конца анимации
+//   tileSize: 512      — вдвое меньше запросов, быстрее покрывает вьюпорт
 //
-// Решение: запрашиваем ОДИН PNG на весь вьюпорт (single-image WMS).
-// При каждом moveend/zoomend убираем старый overlay, создаём новый.
-// Нет швов, нет лоскутов — единая согласованная картинка.
-//
-// Layer IDs из ссылки nspd.gov.ru:
-//   36329,36328 — Земельные участки
-//   36049,36048 — ОКС
-//   36071       — Кадастровые кварталы
+// Layer IDs из ссылки nspd.gov.ru (?active_layers=36329,36328,36049,36048):
+//   36329, 36328 — Земельные участки (ЗУ)
+//   36049, 36048 — ОКС (объекты капстроительства)
+//   36071        — Кадастровые кварталы
 // ─────────────────────────────────────────────────────────────────────────────
 
-const NSPD_LAYERS = [
-  { id: 36329, label: 'ЗУ границы'     },
-  { id: 36328, label: 'ЗУ заливка'     },
-  { id: 36049, label: 'ОКС контуры'    },
-  { id: 36048, label: 'ОКС заливка'    },
-  { id: 36071, label: 'Кв. кварталы'   },
-];
+const NSPD_IDS = [36329, 36328, 36049, 36048, 36071];
 
-// Строим URL одного WMS-изображения на весь вьюпорт
-function buildNspdUrl(layerId, bounds, sizePx) {
-  const sw = L.CRS.EPSG3857.project(bounds.getSouthWest());
-  const ne = L.CRS.EPSG3857.project(bounds.getNorthEast());
-  const bbox = `${sw.x},${sw.y},${ne.x},${ne.y}`;
-  return `https://nspd.gov.ru/api/aeggis/v2/${layerId}/wms`
-    + `?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap`
-    + `&FORMAT=image%2Fpng&TRANSPARENT=true`
-    + `&LAYERS=${layerId}&STYLES=&authkey=0`
-    + `&WIDTH=${sizePx.x}&HEIGHT=${sizePx.y}`
-    + `&CRS=EPSG%3A3857&BBOX=${bbox}`;
-}
+const NSPD_WMS_OPTS = {
+  service:            'WMS',
+  version:            '1.3.0',
+  format:             'image/png',
+  transparent:        true,
+  styles:             '',
+  authkey:            '0',
+  tileSize:           512,
+  attribution:        '© НСПД Росреестр',
+  zIndex:             450,
+  keepBuffer:         8,          // хранить старые тайлы пока грузятся новые
+  updateWhenIdle:     true,       // запрашивать тайлы только после остановки
+  updateWhenZooming:  false,      // не перезапрашивать во время zoom-анимации
+};
 
-let cadastreOverlays = [];  // текущие L.imageOverlay
-let cadastreActive   = false;
-let cadastreOpacity  = 0.7;
-let cadastreUpdateTimer = null;
-
-// Удаляем все текущие overlay
-function clearCadastreOverlays() {
-  cadastreOverlays.forEach(ov => map.removeLayer(ov));
-  cadastreOverlays = [];
-}
-
-// Запрашиваем свежую картинку для текущего вьюпорта
-function updateCadastreImage() {
-  if (!cadastreActive) return;
-  clearCadastreOverlays();
-
-  const bounds  = map.getBounds();
-  // Добавляем 5% отступ чтобы картинка не обрезалась при панировании
-  const padded  = bounds.pad(0.05);
-  const sw      = padded.getSouthWest();
-  const ne      = padded.getNorthEast();
-  const paddedBounds = L.latLngBounds(sw, ne);
-
-  // Размер в пикселях (масштабируем от размера контейнера)
-  const container = map.getContainer();
-  const w = Math.round(container.offsetWidth  * 1.1);
-  const h = Math.round(container.offsetHeight * 1.1);
-  const sizePx = L.point(w, h);
-
-  // Создаём один overlay на каждый слой
-  NSPD_LAYERS.forEach(cfg => {
-    const url = buildNspdUrl(cfg.id, paddedBounds, sizePx);
-    const ov  = L.imageOverlay(url, paddedBounds, {
-      opacity:    cadastreOpacity,
-      zIndex:     450,
-      attribution: '© НСПД Росреестр',
-    });
-    // Показываем только после полной загрузки — плавная замена без мигания
-    ov.on('load', () => ov.setOpacity(cadastreOpacity));
-    ov.setOpacity(0);          // скрыт до load
-    ov.addTo(map);
-    cadastreOverlays.push(ov);
-  });
-}
-
-// Дебаунс: не спамим запросами при быстром панировании
-function scheduleCadastreUpdate() {
-  clearTimeout(cadastreUpdateTimer);
-  cadastreUpdateTimer = setTimeout(updateCadastreImage, 300);
-}
-
-map.on('moveend zoomend', scheduleCadastreUpdate);
+let cadastreLayers = [];
+let cadastreActive = false;
 
 function toggleCadastre() {
   const btn     = document.getElementById('cadastre-btn');
   const opPanel = document.getElementById('cadastre-opacity');
 
   if (!cadastreActive) {
+    if (!cadastreLayers.length) {
+      const opacity = document.getElementById('cadastre-range').value / 100;
+      cadastreLayers = NSPD_IDS.map(id =>
+        L.tileLayer.wms(`https://nspd.gov.ru/api/aeggis/v2/${id}/wms`,
+          { ...NSPD_WMS_OPTS, layers: String(id), opacity })
+      );
+    }
+    cadastreLayers.forEach(l => l.addTo(map));
     cadastreActive = true;
     btn.classList.add('active');
     opPanel.classList.add('visible');
-    updateCadastreImage();
     if (map.getZoom() < 13) showToast('Кадастр виден с zoom ≥ 13');
   } else {
+    cadastreLayers.forEach(l => map.removeLayer(l));
     cadastreActive = false;
-    clearCadastreOverlays();
     btn.classList.remove('active');
     opPanel.classList.remove('visible');
   }
 }
 
 function setCadastreOpacity(val) {
-  cadastreOpacity = val / 100;
   document.getElementById('cadastre-pct').textContent = val + '%';
-  cadastreOverlays.forEach(ov => ov.setOpacity(cadastreOpacity));
+  if (cadastreActive) cadastreLayers.forEach(l => l.setOpacity(val / 100));
 }
 
 
