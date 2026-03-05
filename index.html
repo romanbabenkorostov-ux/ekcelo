@@ -268,18 +268,18 @@ let currentLayer = 'osm';
 const NSPD_IDS = [36329, 36328, 36049, 36048, 36071];
 
 const NSPD_WMS_OPTS = {
-  service:            'WMS',
-  version:            '1.3.0',
-  format:             'image/png',
-  transparent:        true,
-  styles:             '',
-  authkey:            '0',
-  tileSize:           512,
-  attribution:        '© НСПД Росреестр',
-  zIndex:             450,
-  keepBuffer:         8,          // хранить старые тайлы пока грузятся новые
-  updateWhenIdle:     true,       // запрашивать тайлы только после остановки
-  updateWhenZooming:  false,      // не перезапрашивать во время zoom-анимации
+  service:           'WMS',
+  version:           '1.3.0',
+  format:            'image/png',
+  transparent:       true,
+  styles:            '',
+  authkey:           '0',
+  tileSize:          256,
+  attribution:       '© НСПД Росреестр',
+  zIndex:            450,
+  keepBuffer:        2,           // стандартный буфер — не тянет лишние тайлы
+  updateWhenIdle:    false,       // грузить тайлы сразу при движении (центр в приоритете)
+  updateWhenZooming: false,       // не перезапрашивать во время zoom-анимации
 };
 
 let cadastreLayers = [];
