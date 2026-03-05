@@ -303,8 +303,6 @@ async function addLocalPhoto(file) {
 //   3. Полный размер для лайтбокса — ленивый запрос /resources/download (1 запрос при клике)
 // ─────────────────────────────────────────────────────────────────────────────
 
-let ydPublicKey = ''; // сохраняем для ленивой загрузки download-URL
-
 const API_PROXIES = [
   url => url,
   url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
@@ -321,21 +319,10 @@ async function fetchWithFallback(url) {
   throw new Error('Все прокси недоступны');
 }
 
-// Получить прямую ссылку для скачивания конкретного файла (вызывается лениво при открытии лайтбокса)
-async function fetchDownloadUrl(publicKey, path) {
-  try {
-    const apiUrl = 'https://cloud-api.yandex.net/v1/disk/public/resources/download'
-      + `?public_key=${encodeURIComponent(publicKey)}&path=${encodeURIComponent(path)}`;
-    const res  = await fetchWithFallback(apiUrl);
-    const data = await res.json();
-    return data.href || null;
-  } catch (e) { return null; }
-}
-
 async function loadFromYandexDisk() {
   const statusEl  = document.getElementById('yd-status');
   const ydBtn     = document.getElementById('yd-btn');
-  ydPublicKey     = document.getElementById('yd-url').value.trim();
+  const ydPublicKey = document.getElementById('yd-url').value.trim();
 
   if (!ydPublicKey) { statusEl.textContent = 'Введите ссылку на папку'; return; }
 
@@ -394,15 +381,12 @@ async function loadFromYandexDisk() {
     const date     = exif.date_time          ?? '';
     if (lat === null || lon === null) noGps++;
 
-    // thumbUrl = item.preview (работает как <img src> без CORS при preview_size=L)
-    // displayUrl = null → загрузится лениво при открытии лайтбокса
-    // ydPath = путь относительно папки, нужен для /resources/download
-    const ydPreviewUrl = item.preview || null;
-    const ydPath       = item.path || ('/' + item.name);
+    // item.file = подписанный публичный URL. <img src> загружает его без CORS.
+    const fileUrl = item.file || null;
 
     addPhoto({
       name: item.name, size: item.size,
-      ydPreviewUrl, thumbUrl: null, displayUrl: null, ydPath,
+      thumbUrl: fileUrl, displayUrl: fileUrl,
       lat, lon, bearing, altitude, date, isRemote: true
     });
     added++;
@@ -424,47 +408,6 @@ async function loadFromYandexDisk() {
   showToast(`ЯДиск: ${added} фото добавлено`);
   ydBtn.disabled = false;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// LAZY THUMB LOADER
-// Превью Яндекс.Диска нельзя грузить <img src> напрямую — нужен прокси.
-// Кешируем как blob URL в p.thumbUrl, чтобы не делать повторных запросов.
-// ─────────────────────────────────────────────────────────────────────────────
-// Загружаем превью через прокси и кешируем как blob URL
-async function loadThumb(photo) {
-  if (photo.thumbUrl || !photo.ydPreviewUrl) return;
-  photo.thumbUrl = '__loading__'; // флаг «в процессе»
-  const proxyList = [
-    url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-    url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-  ];
-  for (const makeUrl of proxyList) {
-    try {
-      const res = await fetch(makeUrl(photo.ydPreviewUrl));
-      if (!res.ok) continue;
-      const blob = await res.blob();
-      photo.thumbUrl = URL.createObjectURL(blob);
-      // Обновляем все img.thumb с этим фото
-      document.querySelectorAll(`.photo-item[data-name="${CSS.escape(photo.name)}"] .thumb`)
-        .forEach(el => { el.src = photo.thumbUrl; });
-      return;
-    } catch (e) { /* следующий прокси */ }
-  }
-  photo.thumbUrl = ''; // не удалось
-}
-
-// IntersectionObserver — грузим только видимые превью
-const thumbObserver = new IntersectionObserver((entries) => {
-  entries.forEach(entry => {
-    if (!entry.isIntersecting) return;
-    const idx = parseInt(entry.target.dataset.idx, 10);
-    const p   = photos[idx];
-    if (p && p.isRemote && !p.thumbUrl) {
-      loadThumb(p);
-      thumbObserver.unobserve(entry.target);
-    }
-  });
-}, { rootMargin: '200px' });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PHOTO REGISTRY
@@ -566,12 +509,8 @@ function renderList() {
     const img = document.createElement('img');
     img.className = 'thumb';
     img.alt = '';
-    if (p.thumbUrl && p.thumbUrl !== '__loading__') {
-      img.src = p.thumbUrl; // уже загружено (blob URL или objectURL)
-    } else if (!p.isRemote) {
-      img.src = p.thumbUrl || ''; // локальный файл — objectURL сразу доступен
-    }
-    // для remote: src заполнится через IntersectionObserver + loadThumb()
+    img.loading = 'lazy';
+    if (p.thumbUrl) img.src = p.thumbUrl; // objectURL (local) или item.file (YD)
     thumbArea.appendChild(img);
 
     // Мета
@@ -590,13 +529,9 @@ function renderList() {
     del.className = 'del-btn'; del.title = 'Удалить'; del.innerHTML = '&#215;';
     del.addEventListener('click', ev => { ev.stopPropagation(); deletePhoto(i); });
 
-    item.dataset.name = p.name; // нужен для обновления thumb после загрузки
     item.appendChild(thumbArea);
     item.appendChild(meta);
     item.appendChild(del);
-
-    // Запускаем наблюдатель для ленивой загрузки превью с ЯД
-    if (p.isRemote && !p.thumbUrl) thumbObserver.observe(item);
 
     if (p.lat !== null) {
       const go = () => {
@@ -642,9 +577,7 @@ async function openLightbox(idx, latlng) {
   if (item) { item.classList.add('active'); item.scrollIntoView({ block: 'nearest' }); }
 
   const lbImg = document.getElementById('lb-img');
-  // Для удалённых фото: сначала показываем кешированное превью (или пусто), потом полный размер
-  const cachedThumb = p.thumbUrl && p.thumbUrl !== '__loading__' ? p.thumbUrl : '';
-  lbImg.src = cachedThumb;
+  lbImg.src = p.displayUrl || p.thumbUrl || '';
   lbImg.style.transform = 'scale(1)';
   document.getElementById('lb-zoom-val').textContent = '100%';
   document.getElementById('lb-name').textContent = p.name;
@@ -653,12 +586,7 @@ async function openLightbox(idx, latlng) {
   setActiveMarker(idx);
   requestAnimationFrame(() => posLightbox(latlng));
 
-  // Ленивая загрузка полноразмерного URL (только для ЯД-фото)
-  if (p.isRemote && !p.displayUrl) {
-    p.displayUrl = await fetchDownloadUrl(ydPublicKey, p.ydPath);
-  }
-  // Подменяем на полный размер, если лайтбокс ещё открыт для этого фото
-  if (activeIdx === idx && p.displayUrl) lbImg.src = p.displayUrl;
+
 }
 
 function posLightbox(latlng) {
