@@ -246,51 +246,53 @@ TILES.osm.addTo(map);
 let currentLayer = 'osm';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// КАДАСТРОВЫЙ СЛОЙ (Росреестр ПКК6)
+// ─────────────────────────────────────────────────────────────────────────────
+// КАДАСТРОВЫЙ СЛОЙ — НСПД (nspd.gov.ru)
 //
-// Используем L.GridLayer с <img> в createTile — браузер грузит картинки
-// без CORS-ограничений (CORS блокирует fetch/XHR, но не <img>).
+// С 23.12.2024 ПКК перенесена с pkk.rosreestr.ru на nspd.gov.ru/map.
+// Новый WMS-endpoint: https://nspd.gov.ru/api/aeggis/v2/{layerId}/wms
 //
-// Bbox вычисляем через _tileCoordsToBounds + L.CRS.EPSG3857.project —
-// это единственно верный способ в Leaflet.
+// Layer IDs из ссылки пользователя (?active_layers=36329,36328,36049,36048):
+//   36329, 36328 — Земельные участки (ЗУ)
+//   36049, 36048 — Объекты капитального строительства (ОКС)
 //
-// Сервис PKK6/Cadastre/MapServer — полный набор слоёв кадастра:
-//   0,1   — Земельные участки (границы + выделение)
-//   2,3   — ОКС (объекты капстроительства)
-//   4     — Кадастровые кварталы
-//   5,6   — Территориальные и функциональные зоны
+// Используем стандартный L.tileLayer.wms — Leaflet сам строит GetMap-запросы.
+// Добавляем crossOrigin: false, чтобы <img> отправлял Referer текущей страницы.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const PKK_URL   = 'https://pkk.rosreestr.ru/arcgis/rest/services/PKK6/Cadastre/MapServer/export';
-const PKK_LAYERS = 'show:0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,23,24,29,30,31,32,33,34,35,38,39';
+const NSPD_WMS_BASE = 'https://nspd.gov.ru/api/aeggis/v2';
 
-const CadastreLayer = L.GridLayer.extend({
-  createTile(coords, done) {
-    const img = L.DomUtil.create('img');
+// Общие параметры WMS для всех слоёв
+const WMS_PARAMS = {
+  service:     'WMS',
+  version:     '1.3.0',
+  format:      'image/png',
+  transparent: true,
+  styles:      '',
+  authkey:     '0',
+  tileSize:    256,
+  attribution: '© НСПД Росреестр',
+  opacity:     0.7,
+  zIndex:      450,
+};
 
-    // ── Правильное вычисление bbox тайла в EPSG:3857 ──────────────────────
-    // _tileCoordsToBounds возвращает LatLngBounds тайла
-    // L.CRS.EPSG3857.project конвертирует LatLng → метры Web Mercator
-    const bounds = this._tileCoordsToBounds(coords);
-    const sw = L.CRS.EPSG3857.project(bounds.getSouthWest());
-    const ne = L.CRS.EPSG3857.project(bounds.getNorthEast());
-    const bbox = `${sw.x},${sw.y},${ne.x},${ne.y}`;
+// Создаём WMS-слой для конкретного layer ID
+function makeNspdLayer(layerId) {
+  return L.tileLayer.wms(
+    `${NSPD_WMS_BASE}/${layerId}/wms`,
+    { ...WMS_PARAMS, layers: String(layerId) }
+  );
+}
 
-    const sz   = this.options.tileSize;
-    const url  = PKK_URL
-      + `?layers=${encodeURIComponent(PKK_LAYERS)}`
-      + `&dpi=96&format=PNG32`
-      + `&bbox=${bbox}&bboxSR=102100&imageSR=102100`
-      + `&size=${sz},${sz}&transparent=true&f=image`;
+// Слои кадастра (пары: описание + ID)
+const CADASTRE_LAYERS_CFG = [
+  { id: 36329, label: 'ЗУ (границы)'  },
+  { id: 36328, label: 'ЗУ (заливка)'  },
+  { id: 36049, label: 'ОКС (контуры)' },
+  { id: 36048, label: 'ОКС (заливка)' },
+];
 
-    img.onload  = () => done(null, img);
-    img.onerror = (e) => done(null, img);   // не ломаем карту при ошибке
-    img.src = url;
-    return img;
-  }
-});
-
-let cadastreLayer   = null;
+let cadastreLayers  = [];
 let cadastreActive  = false;
 
 function toggleCadastre() {
@@ -298,23 +300,18 @@ function toggleCadastre() {
   const opPanel = document.getElementById('cadastre-opacity');
 
   if (!cadastreActive) {
-    if (!cadastreLayer) {
-      cadastreLayer = new CadastreLayer({
-        tileSize:    256,
-        opacity:     document.getElementById('cadastre-range').value / 100,
-        attribution: '© Росреестр ПКК',
-        minZoom:     1,
-        maxZoom:     21,
-        zIndex:      450,
-      });
+    // Создаём слои при первом включении
+    if (!cadastreLayers.length) {
+      cadastreLayers = CADASTRE_LAYERS_CFG.map(cfg => makeNspdLayer(cfg.id));
     }
-    cadastreLayer.addTo(map);
+    const opacity = document.getElementById('cadastre-range').value / 100;
+    cadastreLayers.forEach(l => { l.setOpacity(opacity); l.addTo(map); });
     cadastreActive = true;
     btn.classList.add('active');
     opPanel.classList.add('visible');
     if (map.getZoom() < 14) showToast('Кадастр виден с zoom ≥ 14 (~масштаб 1:5000)');
   } else {
-    map.removeLayer(cadastreLayer);
+    cadastreLayers.forEach(l => map.removeLayer(l));
     cadastreActive = false;
     btn.classList.remove('active');
     opPanel.classList.remove('visible');
@@ -323,7 +320,7 @@ function toggleCadastre() {
 
 function setCadastreOpacity(val) {
   document.getElementById('cadastre-pct').textContent = val + '%';
-  if (cadastreLayer) cadastreLayer.setOpacity(val / 100);
+  if (cadastreActive) cadastreLayers.forEach(l => l.setOpacity(val / 100));
 }
 
 
