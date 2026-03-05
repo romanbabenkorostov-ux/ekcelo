@@ -248,89 +248,76 @@ let currentLayer = 'osm';
 // ─────────────────────────────────────────────────────────────────────────────
 // КАДАСТРОВЫЙ СЛОЙ (Росреестр ПКК6)
 //
-// ArcGIS MapServer /export принимает bbox в EPSG:3857 (=ESRI:102100).
-// Мы реализуем кастомный GridLayer: для каждого тайла z/x/y вычисляем
-// bbox в метрах Web Mercator и запрашиваем PNG с прозрачным фоном.
+// Используем L.GridLayer с <img> в createTile — браузер грузит картинки
+// без CORS-ограничений (CORS блокирует fetch/XHR, но не <img>).
 //
-// Слои:
-//   0  — Земельные участки (ЗУ)
-//   2  — ОКС (объекты капитального строительства)
-//   4  — Кадастровые кварталы
+// Bbox вычисляем через _tileCoordsToBounds + L.CRS.EPSG3857.project —
+// это единственно верный способ в Leaflet.
 //
-// Работает без прокси: pkk.rosreestr.ru разрешает CORS для /export
-// Виден с zoom ≥ 14 (ограничение самого сервера)
+// Сервис PKK6/Cadastre/MapServer — полный набор слоёв кадастра:
+//   0,1   — Земельные участки (границы + выделение)
+//   2,3   — ОКС (объекты капстроительства)
+//   4     — Кадастровые кварталы
+//   5,6   — Территориальные и функциональные зоны
 // ─────────────────────────────────────────────────────────────────────────────
 
-const PKK_BASE = 'https://pkk.rosreestr.ru/arcgis/rest/services/PKK6/CadastreOriginal/MapServer/export';
-// Слои: ЗУ + ОКС + кварталы
-const PKK_LAYERS = 'show:0,2,4';
+const PKK_URL   = 'https://pkk.rosreestr.ru/arcgis/rest/services/PKK6/Cadastre/MapServer/export';
+const PKK_LAYERS = 'show:0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,23,24,29,30,31,32,33,34,35,38,39';
 
-// Кастомный GridLayer — запрашивает тайлы по bbox в EPSG:3857
 const CadastreLayer = L.GridLayer.extend({
   createTile(coords, done) {
-    const img  = document.createElement('img');
-    img.setAttribute('role', 'presentation');
+    const img = L.DomUtil.create('img');
 
-    // Вычисляем bbox тайла в EPSG:3857 (Web Mercator)
-    const tileSizePx = this.getTileSize();
-    const nwPoint = coords.scaleBy(tileSizePx);
-    const sePoint = nwPoint.add(tileSizePx);
-    const nw = map.options.crs.pointToLatLng(nwPoint, coords.z);
-    const se = map.options.crs.pointToLatLng(sePoint, coords.z);
+    // ── Правильное вычисление bbox тайла в EPSG:3857 ──────────────────────
+    // _tileCoordsToBounds возвращает LatLngBounds тайла
+    // L.CRS.EPSG3857.project конвертирует LatLng → метры Web Mercator
+    const bounds = this._tileCoordsToBounds(coords);
+    const sw = L.CRS.EPSG3857.project(bounds.getSouthWest());
+    const ne = L.CRS.EPSG3857.project(bounds.getNorthEast());
+    const bbox = `${sw.x},${sw.y},${ne.x},${ne.y}`;
 
-    // Конвертация lat/lng → EPSG:3857 (метры)
-    const proj = (lat, lon) => {
-      const x = lon * 20037508.3428 / 180;
-      const y = Math.log(Math.tan((90 + lat) * Math.PI / 360)) / (Math.PI / 180) * 20037508.3428 / 180;
-      return [x, y];
-    };
-
-    const [xMin, yMin] = proj(se.lat, nw.lng);
-    const [xMax, yMax] = proj(nw.lat, se.lng);
-    const bbox = `${xMin},${yMin},${xMax},${yMax}`;
-
-    const url = PKK_BASE
+    const sz   = this.options.tileSize;
+    const url  = PKK_URL
       + `?layers=${encodeURIComponent(PKK_LAYERS)}`
       + `&dpi=96&format=PNG32`
       + `&bbox=${bbox}&bboxSR=102100&imageSR=102100`
-      + `&size=256,256&transparent=true&f=image`;
+      + `&size=${sz},${sz}&transparent=true&f=image`;
 
     img.onload  = () => done(null, img);
-    img.onerror = () => done(null, img); // не ломаем карту при 403
+    img.onerror = (e) => done(null, img);   // не ломаем карту при ошибке
     img.src = url;
     return img;
   }
 });
 
-let cadastreLayer = null;
-let cadastreActive = false;
+let cadastreLayer   = null;
+let cadastreActive  = false;
 
 function toggleCadastre() {
   const btn     = document.getElementById('cadastre-btn');
-  const opacity = document.getElementById('cadastre-opacity');
+  const opPanel = document.getElementById('cadastre-opacity');
 
   if (!cadastreActive) {
-    // Создаём слой, если ещё не создан
     if (!cadastreLayer) {
       cadastreLayer = new CadastreLayer({
-        tileSize: 256,
-        opacity:  document.getElementById('cadastre-range').value / 100,
+        tileSize:    256,
+        opacity:     document.getElementById('cadastre-range').value / 100,
         attribution: '© Росреестр ПКК',
-        minZoom: 14,     // сервер не отдаёт данные мельче z14
-        maxZoom: 20,
-        zIndex: 400,
+        minZoom:     1,
+        maxZoom:     21,
+        zIndex:      450,
       });
     }
     cadastreLayer.addTo(map);
     cadastreActive = true;
     btn.classList.add('active');
-    opacity.classList.add('visible');
-    if (map.getZoom() < 14) showToast('Кадастр виден с масштаба ~1:5000 (zoom 14+)');
+    opPanel.classList.add('visible');
+    if (map.getZoom() < 14) showToast('Кадастр виден с zoom ≥ 14 (~масштаб 1:5000)');
   } else {
     map.removeLayer(cadastreLayer);
     cadastreActive = false;
     btn.classList.remove('active');
-    opacity.classList.remove('visible');
+    opPanel.classList.remove('visible');
   }
 }
 
@@ -338,6 +325,7 @@ function setCadastreOpacity(val) {
   document.getElementById('cadastre-pct').textContent = val + '%';
   if (cadastreLayer) cadastreLayer.setOpacity(val / 100);
 }
+
 
 function toggleLayer() {
   const btn = document.getElementById('layer-btn');
