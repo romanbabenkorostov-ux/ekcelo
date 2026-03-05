@@ -397,12 +397,12 @@ async function loadFromYandexDisk() {
     // thumbUrl = item.preview (работает как <img src> без CORS при preview_size=L)
     // displayUrl = null → загрузится лениво при открытии лайтбокса
     // ydPath = путь относительно папки, нужен для /resources/download
-    const thumbUrl  = item.preview || null;
-    const ydPath    = item.path   || ('/' + item.name); // путь вида "/IMG_001.jpg"
+    const ydPreviewUrl = item.preview || null;
+    const ydPath       = item.path || ('/' + item.name);
 
     addPhoto({
       name: item.name, size: item.size,
-      thumbUrl, displayUrl: null, ydPath,
+      ydPreviewUrl, thumbUrl: null, displayUrl: null, ydPath,
       lat, lon, bearing, altitude, date, isRemote: true
     });
     added++;
@@ -424,6 +424,47 @@ async function loadFromYandexDisk() {
   showToast(`ЯДиск: ${added} фото добавлено`);
   ydBtn.disabled = false;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LAZY THUMB LOADER
+// Превью Яндекс.Диска нельзя грузить <img src> напрямую — нужен прокси.
+// Кешируем как blob URL в p.thumbUrl, чтобы не делать повторных запросов.
+// ─────────────────────────────────────────────────────────────────────────────
+// Загружаем превью через прокси и кешируем как blob URL
+async function loadThumb(photo) {
+  if (photo.thumbUrl || !photo.ydPreviewUrl) return;
+  photo.thumbUrl = '__loading__'; // флаг «в процессе»
+  const proxyList = [
+    url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+    url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  ];
+  for (const makeUrl of proxyList) {
+    try {
+      const res = await fetch(makeUrl(photo.ydPreviewUrl));
+      if (!res.ok) continue;
+      const blob = await res.blob();
+      photo.thumbUrl = URL.createObjectURL(blob);
+      // Обновляем все img.thumb с этим фото
+      document.querySelectorAll(`.photo-item[data-name="${CSS.escape(photo.name)}"] .thumb`)
+        .forEach(el => { el.src = photo.thumbUrl; });
+      return;
+    } catch (e) { /* следующий прокси */ }
+  }
+  photo.thumbUrl = ''; // не удалось
+}
+
+// IntersectionObserver — грузим только видимые превью
+const thumbObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (!entry.isIntersecting) return;
+    const idx = parseInt(entry.target.dataset.idx, 10);
+    const p   = photos[idx];
+    if (p && p.isRemote && !p.thumbUrl) {
+      loadThumb(p);
+      thumbObserver.unobserve(entry.target);
+    }
+  });
+}, { rootMargin: '200px' });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PHOTO REGISTRY
@@ -524,9 +565,13 @@ function renderList() {
     thumbArea.className = 'thumb-area';
     const img = document.createElement('img');
     img.className = 'thumb';
-    img.src = p.thumbUrl;  // для ЯД — thumbnail URL от Яндекса; для локальных — objectURL
     img.alt = '';
-    img.loading = 'lazy';
+    if (p.thumbUrl && p.thumbUrl !== '__loading__') {
+      img.src = p.thumbUrl; // уже загружено (blob URL или objectURL)
+    } else if (!p.isRemote) {
+      img.src = p.thumbUrl || ''; // локальный файл — objectURL сразу доступен
+    }
+    // для remote: src заполнится через IntersectionObserver + loadThumb()
     thumbArea.appendChild(img);
 
     // Мета
@@ -545,9 +590,13 @@ function renderList() {
     del.className = 'del-btn'; del.title = 'Удалить'; del.innerHTML = '&#215;';
     del.addEventListener('click', ev => { ev.stopPropagation(); deletePhoto(i); });
 
+    item.dataset.name = p.name; // нужен для обновления thumb после загрузки
     item.appendChild(thumbArea);
     item.appendChild(meta);
     item.appendChild(del);
+
+    // Запускаем наблюдатель для ленивой загрузки превью с ЯД
+    if (p.isRemote && !p.thumbUrl) thumbObserver.observe(item);
 
     if (p.lat !== null) {
       const go = () => {
@@ -593,8 +642,9 @@ async function openLightbox(idx, latlng) {
   if (item) { item.classList.add('active'); item.scrollIntoView({ block: 'nearest' }); }
 
   const lbImg = document.getElementById('lb-img');
-  // Для удалённых фото: показываем превью сразу, затем подгружаем полный размер
-  lbImg.src = p.thumbUrl || '';
+  // Для удалённых фото: сначала показываем кешированное превью (или пусто), потом полный размер
+  const cachedThumb = p.thumbUrl && p.thumbUrl !== '__loading__' ? p.thumbUrl : '';
+  lbImg.src = cachedThumb;
   lbImg.style.transform = 'scale(1)';
   document.getElementById('lb-zoom-val').textContent = '100%';
   document.getElementById('lb-name').textContent = p.name;
