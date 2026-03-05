@@ -29,16 +29,16 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 
 /* SIDEBAR */
 #sidebar{background:var(--surface);border-right:1px solid var(--border);overflow:hidden;display:flex;flex-direction:column;min-height:0}
-#yd-wrap{padding:10px 10px 6px;flex-shrink:0;border-bottom:1px solid var(--border)}
-#yd-wrap label{font-size:10px;color:var(--muted);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px;font-family:'JetBrains Mono',monospace}
-#yd-row{display:flex;gap:6px}
-#yd-url{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:10px;padding:5px 8px;outline:none;transition:border-color .15s;min-width:0}
-#yd-url:focus{border-color:var(--accent2)}
-#yd-url::placeholder{color:var(--muted)}
-#yd-btn{background:var(--accent2);color:#0d0f14;border:none;border-radius:var(--r);padding:5px 10px;font-family:'Syne',sans-serif;font-weight:700;font-size:11px;cursor:pointer;transition:opacity .15s;white-space:nowrap;flex-shrink:0}
-#yd-btn:hover{opacity:.8}
-#yd-btn:disabled{opacity:.4;cursor:not-allowed}
-#yd-status{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);margin-top:5px;min-height:13px;line-height:1.4;word-break:break-all}
+#gd-wrap{padding:10px 10px 6px;flex-shrink:0;border-bottom:1px solid var(--border)}
+#gd-wrap label{font-size:10px;color:var(--muted);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px;font-family:'JetBrains Mono',monospace}
+#gd-row{display:flex;gap:6px}
+#gd-url{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:10px;padding:5px 8px;outline:none;transition:border-color .15s;min-width:0}
+#gd-url:focus{border-color:var(--accent2)}
+#gd-url::placeholder{color:var(--muted)}
+#gd-btn{background:var(--accent2);color:#0d0f14;border:none;border-radius:var(--r);padding:5px 10px;font-family:'Syne',sans-serif;font-weight:700;font-size:11px;cursor:pointer;transition:opacity .15s;white-space:nowrap;flex-shrink:0}
+#gd-btn:hover{opacity:.8}
+#gd-btn:disabled{opacity:.4;cursor:not-allowed}
+#gd-status{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);margin-top:5px;min-height:13px;line-height:1.4;word-break:break-all}
 
 /* PHOTO LIST */
 #photo-list{flex:1;padding:6px 6px 14px;overflow-y:auto;overflow-x:hidden;min-height:0}
@@ -155,13 +155,18 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 </header>
 
 <aside id="sidebar">
-  <div id="yd-wrap">
-    <label>📁 Папка Яндекс.Диска</label>
-    <div id="yd-row">
-      <input type="text" id="yd-url" placeholder="https://disk.yandex.ru/d/…"/>
-      <button id="yd-btn" onclick="loadFromYandexDisk()">Загрузить</button>
+  <div id="gd-wrap">
+    <label>📁 Папка Google Drive</label>
+    <div id="gd-row">
+      <input type="text" id="gd-url" placeholder="https://drive.google.com/drive/folders/…"/>
+      <button id="gd-btn" onclick="loadFromGoogleDrive()">Загрузить</button>
     </div>
-    <div id="yd-status"></div>
+    <div id="gd-key-row" style="display:flex;gap:6px;margin-top:5px">
+      <input type="text" id="gd-key" placeholder="Google API Key…" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:10px;padding:5px 8px;outline:none;min-width:0"/>
+      <a href="https://console.cloud.google.com/apis/credentials" target="_blank"
+         style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--accent2);text-decoration:none;align-self:center;white-space:nowrap;flex-shrink:0" title="Создать бесплатный ключ">+ ключ</a>
+    </div>
+    <div id="gd-status"></div>
   </div>
   <div id="photo-list"></div>
 </aside>
@@ -295,107 +300,122 @@ async function addLocalPhoto(file) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ЯНДЕКС.ДИСК
+// GOOGLE DRIVE
 //
-// Принцип:
-//   1. API отдаёт GPS в item.exif и preview-URL в item.preview (нужен &preview_size=L)
-//   2. Превью показываем через <img src="item.preview"> — работает кросс-доменно
-//   3. Полный размер для лайтбокса — ленивый запрос /resources/download (1 запрос при клике)
+// Принцип (всё работает нативно, без прокси):
+//   1. Google Drive API v3 поддерживает CORS из браузера (с API-ключом)
+//   2. API возвращает GPS в imageMediaMetadata.location.latitude/longitude
+//   3. Превью:   https://drive.google.com/thumbnail?id=ID&sz=w300  — <img> без CORS
+//   4. Полный:   https://drive.google.com/thumbnail?id=ID&sz=w1600 — <img> без CORS
+//
+// API-ключ: console.cloud.google.com → Credentials → API Key
+//           Включить: Google Drive API. Ограничить: Drive API + ваш домен.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const API_PROXIES = [
-  url => url,
-  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-];
-
-async function fetchWithFallback(url) {
-  for (const proxy of API_PROXIES) {
-    try {
-      const res = await fetch(proxy(url), { signal: AbortSignal.timeout(8000) });
-      if (res.ok) return res;
-    } catch (e) { /* следующий прокси */ }
-  }
-  throw new Error('Все прокси недоступны');
+function parseFolderId(url) {
+  // Принимает ссылку вида:
+  //   https://drive.google.com/drive/folders/FOLDER_ID
+  //   https://drive.google.com/drive/folders/FOLDER_ID?usp=sharing
+  //   или просто FOLDER_ID
+  const m = url.match(/folders\/([a-zA-Z0-9_-]+)/);
+  if (m) return m[1];
+  // Если вставили просто ID
+  if (/^[a-zA-Z0-9_-]{10,}$/.test(url.trim())) return url.trim();
+  return null;
 }
 
-async function loadFromYandexDisk() {
-  const statusEl  = document.getElementById('yd-status');
-  const ydBtn     = document.getElementById('yd-btn');
-  const ydPublicKey = document.getElementById('yd-url').value.trim();
+// URL изображения через Google Drive thumbnail (работает в <img> для публичных файлов)
+const gdThumb   = id => `https://drive.google.com/thumbnail?id=${id}&sz=w300`;
+const gdDisplay = id => `https://drive.google.com/thumbnail?id=${id}&sz=w1600`;
 
-  if (!ydPublicKey) { statusEl.textContent = 'Введите ссылку на папку'; return; }
+async function loadFromGoogleDrive() {
+  const statusEl = document.getElementById('gd-status');
+  const gdBtn    = document.getElementById('gd-btn');
+  const folderUrl = document.getElementById('gd-url').value.trim();
+  const apiKey    = document.getElementById('gd-key').value.trim();
 
-  ydBtn.disabled = true;
+  if (!folderUrl) { statusEl.textContent = 'Введите ссылку на папку'; return; }
+  if (!apiKey)    { statusEl.textContent = 'Введите API-ключ Google'; return; }
+
+  const folderId = parseFolderId(folderUrl);
+  if (!folderId) { statusEl.textContent = 'Не удалось извлечь ID папки из ссылки'; return; }
+
+  gdBtn.disabled = true;
   setProgress(2);
-
-  // ── 1. Список файлов с превью и GPS ───────────────────────────────────────
-  // &preview_size=L — обязательно, иначе item.preview будет пустым
-  // &path=/ в полях — нужен для ленивого /resources/download
-  let allItems = [], offset = 0, limit = 100;
   statusEl.textContent = 'Получаем список файлов…';
+
+  // ── 1. Постранично получаем все JPEG из папки ─────────────────────────────
+  // imageMediaMetadata содержит GPS, дату, и другие EXIF-поля прямо из API
+  const FIELDS = 'nextPageToken,files(id,name,size,imageMediaMetadata)';
+  const BASE   = 'https://www.googleapis.com/drive/v3/files';
+  const QUERY  = `'${folderId}' in parents and mimeType='image/jpeg' and trashed=false`;
+
+  let allFiles = [], pageToken = '';
 
   try {
     while (true) {
-      const apiUrl = 'https://cloud-api.yandex.net/v1/disk/public/resources'
-        + `?public_key=${encodeURIComponent(ydPublicKey)}`
-        + `&limit=${limit}&offset=${offset}&preview_size=L&preview_crop=false`;
+      let apiUrl = `${BASE}?q=${encodeURIComponent(QUERY)}`
+        + `&fields=${encodeURIComponent(FIELDS)}`
+        + `&pageSize=1000&orderBy=name&key=${encodeURIComponent(apiKey)}`;
+      if (pageToken) apiUrl += `&pageToken=${encodeURIComponent(pageToken)}`;
 
-      const res  = await fetchWithFallback(apiUrl);
+      const res  = await fetch(apiUrl);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error?.message || `HTTP ${res.status}`);
+      }
       const data = await res.json();
-      if (data.error) throw new Error(data.description || data.error);
-
-      const items = (data._embedded?.items || [])
-        .filter(i => i.type === 'file' && /\.(jpg|jpeg)$/i.test(i.name));
-      allItems.push(...items);
-
-      const total = data._embedded?.total ?? 0;
-      offset += limit;
-      statusEl.textContent = `Сканируем: ${allItems.length} из ${total}…`;
-      setProgress(Math.round(2 + allItems.length / Math.max(total, 1) * 18));
-      if (offset >= total || items.length === 0) break;
+      allFiles.push(...(data.files || []));
+      statusEl.textContent = `Сканируем: ${allFiles.length} файлов…`;
+      setProgress(Math.round(2 + Math.min(allFiles.length / 50, 1) * 18));
+      pageToken = data.nextPageToken || '';
+      if (!pageToken) break;
     }
   } catch (e) {
     statusEl.textContent = 'Ошибка API: ' + e.message;
-    setProgress(0); ydBtn.disabled = false;
-    showToast('Не удалось получить список файлов'); return;
+    setProgress(0); gdBtn.disabled = false;
+    showToast('Ошибка Google Drive API'); return;
   }
 
-  if (!allItems.length) {
+  if (!allFiles.length) {
     statusEl.textContent = 'Нет JPEG-файлов в папке';
-    setProgress(0); ydBtn.disabled = false; return;
+    setProgress(0); gdBtn.disabled = false; return;
   }
 
-  // ── 2. Создаём записи из метаданных ───────────────────────────────────────
+  // ── 2. Создаём записи фото из метаданных API ─────────────────────────────
+  // imageMediaMetadata.location.{latitude, longitude, altitude}
+  // imageMediaMetadata.time = "2026:03:04 08:46:29"
   let added = 0, noGps = 0;
 
-  for (let i = 0; i < allItems.length; i++) {
-    const item = allItems[i];
-    const exif = item.exif || {};
-    if (photos.find(p => p.name === item.name)) continue;
+  for (let i = 0; i < allFiles.length; i++) {
+    const f    = allFiles[i];
+    if (photos.find(p => p.name === f.name && p.gdId === f.id)) continue;
 
-    const lat      = exif.gps_latitude       ?? null;
-    const lon      = exif.gps_longitude      ?? null;
-    const bearing  = exif.gps_img_direction  != null ? parseFloat(exif.gps_img_direction) : null;
-    const altitude = exif.gps_altitude       ?? null;
-    const date     = exif.date_time          ?? '';
+    const meta = f.imageMediaMetadata || {};
+    const loc  = meta.location || {};
+
+    const lat      = (loc.latitude  != null) ? parseFloat(loc.latitude)  : null;
+    const lon      = (loc.longitude != null) ? parseFloat(loc.longitude) : null;
+    const altitude = (loc.altitude  != null) ? parseFloat(loc.altitude)  : null;
+    const date     = meta.time || '';
+    const bearing  = null; // Google Drive API не возвращает направление съёмки
+
     if (lat === null || lon === null) noGps++;
 
-    // item.file = подписанный публичный URL. <img src> загружает его без CORS.
-    const fileUrl = item.file || null;
-
+    // thumbnail и display URLs — <img src> грузит их без CORS для публичных файлов
     addPhoto({
-      name: item.name, size: item.size,
-      thumbUrl: fileUrl, displayUrl: fileUrl,
+      name: f.name, size: f.size, gdId: f.id,
+      thumbUrl:   gdThumb(f.id),
+      displayUrl: gdDisplay(f.id),
       lat, lon, bearing, altitude, date, isRemote: true
     });
     added++;
 
-    if (added % 10 === 0 || added === allItems.length) {
-      setProgress(Math.round(20 + added / allItems.length * 80));
-      statusEl.textContent = `Обработано ${added} / ${allItems.length}…`;
+    if (added % 20 === 0 || added === allFiles.length) {
+      setProgress(Math.round(20 + added / allFiles.length * 80));
+      statusEl.textContent = `Обработано ${added} / ${allFiles.length}…`;
       updateStats(); renderList();
-      if (added === 10) fitMapToPhotos();
+      if (added === 20) fitMapToPhotos();
       await new Promise(r => setTimeout(r, 0));
     }
   }
@@ -405,8 +425,8 @@ async function loadFromYandexDisk() {
   updateStats(); renderList();
   const gpsInfo = noGps > 0 ? ` (${noGps} без GPS)` : '';
   statusEl.textContent = `Загружено: ${added} фото${gpsInfo}`;
-  showToast(`ЯДиск: ${added} фото добавлено`);
-  ydBtn.disabled = false;
+  showToast(`Google Drive: ${added} фото добавлено`);
+  gdBtn.disabled = false;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -701,7 +721,7 @@ function clearAll() {
   });
   photos = []; activeIdx = null;
   document.getElementById('file-input').value = '';
-  document.getElementById('yd-status').textContent = '';
+  document.getElementById('gd-status').textContent = '';
   updateStats(); renderList();
   document.getElementById('map-hint').classList.remove('hidden');
   showToast('Все фото удалены');
