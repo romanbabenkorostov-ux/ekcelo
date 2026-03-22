@@ -243,6 +243,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 // MAP
 // ─────────────────────────────────────────────────────────────────────────────
 const map = L.map('map', { center: [55.75, 37.61], zoom: 5, zoomControl: true });
+// Убираем только надпись «Leaflet» — самый стабильный и официальный способ
+map.attributionControl.setPrefix(false);
+
 L.control.scale({ imperial: false, metric: true, position: 'bottomleft' }).addTo(map);
 
 const TILES = {
