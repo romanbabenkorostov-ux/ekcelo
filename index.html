@@ -248,6 +248,68 @@ map.attributionControl.setPrefix(false);
 
 L.control.scale({ imperial: false, metric: true, position: 'bottomleft' }).addTo(map);
 
+// ──────────────────────────────────────────────────────────────
+// КЛИК ПО КАРТЕ → кадастр + координаты + центр участка (mock)
+// ──────────────────────────────────────────────────────────────
+map.on('click', function (e) {
+    const lat = e.latlng.lat.toFixed(6);
+    const lng = e.latlng.lng.toFixed(6);
+
+    // === МОК-ДАННЫЕ (как просил) ===
+    const cadNumber = '15:05:0010101:652';
+    const centerLat = 55.812345;
+    const centerLng = 37.623456;
+
+    const popupHTML = `
+        <div style="font-family:system-ui; min-width:260px; line-height:1.5">
+            <b>📍 Кликнутая точка</b><br>
+            <code style="background:#f0f0f0;padding:2px 6px;border-radius:3px">
+                ${lat}, ${lng}
+            </code><br><br>
+
+            <b>🏠 Кадастровые номера в точке</b><br>
+            • <span style="color:#d32f2f">${cadNumber}</span> <small>(1 участок)</small><br><br>
+
+            <b>📍 Центр участка</b><br>
+            <code style="background:#e8f5e9;padding:2px 6px;border-radius:3px">
+                ${centerLat.toFixed(4)}, ${centerLng.toFixed(4)}
+            </code><br>
+
+            <button onclick="centerOnCadastral()" style="margin-top:8px;margin-right:6px;padding:6px 12px;background:#1976d2;color:white;border:none;border-radius:4px;cursor:pointer">
+                → Перейти в центр
+            </button>
+            <button onclick="copyCadastralInfo()" style="padding:6px 12px;background:#388e3c;color:white;border:none;border-radius:4px;cursor:pointer">
+                📋 Копировать
+            </button>
+        </div>`;
+
+    L.popup({ 
+        maxWidth: 320, 
+        className: 'cadastral-popup' 
+    })
+        .setLatLng(e.latlng)
+        .setContent(popupHTML)
+        .openOn(map);
+
+    showToast(`✅ Найден кадастр ${cadNumber}`);
+});
+
+// Глобальные функции (добавляются один раз)
+window.centerOnCadastral = function () {
+    map.flyTo([55.812345, 37.623456], 18, { duration: 1.5 });
+    showToast('🗺 Карта перемещена в центр участка 15:05:0010101:652');
+};
+
+window.copyCadastralInfo = function () {
+    const text = `Координаты: 55.812345, 37.623456\nКадастр: 15:05:0010101:652\nЦентр: 55.8123, 37.6235`;
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('📋 Всё скопировано в буфер!');
+    });
+};
+
+
+
+
 const TILES = {
   osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 19 }),
   sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '© Esri', maxZoom: 19 })
