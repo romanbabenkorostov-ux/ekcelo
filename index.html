@@ -248,107 +248,108 @@ map.attributionControl.setPrefix(false);
 
 L.control.scale({ imperial: false, metric: true, position: 'bottomleft' }).addTo(map);
 
+
 // ──────────────────────────────────────────────────────────────
-// КЛИК ПО КАРТЕ → РЕАЛЬНЫЙ GetFeatureInfo + стабильный RU-friendly fallback
+// КЛИК ПО КАРТЕ — только прямой запрос, без прокси и моков
 // ──────────────────────────────────────────────────────────────
 map.on('click', async function (e) {
     const lat = e.latlng.lat.toFixed(6);
     const lng = e.latlng.lng.toFixed(6);
 
-    showToast('🔍 Запрашиваю кадастр в точке... (через proxy)');
+    showToast('🔍 Запрос к НСПД...');
 
     const NSPD_IDS = [36329, 36328, 36049, 36048, 36071];
     const results = new Set();
+    let errorMsg = null;
 
     try {
-        const proxy = 'https://corsproxy.io/?';
         const promises = NSPD_IDS.map(async id => {
             const latlng = e.latlng;
             const R = 20037508.34;
             const cx = latlng.lng * R / 180;
             const cy = Math.log(Math.tan((90 + latlng.lat) * Math.PI / 360)) * R / Math.PI;
-            const buffer = 120; // метров вокруг клика
+            const buffer = 120; // ~120 м
 
             const bbox = `${cx - buffer},${cy - buffer},${cx + buffer},${cy + buffer}`;
 
-            let url = `https://nspd.gov.ru/api/aeggis/v3/${id}/wms?` + new URLSearchParams({
-                SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetFeatureInfo',
-                LAYERS: String(id), QUERY_LAYERS: String(id),
-                INFO_FORMAT: 'text/html', FEATURE_COUNT: '20',
-                X: '128', Y: '128', WIDTH: '256', HEIGHT: '256',
-                CRS: 'EPSG:3857', BBOX: bbox, STYLES: ''
-            });
+            const url = `https://nspd.gov.ru/api/aeggis/v3/${id}/wms?` +
+                new URLSearchParams({
+                    SERVICE: 'WMS',
+                    VERSION: '1.3.0',
+                    REQUEST: 'GetFeatureInfo',
+                    LAYERS: String(id),
+                    QUERY_LAYERS: String(id),
+                    INFO_FORMAT: 'text/html',
+                    FEATURE_COUNT: '20',
+                    X: '128',
+                    Y: '128',
+                    WIDTH: '256',
+                    HEIGHT: '256',
+                    CRS: 'EPSG:3857',
+                    BBOX: bbox,
+                    STYLES: ''
+                });
 
-            const proxied = proxy + encodeURIComponent(url);
-            const res = await fetch(proxied);
-            if (!res.ok) throw new Error('blocked');
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
             const text = await res.text();
             const found = text.match(/\b(\d{2}:\d{2,3}:\d{6,10}:\d{1,6})\b/g) || [];
             found.forEach(n => results.add(n.trim()));
         });
 
-        await Promise.all(promises);
-        if (results.size === 0) throw new Error('нет данных');
+        await Promise.allSettled(promises);  // продолжаем даже если часть слоёв упала
     } catch (err) {
-        // 🔥 Стабильный fallback с твоими реальными номерами и центром
-        ['15:05:0010101:554', '15:05:0010101:652', '15:05:0010101:604', '15:05:0010101:564']
-            .forEach(n => results.add(n));
-        console.info('💡 Прямой запрос ограничен → показываю реальные участки 15:05:0010101 (рекомендуется российский IP/VPN для 100% успеха)');
+        errorMsg = 'Не удалось получить данные (CORS / блокировка / ошибка сервера)';
+        console.warn('GetFeatureInfo ошибка:', err);
     }
 
     const cadList = Array.from(results).sort();
+    const count = cadList.length;
+    const isSingle = count === 1;
 
-    const centerLat = 43.248524;
-    const centerLng = 44.213248;
-    const centerX = 4921796;
-    const centerY = 5349876;
+    // Центр — только если ровно один участок (заглушка; в реальности нужно парсить из ответа или отдельного запроса)
+    // Пока оставляем placeholder — для реального центра потребуется другой API (не GetFeatureInfo)
+    const centerLat = isSingle ? '—' : null;
+    const centerLng = isSingle ? '—' : null;
+
+    let content = `
+        <b>📍 Кликнутая точка</b><br>
+        <code style="background:#f0f0f0;padding:3px 6px;border-radius:4px">${lat}, ${lng}</code><br><br>`;
+
+    if (errorMsg) {
+        content += `<span style="color:#d32f2f">${errorMsg}</span>`;
+    } else if (count === 0) {
+        content += `<span style="color:#555">Участков не найдено</span>`;
+    } else {
+        content += `<b>🏠 Участков: ${count}</b><br>`;
+        if (count > 5) {
+            content += `<div style="max-height:140px;overflow-y:auto;padding-right:6px">`;
+        }
+        content += cadList.map(cad => {
+            const link = `https://nspd.gov.ru/map?thematic=Default&zoom=17.5&selectedCard=${encodeURIComponent(cad)}`;
+            return `• <span style="color:#d32f2f;font-weight:700">${cad}</span> 
+                    <a href="${link}" target="_blank" style="color:#1976d2;font-size:12px">→ НСПД</a><br>`;
+        }).join('');
+        if (count > 5) content += `</div>`;
+        if (isSingle && centerLat !== '—') {
+            content += `<br><b>📍 Центр участка</b><br>
+                        <code style="background:#e8f5e9;padding:3px 6px;border-radius:4px">${centerLat}, ${centerLng}</code>`;
+        }
+    }
 
     const popupHTML = `
-        <div style="font-family:system-ui; min-width:290px; line-height:1.5; font-size:14px">
-            <b>📍 Кликнутая точка</b><br>
-            <code style="background:#f0f0f0;padding:3px 7px;border-radius:4px">${lat}, ${lng}</code><br><br>
-
-            <b>🏠 Найдено кадастровых участков: ${cadList.length}</b><br>
-            ${cadList.map(cad => `
-                • <span style="color:#d32f2f;font-weight:700">${cad}</span><br>
-                <a href="https://nspd.gov.ru/map?thematic=Default&zoom=17.5&coordinate_x=${centerX}&coordinate_y=${centerY}&selectedCard=${encodeURIComponent(cad)}" 
-                   target="_blank" style="color:#1976d2;font-size:13px;margin-left:12px">→ Открыть в НСПД</a><br>
-            `).join('')}
-
-            <br><b>📍 Центр зоны (реальный)</b><br>
-            <code style="background:#e8f5e9;padding:3px 7px;border-radius:4px">${centerLat}, ${centerLng}</code>
-
-            <div style="margin-top:10px">
-                <button onclick="centerOnFound()" style="padding:8px 14px;background:#1976d2;color:#fff;border:none;border-radius:5px;cursor:pointer;margin-right:6px">
-                    🗺 Перейти в центр участка
-                </button>
-                <button onclick="copyAllCads()" style="padding:8px 14px;background:#388e3c;color:#fff;border:none;border-radius:5px;cursor:pointer">
-                    📋 Копировать всё
-                </button>
-            </div>
-            <small style="color:#666;display:block;margin-top:8px">Для прямого GetFeatureInfo без proxy — запускай с российского IP</small>
+        <div style="font-family:system-ui; min-width:215px; max-width:265px; line-height:1.45; font-size:13.5px">
+            ${content}
         </div>`;
 
-    L.popup({ maxWidth: 360, className: 'cadastral-popup' })
+    L.popup({ maxWidth: 265 })
         .setLatLng(e.latlng)
         .setContent(popupHTML)
         .openOn(map);
 
-    showToast(`✅ Найдено ${cadList.length} участков • центр 43.2485° 44.2132°`);
+    showToast(count > 0 ? `Найдено ${count} участок(-ов)` : 'Нет данных');
 });
-
-// Глобальные функции
-window.centerOnFound = function () {
-    map.flyTo([43.248524, 44.213248], 18, { duration: 1.6 });
-    showToast('🗺 Карта в центре участка 15:05:0010101:604 (и соседних)');
-};
-
-window.copyAllCads = function () {
-    const text = `Координаты клика: 43.248524, 44.213248\nКадастры: 15:05:0010101:554, 652, 604, 564\nСсылка НСПД: https://nspd.gov.ru/map?...`;
-    navigator.clipboard.writeText(text).then(() => showToast('📋 Всё скопировано'));
-};
-
 
 
 
