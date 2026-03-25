@@ -975,6 +975,369 @@ document.addEventListener('keydown', e => {
 
 // Начальный рендер
 renderList();
+
+/**
+ * ============================================================
+ *  EKCELO — Патч: загрузка фото через URL-параметры + кнопка «Поделиться»
+ *  Вставьте этот блок в конец <script> в index.html,
+ *  ПОСЛЕ всех существующих функций.
+ * ============================================================
+ */
+ 
+// ─────────────────────────────────────────────────────────────
+// 1. УТИЛИТЫ
+// ─────────────────────────────────────────────────────────────
+ 
+/**
+ * Преобразует ссылку Google Drive любого вида
+ * в прямую ссылку для скачивания через export=download.
+ * Поддерживает форматы:
+ *   /file/d/ID/view...
+ *   /open?id=ID
+ *   /uc?id=ID
+ */
+function gdriveToDirect(url) {
+  let id = null;
+ 
+  // /file/d/FILEID/...
+  const m1 = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (m1) id = m1[1];
+ 
+  // ?id=FILEID или &id=FILEID
+  if (!id) {
+    const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (m2) id = m2[1];
+  }
+ 
+  if (id) {
+    return `https://drive.google.com/uc?export=download&id=${id}`;
+  }
+ 
+  // Не Google Drive — вернуть как есть
+  return url;
+}
+ 
+/**
+ * Извлекает File ID из ссылки Google Drive.
+ * Возвращает null, если не удалось.
+ */
+function extractGdriveId(url) {
+  const m = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  return m ? m[1] : null;
+}
+ 
+/**
+ * Строит имя файла по умолчанию из ID:
+ * photo_XXXXXXXX.jpg (первые 8 символов ID).
+ */
+function defaultNameFromId(id) {
+  return id ? `photo_${id.substring(0, 8)}.jpg` : 'photo.jpg';
+}
+ 
+// ─────────────────────────────────────────────────────────────
+// 2. TOAST-УВЕДОМЛЕНИЯ
+//    Если в проекте уже есть своя функция showToast — удалите эту.
+// ─────────────────────────────────────────────────────────────
+ 
+function showToast(msg, type = 'info', duration = 3500) {
+  // Создаём контейнер, если его ещё нет
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.style.cssText = `
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      z-index: 9999; display: flex; flex-direction: column; gap: 8px;
+      pointer-events: none;
+    `;
+    document.body.appendChild(container);
+  }
+ 
+  const colors = {
+    info:    '#3b82f6',
+    success: '#22c55e',
+    error:   '#ef4444',
+    warn:    '#f59e0b',
+  };
+ 
+  const toast = document.createElement('div');
+  toast.style.cssText = `
+    background: ${colors[type] || colors.info};
+    color: #fff; padding: 10px 18px; border-radius: 8px;
+    font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,.25);
+    opacity: 0; transition: opacity .25s; pointer-events: auto;
+    max-width: 380px; word-break: break-word;
+  `;
+  toast.textContent = msg;
+  container.appendChild(toast);
+ 
+  // Плавное появление
+  requestAnimationFrame(() => { toast.style.opacity = '1'; });
+ 
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
+ 
+// ─────────────────────────────────────────────────────────────
+// 3. ЗАГРУЗКА ОДНОГО REMOTE-ФОТО
+// ─────────────────────────────────────────────────────────────
+ 
+/**
+ * Список remote-фото (только загруженных через URL),
+ * используется для формирования share-ссылки.
+ * Каждый элемент: { originalUrl, name }
+ */
+const remotePhotos = [];
+ 
+/**
+ * Загружает одно фото по URL, читает EXIF и добавляет маркер на карту.
+ *
+ * @param {string} originalUrl  — исходная ссылка (Google Drive или другая)
+ * @param {string} name         — отображаемое имя файла
+ */
+async function loadRemotePhoto(originalUrl, name) {
+  showToast(`⏳ Загружаем: ${name}`, 'info', 4000);
+ 
+  const directUrl = gdriveToDirect(originalUrl);
+ 
+  let blob;
+  try {
+    const resp = await fetch(directUrl);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    blob = await resp.blob();
+  } catch (err) {
+    showToast(`❌ Ошибка загрузки: ${name} — ${err.message}`, 'error');
+    console.error('[ekcelo] loadRemotePhoto fetch error:', err);
+    return;
+  }
+ 
+  // Создаём File-объект, чтобы передать в существующий обработчик
+  const file = new File([blob], name, { type: blob.type || 'image/jpeg' });
+ 
+  // Читаем EXIF
+  let exif = null;
+  try {
+    exif = await exifr.parse(file, {
+      gps: true, tiff: true, exif: true,
+      translateValues: true, reviveValues: true,
+    });
+  } catch (e) {
+    console.warn('[ekcelo] EXIF parse error:', e);
+  }
+ 
+  // ─── АДАПТАЦИЯ ───────────────────────────────────────────
+  // Здесь мы вызываем СУЩЕСТВУЮЩУЮ функцию добавления фото на карту.
+  // Название функции нужно уточнить по вашему коду.
+  //
+  // Наиболее вероятные варианты (раскомментируйте подходящий):
+  //
+  // 1) Если в проекте есть функция вроде addPhotoToMap(file, exif):
+  //    addPhotoToMap(file, exif);
+  //
+  // 2) Если используется processFile(file):
+  //    processFile(file);
+  //
+  // 3) Если файлы накапливаются в массив и затем рендерятся:
+  //    photoFiles.push(file);
+  //    renderPhoto(file, exif);
+  //
+  // По умолчанию пробуем наиболее распространённый вариант:
+  if (typeof addPhotoToMap === 'function') {
+    addPhotoToMap(file, exif);
+  } else if (typeof processFile === 'function') {
+    processFile(file);
+  } else if (typeof handleFile === 'function') {
+    handleFile(file);
+  } else {
+    console.error('[ekcelo] Не найдена функция добавления фото. ' +
+      'Укажите правильное имя в loadRemotePhoto().');
+    showToast('⚠️ Не найдена функция добавления фото', 'warn');
+    return;
+  }
+ 
+  // Запоминаем для share-ссылки
+  remotePhotos.push({ originalUrl, name });
+  updateShareButton();
+ 
+  showToast(`✅ Добавлено: ${name}`, 'success');
+}
+ 
+// ─────────────────────────────────────────────────────────────
+// 4. КНОПКА «ПОДЕЛИТЬСЯ ЭТИМИ ФОТО»
+// ─────────────────────────────────────────────────────────────
+ 
+/**
+ * Создаём кнопку и вставляем в шапку рядом с заголовком.
+ * Кнопка скрыта по умолчанию.
+ */
+function createShareButton() {
+  const btn = document.createElement('button');
+  btn.id = 'share-btn';
+  btn.innerHTML = '🔗 Поделиться этими фото';
+  btn.title = 'Скопировать ссылку на все загруженные из интернета фото';
+  btn.style.cssText = `
+    display: none;
+    background: #3b82f6;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 14px;
+    cursor: pointer;
+    margin-left: 12px;
+    transition: background .2s;
+    white-space: nowrap;
+  `;
+  btn.addEventListener('mouseenter', () => { btn.style.background = '#2563eb'; });
+  btn.addEventListener('mouseleave', () => { btn.style.background = '#3b82f6'; });
+  btn.addEventListener('click', copyShareLink);
+ 
+  // Вставляем в шапку: ищем первый <h1> или <header>
+  const header = document.querySelector('header') ||
+                 document.querySelector('.header') ||
+                 document.querySelector('h1')?.parentElement ||
+                 document.body;
+ 
+  // Если нашли h1 — вставляем сразу после него
+  const h1 = document.querySelector('h1');
+  if (h1) {
+    h1.insertAdjacentElement('afterend', btn);
+  } else {
+    header.prepend(btn);
+  }
+ 
+  return btn;
+}
+ 
+/** Показывает / скрывает кнопку в зависимости от наличия remote-фото */
+function updateShareButton() {
+  let btn = document.getElementById('share-btn');
+  if (!btn) btn = createShareButton();
+  btn.style.display = remotePhotos.length > 0 ? 'inline-block' : 'none';
+}
+ 
+/**
+ * Формирует share-ссылку и копирует в буфер обмена.
+ * Только remote-фото (без локальных файлов).
+ * Обрезает по ~2000 символам URL.
+ */
+function copyShareLink() {
+  const base = window.location.origin + window.location.pathname;
+  const MAX_URL_LEN = 2000;
+ 
+  const params = new URLSearchParams();
+  let count = 0;
+ 
+  for (const photo of remotePhotos) {
+    count++;
+    const testParams = new URLSearchParams(params);
+    testParams.set(`photo${count}`, photo.originalUrl);
+    testParams.set(`name${count}`, photo.name);
+ 
+    const testUrl = `${base}?${testParams.toString()}`;
+    if (testUrl.length > MAX_URL_LEN) {
+      showToast(
+        `⚠️ Ссылка обрезана: вошли ${count - 1} из ${remotePhotos.length} фото`,
+        'warn', 5000
+      );
+      break;
+    }
+ 
+    params.set(`photo${count}`, photo.originalUrl);
+    params.set(`name${count}`, photo.name);
+  }
+ 
+  const shareUrl = `${base}?${params.toString()}`;
+ 
+  navigator.clipboard.writeText(shareUrl)
+    .then(() => showToast('📋 Ссылка скопирована в буфер обмена!', 'success'))
+    .catch(() => {
+      // Фолбэк для браузеров без clipboard API
+      const ta = document.createElement('textarea');
+      ta.value = shareUrl;
+      ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+      showToast('📋 Ссылка скопирована!', 'success');
+    });
+ 
+  // URL в адресной строке НЕ меняем (по требованию ТЗ)
+}
+ 
+// ─────────────────────────────────────────────────────────────
+// 5. РАЗБОР URL-ПАРАМЕТРОВ ПРИ ЗАГРУЗКЕ СТРАНИЦЫ
+// ─────────────────────────────────────────────────────────────
+ 
+/**
+ * Читает параметры вида photo1=URL1&name1=Название1&photo2=...
+ * и запускает загрузку всех переданных фото.
+ */
+async function loadPhotosFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+ 
+  // Собираем все фото: { n: number, url: string, name: string }
+  const photos = [];
+ 
+  for (const [key, value] of params.entries()) {
+    const match = key.match(/^photo(\d+)$/);
+    if (!match) continue;
+ 
+    const n = parseInt(match[1], 10);
+    const url = value;
+    const id = extractGdriveId(url);
+    const name = params.get(`name${n}`) || defaultNameFromId(id);
+ 
+    photos.push({ n, url, name });
+  }
+ 
+  if (photos.length === 0) return;
+ 
+  // Сортируем по номеру
+  photos.sort((a, b) => a.n - b.n);
+ 
+  showToast(`📂 Загружаем ${photos.length} фото из ссылки…`, 'info', 5000);
+ 
+  // Загружаем последовательно, чтобы не перегружать браузер
+  for (const photo of photos) {
+    await loadRemotePhoto(photo.url, photo.name);
+  }
+ 
+  // Подгоняем карту под все загруженные маркеры
+  // (если в проекте есть такая функция)
+  if (typeof fitMapToPhotos === 'function') {
+    fitMapToPhotos();
+  }
+}
+ 
+// ─────────────────────────────────────────────────────────────
+// 6. ИНИЦИАЛИЗАЦИЯ
+// ─────────────────────────────────────────────────────────────
+ 
+// Запускаем после полной загрузки DOM и карты
+window.addEventListener('load', () => {
+  createShareButton();     // создаём кнопку (скрытую) сразу
+  loadPhotosFromUrl();     // загружаем фото из URL, если есть параметры
+});
+ 
+// ─────────────────────────────────────────────────────────────
+// КАК ИСПОЛЬЗОВАТЬ
+// ─────────────────────────────────────────────────────────────
+//
+// Пример ссылки с одним фото:
+//   https://romanbabenkorostov-ux.github.io/ekcelo/?photo1=https://drive.google.com/file/d/1cEqjmiVYTNOBJYp9lTFnXKYt8xBh2Q91/view&name1=Мой%20снимок
+//
+// Пример с несколькими фото:
+//   ?photo1=URL1&name1=Фото1&photo2=URL2&name2=Фото2
+//
+// ВАЖНО: в функции loadRemotePhoto() раскомментируйте вызов
+// той функции, которая уже есть в вашем проекте для добавления
+// фото на карту (addPhotoToMap / processFile / handleFile).
+// Посмотрите в коде index.html как называется обработчик drop/change.
+
 </script>
 </body>
 </html>
