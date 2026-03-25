@@ -8,6 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<!-- piexifjs — запись GPS в EXIF (ТЗ 2) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/piexifjs/1.0.6/piexif.min.js"></script>
 <style>
 :root{--bg:#0d0f14;--surface:#161a24;--border:#252b3a;--accent:#e8ff47;--accent2:#47c8ff;--text:#e4e8f0;--muted:#5a6480;--danger:#ff5c5c;--r:6px}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -27,6 +29,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .stat-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.5px}
 #clear-btn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:var(--r);padding:5px 10px;font-size:12px;font-family:'JetBrains Mono',monospace;cursor:pointer;transition:all .15s}
 #clear-btn:hover{border-color:var(--danger);color:var(--danger)}
+/* Кнопка «Поделиться» в шапке (ТЗ 1) */
+#share-btn{display:none;background:#3b82f6;color:#fff;border:none;border-radius:var(--r);padding:6px 13px;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;transition:background .15s}
+#share-btn:hover{background:#2563eb}
 
 /* SIDEBAR */
 #sidebar{background:var(--surface);border-right:1px solid var(--border);overflow:hidden;display:flex;flex-direction:column;min-height:0}
@@ -50,12 +55,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .photo-item{display:flex;align-items:flex-start;gap:8px;padding:6px 7px;border-radius:var(--r);border:1px solid transparent;margin-bottom:3px;position:relative;transition:background .15s}
 .photo-item:hover{background:rgba(255,255,255,.04)}
 .photo-item.active{background:rgba(232,255,71,.08);border-color:rgba(232,255,71,.25)}
-.photo-item.no-gps{opacity:.45}
+.photo-item.no-gps{opacity:.55}
+.photo-item.manual-active{opacity:1;border-color:rgba(71,200,255,.5);background:rgba(71,200,255,.07)}
 .thumb-area{cursor:pointer;flex-shrink:0}
-.photo-item.no-gps .thumb-area{cursor:default;pointer-events:none}
 .thumb{width:84px;height:84px;border-radius:5px;object-fit:cover;background:var(--border);display:block}
 .photo-meta{flex:1;min-width:0;padding-top:2px;cursor:pointer}
-.photo-item.no-gps .photo-meta{cursor:default;pointer-events:none}
+.photo-item.no-gps .thumb-area,.photo-item.no-gps .photo-meta{cursor:default;pointer-events:none}
 .photo-name{font-size:8px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
 .photo-coords{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--muted);margin-top:3px;line-height:1.5}
 .gps-badge{font-size:8px;padding:1px 4px;border-radius:3px;font-family:'JetBrains Mono',monospace;margin-top:4px;display:inline-block}
@@ -64,6 +69,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .del-btn{position:absolute;top:4px;right:4px;width:17px;height:17px;background:rgba(13,15,20,.8);border:1px solid var(--border);border-radius:50%;color:var(--muted);font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,background .15s,color .15s,border-color .15s;padding:0;line-height:1}
 .photo-item:hover .del-btn{opacity:1}
 .del-btn:hover{background:rgba(255,92,92,.2);border-color:var(--danger);color:var(--danger)}
+/* Кнопка ручного GPS (ТЗ 2) */
+.gps-manual-btn{display:block;margin-top:5px;background:rgba(71,200,255,.1);border:1px solid rgba(71,200,255,.3);border-radius:4px;color:var(--accent2);font-size:9px;font-family:'JetBrains Mono',monospace;padding:3px 6px;cursor:pointer;transition:all .15s;text-align:left;pointer-events:auto}
+.gps-manual-btn:hover{background:rgba(71,200,255,.2);border-color:var(--accent2)}
 #no-photos{padding:20px 14px;text-align:center;color:var(--muted);font-size:11px;line-height:1.7}
 
 /* MAP */
@@ -81,11 +89,49 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .hint-icon{font-size:44px;opacity:.16}
 .hint-text{font-size:14px;color:var(--muted);text-align:center;line-height:1.7}
 
+/* GPS mode — курсор-прицел по всей карте */
+#map-wrap.gps-picking{cursor:crosshair}
+#map-wrap.gps-picking .leaflet-container{cursor:crosshair !important}
+
+/* GPS hint overlay поверх карты (ТЗ 2) */
+#gps-hint-overlay{display:none;position:absolute;top:60px;left:50%;transform:translateX(-50%);z-index:650;background:rgba(71,200,255,.18);border:1px solid rgba(71,200,255,.5);border-radius:8px;color:var(--accent2);font-size:13px;font-family:'JetBrains Mono',monospace;padding:8px 18px;pointer-events:none;white-space:nowrap}
+#gps-hint-overlay.visible{display:block}
+
+/* MANUAL GPS PANEL (ТЗ 2) */
+#manual-gps-panel{display:none;position:absolute;bottom:28px;right:12px;z-index:650;width:290px;background:var(--surface);border:1px solid rgba(71,200,255,.4);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.7);padding:12px 14px;font-family:'JetBrains Mono',monospace}
+#manual-gps-panel.visible{display:block}
+#mgps-title{font-size:10px;color:var(--accent2);font-weight:700;letter-spacing:.4px;text-transform:uppercase;margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#mgps-mode-btns{display:flex;gap:6px;margin-bottom:10px}
+.mgps-mode-btn{flex:1;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-size:10px;font-family:'JetBrains Mono',monospace;padding:5px 4px;cursor:pointer;transition:all .15s;text-align:center}
+.mgps-mode-btn:hover,.mgps-mode-btn.active{border-color:var(--accent2);color:var(--accent2);background:rgba(71,200,255,.08)}
+#mgps-coord-input-wrap{display:none;margin-bottom:8px}
+#mgps-coord-field{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:9px;padding:5px 8px;outline:none;transition:border-color .15s;margin-bottom:5px}
+#mgps-coord-field:focus{border-color:var(--accent2)}
+#mgps-coord-field::placeholder{color:var(--muted)}
+#mgps-coord-apply{width:100%;background:rgba(71,200,255,.15);border:1px solid rgba(71,200,255,.4);border-radius:var(--r);color:var(--accent2);font-family:'JetBrains Mono',monospace;font-size:10px;padding:5px;cursor:pointer;transition:all .15s}
+#mgps-coord-apply:hover{background:rgba(71,200,255,.25)}
+#mgps-coords-display{font-size:9px;color:var(--muted);margin-bottom:8px;min-height:14px;font-family:'JetBrains Mono',monospace}
+#mgps-coords-display.set{color:var(--accent)}
+#mgps-bearing-wrap{display:none;margin-bottom:10px}
+#mgps-bearing-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
+#mgps-bearing-label span:first-child{font-size:9px;color:var(--muted)}
+#mgps-bearing-val{font-size:18px;font-weight:700;color:var(--accent);font-family:'Syne',sans-serif}
+#mgps-bearing{width:100%;accent-color:var(--accent);cursor:pointer;height:4px}
+#mgps-actions{display:flex;gap:6px;margin-top:2px}
+#mgps-save-btn{flex:2;background:rgba(232,255,71,.15);border:1px solid rgba(232,255,71,.35);border-radius:var(--r);color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:10px;padding:6px;cursor:pointer;transition:all .15s;font-weight:700}
+#mgps-save-btn:disabled{opacity:.3;cursor:not-allowed}
+#mgps-save-btn:not(:disabled):hover{background:rgba(232,255,71,.28);border-color:var(--accent)}
+#mgps-cancel-btn{flex:1;background:transparent;border:1px solid var(--border);border-radius:var(--r);color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:10px;padding:6px;cursor:pointer;transition:all .15s}
+#mgps-cancel-btn:hover{border-color:var(--danger);color:var(--danger)}
+
 /* MARKERS */
 .pm-wrap{position:relative}
 .marker-dot{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:11px;height:11px;background:var(--accent);border:2px solid #0d0f14;border-radius:50%;cursor:pointer;transition:transform .15s,background .15s,box-shadow .15s,width .15s,height .15s;z-index:1}
 .pm-wrap:hover .marker-dot{transform:translate(-50%,-50%) scale(1.55)}
 .marker-dot.active{background:#ff3c3c !important;border-color:#fff !important;box-shadow:0 0 10px rgba(255,60,60,.85) !important;width:15px !important;height:15px !important}
+/* Временный маркер ручного GPS */
+.marker-dot.temp{background:var(--accent2) !important;border-color:#fff !important;animation:pulse-gps 1.2s ease-in-out infinite}
+@keyframes pulse-gps{0%,100%{box-shadow:0 0 0 0 rgba(71,200,255,.5)}50%{box-shadow:0 0 0 6px rgba(71,200,255,0)}}
 
 /* LIGHTBOX */
 #lightbox{display:none;position:absolute;z-index:2000;pointer-events:none}
@@ -109,6 +155,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #lb-table td{padding:2.5px 0}
 #lb-table td:first-child{color:var(--muted);width:88px}
 #lb-table td:last-child{color:var(--text)}
+/* Кнопка ручного GPS в лайтбоксе */
+#lb-gps-btn{display:none;width:100%;margin-top:8px;background:rgba(71,200,255,.1);border:1px solid rgba(71,200,255,.3);border-radius:var(--r);color:var(--accent2);font-size:10px;font-family:'JetBrains Mono',monospace;padding:6px;cursor:pointer;transition:all .15s}
+#lb-gps-btn:hover{background:rgba(71,200,255,.2);border-color:var(--accent2)}
 #lb-nav{display:flex;gap:6px;margin-top:8px}
 .lb-nav-btn{flex:1;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-size:11px;font-family:'JetBrains Mono',monospace;padding:5px;cursor:pointer;transition:all .15s}
 .lb-nav-btn:hover{border-color:var(--accent);color:var(--accent)}
@@ -125,6 +174,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #cadastre-opacity.visible{display:flex}
 #cadastre-opacity input[type=range]{width:80px;accent-color:#ff9500;cursor:pointer}
 #progress-bar{position:absolute;bottom:0;left:0;height:2px;background:var(--accent);transition:width .2s;z-index:600;border-radius:0 2px 2px 0}
+
+/* TOAST */
 #toast{position:absolute;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 16px;font-size:12px;white-space:nowrap;z-index:900;transition:transform .3s cubic-bezier(.34,1.56,.64,1),opacity .3s;opacity:0;pointer-events:none}
 #toast.show{transform:translateX(-50%) translateY(0);opacity:1}
 
@@ -157,6 +208,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     Загрузить фото
   </button>
   <input type="file" id="file-input" multiple accept="image/jpeg,image/jpg"/>
+  <!-- Кнопка «Поделиться» — видна только при наличии remote-фото (ТЗ 1) -->
+  <button id="share-btn" onclick="copyShareLink()">🔗 Поделиться этими фото</button>
   <div id="stats">
     <div class="stat"><span class="stat-val" id="stat-total">0</span><span class="stat-lbl">фото</span></div>
     <div class="stat"><span class="stat-val" id="stat-gps">0</span><span class="stat-lbl">с GPS</span></div>
@@ -189,6 +242,36 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     <div class="hint-text">Загрузите JPG с GPS-метками<br/>— точки появятся на карте</div>
   </div>
 
+  <!-- Подсказка при активном режиме ручного GPS (ТЗ 2) -->
+  <div id="gps-hint-overlay">📍 Кликните по карте в место съёмки</div>
+
+  <!-- Панель ручного GPS (ТЗ 2) -->
+  <div id="manual-gps-panel">
+    <div id="mgps-title">📍 Ручной GPS</div>
+    <div id="mgps-mode-btns">
+      <button class="mgps-mode-btn" id="mgps-btn-map" onclick="setGPSInputMode('map')">🗺️ Кликнуть на карте</button>
+      <button class="mgps-mode-btn" id="mgps-btn-text" onclick="setGPSInputMode('text')">⌨️ Ввести координаты</button>
+    </div>
+    <div id="mgps-coord-input-wrap">
+      <input type="text" id="mgps-coord-field"
+             placeholder="47.373533, 39.899542  или  47°22'24.72&quot;С 39°53'58.35&quot;В"/>
+      <button id="mgps-coord-apply" onclick="applyCoordInput()">Применить ↵</button>
+    </div>
+    <div id="mgps-coords-display">— координаты не выбраны —</div>
+    <div id="mgps-bearing-wrap">
+      <div id="mgps-bearing-label">
+        <span>Угол съёмки</span>
+        <span id="mgps-bearing-val">0°</span>
+      </div>
+      <input type="range" id="mgps-bearing" min="0" max="359" value="0"
+             oninput="onBearingSlider(this.value)"/>
+    </div>
+    <div id="mgps-actions">
+      <button id="mgps-save-btn" disabled onclick="writeEXIFWithGPS()">✅ Записать в EXIF</button>
+      <button id="mgps-cancel-btn" onclick="exitManualGPSMode()">✖ Отмена</button>
+    </div>
+  </div>
+
   <div id="lightbox">
     <div id="lb-card">
       <div id="lb-img-wrap">
@@ -206,6 +289,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
       <div id="lb-info">
         <div id="lb-name"></div>
         <table id="lb-table"><tbody id="lb-tbody"></tbody></table>
+        <!-- Кнопка ручного GPS появляется для no-gps фото (ТЗ 2) -->
+        <button id="lb-gps-btn" onclick="enterManualGPSModeFromLightbox()">📍 Указать точку вручную</button>
         <div id="lb-nav">
           <button class="lb-nav-btn" onclick="navPhoto(-1)">&#8592; пред.</button>
           <button class="lb-nav-btn" onclick="navPhoto(1)">след. &#8594;</button>
@@ -243,117 +328,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 // MAP
 // ─────────────────────────────────────────────────────────────────────────────
 const map = L.map('map', { center: [55.75, 37.61], zoom: 5, zoomControl: true });
-// Убираем только надпись «Leaflet» — самый стабильный и официальный способ
 map.attributionControl.setPrefix(false);
-
 L.control.scale({ imperial: false, metric: true, position: 'bottomleft' }).addTo(map);
-
-
-// ──────────────────────────────────────────────────────────────
-// КЛИК ПО КАРТЕ — только прямой запрос, без прокси и моков
-// ──────────────────────────────────────────────────────────────
-map.on('click', async function (e) {
-    const lat = e.latlng.lat.toFixed(6);
-    const lng = e.latlng.lng.toFixed(6);
-
-    showToast('🔍 Запрос к НСПД...');
-
-    const NSPD_IDS = [36329, 36328, 36049, 36048, 36071];
-    const results = new Set();
-    let errorMsg = null;
-
-    try {
-        const promises = NSPD_IDS.map(async id => {
-            const latlng = e.latlng;
-            const R = 20037508.34;
-            const cx = latlng.lng * R / 180;
-            const cy = Math.log(Math.tan((90 + latlng.lat) * Math.PI / 360)) * R / Math.PI;
-            const buffer = 120; // ~120 м
-
-            const bbox = `${cx - buffer},${cy - buffer},${cx + buffer},${cy + buffer}`;
-
-            const url = `https://nspd.gov.ru/api/aeggis/v3/${id}/wms?` +
-                new URLSearchParams({
-                    SERVICE: 'WMS',
-                    VERSION: '1.3.0',
-                    REQUEST: 'GetFeatureInfo',
-                    LAYERS: String(id),
-                    QUERY_LAYERS: String(id),
-                    INFO_FORMAT: 'text/html',
-                    FEATURE_COUNT: '20',
-                    X: '128',
-                    Y: '128',
-                    WIDTH: '256',
-                    HEIGHT: '256',
-                    CRS: 'EPSG:3857',
-                    BBOX: bbox,
-                    STYLES: ''
-                });
-
-            const res = await fetch(url);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-            const text = await res.text();
-            const found = text.match(/\b(\d{2}:\d{2,3}:\d{6,10}:\d{1,6})\b/g) || [];
-            found.forEach(n => results.add(n.trim()));
-        });
-
-        await Promise.allSettled(promises);  // продолжаем даже если часть слоёв упала
-    } catch (err) {
-        errorMsg = 'Не удалось получить данные (CORS / блокировка / ошибка сервера)';
-        console.warn('GetFeatureInfo ошибка:', err);
-    }
-
-    const cadList = Array.from(results).sort();
-    const count = cadList.length;
-    const isSingle = count === 1;
-
-    // Центр — только если ровно один участок (заглушка; в реальности нужно парсить из ответа или отдельного запроса)
-    // Пока оставляем placeholder — для реального центра потребуется другой API (не GetFeatureInfo)
-    const centerLat = isSingle ? '—' : null;
-    const centerLng = isSingle ? '—' : null;
-
-    let content = `
-        <b>📍 Кликнутая точка</b><br>
-        <code style="background:#f0f0f0;padding:3px 6px;border-radius:4px">${lat}, ${lng}</code><br><br>`;
-
-    if (errorMsg) {
-        content += `<span style="color:#d32f2f">${errorMsg}</span>`;
-    } else if (count === 0) {
-        content += `<span style="color:#555">Участков не найдено</span>`;
-    } else {
-        content += `<b>🏠 Участков: ${count}</b><br>`;
-        if (count > 5) {
-            content += `<div style="max-height:140px;overflow-y:auto;padding-right:6px">`;
-        }
-        content += cadList.map(cad => {
-            const link = `https://nspd.gov.ru/map?thematic=Default&zoom=17.5&selectedCard=${encodeURIComponent(cad)}`;
-            return `• <span style="color:#d32f2f;font-weight:700">${cad}</span> 
-                    <a href="${link}" target="_blank" style="color:#1976d2;font-size:12px">→ НСПД</a><br>`;
-        }).join('');
-        if (count > 5) content += `</div>`;
-        if (isSingle && centerLat !== '—') {
-            content += `<br><b>📍 Центр участка</b><br>
-                        <code style="background:#e8f5e9;padding:3px 6px;border-radius:4px">${centerLat}, ${centerLng}</code>`;
-        }
-    }
-
-    const popupHTML = `
-        <div style="font-family:system-ui; min-width:215px; max-width:265px; line-height:1.45; font-size:13.5px">
-            ${content}
-        </div>`;
-
-    L.popup({ maxWidth: 265 })
-        .setLatLng(e.latlng)
-        .setContent(popupHTML)
-        .openOn(map);
-
-    showToast(count > 0 ? `Найдено ${count} участок(-ов)` : 'Нет данных');
-});
-
-
-
-
 
 const TILES = {
   osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 19 }),
@@ -363,49 +339,21 @@ TILES.osm.addTo(map);
 let currentLayer = 'osm';
 
 // ─────────────────────────────────────────────────────────────────────────────
+// КАДАСТРОВЫЙ СЛОЙ — НСПД nspd.gov.ru
 // ─────────────────────────────────────────────────────────────────────────────
-// ─────────────────────────────────────────────────────────────────────────────
-// ─────────────────────────────────────────────────────────────────────────────
-// КАДАСТРОВЫЙ СЛОЙ — НСПД nspd.gov.ru (тайловый WMS)
-//
-// Ключевые параметры против «лоскутного» эффекта:
-//   keepBuffer: 8      — Leaflet хранит в DOM в 8 тайлов вокруг вьюпорта,
-//                        старые тайлы НЕ удаляются пока новые не загрузились
-//   updateWhenIdle     — тайлы запрашиваются только когда карта остановилась,
-//                        не во время панорамирования
-//   updateWhenZooming:false — при зуме не перезапрашивает до конца анимации
-//   tileSize: 512      — вдвое меньше запросов, быстрее покрывает вьюпорт
-//
-// Layer IDs из ссылки nspd.gov.ru (?active_layers=36329,36328,36049,36048):
-//   36329, 36328 — Земельные участки (ЗУ)
-//   36049, 36048 — ОКС (объекты капстроительства)
-//   36071        — Кадастровые кварталы
-// ─────────────────────────────────────────────────────────────────────────────
-
 const NSPD_IDS = [36329, 36328, 36049, 36048, 36071];
 
 const NSPD_WMS_OPTS = {
-  service:           'WMS',
-  version:           '1.3.0',
-  format:            'image/png',
-  transparent:       true,
-  styles:            '',
-  authkey:           '0',
-  tileSize:          256,
-  attribution:       '© НСПД Росреестр',
-  zIndex:            450,
-  keepBuffer:        2,           // стандартный буфер — не тянет лишние тайлы
-  updateWhenIdle:    false,       // грузить тайлы сразу при движении (центр в приоритете)
-  updateWhenZooming: false,       // не перезапрашивать во время zoom-анимации
+  service: 'WMS', version: '1.3.0', format: 'image/png', transparent: true,
+  styles: '', authkey: '0', tileSize: 256, attribution: '© НСПД Росреестр',
+  zIndex: 450, keepBuffer: 2, updateWhenIdle: false, updateWhenZooming: false,
 };
 
-let cadastreLayers = [];
-let cadastreActive = false;
+let cadastreLayers = [], cadastreActive = false;
 
 function toggleCadastre() {
-  const btn     = document.getElementById('cadastre-btn');
+  const btn = document.getElementById('cadastre-btn');
   const opPanel = document.getElementById('cadastre-opacity');
-
   if (!cadastreActive) {
     if (!cadastreLayers.length) {
       const opacity = document.getElementById('cadastre-range').value / 100;
@@ -432,7 +380,6 @@ function setCadastreOpacity(val) {
   if (cadastreActive) cadastreLayers.forEach(l => l.setOpacity(val / 100));
 }
 
-
 function toggleLayer() {
   const btn = document.getElementById('layer-btn');
   if (currentLayer === 'osm') {
@@ -445,13 +392,103 @@ function toggleLayer() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STATE
+// КЛИК ПО КАРТЕ — НСПД GetFeatureInfo + приоритет ручного GPS (ТЗ 2)
 // ─────────────────────────────────────────────────────────────────────────────
-// photo = { name, size, displayUrl, thumbUrl, lat, lon, bearing, altitude, date, marker, isRemote }
+map.on('click', async function (e) {
+  // ТЗ 2: если активен режим ручного GPS — перехватываем клик
+  if (manualGPSActive) {
+    handleMapClickForGPS(e);
+    return;
+  }
+
+  // Закрываем лайтбокс при клике на пустую карту
+  closeLightbox();
+
+  const lat = e.latlng.lat.toFixed(6);
+  const lng = e.latlng.lng.toFixed(6);
+  showToast('🔍 Запрос к НСПД...');
+
+  const results = new Set();
+  let errorMsg = null;
+
+  try {
+    const promises = NSPD_IDS.map(async id => {
+      const latlng = e.latlng;
+      const R = 20037508.34;
+      const cx = latlng.lng * R / 180;
+      const cy = Math.log(Math.tan((90 + latlng.lat) * Math.PI / 360)) * R / Math.PI;
+      const buffer = 120;
+      const bbox = `${cx - buffer},${cy - buffer},${cx + buffer},${cy + buffer}`;
+      const url = `https://nspd.gov.ru/api/aeggis/v3/${id}/wms?`
+        + new URLSearchParams({
+            SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetFeatureInfo',
+            LAYERS: String(id), QUERY_LAYERS: String(id),
+            INFO_FORMAT: 'text/html', FEATURE_COUNT: '20',
+            X: '128', Y: '128', WIDTH: '256', HEIGHT: '256',
+            CRS: 'EPSG:3857', BBOX: bbox, STYLES: ''
+          });
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      const found = text.match(/\b(\d{2}:\d{2,3}:\d{6,10}:\d{1,6})\b/g) || [];
+      found.forEach(n => results.add(n.trim()));
+    });
+    await Promise.allSettled(promises);
+  } catch (err) {
+    errorMsg = 'Не удалось получить данные (CORS / блокировка / ошибка сервера)';
+    console.warn('GetFeatureInfo ошибка:', err);
+  }
+
+  const cadList = Array.from(results).sort();
+  const count = cadList.length;
+  const isSingle = count === 1;
+  const centerLat = isSingle ? '—' : null;
+  const centerLng = isSingle ? '—' : null;
+
+  let content = `
+      <b>📍 Кликнутая точка</b><br>
+      <code style="background:#f0f0f0;padding:3px 6px;border-radius:4px">${lat}, ${lng}</code><br><br>`;
+
+  if (errorMsg) {
+    content += `<span style="color:#d32f2f">${errorMsg}</span>`;
+  } else if (count === 0) {
+    content += `<span style="color:#555">Участков не найдено</span>`;
+  } else {
+    content += `<b>🏠 Участков: ${count}</b><br>`;
+    if (count > 5) content += `<div style="max-height:140px;overflow-y:auto;padding-right:6px">`;
+    content += cadList.map(cad => {
+      const link = `https://nspd.gov.ru/map?thematic=Default&zoom=17.5&selectedCard=${encodeURIComponent(cad)}`;
+      return `• <span style="color:#d32f2f;font-weight:700">${cad}</span>
+              <a href="${link}" target="_blank" style="color:#1976d2;font-size:12px">→ НСПД</a><br>`;
+    }).join('');
+    if (count > 5) content += `</div>`;
+    if (isSingle && centerLat !== '—') {
+      content += `<br><b>📍 Центр участка</b><br>
+                  <code style="background:#e8f5e9;padding:3px 6px;border-radius:4px">${centerLat}, ${centerLng}</code>`;
+    }
+  }
+
+  L.popup({ maxWidth: 265 })
+    .setLatLng(e.latlng)
+    .setContent(`<div style="font-family:system-ui;min-width:215px;max-width:265px;line-height:1.45;font-size:13.5px">${content}</div>`)
+    .openOn(map);
+
+  showToast(count > 0 ? `Найдено ${count} участок(-ов)` : 'Нет данных');
+});
+
+map.on('move zoom', () => {
+  if (lbLL && document.getElementById('lightbox').classList.contains('visible')) posLightbox(lbLL);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATE
+// photo = { name, size, displayUrl, thumbUrl, lat, lon, bearing, altitude, date,
+//           marker, isRemote, file?, originalBlob?, gdId?, yandexId?, remoteViewUrl? }
+// ─────────────────────────────────────────────────────────────────────────────
 let photos = [], activeIdx = null, lbLL = null, lbScale = 1;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LOCAL FILE UPLOAD  (читаем бинарь + EXIF из файла пользователя)
+// LOCAL FILE UPLOAD
 // ─────────────────────────────────────────────────────────────────────────────
 document.getElementById('file-input').addEventListener('change', e => {
   handleLocalFiles([...e.target.files]);
@@ -486,45 +523,31 @@ async function addLocalPhoto(file) {
   try {
     const e = await exifr.parse(file, { gps: true, tiff: true, exif: true, ifd0: true, translateValues: true });
     if (e) {
-      lat = e.latitude ?? e.GPSLatitude ?? null;
-      lon = e.longitude ?? e.GPSLongitude ?? null;
-      const r = e.GPSImgDirection ?? e.ImgDirection ?? e.GPSDestBearing ?? null;
-      bearing = r !== null ? parseFloat(r) : null;
+      lat      = e.latitude  ?? e.GPSLatitude  ?? null;
+      lon      = e.longitude ?? e.GPSLongitude ?? null;
+      const r  = e.GPSImgDirection ?? e.ImgDirection ?? e.GPSDestBearing ?? null;
+      bearing  = r !== null ? parseFloat(r) : null;
       altitude = e.GPSAltitude ?? null;
-      date = e.DateTimeOriginal ?? e.DateTime ?? '';
+      date     = e.DateTimeOriginal ?? e.DateTime ?? '';
     }
   } catch (err) { console.warn('EXIF:', file.name, err); }
 
-  addPhoto({ name: file.name, size: file.size, displayUrl, thumbUrl: displayUrl, lat, lon, bearing, altitude, date, isRemote: false });
+  // Сохраняем file-объект для последующей записи EXIF (ТЗ 2)
+  addPhoto({ name: file.name, size: file.size, displayUrl, thumbUrl: displayUrl,
+             lat, lon, bearing, altitude, date, isRemote: false, file });
   return true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GOOGLE DRIVE
-//
-// Принцип (всё работает нативно, без прокси):
-//   1. Google Drive API v3 поддерживает CORS из браузера (с API-ключом)
-//   2. API возвращает GPS в imageMediaMetadata.location.latitude/longitude
-//   3. Превью:   https://drive.google.com/thumbnail?id=ID&sz=w300  — <img> без CORS
-//   4. Полный:   https://drive.google.com/thumbnail?id=ID&sz=w1600 — <img> без CORS
-//
-// API-ключ: console.cloud.google.com → Credentials → API Key
-//           Включить: Google Drive API. Ограничить: Drive API + ваш домен.
+// GOOGLE DRIVE — загрузка папки (требует API-ключ)
 // ─────────────────────────────────────────────────────────────────────────────
-
 function parseFolderId(url) {
-  // Принимает ссылку вида:
-  //   https://drive.google.com/drive/folders/FOLDER_ID
-  //   https://drive.google.com/drive/folders/FOLDER_ID?usp=sharing
-  //   или просто FOLDER_ID
   const m = url.match(/folders\/([a-zA-Z0-9_-]+)/);
   if (m) return m[1];
-  // Если вставили просто ID
   if (/^[a-zA-Z0-9_-]{10,}$/.test(url.trim())) return url.trim();
   return null;
 }
 
-// URL изображения через Google Drive thumbnail (работает в <img> для публичных файлов)
 const gdThumb   = id => `https://drive.google.com/thumbnail?id=${id}&sz=w300`;
 const gdDisplay = id => `https://drive.google.com/thumbnail?id=${id}&sz=w1600`;
 
@@ -544,8 +567,6 @@ async function loadFromGoogleDrive() {
   setProgress(2);
   statusEl.textContent = 'Получаем список файлов…';
 
-  // ── 1. Постранично получаем все JPEG из папки ─────────────────────────────
-  // imageMediaMetadata содержит GPS, дату, и другие EXIF-поля прямо из API
   const FIELDS = 'nextPageToken,files(id,name,size,imageMediaMetadata)';
   const BASE   = 'https://www.googleapis.com/drive/v3/files';
   const QUERY  = `'${folderId}' in parents and mimeType='image/jpeg' and trashed=false`;
@@ -582,32 +603,23 @@ async function loadFromGoogleDrive() {
     setProgress(0); gdBtn.disabled = false; return;
   }
 
-  // ── 2. Создаём записи фото из метаданных API ─────────────────────────────
-  // imageMediaMetadata.location.{latitude, longitude, altitude}
-  // imageMediaMetadata.time = "2026:03:04 08:46:29"
   let added = 0, noGps = 0;
-
   for (let i = 0; i < allFiles.length; i++) {
     const f    = allFiles[i];
     if (photos.find(p => p.name === f.name && p.gdId === f.id)) continue;
 
     const meta = f.imageMediaMetadata || {};
     const loc  = meta.location || {};
-
-    const lat      = (loc.latitude  != null) ? parseFloat(loc.latitude)  : null;
-    const lon      = (loc.longitude != null) ? parseFloat(loc.longitude) : null;
-    const altitude = (loc.altitude  != null) ? parseFloat(loc.altitude)  : null;
-    const date     = meta.time || '';
-    const bearing  = null; // Google Drive API не возвращает направление съёмки
-
+    const lat  = (loc.latitude  != null) ? parseFloat(loc.latitude)  : null;
+    const lon  = (loc.longitude != null) ? parseFloat(loc.longitude) : null;
+    const alt  = (loc.altitude  != null) ? parseFloat(loc.altitude)  : null;
     if (lat === null || lon === null) noGps++;
 
-    // thumbnail и display URLs — <img src> грузит их без CORS для публичных файлов
     addPhoto({
       name: f.name, size: f.size, gdId: f.id,
-      thumbUrl:   gdThumb(f.id),
-      displayUrl: gdDisplay(f.id),
-      lat, lon, bearing, altitude, date, isRemote: true
+      thumbUrl: gdThumb(f.id), displayUrl: gdDisplay(f.id),
+      lat, lon, bearing: null, altitude: alt, date: meta.time || '',
+      isRemote: true
     });
     added++;
 
@@ -623,8 +635,7 @@ async function loadFromGoogleDrive() {
   fitMapToPhotos();
   setTimeout(() => setProgress(0), 400);
   updateStats(); renderList();
-  const gpsInfo = noGps > 0 ? ` (${noGps} без GPS)` : '';
-  statusEl.textContent = `Загружено: ${added} фото${gpsInfo}`;
+  statusEl.textContent = `Загружено: ${added} фото${noGps > 0 ? ` (${noGps} без GPS)` : ''}`;
   showToast(`Google Drive: ${added} фото добавлено`);
   gdBtn.disabled = false;
 }
@@ -681,15 +692,16 @@ function rebuildMarkerListeners() {
 function setActiveMarker(idx) {
   photos.forEach((p, i) => {
     if (!p.marker) return;
-    const el  = p.marker.getElement(); if (!el) return;
+    const el = p.marker.getElement(); if (!el) return;
     const dot = el.querySelector('.marker-dot'); if (!dot) return;
     dot.classList.toggle('active', i === idx);
   });
 }
+
 function clearActiveMarker() {
   photos.forEach(p => {
     if (!p.marker) return;
-    const el  = p.marker.getElement(); if (!el) return;
+    const el = p.marker.getElement(); if (!el) return;
     const dot = el.querySelector('.marker-dot'); if (dot) dot.classList.remove('active');
   });
 }
@@ -719,30 +731,46 @@ function renderList() {
   }
 
   photos.forEach((p, i) => {
+    const isManualActive = manualModePhotoIndex === i;
     const item = document.createElement('div');
-    item.className = 'photo-item' + (p.lat === null ? ' no-gps' : '') + (activeIdx === i ? ' active' : '');
+    item.className = 'photo-item'
+      + (p.lat === null ? ' no-gps' : '')
+      + (activeIdx === i ? ' active' : '')
+      + (isManualActive ? ' manual-active' : '');
     item.dataset.idx = i;
 
     // Превью
     const thumbArea = document.createElement('div');
     thumbArea.className = 'thumb-area';
     const img = document.createElement('img');
-    img.className = 'thumb';
-    img.alt = '';
-    img.loading = 'lazy';
-    if (p.thumbUrl) img.src = p.thumbUrl; // objectURL (local) или item.file (YD)
+    img.className = 'thumb'; img.alt = ''; img.loading = 'lazy';
+    if (p.thumbUrl) img.src = p.thumbUrl;
     thumbArea.appendChild(img);
 
     // Мета
     const meta = document.createElement('div');
     meta.className = 'photo-meta';
-    const coords = p.lat !== null
-      ? p.lat.toFixed(5) + ', ' + p.lon.toFixed(5)
-      : 'нет GPS';
+    const coords = p.lat !== null ? p.lat.toFixed(5) + ', ' + p.lon.toFixed(5) : 'нет GPS';
     meta.innerHTML = `<div class="photo-name">${esc(p.name)}</div>`
       + `<div class="photo-coords">${esc(coords)}</div>`
       + `<span class="gps-badge ${p.lat !== null ? 'gps-ok' : 'gps-no'}">`
       + (p.lat !== null ? 'GPS' : 'нет') + '</span>';
+
+    // Кнопка ручного GPS для фото без координат (ТЗ 2)
+    if (p.lat === null) {
+      const gpsBtn = document.createElement('button');
+      gpsBtn.className = 'gps-manual-btn';
+      gpsBtn.textContent = isManualActive ? '📍 Режим GPS активен…' : '📍 Указать точку вручную';
+      gpsBtn.addEventListener('click', ev => {
+        ev.stopPropagation();
+        if (isManualActive) exitManualGPSMode();
+        else enterManualGPSMode(i);
+      });
+      meta.appendChild(gpsBtn);
+      // Разрешаем клик на мета-блоке только для кнопки
+      meta.style.cursor = 'default';
+      meta.style.pointerEvents = 'auto';
+    }
 
     // Кнопка удаления
     const del = document.createElement('button');
@@ -753,6 +781,7 @@ function renderList() {
     item.appendChild(meta);
     item.appendChild(del);
 
+    // Клик открывает лайтбокс (только если есть GPS)
     if (p.lat !== null) {
       const go = () => {
         map.setView([p.lat, p.lon], Math.max(map.getZoom(), 15), { animate: true });
@@ -760,6 +789,9 @@ function renderList() {
       };
       thumbArea.addEventListener('click', go);
       meta.addEventListener('click', go);
+    } else {
+      thumbArea.style.cursor = 'default';
+      thumbArea.style.pointerEvents = 'none';
     }
 
     list.appendChild(item);
@@ -772,14 +804,21 @@ function renderList() {
 function deletePhoto(idx) {
   const p = photos[idx]; if (!p) return;
   if (activeIdx === idx) closeLightbox();
+  if (manualModePhotoIndex === idx) exitManualGPSMode();
   if (p.marker) map.removeLayer(p.marker);
-  // Только для локальных файлов освобождаем blob-URL
-  if (!p.isRemote) URL.revokeObjectURL(p.displayUrl);
+  if (!p.isRemote && p.displayUrl) URL.revokeObjectURL(p.displayUrl);
+  // Удаляем из remotePhotos если это remote
+  if (p.isRemote && p.remoteViewUrl) {
+    const ri = remotePhotos.findIndex(r => r.originalUrl === p.remoteViewUrl);
+    if (ri >= 0) remotePhotos.splice(ri, 1);
+    updateShareButton();
+  }
   photos.splice(idx, 1);
   if (activeIdx !== null) {
     if (activeIdx === idx) activeIdx = null;
     else if (activeIdx > idx) activeIdx--;
   }
+  if (manualModePhotoIndex !== null && manualModePhotoIndex > idx) manualModePhotoIndex--;
   rebuildMarkerListeners();
   updateStats(); renderList();
   if (!photos.some(p => p.lat !== null)) document.getElementById('map-hint').classList.remove('hidden');
@@ -802,11 +841,21 @@ async function openLightbox(idx, latlng) {
   document.getElementById('lb-zoom-val').textContent = '100%';
   document.getElementById('lb-name').textContent = p.name;
   document.getElementById('lb-tbody').innerHTML = buildRows(p);
+
+  // Кнопка ручного GPS — только для фото без координат (ТЗ 2)
+  const lbGpsBtn = document.getElementById('lb-gps-btn');
+  lbGpsBtn.style.display = p.lat === null ? 'block' : 'none';
+
   document.getElementById('lightbox').classList.add('visible');
   setActiveMarker(idx);
   requestAnimationFrame(() => posLightbox(latlng));
+}
 
-
+// Вход в ручной GPS режим из лайтбокса
+function enterManualGPSModeFromLightbox() {
+  if (activeIdx === null) return;
+  closeLightbox();
+  enterManualGPSMode(activeIdx);
 }
 
 function posLightbox(latlng) {
@@ -830,22 +879,18 @@ function closeLightbox() {
   clearActiveMarker(); activeIdx = null;
 }
 
-map.on('click', () => closeLightbox());
-map.on('move zoom', () => {
-  if (lbLL && document.getElementById('lightbox').classList.contains('visible')) posLightbox(lbLL);
-});
-
 function navPhoto(dir) {
   const gi = photos.map((p, i) => p.lat !== null ? i : -1).filter(i => i >= 0);
   if (!gi.length) return;
-  const pos = gi.indexOf(activeIdx), next = gi[(pos + dir + gi.length) % gi.length];
+  const pos  = gi.indexOf(activeIdx);
+  const next = gi[(pos + dir + gi.length) % gi.length];
   const p = photos[next];
   map.setView([p.lat, p.lon], map.getZoom(), { animate: true });
   openLightbox(next, L.latLng(p.lat, p.lon));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DATE FORMAT  "2026-03-04T08:46:29+00:00" / "2026:03:04 08:46:29" → "04.03.2026 в 08:46:29"
+// DATE FORMAT
 // ─────────────────────────────────────────────────────────────────────────────
 function formatDate(dateStr) {
   if (!dateStr) return '';
@@ -853,7 +898,6 @@ function formatDate(dateStr) {
     const pad = n => String(n).padStart(2, '0');
     return `${pad(dateStr.getDate())}.${pad(dateStr.getMonth()+1)}.${dateStr.getFullYear()} в ${pad(dateStr.getHours())}:${pad(dateStr.getMinutes())}:${pad(dateStr.getSeconds())}`;
   }
-  // Универсальный regex: "2026:03:04 08:46:29" и "2026-03-04T08:46:29..."
   const m = String(dateStr).match(/(\d{4})[-:](\d{2})[-:](\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);
   if (m) return `${m[3]}.${m[2]}.${m[1]} в ${m[4]}:${m[5]}:${m[6]}`;
   return dateStr;
@@ -870,7 +914,6 @@ function buildRows(p) {
   if (p.bearing !== null && !isNaN(p.bearing)) add('Направление', p.bearing.toFixed(1) + '°');
   if (p.date) add('Дата', formatDate(p.date));
   if (p.altitude !== null) add('Высота над ур.м.', parseFloat(p.altitude).toFixed(1) + ' м');
-  // Камера / Выдержка / Диафрагма / ISO / Фокусное — убраны
   return rows.join('');
 }
 
@@ -892,10 +935,9 @@ document.getElementById('lb-img-wrap').addEventListener('wheel', e => {
 document.getElementById('lb-img-wrap').addEventListener('click', () => openViewer());
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FULLSCREEN
+// FULLSCREEN VIEWER
 // ─────────────────────────────────────────────────────────────────────────────
 function openViewer() {
-  // Берём текущий src лайтбокса (уже может быть полноразмерным)
   const p   = activeIdx !== null ? photos[activeIdx] : null;
   const src = (p && (p.displayUrl || p.thumbUrl)) || document.getElementById('lb-img').src;
   if (!src) return;
@@ -905,25 +947,22 @@ function openViewer() {
 function closeViewer() { document.getElementById('viewer').classList.remove('open'); }
 
 function viewerNav(dir) {
-  const gps = photos.map((p, i) => p.lat !== null ? i : -1).filter(i => i >= 0);
+  const gps  = photos.map((p, i) => p.lat !== null ? i : -1).filter(i => i >= 0);
   if (!gps.length) return;
   const cur  = activeIdx !== null ? activeIdx : gps[0];
   const pos  = gps.indexOf(cur);
   const next = gps[(pos + dir + gps.length) % gps.length];
   const p    = photos[next];
   activeIdx  = next;
-  const src  = p.displayUrl || p.thumbUrl || '';
-  document.getElementById('viewer-img').src = src;
-  // Обновляем активный маркер
+  document.getElementById('viewer-img').src = p.displayUrl || p.thumbUrl || '';
   setActiveMarker(next);
-  // Подсвечиваем в сайдбаре
   document.querySelectorAll('.photo-item').forEach(el => el.classList.remove('active'));
   const item = document.querySelector(`.photo-item[data-idx="${next}"]`);
-  if (item) { item.classList.add('active'); item.scrollIntoView({block:'nearest'}); }
+  if (item) { item.classList.add('active'); item.scrollIntoView({ block: 'nearest' }); }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MISC
+// MISC / UTILS
 // ─────────────────────────────────────────────────────────────────────────────
 function updateStats() {
   document.getElementById('stat-total').textContent = photos.length;
@@ -933,11 +972,15 @@ function updateStats() {
 
 function clearAll() {
   closeLightbox(); closeViewer();
+  exitManualGPSMode();
   photos.forEach(p => {
     if (p.marker) map.removeLayer(p.marker);
-    if (!p.isRemote) URL.revokeObjectURL(p.displayUrl);
+    if (!p.isRemote && p.displayUrl) URL.revokeObjectURL(p.displayUrl);
   });
   photos = []; activeIdx = null;
+  // Очищаем список remote-фото для share (ТЗ 1)
+  remotePhotos.length = 0;
+  updateShareButton();
   document.getElementById('file-input').value = '';
   document.getElementById('gd-status').textContent = '';
   updateStats(); renderList();
@@ -947,11 +990,20 @@ function clearAll() {
 
 function setProgress(pct) { document.getElementById('progress-bar').style.width = pct + '%'; }
 
+/**
+ * Toast с поддержкой типов: 'info' | 'success' | 'error' | 'warn'
+ */
 let _tt;
-function showToast(msg) {
+function showToast(msg, type = 'info', duration = 2800) {
   const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  clearTimeout(_tt); _tt = setTimeout(() => t.classList.remove('show'), 2800);
+  t.textContent = msg;
+  const bg = { info: 'var(--surface)', success: '#0f2a0f', error: '#2a0f0f', warn: '#2a200a' };
+  const bc = { info: 'var(--border)', success: '#22c55e', error: '#ef4444', warn: '#f59e0b' };
+  t.style.background  = bg[type]  || bg.info;
+  t.style.borderColor = bc[type]  || bc.info;
+  t.classList.add('show');
+  clearTimeout(_tt);
+  _tt = setTimeout(() => t.classList.remove('show'), duration);
 }
 
 function esc(s) {
@@ -962,6 +1014,7 @@ function esc(s) {
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
+    if (manualGPSActive) { exitManualGPSMode(); return; }
     if (document.getElementById('viewer').classList.contains('open')) { closeViewer(); return; }
     closeLightbox(); return;
   }
@@ -976,367 +1029,651 @@ document.addEventListener('keydown', e => {
 // Начальный рендер
 renderList();
 
+// ═════════════════════════════════════════════════════════════════════════════
+// ТЗ 1: REMOTE-ФОТО — Google Drive (одиночный файл) + Яндекс.Диск
+// ═════════════════════════════════════════════════════════════════════════════
+
 /**
- * ============================================================
- *  EKCELO — Патч: загрузка фото через URL-параметры + кнопка «Поделиться»
- *  Вставьте этот блок в конец <script> в index.html,
- *  ПОСЛЕ всех существующих функций.
- * ============================================================
- */
- 
-// ─────────────────────────────────────────────────────────────
-// 1. УТИЛИТЫ
-// ─────────────────────────────────────────────────────────────
- 
-/**
- * Преобразует ссылку Google Drive любого вида
- * в прямую ссылку для скачивания через export=download.
- * Поддерживает форматы:
- *   /file/d/ID/view...
- *   /open?id=ID
- *   /uc?id=ID
- */
-function gdriveToDirect(url) {
-  let id = null;
- 
-  // /file/d/FILEID/...
-  const m1 = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-  if (m1) id = m1[1];
- 
-  // ?id=FILEID или &id=FILEID
-  if (!id) {
-    const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-    if (m2) id = m2[1];
-  }
- 
-  if (id) {
-    return `https://drive.google.com/uc?export=download&id=${id}`;
-  }
- 
-  // Не Google Drive — вернуть как есть
-  return url;
-}
- 
-/**
- * Извлекает File ID из ссылки Google Drive.
- * Возвращает null, если не удалось.
- */
-function extractGdriveId(url) {
-  const m = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-  return m ? m[1] : null;
-}
- 
-/**
- * Строит имя файла по умолчанию из ID:
- * photo_XXXXXXXX.jpg (первые 8 символов ID).
- */
-function defaultNameFromId(id) {
-  return id ? `photo_${id.substring(0, 8)}.jpg` : 'photo.jpg';
-}
- 
-// ─────────────────────────────────────────────────────────────
-// 2. TOAST-УВЕДОМЛЕНИЯ
-//    Если в проекте уже есть своя функция showToast — удалите эту.
-// ─────────────────────────────────────────────────────────────
- 
-function showToast(msg, type = 'info', duration = 3500) {
-  // Создаём контейнер, если его ещё нет
-  let container = document.getElementById('toast-container');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'toast-container';
-    container.style.cssText = `
-      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-      z-index: 9999; display: flex; flex-direction: column; gap: 8px;
-      pointer-events: none;
-    `;
-    document.body.appendChild(container);
-  }
- 
-  const colors = {
-    info:    '#3b82f6',
-    success: '#22c55e',
-    error:   '#ef4444',
-    warn:    '#f59e0b',
-  };
- 
-  const toast = document.createElement('div');
-  toast.style.cssText = `
-    background: ${colors[type] || colors.info};
-    color: #fff; padding: 10px 18px; border-radius: 8px;
-    font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,.25);
-    opacity: 0; transition: opacity .25s; pointer-events: auto;
-    max-width: 380px; word-break: break-word;
-  `;
-  toast.textContent = msg;
-  container.appendChild(toast);
- 
-  // Плавное появление
-  requestAnimationFrame(() => { toast.style.opacity = '1'; });
- 
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    setTimeout(() => toast.remove(), 300);
-  }, duration);
-}
- 
-// ─────────────────────────────────────────────────────────────
-// 3. ЗАГРУЗКА ОДНОГО REMOTE-ФОТО
-// ─────────────────────────────────────────────────────────────
- 
-/**
- * Список remote-фото (только загруженных через URL),
- * используется для формирования share-ссылки.
- * Каждый элемент: { originalUrl, name }
+ * Список remote-фото, загруженных через URL-параметры.
+ * Используется для формирования share-ссылки.
+ * Элемент: { originalUrl: string, name: string }
  */
 const remotePhotos = [];
- 
+
+// ─── Определение типа ссылки ─────────────────────────────────────────────────
+
 /**
- * Загружает одно фото по URL, читает EXIF и добавляет маркер на карту.
- *
- * @param {string} originalUrl  — исходная ссылка (Google Drive или другая)
- * @param {string} name         — отображаемое имя файла
+ * Определяет тип remote-ссылки.
+ * @returns {'gdrive'|'yandex'|'other'}
  */
-async function loadRemotePhoto(originalUrl, name) {
-  showToast(`⏳ Загружаем: ${name}`, 'info', 4000);
- 
-  const directUrl = gdriveToDirect(originalUrl);
- 
-  let blob;
+function detectRemoteType(url) {
+  if (/drive\.google\.com|docs\.google\.com/i.test(url)) return 'gdrive';
+  if (/disk\.yandex\.(ru|com)|yadi\.sk/i.test(url)) return 'yandex';
+  return 'other';
+}
+
+/** Проверяет, является ли ссылка Яндекс.Диском */
+function isYandexLink(url) { return detectRemoteType(url) === 'yandex'; }
+
+/**
+ * Извлекает File ID из ссылки Google Drive.
+ * Поддерживает /file/d/ID/view и ?id=ID
+ */
+function extractGdriveId(url) {
+  const m1 = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (m1) return m1[1];
+  const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (m2) return m2[1];
+  return null;
+}
+
+/**
+ * Извлекает ID из ссылки Яндекс.Диска.
+ * Поддерживает disk.yandex.ru/i/ID и yadi.sk/i/ID
+ */
+function extractYandexId(url) {
+  const m = url.match(/\/i\/([a-zA-Z0-9_-]+)/);
+  return m ? m[1] : null;
+}
+
+/**
+ * Возвращает прямой URL для fetch() в зависимости от типа ссылки.
+ * Google Drive: uc?export=view&id=...
+ * Яндекс.Диск: оригинальная ссылка (отдаёт изображение напрямую для публичных файлов)
+ * Другое: без изменений
+ */
+function getDirectUrlForFetch(url) {
+  const type = detectRemoteType(url);
+  if (type === 'gdrive') {
+    const id = extractGdriveId(url);
+    if (id) return `https://drive.google.com/uc?export=view&id=${id}`;
+  }
+  // Яндекс.Диск и другие ссылки используем напрямую
+  return url;
+}
+
+/**
+ * Возвращает URL для отображения в <img> (thumbnail).
+ * Google Drive: thumbnail API (без CORS проблем)
+ * Яндекс: тот же оригинальный URL
+ */
+function getDisplayUrl(url) {
+  const type = detectRemoteType(url);
+  if (type === 'gdrive') {
+    const id = extractGdriveId(url);
+    if (id) return gdDisplay(id);
+  }
+  return url;
+}
+
+function getThumbUrl(url) {
+  const type = detectRemoteType(url);
+  if (type === 'gdrive') {
+    const id = extractGdriveId(url);
+    if (id) return gdThumb(id);
+  }
+  return url;
+}
+
+/**
+ * Формирует имя файла по умолчанию из ID (первые 8 символов).
+ * @param {string|null} id
+ * @param {'gdrive'|'yandex'|'other'} type
+ */
+function defaultNameFromId(id, type = 'other') {
+  if (!id) return 'photo.jpg';
+  const prefix = type === 'yandex' ? 'yd_' : 'gd_';
+  return `photo_${prefix}${id.substring(0, 8)}.jpg`;
+}
+
+// ─── Загрузка одного remote-фото ─────────────────────────────────────────────
+
+/**
+ * Универсальная загрузка remote-фото (Google Drive / Яндекс.Диск / любой URL).
+ * 1. Определяет тип ссылки
+ * 2. Получает прямой URL для fetch()
+ * 3. Читает EXIF → добавляет на карту
+ * 4. Запоминает для share-ссылки
+ *
+ * @param {string} viewUrl    — исходная ссылка (та, что будет в share-ссылке)
+ * @param {string} customName — имя файла (или '' для автоматического)
+ */
+async function loadSingleRemotePhoto(viewUrl, customName) {
+  const type   = detectRemoteType(viewUrl);
+  const gdId   = type === 'gdrive' ? extractGdriveId(viewUrl) : null;
+  const ydId   = type === 'yandex' ? extractYandexId(viewUrl) : null;
+  const anyId  = gdId || ydId;
+  const name   = customName || defaultNameFromId(anyId, type);
+
+  showToast(`⏳ Загружаем: ${name}`, 'info', 5000);
+
+  const directUrl  = getDirectUrlForFetch(viewUrl);
+  const displayUrl = getDisplayUrl(viewUrl);
+  const thumbUrl   = getThumbUrl(viewUrl);
+
+  // Попытка fetch для чтения EXIF
+  let blob = null;
   try {
     const resp = await fetch(directUrl);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     blob = await resp.blob();
   } catch (err) {
-    showToast(`❌ Ошибка загрузки: ${name} — ${err.message}`, 'error');
-    console.error('[ekcelo] loadRemotePhoto fetch error:', err);
+    const hint = type === 'yandex'
+      ? 'Убедитесь, что ссылка Яндекс.Диска открыта «Для всех»'
+      : 'Проверьте, что файл Google Drive доступен по ссылке';
+    showToast(`❌ Не удалось загрузить: ${name} — ${hint}`, 'error', 6000);
+    console.warn('[ekcelo] fetch error:', err, viewUrl);
+    // Добавляем фото без EXIF (без маркера на карте, но в списке)
+    addPhoto({
+      name, size: null, displayUrl, thumbUrl,
+      lat: null, lon: null, bearing: null, altitude: null, date: '',
+      isRemote: true, remoteViewUrl: viewUrl,
+      gdId, yandexId: ydId
+    });
+    remotePhotos.push({ originalUrl: viewUrl, name });
+    updateStats(); renderList(); updateShareButton();
     return;
   }
- 
-  // Создаём File-объект, чтобы передать в существующий обработчик
-  const file = new File([blob], name, { type: blob.type || 'image/jpeg' });
- 
+
   // Читаем EXIF
-  let exif = null;
+  let lat = null, lon = null, bearing = null, altitude = null, date = '';
   try {
-    exif = await exifr.parse(file, {
-      gps: true, tiff: true, exif: true,
-      translateValues: true, reviveValues: true,
-    });
-  } catch (e) {
-    console.warn('[ekcelo] EXIF parse error:', e);
-  }
- 
-  // ─── АДАПТАЦИЯ ───────────────────────────────────────────
-  // Здесь мы вызываем СУЩЕСТВУЮЩУЮ функцию добавления фото на карту.
-  // Название функции нужно уточнить по вашему коду.
-  //
-  // Наиболее вероятные варианты (раскомментируйте подходящий):
-  //
-  // 1) Если в проекте есть функция вроде addPhotoToMap(file, exif):
-  //    addPhotoToMap(file, exif);
-  //
-  // 2) Если используется processFile(file):
-  //    processFile(file);
-  //
-  // 3) Если файлы накапливаются в массив и затем рендерятся:
-  //    photoFiles.push(file);
-  //    renderPhoto(file, exif);
-  //
-  // По умолчанию пробуем наиболее распространённый вариант:
-  if (typeof addPhotoToMap === 'function') {
-    addPhotoToMap(file, exif);
-  } else if (typeof processFile === 'function') {
-    processFile(file);
-  } else if (typeof handleFile === 'function') {
-    handleFile(file);
-  } else {
-    console.error('[ekcelo] Не найдена функция добавления фото. ' +
-      'Укажите правильное имя в loadRemotePhoto().');
-    showToast('⚠️ Не найдена функция добавления фото', 'warn');
-    return;
-  }
- 
-  // Запоминаем для share-ссылки
-  remotePhotos.push({ originalUrl, name });
-  updateShareButton();
- 
-  showToast(`✅ Добавлено: ${name}`, 'success');
-}
- 
-// ─────────────────────────────────────────────────────────────
-// 4. КНОПКА «ПОДЕЛИТЬСЯ ЭТИМИ ФОТО»
-// ─────────────────────────────────────────────────────────────
- 
-/**
- * Создаём кнопку и вставляем в шапку рядом с заголовком.
- * Кнопка скрыта по умолчанию.
- */
-function createShareButton() {
-  const btn = document.createElement('button');
-  btn.id = 'share-btn';
-  btn.innerHTML = '🔗 Поделиться этими фото';
-  btn.title = 'Скопировать ссылку на все загруженные из интернета фото';
-  btn.style.cssText = `
-    display: none;
-    background: #3b82f6;
-    color: #fff;
-    border: none;
-    border-radius: 6px;
-    padding: 6px 14px;
-    font-size: 14px;
-    cursor: pointer;
-    margin-left: 12px;
-    transition: background .2s;
-    white-space: nowrap;
-  `;
-  btn.addEventListener('mouseenter', () => { btn.style.background = '#2563eb'; });
-  btn.addEventListener('mouseleave', () => { btn.style.background = '#3b82f6'; });
-  btn.addEventListener('click', copyShareLink);
- 
-  // Вставляем в шапку: ищем первый <h1> или <header>
-  const header = document.querySelector('header') ||
-                 document.querySelector('.header') ||
-                 document.querySelector('h1')?.parentElement ||
-                 document.body;
- 
-  // Если нашли h1 — вставляем сразу после него
-  const h1 = document.querySelector('h1');
-  if (h1) {
-    h1.insertAdjacentElement('afterend', btn);
-  } else {
-    header.prepend(btn);
-  }
- 
-  return btn;
-}
- 
-/** Показывает / скрывает кнопку в зависимости от наличия remote-фото */
-function updateShareButton() {
-  let btn = document.getElementById('share-btn');
-  if (!btn) btn = createShareButton();
-  btn.style.display = remotePhotos.length > 0 ? 'inline-block' : 'none';
-}
- 
-/**
- * Формирует share-ссылку и копирует в буфер обмена.
- * Только remote-фото (без локальных файлов).
- * Обрезает по ~2000 символам URL.
- */
-function copyShareLink() {
-  const base = window.location.origin + window.location.pathname;
-  const MAX_URL_LEN = 2000;
- 
-  const params = new URLSearchParams();
-  let count = 0;
- 
-  for (const photo of remotePhotos) {
-    count++;
-    const testParams = new URLSearchParams(params);
-    testParams.set(`photo${count}`, photo.originalUrl);
-    testParams.set(`name${count}`, photo.name);
- 
-    const testUrl = `${base}?${testParams.toString()}`;
-    if (testUrl.length > MAX_URL_LEN) {
-      showToast(
-        `⚠️ Ссылка обрезана: вошли ${count - 1} из ${remotePhotos.length} фото`,
-        'warn', 5000
-      );
-      break;
+    const e = await exifr.parse(blob, { gps: true, tiff: true, exif: true, translateValues: true });
+    if (e) {
+      lat      = e.latitude  ?? e.GPSLatitude  ?? null;
+      lon      = e.longitude ?? e.GPSLongitude ?? null;
+      const r  = e.GPSImgDirection ?? e.ImgDirection ?? e.GPSDestBearing ?? null;
+      bearing  = r !== null ? parseFloat(r) : null;
+      altitude = e.GPSAltitude ?? null;
+      date     = e.DateTimeOriginal ?? e.DateTime ?? '';
     }
- 
-    params.set(`photo${count}`, photo.originalUrl);
-    params.set(`name${count}`, photo.name);
-  }
- 
-  const shareUrl = `${base}?${params.toString()}`;
- 
-  navigator.clipboard.writeText(shareUrl)
-    .then(() => showToast('📋 Ссылка скопирована в буфер обмена!', 'success'))
-    .catch(() => {
-      // Фолбэк для браузеров без clipboard API
-      const ta = document.createElement('textarea');
-      ta.value = shareUrl;
-      ta.style.position = 'fixed'; ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      ta.remove();
-      showToast('📋 Ссылка скопирована!', 'success');
-    });
- 
-  // URL в адресной строке НЕ меняем (по требованию ТЗ)
+  } catch (err) { console.warn('[ekcelo] EXIF parse error:', err); }
+
+  addPhoto({
+    name, size: blob.size, displayUrl, thumbUrl,
+    lat, lon, bearing, altitude, date,
+    isRemote: true, remoteViewUrl: viewUrl,
+    originalBlob: blob,  // сохраняем для записи EXIF (ТЗ 2)
+    gdId, yandexId: ydId
+  });
+
+  remotePhotos.push({ originalUrl: viewUrl, name });
+  updateStats(); renderList(); updateShareButton();
+  showToast(`✅ Добавлено: ${name}${lat !== null ? '' : ' (без GPS)'}`, 'success');
 }
- 
-// ─────────────────────────────────────────────────────────────
-// 5. РАЗБОР URL-ПАРАМЕТРОВ ПРИ ЗАГРУЗКЕ СТРАНИЦЫ
-// ─────────────────────────────────────────────────────────────
- 
+
+// ─── Автозагрузка из URL-параметров ──────────────────────────────────────────
+
 /**
- * Читает параметры вида photo1=URL1&name1=Название1&photo2=...
- * и запускает загрузку всех переданных фото.
+ * Читает параметры ?photo1=URL&name1=...&photo2=URL&name2=...
+ * и загружает все фото последовательно.
+ * Поддерживает Google Drive и Яндекс.Диск.
  */
 async function loadPhotosFromUrl() {
   const params = new URLSearchParams(window.location.search);
- 
-  // Собираем все фото: { n: number, url: string, name: string }
-  const photos = [];
- 
+  const photos_list = [];
+
   for (const [key, value] of params.entries()) {
-    const match = key.match(/^photo(\d+)$/);
-    if (!match) continue;
- 
-    const n = parseInt(match[1], 10);
-    const url = value;
-    const id = extractGdriveId(url);
-    const name = params.get(`name${n}`) || defaultNameFromId(id);
- 
-    photos.push({ n, url, name });
+    const m = key.match(/^photo(\d+)$/);
+    if (!m) continue;
+    const n = parseInt(m[1], 10);
+    photos_list.push({ n, url: value, name: params.get(`name${n}`) || '' });
   }
- 
-  if (photos.length === 0) return;
- 
-  // Сортируем по номеру
-  photos.sort((a, b) => a.n - b.n);
- 
-  showToast(`📂 Загружаем ${photos.length} фото из ссылки…`, 'info', 5000);
- 
-  // Загружаем последовательно, чтобы не перегружать браузер
-  for (const photo of photos) {
-    await loadRemotePhoto(photo.url, photo.name);
+
+  if (!photos_list.length) return;
+
+  // Сортируем по номеру параметра
+  photos_list.sort((a, b) => a.n - b.n);
+
+  showToast(`📂 Загружаем ${photos_list.length} фото из ссылки…`, 'info', 6000);
+
+  for (const item of photos_list) {
+    await loadSingleRemotePhoto(item.url, item.name);
   }
- 
-  // Подгоняем карту под все загруженные маркеры
-  // (если в проекте есть такая функция)
-  if (typeof fitMapToPhotos === 'function') {
-    fitMapToPhotos();
+
+  fitMapToPhotos();
+}
+
+// ─── Кнопка «Поделиться этими фото» ──────────────────────────────────────────
+
+/** Обновляет видимость кнопки «Поделиться» */
+function updateShareButton() {
+  document.getElementById('share-btn').style.display =
+    remotePhotos.length > 0 ? 'inline-block' : 'none';
+}
+
+/**
+ * Формирует share-ссылку из текущих remote-фото и копирует в буфер.
+ * Сохраняет оригинальные ссылки (Яндекс / Google Drive).
+ * Обрезает до ~2000 символов.
+ */
+function copyShareLink() {
+  const base = window.location.origin + window.location.pathname;
+  const MAX_LEN = 2000;
+  const params = new URLSearchParams();
+  let count = 0;
+
+  for (const photo of remotePhotos) {
+    count++;
+    const test = new URLSearchParams(params);
+    test.set(`photo${count}`, photo.originalUrl);
+    if (photo.name) test.set(`name${count}`, photo.name);
+
+    if (`${base}?${test}`.length > MAX_LEN) {
+      showToast(`⚠️ Вошли ${count - 1} из ${remotePhotos.length} фото (URL слишком длинный)`, 'warn', 5000);
+      count--;
+      break;
+    }
+    params.set(`photo${count}`, photo.originalUrl);
+    if (photo.name) params.set(`name${count}`, photo.name);
+  }
+
+  if (!count) { showToast('Нет remote-фото для шаринга', 'warn'); return; }
+
+  const shareUrl = `${base}?${params}`;
+
+  // URL в адресной строке НЕ меняем — только копируем
+  navigator.clipboard.writeText(shareUrl)
+    .then(() => showToast('📋 Ссылка скопирована!', 'success'))
+    .catch(() => {
+      // Фолбэк через textarea
+      const ta = document.createElement('textarea');
+      ta.value = shareUrl; ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); ta.remove();
+      showToast('📋 Ссылка скопирована!', 'success');
+    });
+}
+
+// ─── Инициализация при загрузке страницы ────────────────────────────────────
+window.addEventListener('load', () => {
+  updateShareButton();
+  loadPhotosFromUrl();
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ТЗ 2: РУЧНОЙ GPS — указание координат и угла съёмки, запись в EXIF
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─── Состояние режима ────────────────────────────────────────────────────────
+let manualGPSActive        = false;  // режим активен
+let manualModePhotoIndex   = null;   // индекс фото в массиве photos
+let manualInputMode        = 'map';  // 'map' | 'text' — способ ввода координат
+let tempLat                = null;   // временные координаты
+let tempLon                = null;
+let tempBearing            = 0;      // временный угол (0–359)
+let tempMarker             = null;   // временный маркер на карте
+
+// ─── Вход в режим ────────────────────────────────────────────────────────────
+
+/**
+ * Активирует режим ручного GPS для фото с индексом idx.
+ * Фото должно не иметь GPS (p.lat === null).
+ */
+function enterManualGPSMode(idx) {
+  const p = photos[idx];
+  if (!p || p.lat !== null) return;  // у фото уже есть GPS
+
+  // Сбрасываем предыдущий режим, если был
+  if (manualGPSActive) exitManualGPSMode(true);
+
+  manualGPSActive = true;
+  manualModePhotoIndex = idx;
+  tempLat = null; tempLon = null; tempBearing = 0;
+
+  // Подсвечиваем фото в списке
+  renderList();
+
+  // Активируем режим карты по умолчанию
+  setGPSInputMode('map');
+
+  // Показываем панель
+  const panel = document.getElementById('manual-gps-panel');
+  panel.classList.add('visible');
+  document.getElementById('mgps-title').textContent = `📍 Ручной GPS — ${p.name}`;
+  document.getElementById('mgps-coords-display').textContent = '— координаты не выбраны —';
+  document.getElementById('mgps-coords-display').classList.remove('set');
+  document.getElementById('mgps-bearing-wrap').style.display = 'none';
+  document.getElementById('mgps-save-btn').disabled = true;
+  document.getElementById('mgps-bearing').value = 0;
+  document.getElementById('mgps-bearing-val').textContent = '0°';
+
+  showToast('📍 Кликните на карте для установки точки съёмки', 'info', 5000);
+}
+
+/**
+ * Переключает способ ввода координат: 'map' или 'text'
+ */
+function setGPSInputMode(mode) {
+  manualInputMode = mode;
+  const mapBtn  = document.getElementById('mgps-btn-map');
+  const textBtn = document.getElementById('mgps-btn-text');
+  const textWrap = document.getElementById('mgps-coord-input-wrap');
+  const hintOverlay = document.getElementById('gps-hint-overlay');
+  const mapWrap  = document.getElementById('map-wrap');
+
+  if (mode === 'map') {
+    mapBtn.classList.add('active'); textBtn.classList.remove('active');
+    textWrap.style.display = 'none';
+    hintOverlay.classList.add('visible');
+    mapWrap.classList.add('gps-picking');
+  } else {
+    textBtn.classList.add('active'); mapBtn.classList.remove('active');
+    textWrap.style.display = 'block';
+    hintOverlay.classList.remove('visible');
+    mapWrap.classList.remove('gps-picking');
+    document.getElementById('mgps-coord-field').focus();
   }
 }
- 
-// ─────────────────────────────────────────────────────────────
-// 6. ИНИЦИАЛИЗАЦИЯ
-// ─────────────────────────────────────────────────────────────
- 
-// Запускаем после полной загрузки DOM и карты
-window.addEventListener('load', () => {
-  createShareButton();     // создаём кнопку (скрытую) сразу
-  loadPhotosFromUrl();     // загружаем фото из URL, если есть параметры
-});
- 
-// ─────────────────────────────────────────────────────────────
-// КАК ИСПОЛЬЗОВАТЬ
-// ─────────────────────────────────────────────────────────────
-//
-// Пример ссылки с одним фото:
-//   https://romanbabenkorostov-ux.github.io/ekcelo/?photo1=https://drive.google.com/file/d/1cEqjmiVYTNOBJYp9lTFnXKYt8xBh2Q91/view&name1=Мой%20снимок
-//
-// Пример с несколькими фото:
-//   ?photo1=URL1&name1=Фото1&photo2=URL2&name2=Фото2
-//
-// ВАЖНО: в функции loadRemotePhoto() раскомментируйте вызов
-// той функции, которая уже есть в вашем проекте для добавления
-// фото на карту (addPhotoToMap / processFile / handleFile).
-// Посмотрите в коде index.html как называется обработчик drop/change.
+
+// ─── Выход из режима ────────────────────────────────────────────────────────
+
+/**
+ * Выключает режим ручного GPS, удаляет временный маркер.
+ * @param {boolean} silent — без уведомления (для внутренних сбросов)
+ */
+function exitManualGPSMode(silent = false) {
+  manualGPSActive = false;
+
+  // Удаляем временный маркер
+  if (tempMarker) { map.removeLayer(tempMarker); tempMarker = null; }
+
+  document.getElementById('manual-gps-panel').classList.remove('visible');
+  document.getElementById('gps-hint-overlay').classList.remove('visible');
+  document.getElementById('map-wrap').classList.remove('gps-picking');
+
+  manualModePhotoIndex = null;
+  tempLat = null; tempLon = null; tempBearing = 0;
+
+  renderList();
+  if (!silent) showToast('Режим GPS отменён');
+}
+
+// ─── Обработчик клика по карте в режиме GPS ──────────────────────────────────
+
+/**
+ * Вызывается из обработчика map.on('click') когда manualGPSActive = true.
+ * Устанавливает временные координаты и перерисовывает маркер.
+ */
+function handleMapClickForGPS(e) {
+  tempLat = e.latlng.lat;
+  tempLon = e.latlng.lng;
+  updateTempMarker();
+  onCoordsSet();
+}
+
+// ─── Ввод координат текстом ──────────────────────────────────────────────────
+
+/**
+ * Применяет координаты из текстового поля.
+ * Поддерживает форматы:
+ *   47.373533, 39.899542
+ *   47°22'24.72"С 39°53'58.35"В  (С=N, Ю=S, В=E, З=W)
+ */
+function applyCoordInput() {
+  const raw = document.getElementById('mgps-coord-field').value.trim();
+  const result = parseCoordInput(raw);
+  if (!result) {
+    showToast('❌ Не удалось разобрать координаты. Пример: 47.373533, 39.899542', 'error');
+    return;
+  }
+  tempLat = result.lat; tempLon = result.lon;
+  updateTempMarker();
+  // Центрируем карту
+  map.setView([tempLat, tempLon], Math.max(map.getZoom(), 14), { animate: true });
+  onCoordsSet();
+}
+
+/**
+ * Парсит строку с координатами.
+ * @returns {{ lat: number, lon: number } | null}
+ */
+function parseCoordInput(str) {
+  str = str.trim().replace(/\s+/g, ' ');
+
+  // Формат 1: "47.373533, 39.899542" или "47.373533 39.899542"
+  const dec = str.match(/^(-?[\d.]+)[,\s]+(-?[\d.]+)$/);
+  if (dec) {
+    const lat = parseFloat(dec[1]), lon = parseFloat(dec[2]);
+    if (!isNaN(lat) && !isNaN(lon)) return { lat, lon };
+  }
+
+  // Формат 2: "47°22'24.72"С 39°53'58.35"В"
+  // Разрешаем разные виды кавычек и градусных знаков
+  const DMS = /(\d+)[°]\s*(\d+)['''`]\s*([\d.]+)["""″'']\s*([СсNn]|[ЮюSs])\s+(\d+)[°]\s*(\d+)['''`]\s*([\d.]+)["""″'']\s*([ВвEe]|[ЗзWw])/;
+  const m = str.match(DMS);
+  if (m) {
+    const dmsToDecimal = (d, min, sec) => parseInt(d) + parseInt(min) / 60 + parseFloat(sec) / 3600;
+    let lat = dmsToDecimal(m[1], m[2], m[3]);
+    let lon = dmsToDecimal(m[5], m[6], m[7]);
+    const latRef = m[4].toUpperCase();
+    const lonRef = m[8].toUpperCase();
+    if (latRef === 'Ю' || latRef === 'S') lat = -lat;
+    if (lonRef === 'З' || lonRef === 'W') lon = -lon;
+    return { lat, lon };
+  }
+
+  return null;
+}
+
+// ─── Координаты установлены — обновляем UI ───────────────────────────────────
+
+function onCoordsSet() {
+  const coordsEl = document.getElementById('mgps-coords-display');
+  coordsEl.textContent = `${tempLat.toFixed(6)}, ${tempLon.toFixed(6)}`;
+  coordsEl.classList.add('set');
+  document.getElementById('mgps-bearing-wrap').style.display = 'block';
+  document.getElementById('mgps-save-btn').disabled = false;
+  document.getElementById('gps-hint-overlay').classList.remove('visible');
+  document.getElementById('map-wrap').classList.remove('gps-picking');
+  showToast(`📍 ${tempLat.toFixed(5)}, ${tempLon.toFixed(5)}`, 'success', 2000);
+}
+
+// ─── Временный маркер на карте ────────────────────────────────────────────────
+
+/**
+ * Создаёт или обновляет временный маркер с текущим углом tempBearing.
+ */
+function updateTempMarker() {
+  if (tempMarker) map.removeLayer(tempMarker);
+  if (tempLat === null) return;
+
+  const bearing = tempBearing;
+  const hb = bearing !== null, S = hb ? 100 : 20;
+  const html = `<div class="pm-wrap" style="width:${S}px;height:${S}px">`
+    + fovSvgAccent(bearing, S / 2)
+    + `<div class="marker-dot temp"></div></div>`;
+  const icon = L.divIcon({ html, className: '', iconSize: [S, S], iconAnchor: [S / 2, S / 2] });
+  tempMarker = L.marker([tempLat, tempLon], { icon, zIndexOffset: 1000 }).addTo(map);
+}
+
+/**
+ * SVG конуса для временного маркера — другой цвет (accent2)
+ */
+function fovSvgAccent(bearing, R) {
+  if (bearing === null || isNaN(bearing)) return '';
+  const fov = 55, cx = R, cy = R;
+  const al = (bearing - fov - 90) * Math.PI / 180;
+  const ar = (bearing + fov - 90) * Math.PI / 180;
+  const x1 = cx + R * Math.cos(al), y1 = cy + R * Math.sin(al);
+  const x2 = cx + R * Math.cos(ar), y2 = cy + R * Math.sin(ar);
+  const nx = cx + R * .5 * Math.cos((bearing - 90) * Math.PI / 180);
+  const ny = cy + R * .5 * Math.sin((bearing - 90) * Math.PI / 180);
+  const S = R * 2;
+  return `<svg width="${S}" height="${S}" viewBox="0 0 ${S} ${S}" `
+    + `style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none">`
+    + `<path d="M${cx},${cy} L${x1},${y1} A${R},${R} 0 0,1 ${x2},${y2} Z" `
+    + `fill="rgba(71,200,255,.18)" stroke="#47c8ff" stroke-width="1.2" stroke-linejoin="round"/>`
+    + `<line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="#47c8ff" stroke-width="1.5" stroke-linecap="round" opacity=".9"/>`
+    + `</svg>`;
+}
+
+// ─── Слайдер угла ────────────────────────────────────────────────────────────
+
+/**
+ * Вызывается oninput слайдера — обновляет угол и перерисовывает маркер.
+ */
+function onBearingSlider(val) {
+  tempBearing = parseInt(val, 10);
+  document.getElementById('mgps-bearing-val').textContent = tempBearing + '°';
+  if (tempLat !== null) updateTempMarker();
+}
+
+// Колёсико мыши на слайдере
+document.getElementById('mgps-bearing').addEventListener('wheel', function(e) {
+  e.preventDefault();
+  const delta = e.deltaY < 0 ? 1 : -1;
+  const newVal = ((parseInt(this.value, 10) + delta + 360) % 360);
+  this.value = newVal;
+  onBearingSlider(newVal);
+}, { passive: false });
+
+// ─── Запись EXIF ─────────────────────────────────────────────────────────────
+
+/**
+ * Конвертирует десятичные градусы в формат piexif: [[deg,1],[min,1],[sec*100,100]]
+ * @returns {[Array, string]} [dmsArray, ref]
+ */
+function decimalToDMSForPiexif(decimal, axis) {
+  const ref = axis === 'lat'
+    ? (decimal >= 0 ? 'N' : 'S')
+    : (decimal >= 0 ? 'E' : 'W');
+  const abs = Math.abs(decimal);
+  const deg = Math.floor(abs);
+  const minF = (abs - deg) * 60;
+  const min  = Math.floor(minF);
+  const secInt = Math.round((minF - min) * 6000); // sec * 100 для знаменателя 100
+  return [[[deg, 1], [min, 1], [secInt, 100]], ref];
+}
+
+/** Конвертирует Blob/File в Data URL */
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = e => resolve(e.target.result);
+    r.onerror = () => reject(new Error('FileReader error'));
+    r.readAsDataURL(blob);
+  });
+}
+
+/** Конвертирует Data URL в Blob */
+function dataUrlToBlob(dataUrl) {
+  const [meta, b64] = dataUrl.split(',');
+  const mime = (meta.match(/:(.*?);/) || [])[1] || 'image/jpeg';
+  const bin  = atob(b64);
+  const arr  = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+/**
+ * Записывает GPS + угол в EXIF файла и предлагает скачать.
+ * После успеха обновляет фото в реестре и добавляет маркер на карту.
+ */
+async function writeEXIFWithGPS() {
+  if (tempLat === null || tempLon === null) {
+    showToast('❌ Сначала укажите координаты', 'error'); return;
+  }
+  const idx = manualModePhotoIndex;
+  const p   = photos[idx];
+  if (!p) return;
+
+  document.getElementById('mgps-save-btn').disabled = true;
+  showToast('⏳ Записываем EXIF…', 'info', 8000);
+
+  // Получаем бинарные данные файла
+  let blob = null;
+  try {
+    if (p.file) {
+      // Локальный файл
+      blob = p.file;
+    } else if (p.originalBlob) {
+      // Remote — уже скачан при загрузке
+      blob = p.originalBlob;
+    } else if (p.remoteViewUrl) {
+      // Remote — нужно скачать
+      showToast('⏳ Скачиваем оригинал…', 'info', 8000);
+      const resp = await fetch(getDirectUrlForFetch(p.remoteViewUrl));
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      blob = await resp.blob();
+    } else {
+      throw new Error('Нет источника для записи EXIF');
+    }
+  } catch (err) {
+    showToast(`❌ Не удалось получить файл: ${err.message}`, 'error', 6000);
+    document.getElementById('mgps-save-btn').disabled = false;
+    return;
+  }
+
+  // Конвертируем в DataURL для piexifjs
+  let dataUrl;
+  try {
+    dataUrl = await blobToDataUrl(blob);
+  } catch (err) {
+    showToast('❌ Ошибка чтения файла', 'error'); return;
+  }
+
+  // Загружаем/создаём EXIF-объект
+  let exifObj = { '0th': {}, 'Exif': {}, 'GPS': {}, '1st': {} };
+  try { exifObj = piexif.load(dataUrl); } catch(e) {}
+  if (!exifObj['GPS']) exifObj['GPS'] = {};
+
+  // Записываем GPS
+  const [latDMS, latRef] = decimalToDMSForPiexif(tempLat, 'lat');
+  const [lonDMS, lonRef] = decimalToDMSForPiexif(tempLon, 'lon');
+
+  exifObj['GPS'][piexif.GPSIFD.GPSLatitude]        = latDMS;
+  exifObj['GPS'][piexif.GPSIFD.GPSLatitudeRef]     = latRef;
+  exifObj['GPS'][piexif.GPSIFD.GPSLongitude]       = lonDMS;
+  exifObj['GPS'][piexif.GPSIFD.GPSLongitudeRef]    = lonRef;
+  exifObj['GPS'][piexif.GPSIFD.GPSImgDirection]    = [Math.round(tempBearing * 100), 100];
+  exifObj['GPS'][piexif.GPSIFD.GPSImgDirectionRef] = 'T'; // True north
+
+  // Вставляем EXIF обратно в JPEG
+  let newDataUrl;
+  try {
+    const exifBytes = piexif.dump(exifObj);
+    newDataUrl = piexif.insert(exifBytes, dataUrl);
+  } catch (err) {
+    showToast(`❌ Ошибка записи EXIF: ${err.message}`, 'error', 6000);
+    console.error('[ekcelo] piexif error:', err);
+    document.getElementById('mgps-save-btn').disabled = false;
+    return;
+  }
+
+  // Предлагаем скачать модифицированный файл
+  const a = document.createElement('a');
+  a.href = newDataUrl;
+  a.download = p.name;
+  a.click();
+
+  // Обновляем фото в реестре
+  const newBlob    = dataUrlToBlob(newDataUrl);
+  const newBlobUrl = URL.createObjectURL(newBlob);
+
+  // Освобождаем старый ObjectURL если это был локальный файл
+  if (!p.isRemote && p.displayUrl) URL.revokeObjectURL(p.displayUrl);
+
+  p.lat        = tempLat;
+  p.lon        = tempLon;
+  p.bearing    = tempBearing === 0 ? null : tempBearing;
+  p.displayUrl = newBlobUrl;
+  p.thumbUrl   = newBlobUrl;
+  p.originalBlob = newBlob;
+
+  // Удаляем старый маркер, добавляем новый
+  if (p.marker) map.removeLayer(p.marker);
+  p.marker = null;
+  addMarker(p, idx);
+  rebuildMarkerListeners();
+
+  updateStats(); renderList();
+  fitMapToPhotos();
+
+  // Выходим из режима
+  exitManualGPSMode(true);
+  showToast('✅ EXIF записан, файл скачан!', 'success', 4000);
+}
 
 </script>
 </body>
