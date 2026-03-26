@@ -1892,6 +1892,8 @@ function initTimeline() {
   const startH = document.getElementById('handle-start');
   const endH = document.getElementById('handle-end');
   let dragging = null;
+  let dragStartTime = 0;
+  let dragVelocity = 1;
 
   // Переключатель режимов
   document.querySelectorAll('.timeline-mode-btn').forEach(btn => {
@@ -1905,16 +1907,23 @@ function initTimeline() {
   function startDrag(e, type) {
     e.preventDefault();
     dragging = type;
+    dragStartTime = Date.now();
+    dragVelocity = 1;
     document.addEventListener('mousemove', doDrag);
     document.addEventListener('mouseup', stopDrag);
   }
 
   function doDrag(e) {
     if (!dragging) return;
+
     const rect = track.getBoundingClientRect();
     let perc = ((e.clientX - rect.left) / rect.width) * 100;
-    perc = Math.max(0, Math.min(100, perc));
 
+    // Ускорение при долгом перетаскивании за пределы
+    const timeHeld = (Date.now() - dragStartTime) / 1000;
+    dragVelocity = Math.min(8, 1 + Math.pow(timeHeld * 1.8, 1.6)); // ускоряется плавно
+
+    // Разрешаем выход за пределы [0–100] для расширения диапазона
     if (dragging === 'start') {
       let endP = parseFloat(endH.style.left) || 100;
       if (perc > endP) perc = endP;
@@ -1924,6 +1933,7 @@ function initTimeline() {
       if (perc < startP) perc = startP;
       endH.style.left = `${perc}%`;
     }
+
     updateSelectedBar();
   }
 
@@ -1932,14 +1942,26 @@ function initTimeline() {
     document.removeEventListener('mousemove', doDrag);
     document.removeEventListener('mouseup', stopDrag);
 
-    const duration = (timelineMode === 'full') 
-      ? (maxDateGlobal.getTime() - minDateGlobal.getTime())
-      : (filterEnd.getTime() - filterStart.getTime());
+    const fullDuration = maxDateGlobal.getTime() - minDateGlobal.getTime();
+    const selectedDuration = filterEnd.getTime() - filterStart.getTime();
 
+    const duration = (timelineMode === 'full') ? fullDuration : selectedDuration;
     const baseTime = (timelineMode === 'full') ? minDateGlobal.getTime() : filterStart.getTime();
 
-    const startPerc = parseFloat(startH.style.left) || 0;
-    const endPerc = parseFloat(endH.style.left) || 100;
+    let startPerc = parseFloat(startH.style.left) || 0;
+    let endPerc   = parseFloat(endH.style.left)   || 100;
+
+    // Если вышли за пределы — расширяем диапазон
+    if (startPerc < 0) {
+      const extendLeft = Math.abs(startPerc) * dragVelocity;
+      filterStart = new Date(baseTime - (extendLeft / 100) * duration);
+      startPerc = 0;
+    }
+    if (endPerc > 100) {
+      const extendRight = (endPerc - 100) * dragVelocity;
+      filterEnd = new Date(baseTime + duration + (extendRight / 100) * duration);
+      endPerc = 100;
+    }
 
     filterStart = new Date(baseTime + (startPerc / 100) * duration);
     filterEnd   = new Date(baseTime + (endPerc   / 100) * duration);
@@ -1954,6 +1976,7 @@ function initTimeline() {
   startH.addEventListener('mousedown', e => startDrag(e, 'start'));
   endH.addEventListener('mousedown', e => startDrag(e, 'end'));
 
+  // Клик по треку
   track.addEventListener('click', e => {
     if (dragging) return;
     const rect = track.getBoundingClientRect();
@@ -1986,8 +2009,10 @@ function initTimeline() {
 
 function updateTimeFromInputs() {
   if (!filterStart || !filterEnd) return;
+
   const startVal = document.getElementById('start-time-input').value;
-  const endVal = document.getElementById('end-time-input').value;
+  const endVal   = document.getElementById('end-time-input').value;
+
   if (startVal) {
     const [h, m] = startVal.split(':').map(Number);
     filterStart.setHours(h, m, 0, 0);
@@ -1996,7 +2021,9 @@ function updateTimeFromInputs() {
     const [h, m] = endVal.split(':').map(Number);
     filterEnd.setHours(h, m, 0, 0);
   }
+
   if (filterEnd < filterStart) [filterStart, filterEnd] = [filterEnd, filterStart];
+
   renderTimeline();
   applyTimeFilter();
 }
