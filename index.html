@@ -1813,16 +1813,23 @@ function formatDateShort(d) {
 function renderTimeline() {
   if (!minDateGlobal || !maxDateGlobal) return;
 
-  const duration = maxDateGlobal.getTime() - minDateGlobal.getTime();
+  const fullDuration = maxDateGlobal.getTime() - minDateGlobal.getTime();
   const track = document.getElementById('timeline-track');
 
+  // Очищаем старые точки
   track.querySelectorAll('.timeline-dot').forEach(d => d.remove());
 
   datedPhotosGlobal.forEach(p => {
-    let perc = ((p.dateObj.getTime() - minDateGlobal.getTime()) / duration) * 100;
-    if (timelineMode === 'zoom') {
+    let perc = 0;
+    
+    if (timelineMode === 'full') {
+      perc = ((p.dateObj.getTime() - minDateGlobal.getTime()) / fullDuration) * 100;
+    } else {
+      // В режиме zoom считаем относительно выбранного диапазона
       const selectedDuration = filterEnd.getTime() - filterStart.getTime();
-      perc = ((p.dateObj.getTime() - filterStart.getTime()) / selectedDuration) * 100;
+      if (selectedDuration > 0) {
+        perc = ((p.dateObj.getTime() - filterStart.getTime()) / selectedDuration) * 100;
+      }
     }
 
     const dot = document.createElement('div');
@@ -1835,13 +1842,13 @@ function renderTimeline() {
     track.appendChild(dot);
   });
 
-  let startPerc = 0, endPerc = 100;
+  // Позиции бегунков
+  let startPerc = 0;
+  let endPerc = 100;
+
   if (timelineMode === 'full') {
-    startPerc = ((filterStart.getTime() - minDateGlobal.getTime()) / duration) * 100;
-    endPerc   = ((filterEnd.getTime()   - minDateGlobal.getTime()) / duration) * 100;
-  } else {
-    startPerc = 0;
-    endPerc = 100;
+    startPerc = ((filterStart.getTime() - minDateGlobal.getTime()) / fullDuration) * 100;
+    endPerc   = ((filterEnd.getTime()   - minDateGlobal.getTime()) / fullDuration) * 100;
   }
 
   startPerc = Math.max(0, Math.min(100, startPerc));
@@ -1856,6 +1863,20 @@ function renderTimeline() {
   document.getElementById('max-date-label').textContent = formatDateShort(maxDateGlobal);
   document.getElementById('range-display').innerHTML = 
     `<b>${formatDateShort(filterStart)}</b> — <b>${formatDateShort(filterEnd)}</b>`;
+
+  // === ВОЗВРАЩАЕМ ТОЧНУЮ НАСТРОЙКУ ПО ВРЕМЕНИ ===
+  const selectedDurationHours = (filterEnd.getTime() - filterStart.getTime()) / (1000 * 60 * 60);
+  const fineEl = document.getElementById('time-fine-controls');
+  
+  if (selectedDurationHours < 48 && selectedDurationHours > 0) {
+    fineEl.style.display = 'flex';
+    document.getElementById('start-time-input').value = 
+      `${String(filterStart.getHours()).padStart(2,'0')}:${String(filterStart.getMinutes()).padStart(2,'0')}`;
+    document.getElementById('end-time-input').value = 
+      `${String(filterEnd.getHours()).padStart(2,'0')}:${String(filterEnd.getMinutes()).padStart(2,'0')}`;
+  } else {
+    fineEl.style.display = 'none';
+  }
 }
 
 function updateSelectedBar() {
