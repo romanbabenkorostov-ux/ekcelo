@@ -318,8 +318,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
       <div id="lb-info">
         <div id="lb-name"></div>
         <table id="lb-table"><tbody id="lb-tbody"></tbody></table>
-        <!-- Кнопка ручного GPS появляется для no-gps фото (ТЗ 2) -->
-        <button id="lb-gps-btn" onclick="enterManualGPSModeFromLightbox()">📍 Указать точку вручную</button>
+		<!-- Кнопка ручного GPS появляется только для фото без координат или без угла -->
+        <button id="lb-gps-btn" onclick="enterManualGPSModeFromLightbox()" 
+                style="display:none; width:100%; margin-top:8px; background:rgba(71,200,255,.1); border:1px solid rgba(71,200,255,.3); border-radius:var(--r); color:var(--accent2); font-size:10px; font-family:'JetBrains Mono',monospace; padding:6px; cursor:pointer; transition:all .15s">
+          📍 Установить координаты и угол съёмки
+        </button>
+		
         <div id="lb-nav">
           <button class="lb-nav-btn" onclick="navPhoto(-1)">&#8592; пред.</button>
           <button class="lb-nav-btn" onclick="navPhoto(1)">след. &#8594;</button>
@@ -880,9 +884,12 @@ async function openLightbox(idx, latlng) {
   document.getElementById('lb-name').textContent = p.name;
   document.getElementById('lb-tbody').innerHTML = buildRows(p);
 
-  // Кнопка ручного GPS — только для фото без координат (ТЗ 2)
+  // Кнопка ручного GPS — показываем, если нет координат ИЛИ нет угла
   const lbGpsBtn = document.getElementById('lb-gps-btn');
-  lbGpsBtn.style.display = p.lat === null ? 'block' : 'none';
+  const needsGPS = (p.lat === null || p.lon === null) || 
+                   (p.bearing === null || isNaN(p.bearing) || p.bearing === 0);
+  
+  lbGpsBtn.style.display = needsGPS ? 'block' : 'none';
 
   document.getElementById('lightbox').classList.add('visible');
   setActiveMarker(idx);
@@ -946,15 +953,53 @@ function formatDate(dateStr) {
 
 function buildRows(p) {
   const rows = [];
-  const add = (l, v) => {
-    if (v !== null && v !== undefined && v !== '') {
-      rows.push(`<tr><td>${l}</td><td>${esc(String(v))}</td></tr>`);
+  const add = (label, value, hasData, onClick = null) => {
+    let html = `<tr><td>${label}</td><td>`;
+    
+    if (hasData) {
+      html += esc(String(value));
+    } else {
+      html += `<span style="color:var(--muted);font-style:italic">нет данных</span>`;
+      if (onClick) {
+        html += ` <button onclick="${onClick}" style="margin-left:8px;background:rgba(71,200,255,.15);border:1px solid rgba(71,200,255,.4);color:var(--accent2);border-radius:4px;padding:2px 8px;font-size:9px;cursor:pointer">Установить</button>`;
+      }
     }
+    
+    html += `</td></tr>`;
+    rows.push(html);
   };
-  if (p.lat !== null) { add('Широта', p.lat.toFixed(6)); add('Долгота', p.lon.toFixed(6)); }
-  if (p.bearing !== null && !isNaN(p.bearing)) add('Направление', p.bearing.toFixed(1) + '°');
-  if (p.date) add('Дата', formatDate(p.date));
-  if (p.altitude !== null) add('Высота над ур.м.', parseFloat(p.altitude).toFixed(1) + ' м');
+
+  // Широта и Долгота
+  const hasCoords = p.lat !== null && p.lon !== null;
+  if (hasCoords) {
+    add('Широта', p.lat.toFixed(6), true);
+    add('Долгота', p.lon.toFixed(6), true);
+  } else {
+    add('Координаты', '', false, `enterManualGPSModeFromLightbox()`);
+  }
+
+  // Угол съёмки
+  const hasBearing = p.bearing !== null && !isNaN(p.bearing) && p.bearing !== 0;
+  if (hasBearing) {
+    add('Направление', p.bearing.toFixed(1) + '°', true);
+  } else {
+    add('Угол съёмки', '', false, `enterManualGPSModeFromLightbox()`);
+  }
+
+  // Дата
+  if (p.date) {
+    add('Дата', formatDate(p.date), true);
+  } else {
+    add('Дата', 'нет данных', false);
+  }
+
+  // Высота
+  if (p.altitude !== null) {
+    add('Высота над ур.м.', parseFloat(p.altitude).toFixed(1) + ' м', true);
+  } else {
+    add('Высота над ур.м.', 'нет данных', false);
+  }
+
   return rows.join('');
 }
 
