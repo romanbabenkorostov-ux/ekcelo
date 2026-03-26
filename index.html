@@ -359,9 +359,18 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     
     <div id="time-fine-controls" class="time-fine-controls">
       <span style="color:var(--accent2)">⏰ Точное время:</span>
-      <input type="time" id="start-time-input" onchange="updateTimeFromInputs()">
+      
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:13px;cursor:pointer" onclick="document.getElementById('start-time-input').showPicker()">🕒</span>
+        <input type="time" id="start-time-input" onchange="updateTimeFromInputs()">
+      </div>
+      
       <span>—</span>
-      <input type="time" id="end-time-input" onchange="updateTimeFromInputs()">
+      
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:13px;cursor:pointer" onclick="document.getElementById('end-time-input').showPicker()">🕒</span>
+        <input type="time" id="end-time-input" onchange="updateTimeFromInputs()">
+      </div>
     </div>
   </div>
 
@@ -1795,10 +1804,9 @@ function updateTimelineData() {
   minDateGlobal = datedPhotosGlobal[0].dateObj;
   maxDateGlobal = datedPhotosGlobal[datedPhotosGlobal.length - 1].dateObj;
 
-  if (!filterStart || filterStart < minDateGlobal) filterStart = new Date(minDateGlobal.getTime());
-  if (!filterEnd || filterEnd > maxDateGlobal) filterEnd = new Date(maxDateGlobal.getTime());
-
-  if (filterStart > filterEnd) [filterStart, filterEnd] = [filterEnd, filterStart];
+  // Важное исправление: при любой загрузке нового фото сбрасываем фильтр на весь диапазон
+  filterStart = new Date(minDateGlobal.getTime());
+  filterEnd   = new Date(maxDateGlobal.getTime());
 
   document.getElementById('timeline').classList.add('visible');
   renderTimeline();
@@ -1906,7 +1914,7 @@ function initTimeline() {
 
     const rect = track.getBoundingClientRect();
     let perc = ((e.clientX - rect.left) / rect.width) * 100;
-    perc = Math.max(-30, Math.min(130, perc));   // разрешаем выход за границы
+    perc = Math.max(-40, Math.min(140, perc));   // разрешаем сильный выход за края
 
     if (dragging === 'start') {
       let endP = parseFloat(endH.style.left) || 100;
@@ -1926,24 +1934,25 @@ function initTimeline() {
     document.removeEventListener('mouseup', stopDrag);
 
     const fullDuration = maxDateGlobal.getTime() - minDateGlobal.getTime();
-    const baseTime = (timelineMode === 'full') ? minDateGlobal.getTime() : filterStart.getTime();
     let duration = (timelineMode === 'full') ? fullDuration : (filterEnd.getTime() - filterStart.getTime());
+    const baseTime = (timelineMode === 'full') ? minDateGlobal.getTime() : filterStart.getTime();
 
     let startPerc = parseFloat(startH.style.left) || 0;
     let endPerc   = parseFloat(endH.style.left)   || 100;
 
-    // Расширение диапазона при выходе за пределы
+    // === ИСПРАВЛЕНИЕ: Расширение диапазона при выходе за пределы ===
     if (startPerc < 0) {
-      const extend = Math.abs(startPerc) / 100 * duration * 1.8; // чуть агрессивнее
-      filterStart = new Date(baseTime - extend);
+      const extendFactor = Math.abs(startPerc) / 30; // чем дальше ушёл — тем сильнее расширение
+      filterStart = new Date(baseTime - extendFactor * duration * 0.6);
       startPerc = 0;
     }
     if (endPerc > 100) {
-      const extend = (endPerc - 100) / 100 * duration * 1.8;
-      filterEnd = new Date(baseTime + duration + extend);
+      const extendFactor = (endPerc - 100) / 30;
+      filterEnd = new Date(baseTime + duration + extendFactor * duration * 0.6);
       endPerc = 100;
     }
 
+    // Применяем новые позиции
     filterStart = new Date(baseTime + (startPerc / 100) * duration);
     filterEnd   = new Date(baseTime + (endPerc   / 100) * duration);
 
