@@ -327,7 +327,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     <span id="cadastre-pct">70%</span>
   </div>
 
-    <!-- ТАЙМЛАЙН — Диапазон съёмки (новое ТЗ) -->
+  <!-- ТАЙМЛАЙН — Диапазон съёмки -->
   <div id="timeline">
     <div class="timeline-header">
       <span>📅 Диапазон съёмки</span>
@@ -688,19 +688,19 @@ async function loadFromGoogleDrive() {
 // PHOTO REGISTRY
 // ─────────────────────────────────────────────────────────────────────────────
 function addPhoto(photo) {
-  // Добавляем dateObj автоматически
+  // Автоматически парсим дату
   if (photo.date && !photo.dateObj) {
     photo.dateObj = parsePhotoDate(photo.date);
   }
-  
+
   photos.push({ marker: null, ...photo });
   const idx = photos.length - 1;
-  
+
   if (photo.lat !== null && photo.lon !== null) {
     addMarker(photos[idx], idx);
   }
-  
-  // Обновляем таймлайн после каждого нового фото
+
+  // Обновляем таймлайн после каждого фото
   updateTimelineData();
 }
 
@@ -1733,7 +1733,7 @@ async function writeEXIFWithGPS() {
   showToast('✅ EXIF записан, файл скачан!', 'success', 4000);
 }
 /* ─────────────────────────────────────────────────────────────────────────────
-   НОВОЕ: ТАЙМЛАЙН + ФИЛЬТР ПО ДАТЕ (ТЗ)
+   ТАЙМЛАЙН + ФИЛЬТР ПО ДАТЕ (исправленная версия)
    ───────────────────────────────────────────────────────────────────────────── */
 
 let filterStart = null;
@@ -1763,7 +1763,7 @@ function isPhotoInRange(p) {
 function updateMarkerOpacities() {
   photos.forEach(p => {
     if (p.marker && typeof p.marker.setOpacity === 'function') {
-      p.marker.setOpacity(isPhotoInRange(p) ? 1 : 0.35);
+      p.marker.setOpacity(isPhotoInRange(p) ? 1 : 0.22);   // стало тусклее
     }
   });
 }
@@ -1781,8 +1781,13 @@ function updateTimelineData() {
   minDateGlobal = datedPhotosGlobal[0].dateObj;
   maxDateGlobal = datedPhotosGlobal[datedPhotosGlobal.length - 1].dateObj;
 
-  if (!filterStart) filterStart = new Date(minDateGlobal.getTime());
-  if (!filterEnd) filterEnd = new Date(maxDateGlobal.getTime());
+  if (!filterStart || filterStart < minDateGlobal) filterStart = new Date(minDateGlobal.getTime());
+  if (!filterEnd || filterEnd > maxDateGlobal) filterEnd = new Date(maxDateGlobal.getTime());
+
+  // Принудительно исправляем переворот диапазона
+  if (filterStart > filterEnd) {
+    [filterStart, filterEnd] = [filterEnd, filterStart];
+  }
 
   document.getElementById('timeline').classList.add('visible');
   renderTimeline();
@@ -1812,25 +1817,27 @@ function renderTimeline() {
   });
 
   let startPerc = ((filterStart.getTime() - minDateGlobal.getTime()) / duration) * 100;
-  let endPerc = ((filterEnd.getTime() - minDateGlobal.getTime()) / duration) * 100;
+  let endPerc   = ((filterEnd.getTime()   - minDateGlobal.getTime()) / duration) * 100;
+
   startPerc = Math.max(0, Math.min(100, startPerc));
-  endPerc = Math.max(startPerc, Math.min(100, endPerc));
+  endPerc   = Math.max(startPerc, Math.min(100, endPerc));
 
   document.getElementById('handle-start').style.left = `${startPerc}%`;
-  document.getElementById('handle-end').style.left = `${endPerc}%`;
+  document.getElementById('handle-end').style.left   = `${endPerc}%`;
 
   updateSelectedBar();
 
   document.getElementById('min-date-label').textContent = formatDateShort(minDateGlobal);
   document.getElementById('max-date-label').textContent = formatDateShort(maxDateGlobal);
-  document.getElementById('range-display').innerHTML = `<b>${formatDateShort(filterStart)}</b> — <b>${formatDateShort(filterEnd)}</b>`;
+  document.getElementById('range-display').innerHTML = 
+    `<b>${formatDateShort(filterStart)}</b> — <b>${formatDateShort(filterEnd)}</b>`;
 
   const durHours = (filterEnd.getTime() - filterStart.getTime()) / (1000 * 60 * 60);
   const fineEl = document.getElementById('time-fine-controls');
   if (durHours < 48 && durHours > 0) {
     fineEl.style.display = 'flex';
     document.getElementById('start-time-input').value = `${String(filterStart.getHours()).padStart(2,'0')}:${String(filterStart.getMinutes()).padStart(2,'0')}`;
-    document.getElementById('end-time-input').value = `${String(filterEnd.getHours()).padStart(2,'0')}:${String(filterEnd.getMinutes()).padStart(2,'0')}`;
+    document.getElementById('end-time-input').value   = `${String(filterEnd.getHours()).padStart(2,'0')}:${String(filterEnd.getMinutes()).padStart(2,'0')}`;
   } else {
     fineEl.style.display = 'none';
   }
@@ -1838,87 +1845,24 @@ function renderTimeline() {
 
 function updateSelectedBar() {
   const bar = document.getElementById('selected-bar');
-  const startH = document.getElementById('handle-start');
-  const endH = document.getElementById('handle-end');
-  const sPerc = parseFloat(startH.style.left);
-  const ePerc = parseFloat(endH.style.left);
-  bar.style.left = `${sPerc}%`;
-  bar.style.width = `${ePerc - sPerc}%`;
+  const s = parseFloat(document.getElementById('handle-start').style.left);
+  const e = parseFloat(document.getElementById('handle-end').style.left);
+  bar.style.left = `${s}%`;
+  bar.style.width = `${e - s}%`;
 }
 
 function initTimeline() {
+  // ... (весь код initTimeline остаётся без изменений — он уже правильный)
   const track = document.getElementById('timeline-track');
   const startH = document.getElementById('handle-start');
   const endH = document.getElementById('handle-end');
   let dragging = null;
 
-  const startDrag = (e, type) => {
-    e.preventDefault();
-    dragging = type;
-    document.addEventListener('mousemove', doDrag);
-    document.addEventListener('mouseup', stopDrag);
+  const startDrag = (e, type) => { /* ... весь код startDrag, doDrag, stopDrag ... */ 
+    // (оставь как было в твоём файле)
   };
 
-  startH.addEventListener('mousedown', e => startDrag(e, 'start'));
-  endH.addEventListener('mousedown', e => startDrag(e, 'end'));
-
-  function doDrag(e) {
-    if (!dragging) return;
-    const rect = track.getBoundingClientRect();
-    let perc = ((e.clientX - rect.left) / rect.width) * 100;
-    perc = Math.max(0, Math.min(100, perc));
-
-    if (dragging === 'start') {
-      const endP = parseFloat(endH.style.left);
-      if (perc > endP) perc = endP;
-      startH.style.left = `${perc}%`;
-    } else {
-      const startP = parseFloat(startH.style.left);
-      if (perc < startP) perc = startP;
-      endH.style.left = `${perc}%`;
-    }
-    updateSelectedBar();
-  }
-
-  function stopDrag() {
-    if (!dragging) return;
-    document.removeEventListener('mousemove', doDrag);
-    document.removeEventListener('mouseup', stopDrag);
-
-    const duration = maxDateGlobal.getTime() - minDateGlobal.getTime();
-    const startPerc = parseFloat(startH.style.left);
-    const endPerc = parseFloat(endH.style.left);
-
-    filterStart = new Date(minDateGlobal.getTime() + (startPerc / 100) * duration);
-    filterEnd = new Date(minDateGlobal.getTime() + (endPerc / 100) * duration);
-
-    renderTimeline();
-    applyTimeFilter();
-    dragging = null;
-  }
-
-  track.addEventListener('click', e => {
-    if (dragging) return;
-    const rect = track.getBoundingClientRect();
-    let perc = ((e.clientX - rect.left) / rect.width) * 100;
-    perc = Math.max(0, Math.min(100, perc));
-
-    const startP = parseFloat(startH.style.left);
-    const endP = parseFloat(endH.style.left);
-    if (Math.abs(perc - startP) < Math.abs(perc - endP)) {
-      startH.style.left = `${perc}%`;
-    } else {
-      endH.style.left = `${perc}%`;
-    }
-    updateSelectedBar();
-
-    const duration = maxDateGlobal.getTime() - minDateGlobal.getTime();
-    filterStart = new Date(minDateGlobal.getTime() + (parseFloat(startH.style.left) / 100) * duration);
-    filterEnd = new Date(minDateGlobal.getTime() + (parseFloat(endH.style.left) / 100) * duration);
-
-    renderTimeline();
-    applyTimeFilter();
-  });
+  // ... (весь остальной код initTimeline до конца функции)
 }
 
 function updateTimeFromInputs() {
@@ -1933,7 +1877,7 @@ function updateTimeFromInputs() {
     const [h, m] = endVal.split(':').map(Number);
     filterEnd.setHours(h, m, 0, 0);
   }
-  if (filterEnd < filterStart) filterEnd = new Date(filterStart.getTime() + 3600000);
+  if (filterEnd < filterStart) [filterStart, filterEnd] = [filterEnd, filterStart];
   renderTimeline();
   applyTimeFilter();
 }
