@@ -179,21 +179,24 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #toast{position:absolute;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 16px;font-size:12px;white-space:nowrap;z-index:900;transition:transform .3s cubic-bezier(.34,1.56,.64,1),opacity .3s;opacity:0;pointer-events:none}
 #toast.show{transform:translateX(-50%) translateY(0);opacity:1}
 
-/* TIMELINE (ТЗ — диапазон дат) — исправленная версия */
-#timeline{position:absolute;bottom:0;left:0;right:0;height:122px;background:var(--surface);border-top:1px solid var(--border);z-index:550;padding:8px 16px 6px;display:none;flex-direction:column;font-size:11px;color:var(--text);box-shadow:0 -4px 12px rgba(0,0,0,.4)}
+/* TIMELINE — улучшенная версия с режимами */
+#timeline{position:absolute;bottom:0;left:0;right:0;height:128px;background:var(--surface);border-top:1px solid var(--border);z-index:550;padding:8px 16px 6px;display:none;flex-direction:column;font-size:11px;color:var(--text);box-shadow:0 -4px 12px rgba(0,0,0,.4)}
 #timeline.visible{display:flex}
 .timeline-header{display:flex;align-items:center;gap:12px;margin-bottom:6px;font-family:'Syne',sans-serif;font-weight:700}
 .timeline-header span:first-child{color:var(--accent);font-size:13px}
+#timeline-mode{display:flex;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:6px;padding:2px;font-size:10px}
+.timeline-mode-btn{padding:3px 10px;border-radius:4px;cursor:pointer;transition:all .15s}
+.timeline-mode-btn.active{background:var(--accent);color:#0d0f14;font-weight:700}
 #range-display{flex:1;text-align:center;background:rgba(232,255,71,.12);border:1px solid rgba(232,255,71,.3);border-radius:4px;padding:2px 10px;font-family:'JetBrains Mono',monospace;font-size:12px;white-space:nowrap}
 #timeline-reset{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:var(--r);padding:4px 10px;font-size:10px;cursor:pointer}
 #timeline-reset:hover{border-color:var(--accent);color:var(--accent)}
 .timeline-track{position:relative;height:34px;background:linear-gradient(to right,#252b3a,#1c212f);border-radius:6px;cursor:col-resize;box-shadow:inset 0 2px 6px rgba(0,0,0,.5)}
-.timeline-selected-bar{position:absolute;top:5px;bottom:5px;background:var(--accent);opacity:.18;border-radius:4px;pointer-events:none}
+.timeline-selected-bar{position:absolute;top:5px;bottom:5px;background:var(--accent);opacity:.22;border-radius:4px;pointer-events:none}
 .timeline-handle{position:absolute;top:-4px;width:22px;height:42px;background:#fff;border:3px solid var(--accent);border-radius:6px;cursor:ew-resize;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px -2px rgba(232,255,71,.7);z-index:20;user-select:none;transform:translateX(-50%)}
 .timeline-handle.start::before{content:'◀';font-size:12px;color:#0d0f14}
 .timeline-handle.end::before{content:'▶';font-size:12px;color:#0d0f14}
-.timeline-dot{position:absolute;top:50%;width:8px;height:8px;background:#e8ff47;border:1.5px solid #0d0f14;border-radius:50%;transform:translateY(-50%);z-index:10;pointer-events:none;box-shadow:0 0 4px var(--accent)}
-.timeline-dot.in-range{background:#ffeb3b;transform:translateY(-50%) scale(1.35);box-shadow:0 0 10px #e8ff47;z-index:15}
+.timeline-dot{position:absolute;top:50%;width:7px;height:7px;background:#e8ff47;border:1.5px solid #0d0f14;border-radius:50%;transform:translateY(-50%);z-index:10;pointer-events:none;box-shadow:0 0 4px var(--accent)}
+.timeline-dot.in-range{background:#ffeb3b;transform:translateY(-50%) scale(1.4);box-shadow:0 0 10px #e8ff47;z-index:15}
 .timeline-labels{display:flex;justify-content:space-between;margin-top:3px;font-size:9px;color:var(--muted);font-family:'JetBrains Mono',monospace}
 .time-fine-controls{margin-top:6px;display:none;align-items:center;gap:10px;background:rgba(71,200,255,.08);border:1px solid rgba(71,200,255,.3);border-radius:6px;padding:7px 12px;font-size:10px}
 .time-fine-controls input[type=time]{background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;border-radius:4px;padding:4px 7px}
@@ -328,22 +331,32 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     <span id="cadastre-pct">70%</span>
   </div>
 
-  <!-- ТАЙМЛАЙН — Диапазон съёмки -->
+  <!-- ТАЙМЛАЙН — Диапазон съёмки (с переключателем режимов) -->
   <div id="timeline">
     <div class="timeline-header">
       <span>📅 Диапазон съёмки</span>
+      
+      <!-- Переключатель режимов: Весь диапазон / Выделенный период -->
+      <div id="timeline-mode">
+        <div class="timeline-mode-btn active" data-mode="full">Весь диапазон</div>
+        <div class="timeline-mode-btn" data-mode="zoom">Выделенный период</div>
+      </div>
+
       <div id="range-display">—</div>
       <button id="timeline-reset" onclick="resetTimelineFilter()">⟳ Сбросить</button>
     </div>
+    
     <div id="timeline-track" class="timeline-track">
       <div id="selected-bar" class="timeline-selected-bar"></div>
       <div id="handle-start" class="timeline-handle start" style="left:0%"></div>
       <div id="handle-end" class="timeline-handle end" style="left:100%"></div>
     </div>
+    
     <div class="timeline-labels">
       <span id="min-date-label"></span>
       <span id="max-date-label"></span>
     </div>
+    
     <div id="time-fine-controls" class="time-fine-controls">
       <span style="color:var(--accent2)">⏰ Точное время:</span>
       <input type="time" id="start-time-input" onchange="updateTimeFromInputs()">
@@ -1734,7 +1747,7 @@ async function writeEXIFWithGPS() {
   showToast('✅ EXIF записан, файл скачан!', 'success', 4000);
 }
 /* ─────────────────────────────────────────────────────────────────────────────
-   ТАЙМЛАЙН + ФИЛЬТР ПО ДАТЕ — ФИНАЛЬНАЯ ИСПРАВЛЕННАЯ ВЕРСИЯ
+   ТАЙМЛАЙН — УЛУЧШЕННАЯ ВЕРСИЯ С РЕЖИМАМИ (2026)
    ───────────────────────────────────────────────────────────────────────────── */
 
 let filterStart = null;
@@ -1742,6 +1755,7 @@ let filterEnd = null;
 let minDateGlobal = null;
 let maxDateGlobal = null;
 let datedPhotosGlobal = [];
+let timelineMode = 'full'; // 'full' или 'zoom'
 
 function parsePhotoDate(dateInput) {
   if (!dateInput) return null;
@@ -1805,20 +1819,30 @@ function renderTimeline() {
   track.querySelectorAll('.timeline-dot').forEach(d => d.remove());
 
   datedPhotosGlobal.forEach(p => {
-    const perc = ((p.dateObj.getTime() - minDateGlobal.getTime()) / duration) * 100;
+    let perc = ((p.dateObj.getTime() - minDateGlobal.getTime()) / duration) * 100;
+    if (timelineMode === 'zoom') {
+      const selectedDuration = filterEnd.getTime() - filterStart.getTime();
+      perc = ((p.dateObj.getTime() - filterStart.getTime()) / selectedDuration) * 100;
+    }
+
     const dot = document.createElement('div');
     dot.className = 'timeline-dot';
     dot.style.left = `${Math.max(0, Math.min(100, perc))}%`;
     dot.title = formatDate(p.dateObj);
 
-    // Если точка внутри выбранного диапазона — делаем её ярче и крупнее
     if (isPhotoInRange(p)) dot.classList.add('in-range');
 
     track.appendChild(dot);
   });
 
-  let startPerc = ((filterStart.getTime() - minDateGlobal.getTime()) / duration) * 100;
-  let endPerc   = ((filterEnd.getTime()   - minDateGlobal.getTime()) / duration) * 100;
+  let startPerc = 0, endPerc = 100;
+  if (timelineMode === 'full') {
+    startPerc = ((filterStart.getTime() - minDateGlobal.getTime()) / duration) * 100;
+    endPerc   = ((filterEnd.getTime()   - minDateGlobal.getTime()) / duration) * 100;
+  } else {
+    startPerc = 0;
+    endPerc = 100;
+  }
 
   startPerc = Math.max(0, Math.min(100, startPerc));
   endPerc   = Math.max(startPerc, Math.min(100, endPerc));
@@ -1832,16 +1856,6 @@ function renderTimeline() {
   document.getElementById('max-date-label').textContent = formatDateShort(maxDateGlobal);
   document.getElementById('range-display').innerHTML = 
     `<b>${formatDateShort(filterStart)}</b> — <b>${formatDateShort(filterEnd)}</b>`;
-
-  const durHours = (filterEnd.getTime() - filterStart.getTime()) / (1000*60*60);
-  const fineEl = document.getElementById('time-fine-controls');
-  if (durHours < 48 && durHours > 0) {
-    fineEl.style.display = 'flex';
-    document.getElementById('start-time-input').value = `${String(filterStart.getHours()).padStart(2,'0')}:${String(filterStart.getMinutes()).padStart(2,'0')}`;
-    document.getElementById('end-time-input').value   = `${String(filterEnd.getHours()).padStart(2,'0')}:${String(filterEnd.getMinutes()).padStart(2,'0')}`;
-  } else {
-    fineEl.style.display = 'none';
-  }
 }
 
 function updateSelectedBar() {
@@ -1857,6 +1871,15 @@ function initTimeline() {
   const startH = document.getElementById('handle-start');
   const endH = document.getElementById('handle-end');
   let dragging = null;
+
+  // Переключатель режимов
+  document.querySelectorAll('.timeline-mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      timelineMode = btn.dataset.mode;
+      document.querySelectorAll('.timeline-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === timelineMode));
+      renderTimeline();
+    });
+  });
 
   function startDrag(e, type) {
     e.preventDefault();
@@ -1888,12 +1911,17 @@ function initTimeline() {
     document.removeEventListener('mousemove', doDrag);
     document.removeEventListener('mouseup', stopDrag);
 
-    const duration = maxDateGlobal.getTime() - minDateGlobal.getTime();
+    const duration = (timelineMode === 'full') 
+      ? (maxDateGlobal.getTime() - minDateGlobal.getTime())
+      : (filterEnd.getTime() - filterStart.getTime());
+
+    const baseTime = (timelineMode === 'full') ? minDateGlobal.getTime() : filterStart.getTime();
+
     const startPerc = parseFloat(startH.style.left) || 0;
     const endPerc = parseFloat(endH.style.left) || 100;
 
-    filterStart = new Date(minDateGlobal.getTime() + (startPerc / 100) * duration);
-    filterEnd   = new Date(minDateGlobal.getTime() + (endPerc   / 100) * duration);
+    filterStart = new Date(baseTime + (startPerc / 100) * duration);
+    filterEnd   = new Date(baseTime + (endPerc   / 100) * duration);
 
     if (filterStart > filterEnd) [filterStart, filterEnd] = [filterEnd, filterStart];
 
@@ -1905,7 +1933,6 @@ function initTimeline() {
   startH.addEventListener('mousedown', e => startDrag(e, 'start'));
   endH.addEventListener('mousedown', e => startDrag(e, 'end'));
 
-  // Клик по треку
   track.addEventListener('click', e => {
     if (dragging) return;
     const rect = track.getBoundingClientRect();
@@ -1921,9 +1948,13 @@ function initTimeline() {
       endH.style.left = `${perc}%`;
     }
 
-    const duration = maxDateGlobal.getTime() - minDateGlobal.getTime();
-    filterStart = new Date(minDateGlobal.getTime() + (parseFloat(startH.style.left) / 100) * duration);
-    filterEnd   = new Date(minDateGlobal.getTime() + (parseFloat(endH.style.left)   / 100) * duration);
+    const duration = (timelineMode === 'full') 
+      ? (maxDateGlobal.getTime() - minDateGlobal.getTime())
+      : (filterEnd.getTime() - filterStart.getTime());
+    const baseTime = (timelineMode === 'full') ? minDateGlobal.getTime() : filterStart.getTime();
+
+    filterStart = new Date(baseTime + (parseFloat(startH.style.left) / 100) * duration);
+    filterEnd   = new Date(baseTime + (parseFloat(endH.style.left)   / 100) * duration);
 
     if (filterStart > filterEnd) [filterStart, filterEnd] = [filterEnd, filterStart];
 
@@ -1953,6 +1984,8 @@ function resetTimelineFilter() {
   if (minDateGlobal) {
     filterStart = new Date(minDateGlobal.getTime());
     filterEnd = new Date(maxDateGlobal.getTime());
+    timelineMode = 'full';
+    document.querySelectorAll('.timeline-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === 'full'));
   }
   renderTimeline();
   applyTimeFilter();
