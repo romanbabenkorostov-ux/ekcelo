@@ -324,12 +324,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
   <button id="fit-btn" onclick="fitMapToPhotos()">&#8861; По фото</button>
   <button id="cadastre-btn" onclick="toggleCadastre()">&#9633; Кадастр</button>
   
-  <!-- Новая кнопка: Запрос кадастра по точке -->
-  <button id="query-nspd-btn" onclick="queryNSPDAtPoint()" 
-          style="position:absolute;top:12px;right:280px;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 11px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);cursor:pointer;transition:all .15s">
-    📍 Запросить кадастр
-  </button>
-
   <button id="layer-btn" onclick="toggleLayer()">&#128752; Спутник</button>
   
   <div id="progress-bar" style="width:0"></div>
@@ -466,26 +460,34 @@ function toggleLayer() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// КЛИК ПО КАРТЕ — теперь только показывает координаты
+// КЛИК ПО КАРТЕ — теперь открывает popup с координатами + кнопкой кадастра
 // ─────────────────────────────────────────────────────────────────────────────
 map.on('click', function (e) {
-  // Приоритет: режим ручного GPS
   if (manualGPSActive) {
     handleMapClickForGPS(e);
     return;
   }
 
-  // Закрываем лайтбокс при клике на пустую карту
   closeLightbox();
 
   const lat = e.latlng.lat.toFixed(6);
   const lng = e.latlng.lng.toFixed(6);
 
-  // Быстрый показ координат
-  showToast(`📍 ${lat}, ${lng}`, 'info', 1800);
-
-  // Сохраняем точку для кнопки "Запросить кадастр"
+  // Сохраняем точку
   window.lastClickedPoint = e.latlng;
+
+  const content = `
+    <b>📍 Координаты точки</b><br>
+    <code style="background:#f0f0f0;padding:4px 8px;border-radius:4px;font-family:JetBrains Mono">${lat}, ${lng}</code><br><br>
+    <button onclick="queryNSPDAtPoint()" 
+            style="background:#ff9500;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-weight:700;width:100%">
+      📍 Запросить кадастр в этой точке
+    </button>`;
+
+  L.popup({ maxWidth: 300, closeButton: true })
+    .setLatLng(e.latlng)
+    .setContent(content)
+    .openOn(map);
 });
 
 map.on('move zoom', () => {
@@ -1353,40 +1355,35 @@ async function queryNSPDAtPoint() {
 
     await Promise.allSettled(promises);
   } catch (err) {
-    errorMsg = 'Не удалось получить данные НСПД';
-    console.warn('GetFeatureInfo ошибка:', err);
+    errorMsg = 'Не удалось получить данные';
+    console.warn(err);
   }
 
   const cadList = Array.from(results).sort();
   const count = cadList.length;
 
-  let content = `
-    <b>📍 Кликнутая точка</b><br>
-    <code style="background:#f0f0f0;padding:3px 6px;border-radius:4px">
-      ${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}
-    </code><br><br>`;
+  let html = `
+    <b>📍 Координаты</b><br>
+    <code style="background:#f0f0f0;padding:4px 8px;border-radius:4px">${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}</code><br><br>`;
 
   if (errorMsg) {
-    content += `<span style="color:#d32f2f">${errorMsg}</span>`;
+    html += `<span style="color:#d32f2f">${errorMsg}</span>`;
   } else if (count === 0) {
-    content += `<span style="color:#555">Участков не найдено</span>`;
+    html += `<span style="color:#555">Участков не найдено</span>`;
   } else {
-    content += `<b>🏠 Участков найдено: ${count}</b><br>`;
-    if (count > 5) content += `<div style="max-height:160px;overflow-y:auto">`;
-    content += cadList.map(cad => {
+    html += `<b>🏠 Найдено участков: ${count}</b><br>`;
+    html += cadList.map(cad => {
       const link = `https://nspd.gov.ru/map?thematic=Default&zoom=17.5&selectedCard=${encodeURIComponent(cad)}`;
-      return `• <span style="color:#d32f2f;font-weight:700">${cad}</span> 
-              <a href="${link}" target="_blank" style="color:#1976d2">→ НСПД</a><br>`;
+      return `• <span style="color:#d32f2f;font-weight:700">${cad}</span> <a href="${link}" target="_blank" style="color:#1976d2">→ открыть в НСПД</a><br>`;
     }).join('');
-    if (count > 5) content += `</div>`;
   }
 
-  L.popup({ maxWidth: 280 })
+  L.popup({ maxWidth: 300 })
     .setLatLng(e.latlng)
-    .setContent(`<div style="font-family:system-ui;line-height:1.45;font-size:13.5px">${content}</div>`)
+    .setContent(`<div style="font-family:system-ui;line-height:1.45;font-size:13.5px">${html}</div>`)
     .openOn(map);
 
-  showToast(count > 0 ? `Найдено ${count} участок(-ов)` : 'Кадастровых участков не найдено', count > 0 ? 'success' : 'warn');
+  showToast(count > 0 ? `Найдено ${count} участок(-ов)` : 'Участков не найдено', count > 0 ? 'success' : 'warn');
 }
 
 // ─── Инициализация при загрузке страницы ────────────────────────────────────
