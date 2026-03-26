@@ -180,22 +180,22 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #toast.show{transform:translateX(-50%) translateY(0);opacity:1}
 
 /* TIMELINE (ТЗ — диапазон дат) */
-#timeline{position:absolute;bottom:0;left:0;right:0;height:118px;background:var(--surface);border-top:1px solid var(--border);z-index:550;padding:8px 16px 4px;display:none;flex-direction:column;font-size:11px;color:var(--text);box-shadow:0 -4px 12px rgba(0,0,0,.3)}
+#timeline{position:absolute;bottom:0;left:0;right:0;height:122px;background:var(--surface);border-top:1px solid var(--border);z-index:550;padding:8px 16px 6px;display:none;flex-direction:column;font-size:11px;color:var(--text);box-shadow:0 -4px 12px rgba(0,0,0,.4)}
 #timeline.visible{display:flex}
 .timeline-header{display:flex;align-items:center;gap:12px;margin-bottom:6px;font-family:'Syne',sans-serif;font-weight:700}
 .timeline-header span:first-child{color:var(--accent);font-size:13px}
-#range-display{flex:1;text-align:center;background:rgba(232,255,71,.12);border:1px solid rgba(232,255,71,.3);border-radius:4px;padding:1px 10px;font-family:'JetBrains Mono',monospace;font-size:12px;white-space:nowrap}
+#range-display{flex:1;text-align:center;background:rgba(232,255,71,.12);border:1px solid rgba(232,255,71,.3);border-radius:4px;padding:2px 10px;font-family:'JetBrains Mono',monospace;font-size:12px;white-space:nowrap}
 #timeline-reset{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:var(--r);padding:4px 10px;font-size:10px;cursor:pointer}
 #timeline-reset:hover{border-color:var(--accent);color:var(--accent)}
-.timeline-track{position:relative;height:32px;background:linear-gradient(to right,#252b3a,#1c212f);border-radius:6px;cursor:col-resize;box-shadow:inset 0 2px 4px rgba(0,0,0,.4)}
-.timeline-selected-bar{position:absolute;top:4px;bottom:4px;background:var(--accent);opacity:.28;border-radius:4px;pointer-events:none;box-shadow:0 0 8px var(--accent)}
-.timeline-handle{position:absolute;top:-3px;width:20px;height:38px;background:#fff;border:3px solid var(--accent);border-radius:6px;cursor:ew-resize;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px -2px rgba(232,255,71,.6);z-index:20;user-select:none}
-.timeline-handle.start::before{content:'◀';font-size:11px;color:#0d0f14}
-.timeline-handle.end::before{content:'▶';font-size:11px;color:#0d0f14}
-.timeline-dot{position:absolute;top:50%;width:6px;height:6px;background:#e8ff47;border:1px solid #0d0f14;border-radius:50%;transform:translateY(-50%);z-index:10;box-shadow:0 0 4px var(--accent);pointer-events:none}
-.timeline-labels{display:flex;justify-content:space-between;margin-top:2px;font-size:9px;color:var(--muted);font-family:'JetBrains Mono',monospace}
-.time-fine-controls{margin-top:6px;display:none;align-items:center;gap:8px;background:rgba(71,200,255,.08);border:1px solid rgba(71,200,255,.3);border-radius:6px;padding:6px 12px;font-size:10px}
-.time-fine-controls input[type=time]{background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;border-radius:4px;padding:3px 6px}
+.timeline-track{position:relative;height:34px;background:linear-gradient(to right,#252b3a,#1c212f);border-radius:6px;cursor:col-resize;box-shadow:inset 0 2px 6px rgba(0,0,0,.5)}
+.timeline-selected-bar{position:absolute;top:5px;bottom:5px;background:var(--accent);opacity:.32;border-radius:4px;pointer-events:none}
+.timeline-handle{position:absolute;top:-4px;width:22px;height:42px;background:#fff;border:3px solid var(--accent);border-radius:6px;cursor:ew-resize;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px -2px rgba(232,255,71,.7);z-index:20;user-select:none}
+.timeline-handle.start::before{content:'◀';font-size:12px;color:#0d0f14}
+.timeline-handle.end::before{content:'▶';font-size:12px;color:#0d0f14}
+.timeline-dot{position:absolute;top:50%;width:7px;height:7px;background:#e8ff47;border:1.5px solid #0d0f14;border-radius:50%;transform:translateY(-50%);z-index:10;pointer-events:none;box-shadow:0 0 5px var(--accent)}
+.timeline-labels{display:flex;justify-content:space-between;margin-top:3px;font-size:9px;color:var(--muted);font-family:'JetBrains Mono',monospace}
+.time-fine-controls{margin-top:6px;display:none;align-items:center;gap:10px;background:rgba(71,200,255,.08);border:1px solid rgba(71,200,255,.3);border-radius:6px;padding:7px 12px;font-size:10px}
+.time-fine-controls input[type=time]{background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;border-radius:4px;padding:4px 7px}
 
 /* FULLSCREEN */
 #viewer{display:none;position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:9999;align-items:center;justify-content:center}
@@ -1733,7 +1733,7 @@ async function writeEXIFWithGPS() {
   showToast('✅ EXIF записан, файл скачан!', 'success', 4000);
 }
 /* ─────────────────────────────────────────────────────────────────────────────
-   ТАЙМЛАЙН + ФИЛЬТР ПО ДАТЕ (исправленная версия)
+   ТАЙМЛАЙН + ФИЛЬТР ПО ДАТЕ — ИСПРАВЛЕННАЯ ВЕРСИЯ
    ───────────────────────────────────────────────────────────────────────────── */
 
 let filterStart = null;
@@ -1756,14 +1756,13 @@ function parsePhotoDate(dateInput) {
 
 function isPhotoInRange(p) {
   if (!p.dateObj || !filterStart || !filterEnd) return true;
-  const t = p.dateObj.getTime();
-  return t >= filterStart.getTime() && t <= filterEnd.getTime();
+  return p.dateObj.getTime() >= filterStart.getTime() && p.dateObj.getTime() <= filterEnd.getTime();
 }
 
 function updateMarkerOpacities() {
   photos.forEach(p => {
     if (p.marker && typeof p.marker.setOpacity === 'function') {
-      p.marker.setOpacity(isPhotoInRange(p) ? 1 : 0.22);   // стало тусклее
+      p.marker.setOpacity(isPhotoInRange(p) ? 1 : 0.25);
     }
   });
 }
@@ -1781,10 +1780,10 @@ function updateTimelineData() {
   minDateGlobal = datedPhotosGlobal[0].dateObj;
   maxDateGlobal = datedPhotosGlobal[datedPhotosGlobal.length - 1].dateObj;
 
-  if (!filterStart || filterStart < minDateGlobal) filterStart = new Date(minDateGlobal.getTime());
-  if (!filterEnd || filterEnd > maxDateGlobal) filterEnd = new Date(maxDateGlobal.getTime());
+  if (!filterStart || filterStart < minDateGlobal) filterStart = new Date(minDateGlobal);
+  if (!filterEnd || filterEnd > maxDateGlobal) filterEnd = new Date(maxDateGlobal);
 
-  // Принудительно исправляем переворот диапазона
+  // Исправляем возможный переворот
   if (filterStart > filterEnd) {
     [filterStart, filterEnd] = [filterEnd, filterStart];
   }
@@ -1805,8 +1804,10 @@ function renderTimeline() {
   const duration = maxDateGlobal.getTime() - minDateGlobal.getTime();
   const track = document.getElementById('timeline-track');
 
+  // Очищаем старые точки
   track.querySelectorAll('.timeline-dot').forEach(d => d.remove());
 
+  // Добавляем точки фото
   datedPhotosGlobal.forEach(p => {
     const perc = ((p.dateObj.getTime() - minDateGlobal.getTime()) / duration) * 100;
     const dot = document.createElement('div');
@@ -1832,7 +1833,8 @@ function renderTimeline() {
   document.getElementById('range-display').innerHTML = 
     `<b>${formatDateShort(filterStart)}</b> — <b>${formatDateShort(filterEnd)}</b>`;
 
-  const durHours = (filterEnd.getTime() - filterStart.getTime()) / (1000 * 60 * 60);
+  // Показываем точное время, если диапазон меньше 48 часов
+  const durHours = (filterEnd.getTime() - filterStart.getTime()) / (1000*60*60);
   const fineEl = document.getElementById('time-fine-controls');
   if (durHours < 48 && durHours > 0) {
     fineEl.style.display = 'flex';
@@ -1845,24 +1847,91 @@ function renderTimeline() {
 
 function updateSelectedBar() {
   const bar = document.getElementById('selected-bar');
-  const s = parseFloat(document.getElementById('handle-start').style.left);
-  const e = parseFloat(document.getElementById('handle-end').style.left);
+  const s = parseFloat(document.getElementById('handle-start').style.left) || 0;
+  const e = parseFloat(document.getElementById('handle-end').style.left) || 100;
   bar.style.left = `${s}%`;
   bar.style.width = `${e - s}%`;
 }
 
+/* Инициализация драг-энд-дроп и кликов по таймлайну */
 function initTimeline() {
-  // ... (весь код initTimeline остаётся без изменений — он уже правильный)
   const track = document.getElementById('timeline-track');
   const startH = document.getElementById('handle-start');
   const endH = document.getElementById('handle-end');
   let dragging = null;
 
-  const startDrag = (e, type) => { /* ... весь код startDrag, doDrag, stopDrag ... */ 
-    // (оставь как было в твоём файле)
-  };
+  function startDrag(e, type) {
+    e.preventDefault();
+    dragging = type;
+    document.addEventListener('mousemove', doDrag);
+    document.addEventListener('mouseup', stopDrag);
+  }
 
-  // ... (весь остальной код initTimeline до конца функции)
+  function doDrag(e) {
+    if (!dragging) return;
+    const rect = track.getBoundingClientRect();
+    let perc = ((e.clientX - rect.left) / rect.width) * 100;
+    perc = Math.max(0, Math.min(100, perc));
+
+    if (dragging === 'start') {
+      let endP = parseFloat(endH.style.left) || 100;
+      if (perc > endP) perc = endP;
+      startH.style.left = `${perc}%`;
+    } else {
+      let startP = parseFloat(startH.style.left) || 0;
+      if (perc < startP) perc = startP;
+      endH.style.left = `${perc}%`;
+    }
+    updateSelectedBar();
+  }
+
+  function stopDrag() {
+    if (!dragging) return;
+    document.removeEventListener('mousemove', doDrag);
+    document.removeEventListener('mouseup', stopDrag);
+
+    const duration = maxDateGlobal.getTime() - minDateGlobal.getTime();
+    const startPerc = parseFloat(startH.style.left) || 0;
+    const endPerc = parseFloat(endH.style.left) || 100;
+
+    filterStart = new Date(minDateGlobal.getTime() + (startPerc / 100) * duration);
+    filterEnd = new Date(minDateGlobal.getTime() + (endPerc / 100) * duration);
+
+    if (filterStart > filterEnd) [filterStart, filterEnd] = [filterEnd, filterStart];
+
+    renderTimeline();
+    applyTimeFilter();
+    dragging = null;
+  }
+
+  startH.addEventListener('mousedown', e => startDrag(e, 'start'));
+  endH.addEventListener('mousedown', e => startDrag(e, 'end'));
+
+  // Клик по треку
+  track.addEventListener('click', e => {
+    if (dragging) return;
+    const rect = track.getBoundingClientRect();
+    let perc = ((e.clientX - rect.left) / rect.width) * 100;
+    perc = Math.max(0, Math.min(100, perc));
+
+    const startP = parseFloat(startH.style.left) || 0;
+    const endP = parseFloat(endH.style.left) || 100;
+
+    if (Math.abs(perc - startP) < Math.abs(perc - endP)) {
+      startH.style.left = `${perc}%`;
+    } else {
+      endH.style.left = `${perc}%`;
+    }
+
+    const duration = maxDateGlobal.getTime() - minDateGlobal.getTime();
+    filterStart = new Date(minDateGlobal.getTime() + (parseFloat(startH.style.left) / 100) * duration);
+    filterEnd = new Date(minDateGlobal.getTime() + (parseFloat(endH.style.left) / 100) * duration);
+
+    if (filterStart > filterEnd) [filterStart, filterEnd] = [filterEnd, filterStart];
+
+    renderTimeline();
+    applyTimeFilter();
+  });
 }
 
 function updateTimeFromInputs() {
@@ -1878,6 +1947,7 @@ function updateTimeFromInputs() {
     filterEnd.setHours(h, m, 0, 0);
   }
   if (filterEnd < filterStart) [filterStart, filterEnd] = [filterEnd, filterStart];
+
   renderTimeline();
   applyTimeFilter();
 }
