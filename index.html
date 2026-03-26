@@ -1914,7 +1914,7 @@ function initTimeline() {
 
     const rect = track.getBoundingClientRect();
     let perc = ((e.clientX - rect.left) / rect.width) * 100;
-    perc = Math.max(-50, Math.min(150, perc));   // разрешаем большой выход за края
+    perc = Math.max(-60, Math.min(160, perc));   // большой запас для расширения
 
     if (dragging === 'start') {
       let endP = parseFloat(endH.style.left) || 100;
@@ -1937,42 +1937,42 @@ function initTimeline() {
     let endPerc   = parseFloat(endH.style.left)   || 100;
 
     if (timelineMode === 'full') {
-      // Режим "Весь диапазон"
+      // === РЕЖИМ "Весь диапазон" ===
       const fullDuration = maxDateGlobal.getTime() - minDateGlobal.getTime();
-      const baseTime = minDateGlobal.getTime();
+      const base = minDateGlobal.getTime();
 
       if (startPerc < 0) {
-        const extend = Math.abs(startPerc) / 40 * fullDuration;
-        filterStart = new Date(baseTime - extend);
-        startPerc = 0;
+        const extend = (Math.abs(startPerc) / 50) * fullDuration * 1.2;
+        filterStart = new Date(base - extend);
       }
       if (endPerc > 100) {
-        const extend = (endPerc - 100) / 40 * fullDuration;
-        filterEnd = new Date(baseTime + fullDuration + extend);
-        endPerc = 100;
+        const extend = ((endPerc - 100) / 50) * fullDuration * 1.2;
+        filterEnd = new Date(base + fullDuration + extend);
       }
 
-      filterStart = new Date(baseTime + (startPerc / 100) * fullDuration);
-      filterEnd   = new Date(baseTime + (endPerc   / 100) * fullDuration);
+      filterStart = new Date(base + (Math.max(0, startPerc) / 100) * fullDuration);
+      filterEnd   = new Date(base + (Math.min(100, endPerc) / 100) * fullDuration);
 
     } else {
-      // Режим "Выделенный период" — здесь была главная ошибка
-      const currentDuration = filterEnd.getTime() - filterStart.getTime();
-      const baseTime = filterStart.getTime();
+      // === РЕЖИМ "Выделенный период" — ИСПРАВЛЕНИЕ ЗДЕСЬ ===
+      let currentDuration = filterEnd.getTime() - filterStart.getTime();
+      if (currentDuration <= 0) currentDuration = 3600000; // минимум 1 час
+
+      const base = filterStart.getTime();
 
       if (startPerc < 0) {
-        const extend = Math.abs(startPerc) / 35 * currentDuration;   // коэффициент подбирался
-        filterStart = new Date(baseTime - extend);
-        startPerc = 0;
+        const extend = (Math.abs(startPerc) / 45) * currentDuration * 1.3;
+        filterStart = new Date(base - extend);
       }
       if (endPerc > 100) {
-        const extend = (endPerc - 100) / 35 * currentDuration;
-        filterEnd = new Date(baseTime + currentDuration + extend);
-        endPerc = 100;
+        const extend = ((endPerc - 100) / 45) * currentDuration * 1.3;
+        filterEnd = new Date(base + currentDuration + extend);
       }
 
-      filterStart = new Date(baseTime + (startPerc / 100) * currentDuration);
-      filterEnd   = new Date(baseTime + (endPerc   / 100) * currentDuration);
+      // Пересчитываем позиции после возможного расширения
+      currentDuration = filterEnd.getTime() - filterStart.getTime();
+      filterStart = new Date(base + (Math.max(0, startPerc) / 100) * currentDuration);
+      filterEnd   = new Date(base + (Math.min(100, endPerc) / 100) * currentDuration);
     }
 
     if (filterStart > filterEnd) [filterStart, filterEnd] = [filterEnd, filterStart];
@@ -1985,34 +1985,44 @@ function initTimeline() {
   startH.addEventListener('mousedown', e => startDrag(e, 'start'));
   endH.addEventListener('mousedown', e => startDrag(e, 'end'));
 
-  // Клик по треку
+  // === КЛИК ПО ТОЧКЕ В ТАЙМЛАЙНЕ — теперь только выделяет фото, не меняет диапазон ===
   track.addEventListener('click', e => {
     if (dragging) return;
+
     const rect = track.getBoundingClientRect();
-    let perc = ((e.clientX - rect.left) / rect.width) * 100;
-    perc = Math.max(0, Math.min(100, perc));
+    const clickX = e.clientX - rect.left;
+    const perc = (clickX / rect.width) * 100;
 
-    const startP = parseFloat(startH.style.left) || 0;
-    const endP   = parseFloat(endH.style.left)   || 100;
+    // Находим ближайшую точку по времени
+    let closestPhoto = null;
+    let minDiff = Infinity;
 
-    if (Math.abs(perc - startP) < Math.abs(perc - endP)) {
-      startH.style.left = `${perc}%`;
-    } else {
-      endH.style.left = `${perc}%`;
+    datedPhotosGlobal.forEach(p => {
+      let photoPerc = 0;
+      if (timelineMode === 'full') {
+        photoPerc = ((p.dateObj.getTime() - minDateGlobal.getTime()) / (maxDateGlobal.getTime() - minDateGlobal.getTime())) * 100;
+      } else {
+        const selDur = filterEnd.getTime() - filterStart.getTime();
+        if (selDur > 0) photoPerc = ((p.dateObj.getTime() - filterStart.getTime()) / selDur) * 100;
+      }
+
+      const diff = Math.abs(photoPerc - perc);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestPhoto = p;
+      }
+    });
+
+    if (closestPhoto) {
+      const idx = photos.findIndex(photo => photo === closestPhoto);
+      if (idx !== -1) {
+        // Переключаемся на это фото
+        if (closestPhoto.lat !== null) {
+          map.setView([closestPhoto.lat, closestPhoto.lon], Math.max(map.getZoom(), 15), { animate: true });
+        }
+        openLightbox(idx, closestPhoto.lat ? L.latLng(closestPhoto.lat, closestPhoto.lon) : null);
+      }
     }
-
-    const duration = (timelineMode === 'full') 
-      ? (maxDateGlobal.getTime() - minDateGlobal.getTime())
-      : (filterEnd.getTime() - filterStart.getTime());
-    const baseTime = (timelineMode === 'full') ? minDateGlobal.getTime() : filterStart.getTime();
-
-    filterStart = new Date(baseTime + (parseFloat(startH.style.left) / 100) * duration);
-    filterEnd   = new Date(baseTime + (parseFloat(endH.style.left)   / 100) * duration);
-
-    if (filterStart > filterEnd) [filterStart, filterEnd] = [filterEnd, filterStart];
-
-    renderTimeline();
-    applyTimeFilter();
   });
 }
 
