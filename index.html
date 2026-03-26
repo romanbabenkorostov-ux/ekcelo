@@ -1915,11 +1915,30 @@ function initTimeline() {
   // Переключатель режимов
   document.querySelectorAll('.timeline-mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      timelineMode = btn.dataset.mode;
+      const newMode = btn.dataset.mode;
+  
+      if (newMode === 'full' && timelineMode === 'zoom') {
+        // При переходе из "Выделенный период" в "Весь диапазон" — расширяем, но сохраняем выбранный интервал внутри
+        const currentStartTime = filterStart ? filterStart.getTime() : minDateGlobal.getTime();
+        const currentEndTime   = filterEnd   ? filterEnd.getTime()   : maxDateGlobal.getTime();
+  
+        filterStart = new Date(minDateGlobal.getTime());
+        filterEnd   = new Date(maxDateGlobal.getTime());
+  
+        // Если выбранный ранее интервал всё ещё внутри полного — оставляем его
+        if (currentStartTime > filterStart.getTime() && currentEndTime < filterEnd.getTime()) {
+          filterStart = new Date(currentStartTime);
+          filterEnd   = new Date(currentEndTime);
+        }
+      }
+  
+      timelineMode = newMode;
       document.querySelectorAll('.timeline-mode-btn').forEach(b => 
         b.classList.toggle('active', b.dataset.mode === timelineMode)
       );
+  
       renderTimeline();
+      applyTimeFilter();
     });
   });
 
@@ -2069,12 +2088,28 @@ function updateTimeFromInputs() {
 }
 
 function resetTimelineFilter() {
-  if (minDateGlobal) {
-    filterStart = new Date(minDateGlobal.getTime());
-    filterEnd = new Date(maxDateGlobal.getTime());
-    timelineMode = 'full';
-    document.querySelectorAll('.timeline-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === 'full'));
+  if (!minDateGlobal || !maxDateGlobal) return;
+
+  // Переключаемся в режим "Весь диапазон"
+  timelineMode = 'full';
+  document.querySelectorAll('.timeline-mode-btn').forEach(b => 
+    b.classList.toggle('active', b.dataset.mode === 'full')
+  );
+
+  // Сохраняем текущие выбранные даты (чтобы бегунки не улетали влево)
+  const currentStart = filterStart ? filterStart.getTime() : minDateGlobal.getTime();
+  const currentEnd   = filterEnd   ? filterEnd.getTime()   : maxDateGlobal.getTime();
+
+  // Расширяем до полного диапазона
+  filterStart = new Date(minDateGlobal.getTime());
+  filterEnd   = new Date(maxDateGlobal.getTime());
+
+  // Если предыдущий выбранный диапазон был внутри полного — оставляем его как внутренний
+  if (currentStart > filterStart.getTime() && currentEnd < filterEnd.getTime()) {
+    filterStart = new Date(currentStart);
+    filterEnd   = new Date(currentEnd);
   }
+
   renderTimeline();
   applyTimeFilter();
 }
