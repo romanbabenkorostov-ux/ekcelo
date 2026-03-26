@@ -1914,7 +1914,7 @@ function initTimeline() {
 
     const rect = track.getBoundingClientRect();
     let perc = ((e.clientX - rect.left) / rect.width) * 100;
-    perc = Math.max(-40, Math.min(140, perc));   // разрешаем сильный выход за края
+    perc = Math.max(-50, Math.min(150, perc));   // разрешаем большой выход за края
 
     if (dragging === 'start') {
       let endP = parseFloat(endH.style.left) || 100;
@@ -1933,28 +1933,47 @@ function initTimeline() {
     document.removeEventListener('mousemove', doDrag);
     document.removeEventListener('mouseup', stopDrag);
 
-    const fullDuration = maxDateGlobal.getTime() - minDateGlobal.getTime();
-    let duration = (timelineMode === 'full') ? fullDuration : (filterEnd.getTime() - filterStart.getTime());
-    const baseTime = (timelineMode === 'full') ? minDateGlobal.getTime() : filterStart.getTime();
-
     let startPerc = parseFloat(startH.style.left) || 0;
     let endPerc   = parseFloat(endH.style.left)   || 100;
 
-    // === ИСПРАВЛЕНИЕ: Расширение диапазона при выходе за пределы ===
-    if (startPerc < 0) {
-      const extendFactor = Math.abs(startPerc) / 30; // чем дальше ушёл — тем сильнее расширение
-      filterStart = new Date(baseTime - extendFactor * duration * 0.6);
-      startPerc = 0;
-    }
-    if (endPerc > 100) {
-      const extendFactor = (endPerc - 100) / 30;
-      filterEnd = new Date(baseTime + duration + extendFactor * duration * 0.6);
-      endPerc = 100;
-    }
+    if (timelineMode === 'full') {
+      // Режим "Весь диапазон"
+      const fullDuration = maxDateGlobal.getTime() - minDateGlobal.getTime();
+      const baseTime = minDateGlobal.getTime();
 
-    // Применяем новые позиции
-    filterStart = new Date(baseTime + (startPerc / 100) * duration);
-    filterEnd   = new Date(baseTime + (endPerc   / 100) * duration);
+      if (startPerc < 0) {
+        const extend = Math.abs(startPerc) / 40 * fullDuration;
+        filterStart = new Date(baseTime - extend);
+        startPerc = 0;
+      }
+      if (endPerc > 100) {
+        const extend = (endPerc - 100) / 40 * fullDuration;
+        filterEnd = new Date(baseTime + fullDuration + extend);
+        endPerc = 100;
+      }
+
+      filterStart = new Date(baseTime + (startPerc / 100) * fullDuration);
+      filterEnd   = new Date(baseTime + (endPerc   / 100) * fullDuration);
+
+    } else {
+      // Режим "Выделенный период" — здесь была главная ошибка
+      const currentDuration = filterEnd.getTime() - filterStart.getTime();
+      const baseTime = filterStart.getTime();
+
+      if (startPerc < 0) {
+        const extend = Math.abs(startPerc) / 35 * currentDuration;   // коэффициент подбирался
+        filterStart = new Date(baseTime - extend);
+        startPerc = 0;
+      }
+      if (endPerc > 100) {
+        const extend = (endPerc - 100) / 35 * currentDuration;
+        filterEnd = new Date(baseTime + currentDuration + extend);
+        endPerc = 100;
+      }
+
+      filterStart = new Date(baseTime + (startPerc / 100) * currentDuration);
+      filterEnd   = new Date(baseTime + (endPerc   / 100) * currentDuration);
+    }
 
     if (filterStart > filterEnd) [filterStart, filterEnd] = [filterEnd, filterStart];
 
