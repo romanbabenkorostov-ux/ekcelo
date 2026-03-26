@@ -199,6 +199,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .timeline-dot.in-range{background:#ffeb3b;transform:translateY(-50%) scale(1.4);box-shadow:0 0 10px #e8ff47;z-index:15}
 .timeline-labels{display:flex;justify-content:space-between;margin-top:3px;font-size:9px;color:var(--muted);font-family:'JetBrains Mono',monospace}
 .time-fine-controls{margin-top:6px;display:none;align-items:center;gap:10px;background:rgba(71,200,255,.08);border:1px solid rgba(71,200,255,.3);border-radius:6px;padding:7px 12px;font-size:10px}
+.timeline-dot.active-dot {
+  background: #ff3c3c !important;
+  border-color: #fff !important;
+  transform: translateY(-50%) scale(1.6) !important;
+  box-shadow: 0 0 12px #ff3c3c !important;
+  z-index: 20;
+}
 .time-fine-controls input[type=time]{background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;border-radius:4px;padding:4px 7px}
 
 /* FULLSCREEN */
@@ -703,7 +710,10 @@ function addMarker(photo, idx) {
     + `<div class="marker-dot"></div></div>`;
   const icon = L.divIcon({ html, className: '', iconSize: [S, S], iconAnchor: [S / 2, S / 2] });
   const marker = L.marker([photo.lat, photo.lon], { icon }).addTo(map)
-    .on('click', () => openLightbox(photos.indexOf(photo), marker.getLatLng()));
+    .on('click', () => {
+      openLightbox(photos.indexOf(photo), marker.getLatLng());
+      highlightTimelineDot(photo);   // ← добавленная строка
+    });
   photo.marker = marker;
 }
 
@@ -877,6 +887,9 @@ async function openLightbox(idx, latlng) {
   document.getElementById('lightbox').classList.add('visible');
   setActiveMarker(idx);
   requestAnimationFrame(() => posLightbox(latlng));
+  
+  // Выделяем точку на таймлайне
+  highlightTimelineDot(p);
 }
 
 // Вход в ручной GPS режим из лайтбокса
@@ -1906,6 +1919,44 @@ function updateSelectedBar() {
   bar.style.width = `${e - s}%`;
 }
 
+// Выделение точки на таймлайне красным (при клике на карту или лайтбокс)
+function highlightTimelineDot(photo) {
+  // Убираем предыдущее выделение
+  document.querySelectorAll('.timeline-dot').forEach(dot => {
+    dot.classList.remove('active-dot');
+  });
+
+  if (!photo || !photo.dateObj) return;
+
+  const duration = maxDateGlobal.getTime() - minDateGlobal.getTime();
+  if (duration <= 0) return;
+
+  let perc = 0;
+  if (timelineMode === 'full') {
+    perc = ((photo.dateObj.getTime() - minDateGlobal.getTime()) / duration) * 100;
+  } else {
+    const selDur = filterEnd.getTime() - filterStart.getTime();
+    if (selDur > 0) perc = ((photo.dateObj.getTime() - filterStart.getTime()) / selDur) * 100;
+  }
+
+  // Находим ближайшую точку и выделяем её
+  let closestDot = null;
+  let minDiff = Infinity;
+
+  document.querySelectorAll('.timeline-dot').forEach(dot => {
+    const dotPerc = parseFloat(dot.style.left);
+    const diff = Math.abs(dotPerc - perc);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closestDot = dot;
+    }
+  });
+
+  if (closestDot) {
+    closestDot.classList.add('active-dot');
+  }
+}
+
 function initTimeline() {
   const track = document.getElementById('timeline-track');
   const startH = document.getElementById('handle-start');
@@ -2025,7 +2076,7 @@ function initTimeline() {
   startH.addEventListener('mousedown', e => startDrag(e, 'start'));
   endH.addEventListener('mousedown', e => startDrag(e, 'end'));
 
-  // === КЛИК ПО ТОЧКЕ В ТАЙМЛАЙНЕ — теперь только выделяет фото, не меняет диапазон ===
+  // Клик по точке в таймлайне — выделяем фото и на карте, и на таймлайне
   track.addEventListener('click', e => {
     if (dragging) return;
 
@@ -2033,7 +2084,6 @@ function initTimeline() {
     const clickX = e.clientX - rect.left;
     const perc = (clickX / rect.width) * 100;
 
-    // Находим ближайшую точку по времени
     let closestPhoto = null;
     let minDiff = Infinity;
 
@@ -2056,11 +2106,15 @@ function initTimeline() {
     if (closestPhoto) {
       const idx = photos.findIndex(photo => photo === closestPhoto);
       if (idx !== -1) {
-        // Переключаемся на это фото
+        // Выделяем на карте
         if (closestPhoto.lat !== null) {
           map.setView([closestPhoto.lat, closestPhoto.lon], Math.max(map.getZoom(), 15), { animate: true });
         }
+        // Открываем лайтбокс
         openLightbox(idx, closestPhoto.lat ? L.latLng(closestPhoto.lat, closestPhoto.lon) : null);
+        
+        // Выделяем точку на таймлайне
+        highlightTimelineDot(closestPhoto);
       }
     }
   });
