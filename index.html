@@ -907,8 +907,10 @@ function enterManualGPSModeFromLightbox() {
   if (activeIdx === null) return;
   const p = photos[activeIdx];
 
-  closeLightbox();
+  // НЕ закрываем лайтбокс полностью — только скрываем его, чтобы панель GPS была видна
+  document.getElementById('lightbox').classList.remove('visible');
 
+  // Открываем панель ручного GPS
   enterManualGPSMode(activeIdx);
 
   // Предзаполняем координаты, если они есть
@@ -923,7 +925,7 @@ function enterManualGPSModeFromLightbox() {
     document.getElementById('mgps-save-btn').disabled = false;
   }
 
-  // Предзаполняем угол, если он есть
+  // Если угол уже есть — предзаполняем его
   if (p.bearing !== null && !isNaN(p.bearing)) {
     tempBearing = Math.round(p.bearing);
     document.getElementById('mgps-bearing').value = tempBearing;
