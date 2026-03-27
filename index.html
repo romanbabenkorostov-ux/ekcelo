@@ -319,10 +319,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
         <div id="lb-name"></div>
         <table id="lb-table"><tbody id="lb-tbody"></tbody></table>
 		<!-- Кнопка ручного GPS появляется только для фото без координат или без угла -->
-        <button id="lb-gps-btn" onclick="enterManualGPSModeFromLightbox()" 
-                style="display:none; width:100%; margin-top:8px; background:rgba(71,200,255,.1); border:1px solid rgba(71,200,255,.3); border-radius:var(--r); color:var(--accent2); font-size:10px; font-family:'JetBrains Mono',monospace; padding:6px; cursor:pointer; transition:all .15s">
-          📍 Установить координаты и угол съёмки
-        </button>
+        <button id="lb-gps-btn" style="display:none"></button>
 		
         <div id="lb-nav">
           <button class="lb-nav-btn" onclick="navPhoto(-1)">&#8592; пред.</button>
@@ -870,13 +867,22 @@ function deletePhoto(idx) {
 // LIGHTBOX
 // ─────────────────────────────────────────────────────────────────────────────
 async function openLightbox(idx, latlng) {
-  const p = photos[idx]; if (!p) return;
-  activeIdx = idx; lbLL = latlng; lbScale = 1;
+  const p = photos[idx];
+  if (!p) return;
 
+  activeIdx = idx;
+  lbLL = latlng;
+  lbScale = 1;
+
+  // Снимаем выделение со всех элементов списка
   document.querySelectorAll('.photo-item').forEach(el => el.classList.remove('active'));
   const item = document.querySelector(`.photo-item[data-idx="${idx}"]`);
-  if (item) { item.classList.add('active'); item.scrollIntoView({ block: 'nearest' }); }
+  if (item) {
+    item.classList.add('active');
+    item.scrollIntoView({ block: 'nearest' });
+  }
 
+  // Заполняем лайтбокс
   const lbImg = document.getElementById('lb-img');
   lbImg.src = p.displayUrl || p.thumbUrl || '';
   lbImg.style.transform = 'scale(1)';
@@ -884,17 +890,14 @@ async function openLightbox(idx, latlng) {
   document.getElementById('lb-name').textContent = p.name;
   document.getElementById('lb-tbody').innerHTML = buildRows(p);
 
-  // Кнопка ручного GPS — показываем, если нет координат ИЛИ нет угла
-  const lbGpsBtn = document.getElementById('lb-gps-btn');
-  const needsGPS = (p.lat === null || p.lon === null) || 
-                   (p.bearing === null || isNaN(p.bearing) || p.bearing === 0);
-  
-  lbGpsBtn.style.display = needsGPS ? 'block' : 'none';
+  // Кнопка ручного GPS внизу больше не нужна — все действия через кнопки "Установить" в таблице
+  document.getElementById('lb-gps-btn').style.display = 'none';
 
+  // Показываем лайтбокс
   document.getElementById('lightbox').classList.add('visible');
   setActiveMarker(idx);
   requestAnimationFrame(() => posLightbox(latlng));
-  
+
   // Выделяем точку на таймлайне
   highlightTimelineDot(p);
 }
@@ -951,39 +954,51 @@ function formatDate(dateStr) {
   return dateStr;
 }
 
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('✅ Координаты скопированы в буфер', 'success', 2000);
+  }).catch(() => {
+    showToast('Не удалось скопировать', 'error');
+  });
+}
+
 function buildRows(p) {
   const rows = [];
-  const add = (label, value, hasData, onClick = null) => {
+
+  const add = (label, value, hasData, copyText = null, editAction = null) => {
     let html = `<tr><td>${label}</td><td>`;
-    
+
     if (hasData) {
       html += esc(String(value));
+      if (copyText) {
+        html += ` <button onclick="copyToClipboard('${copyText}')" style="margin-left:8px;background:rgba(232,255,71,.15);border:1px solid rgba(232,255,71,.4);color:var(--accent);border-radius:4px;padding:1px 7px;font-size:9px;cursor:pointer">Копировать</button>`;
+      }
     } else {
       html += `<span style="color:var(--muted);font-style:italic">нет данных</span>`;
-      if (onClick) {
-        html += ` <button onclick="${onClick}" style="margin-left:8px;background:rgba(71,200,255,.15);border:1px solid rgba(71,200,255,.4);color:var(--accent2);border-radius:4px;padding:2px 8px;font-size:9px;cursor:pointer">Установить</button>`;
+      if (editAction) {
+        html += ` <button onclick="${editAction}" style="margin-left:8px;background:rgba(71,200,255,.15);border:1px solid rgba(71,200,255,.4);color:var(--accent2);border-radius:4px;padding:2px 8px;font-size:9px;cursor:pointer">Установить</button>`;
       }
     }
-    
+
     html += `</td></tr>`;
     rows.push(html);
   };
 
-  // Широта и Долгота
+  // Координаты
   const hasCoords = p.lat !== null && p.lon !== null;
   if (hasCoords) {
-    add('Широта', p.lat.toFixed(6), true);
-    add('Долгота', p.lon.toFixed(6), true);
+    const coordText = `${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}`;
+    add('Координаты', coordText, true, coordText);
   } else {
-    add('Координаты', '', false, `enterManualGPSModeFromLightbox()`);
+    add('Координаты', '', false, null, `enterManualGPSModeFromLightbox()`);
   }
 
   // Угол съёмки
   const hasBearing = p.bearing !== null && !isNaN(p.bearing) && p.bearing !== 0;
   if (hasBearing) {
-    add('Направление', p.bearing.toFixed(1) + '°', true);
+    add('Угол съёмки', p.bearing.toFixed(1) + '°', true);
   } else {
-    add('Угол съёмки', '', false, `enterManualGPSModeFromLightbox()`);
+    add('Угол съёмки', '', false, null, `enterManualGPSModeFromLightbox()`);
   }
 
   // Дата
@@ -991,13 +1006,6 @@ function buildRows(p) {
     add('Дата', formatDate(p.date), true);
   } else {
     add('Дата', 'нет данных', false);
-  }
-
-  // Высота
-  if (p.altitude !== null) {
-    add('Высота над ур.м.', parseFloat(p.altitude).toFixed(1) + ' м', true);
-  } else {
-    add('Высота над ур.м.', 'нет данных', false);
   }
 
   return rows.join('');
@@ -1883,7 +1891,7 @@ function updateTimelineData() {
   minDateGlobal = datedPhotosGlobal[0].dateObj;
   maxDateGlobal = datedPhotosGlobal[datedPhotosGlobal.length - 1].dateObj;
 
-  // Важное исправление: при любой загрузке нового фото сбрасываем фильтр на весь диапазон
+  // Исправление: при старте и дозагрузке бегунки должны быть по краям
   filterStart = new Date(minDateGlobal.getTime());
   filterEnd   = new Date(maxDateGlobal.getTime());
 
