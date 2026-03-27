@@ -907,11 +907,8 @@ function enterManualGPSModeFromLightbox() {
   if (activeIdx === null) return;
   const p = photos[activeIdx];
 
-  // Важно: НЕ закрываем и НЕ скрываем лайтбокс
+  // НЕ закрываем лайтбокс полностью
   // document.getElementById('lightbox').classList.remove('visible');
-
-  // Если панель уже открыта — просто выходим
-  if (manualGPSActive) return;
 
   // Открываем панель ручного GPS
   enterManualGPSMode(activeIdx);
@@ -928,7 +925,7 @@ function enterManualGPSModeFromLightbox() {
     document.getElementById('mgps-save-btn').disabled = false;
   }
 
-  // Предзаполняем угол
+  // Предзаполняем угол, если он есть
   if (p.bearing !== null && !isNaN(p.bearing)) {
     tempBearing = Math.round(p.bearing);
     document.getElementById('mgps-bearing').value = tempBearing;
@@ -937,14 +934,6 @@ function enterManualGPSModeFromLightbox() {
     tempBearing = 0;
     document.getElementById('mgps-bearing').value = 0;
     document.getElementById('mgps-bearing-val').textContent = '0°';
-  }
-
-  // Принудительно поднимаем панель выше лайтбокса
-  const panel = document.getElementById('manual-gps-panel');
-  if (panel) {
-    panel.style.zIndex = '750';
-    panel.style.display = 'block';           // на всякий случай
-    panel.classList.add('visible');
   }
 }
 
@@ -1671,19 +1660,31 @@ function setGPSInputMode(mode) {
  */
 function exitManualGPSMode(silent = false) {
   manualGPSActive = false;
+  manualModePhotoIndex = null;
+  tempLat = null;
+  tempLon = null;
+  tempBearing = 0;
 
   // Удаляем временный маркер
-  if (tempMarker) { map.removeLayer(tempMarker); tempMarker = null; }
+  if (tempMarker) {
+    map.removeLayer(tempMarker);
+    tempMarker = null;
+  }
 
-  document.getElementById('manual-gps-panel').classList.remove('visible');
+  // Скрываем панель
+  const panel = document.getElementById('manual-gps-panel');
+  if (panel) {
+    panel.classList.remove('visible');
+  }
+
   document.getElementById('gps-hint-overlay').classList.remove('visible');
   document.getElementById('map-wrap').classList.remove('gps-picking');
 
-  manualModePhotoIndex = null;
-  tempLat = null; tempLon = null; tempBearing = 0;
-
   renderList();
-  if (!silent) showToast('Режим GPS отменён');
+
+  if (!silent) {
+    showToast('Режим GPS отменён');
+  }
 }
 
 // ─── Обработчик клика по карте в режиме GPS ──────────────────────────────────
