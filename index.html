@@ -98,7 +98,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #gps-hint-overlay.visible{display:block}
 
 /* MANUAL GPS PANEL (ТЗ 2) */
-#manual-gps-panel{display:none;position:absolute;bottom:28px;right:12px;z-index:650;width:290px;background:var(--surface);border:1px solid rgba(71,200,255,.4);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.7);padding:12px 14px;font-family:'JetBrains Mono',monospace}
+#manual-gps-panel{display:none;position:absolute;bottom:28px;right:12px;z-index:700;width:290px;background:var(--surface);border:1px solid rgba(71,200,255,.4);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.7);padding:12px 14px;font-family:'JetBrains Mono',monospace}
 #manual-gps-panel.visible{display:block}
 #mgps-title{font-size:10px;color:var(--accent2);font-weight:700;letter-spacing:.4px;text-transform:uppercase;margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #mgps-mode-btns{display:flex;gap:6px;margin-bottom:10px}
@@ -907,8 +907,8 @@ function enterManualGPSModeFromLightbox() {
   if (activeIdx === null) return;
   const p = photos[activeIdx];
 
-  // НЕ закрываем лайтбокс полностью — только скрываем его, чтобы панель GPS была видна
-  document.getElementById('lightbox').classList.remove('visible');
+  // НЕ скрываем лайтбокс полностью — оставляем его видимым
+  // document.getElementById('lightbox').classList.remove('visible');   // закомментировано
 
   // Открываем панель ручного GPS
   enterManualGPSMode(activeIdx);
@@ -925,7 +925,7 @@ function enterManualGPSModeFromLightbox() {
     document.getElementById('mgps-save-btn').disabled = false;
   }
 
-  // Если угол уже есть — предзаполняем его
+  // Предзаполняем угол, если он есть
   if (p.bearing !== null && !isNaN(p.bearing)) {
     tempBearing = Math.round(p.bearing);
     document.getElementById('mgps-bearing').value = tempBearing;
@@ -935,6 +935,10 @@ function enterManualGPSModeFromLightbox() {
     document.getElementById('mgps-bearing').value = 0;
     document.getElementById('mgps-bearing-val').textContent = '0°';
   }
+
+  // Дополнительно поднимаем панель GPS над лайтбоксом
+  const panel = document.getElementById('manual-gps-panel');
+  if (panel) panel.style.zIndex = '700';
 }
 
 function posLightbox(latlng) {
