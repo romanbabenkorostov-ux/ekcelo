@@ -909,19 +909,26 @@ function enterManualGPSModeFromLightbox() {
 
   closeLightbox();
 
-  // Открываем панель ручного GPS даже если есть координаты, но нет угла
+  // Открываем панель ручного GPS
   enterManualGPSMode(activeIdx);
 
-  // Если координаты уже есть — предзаполняем их в панели
+  // Если координаты уже есть — предзаполняем их
   if (p.lat !== null && p.lon !== null) {
     tempLat = p.lat;
     tempLon = p.lon;
-    // Обновляем отображение координат в панели
+
     const coordsEl = document.getElementById('mgps-coords-display');
     coordsEl.textContent = `${tempLat.toFixed(6)}, ${tempLon.toFixed(6)}`;
     coordsEl.classList.add('set');
     document.getElementById('mgps-bearing-wrap').style.display = 'block';
     document.getElementById('mgps-save-btn').disabled = false;
+
+    // Если угол уже есть — предзаполняем его
+    if (p.bearing !== null && !isNaN(p.bearing)) {
+      tempBearing = Math.round(p.bearing);
+      document.getElementById('mgps-bearing').value = tempBearing;
+      document.getElementById('mgps-bearing-val').textContent = tempBearing + '°';
+    }
   }
 }
 
@@ -1042,6 +1049,35 @@ document.getElementById('lb-img-wrap').addEventListener('wheel', e => {
 }, { passive: false });
 document.getElementById('lb-img-wrap').addEventListener('click', () => openViewer());
 
+function updateViewerInfo(p) {
+  let infoHTML = '';
+
+  if (p.lat !== null && p.lon !== null) {
+    infoHTML += `<div>📍 ${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}</div>`;
+  }
+  if (p.bearing !== null && !isNaN(p.bearing) && p.bearing !== 0) {
+    infoHTML += `<div>↗ ${p.bearing.toFixed(1)}°</div>`;
+  }
+  if (p.date) {
+    infoHTML += `<div>${formatDate(p.date)}</div>`;
+  }
+
+  let infoDiv = document.getElementById('viewer-info');
+  if (!infoDiv) {
+    infoDiv = document.createElement('div');
+    infoDiv.id = 'viewer-info';
+    infoDiv.style.cssText = `
+      position:absolute; bottom:30px; left:50%; transform:translateX(-50%);
+      background:rgba(13,15,20,0.85); color:#e4e8f0; padding:8px 18px;
+      border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:13px;
+      display:flex; gap:20px; z-index:10002; box-shadow:0 4px 20px rgba(0,0,0,0.6);
+    `;
+    document.getElementById('viewer').appendChild(infoDiv);
+  }
+
+  infoDiv.innerHTML = infoHTML || '<div style="color:#666">Нет данных EXIF</div>';
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // FULLSCREEN VIEWER
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1055,33 +1091,7 @@ function openViewer() {
   document.getElementById('viewer-img').src = src;
   document.getElementById('viewer').classList.add('open');
 
-  // Добавляем оверлей с информацией внизу
-  let infoHTML = '';
-
-  if (p.lat !== null && p.lon !== null) {
-    infoHTML += `<div>📍 ${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}</div>`;
-  }
-  if (p.bearing !== null && !isNaN(p.bearing) && p.bearing !== 0) {
-    infoHTML += `<div>↗ ${p.bearing.toFixed(1)}°</div>`;
-  }
-  if (p.date) {
-    infoHTML += `<div>${formatDate(p.date)}</div>`;
-  }
-
-  // Создаём или обновляем информационную строку
-  let infoDiv = document.getElementById('viewer-info');
-  if (!infoDiv) {
-    infoDiv = document.createElement('div');
-    infoDiv.id = 'viewer-info';
-    infoDiv.style.cssText = `
-      position:absolute; bottom:30px; left:50%; transform:translateX(-50%);
-      background:rgba(13,15,20,0.85); color:#e4e8f0; padding:8px 16px;
-      border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:13px;
-      display:flex; gap:20px; z-index:10002; box-shadow:0 4px 20px rgba(0,0,0,0.6);
-    `;
-    document.getElementById('viewer').appendChild(infoDiv);
-  }
-  infoDiv.innerHTML = infoHTML || '<div style="color:#666">Нет данных EXIF</div>';
+  updateViewerInfo(p);
 }
 
 function closeViewer() {
@@ -1091,18 +1101,28 @@ function closeViewer() {
 }
 
 function viewerNav(dir) {
-  const gps  = photos.map((p, i) => p.lat !== null ? i : -1).filter(i => i >= 0);
-  if (!gps.length) return;
-  const cur  = activeIdx !== null ? activeIdx : gps[0];
-  const pos  = gps.indexOf(cur);
-  const next = gps[(pos + dir + gps.length) % gps.length];
-  const p    = photos[next];
-  activeIdx  = next;
+  const gpsPhotos = photos.map((p, i) => p.lat !== null ? i : -1).filter(i => i >= 0);
+  if (!gpsPhotos.length) return;
+
+  let cur = activeIdx !== null ? activeIdx : gpsPhotos[0];
+  let pos = gpsPhotos.indexOf(cur);
+  let next = gpsPhotos[(pos + dir + gpsPhotos.length) % gpsPhotos.length];
+
+  const p = photos[next];
+  activeIdx = next;
+
   document.getElementById('viewer-img').src = p.displayUrl || p.thumbUrl || '';
+
   setActiveMarker(next);
+  updateViewerInfo(p);        // ← обновляем данные при смене фото
+
+  // Обновляем выделение в списке
   document.querySelectorAll('.photo-item').forEach(el => el.classList.remove('active'));
   const item = document.querySelector(`.photo-item[data-idx="${next}"]`);
-  if (item) { item.classList.add('active'); item.scrollIntoView({ block: 'nearest' }); }
+  if (item) {
+    item.classList.add('active');
+    item.scrollIntoView({ block: 'nearest' });
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
