@@ -905,8 +905,24 @@ async function openLightbox(idx, latlng) {
 // Вход в ручной GPS режим из лайтбокса
 function enterManualGPSModeFromLightbox() {
   if (activeIdx === null) return;
+  const p = photos[activeIdx];
+
   closeLightbox();
+
+  // Открываем панель ручного GPS даже если есть координаты, но нет угла
   enterManualGPSMode(activeIdx);
+
+  // Если координаты уже есть — предзаполняем их в панели
+  if (p.lat !== null && p.lon !== null) {
+    tempLat = p.lat;
+    tempLon = p.lon;
+    // Обновляем отображение координат в панели
+    const coordsEl = document.getElementById('mgps-coords-display');
+    coordsEl.textContent = `${tempLat.toFixed(6)}, ${tempLon.toFixed(6)}`;
+    coordsEl.classList.add('set');
+    document.getElementById('mgps-bearing-wrap').style.display = 'block';
+    document.getElementById('mgps-save-btn').disabled = false;
+  }
 }
 
 function posLightbox(latlng) {
@@ -965,14 +981,11 @@ function copyToClipboard(text) {
 function buildRows(p) {
   const rows = [];
 
-  const add = (label, value, hasData, copyText = null, editAction = null) => {
+  const add = (label, value, hasData, editAction = null) => {
     let html = `<tr><td>${label}</td><td>`;
 
     if (hasData) {
       html += esc(String(value));
-      if (copyText) {
-        html += ` <button onclick="copyToClipboard('${copyText}')" style="margin-left:8px;background:rgba(232,255,71,.15);border:1px solid rgba(232,255,71,.4);color:var(--accent);border-radius:4px;padding:1px 7px;font-size:9px;cursor:pointer">Копировать</button>`;
-      }
     } else {
       html += `<span style="color:var(--muted);font-style:italic">нет данных</span>`;
       if (editAction) {
@@ -988,17 +1001,18 @@ function buildRows(p) {
   const hasCoords = p.lat !== null && p.lon !== null;
   if (hasCoords) {
     const coordText = `${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}`;
-    add('Координаты', coordText, true, coordText);
+    add('Координаты', coordText, true);
   } else {
-    add('Координаты', '', false, null, `enterManualGPSModeFromLightbox()`);
+    add('Координаты', '', false, `enterManualGPSModeFromLightbox()`);
   }
 
-  // Угол съёмки
+  // Угол съёмки — исправленный вызов
   const hasBearing = p.bearing !== null && !isNaN(p.bearing) && p.bearing !== 0;
   if (hasBearing) {
     add('Угол съёмки', p.bearing.toFixed(1) + '°', true);
   } else {
-    add('Угол съёмки', '', false, null, `enterManualGPSModeFromLightbox()`);
+    // Важно: вызываем ту же функцию, что и для координат
+    add('Угол съёмки', '', false, `enterManualGPSModeFromLightbox()`);
   }
 
   // Дата
@@ -1032,13 +1046,49 @@ document.getElementById('lb-img-wrap').addEventListener('click', () => openViewe
 // FULLSCREEN VIEWER
 // ─────────────────────────────────────────────────────────────────────────────
 function openViewer() {
-  const p   = activeIdx !== null ? photos[activeIdx] : null;
-  const src = (p && (p.displayUrl || p.thumbUrl)) || document.getElementById('lb-img').src;
+  const p = activeIdx !== null ? photos[activeIdx] : null;
+  if (!p) return;
+
+  const src = p.displayUrl || p.thumbUrl || '';
   if (!src) return;
+
   document.getElementById('viewer-img').src = src;
   document.getElementById('viewer').classList.add('open');
+
+  // Добавляем оверлей с информацией внизу
+  let infoHTML = '';
+
+  if (p.lat !== null && p.lon !== null) {
+    infoHTML += `<div>📍 ${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}</div>`;
+  }
+  if (p.bearing !== null && !isNaN(p.bearing) && p.bearing !== 0) {
+    infoHTML += `<div>↗ ${p.bearing.toFixed(1)}°</div>`;
+  }
+  if (p.date) {
+    infoHTML += `<div>${formatDate(p.date)}</div>`;
+  }
+
+  // Создаём или обновляем информационную строку
+  let infoDiv = document.getElementById('viewer-info');
+  if (!infoDiv) {
+    infoDiv = document.createElement('div');
+    infoDiv.id = 'viewer-info';
+    infoDiv.style.cssText = `
+      position:absolute; bottom:30px; left:50%; transform:translateX(-50%);
+      background:rgba(13,15,20,0.85); color:#e4e8f0; padding:8px 16px;
+      border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:13px;
+      display:flex; gap:20px; z-index:10002; box-shadow:0 4px 20px rgba(0,0,0,0.6);
+    `;
+    document.getElementById('viewer').appendChild(infoDiv);
+  }
+  infoDiv.innerHTML = infoHTML || '<div style="color:#666">Нет данных EXIF</div>';
 }
-function closeViewer() { document.getElementById('viewer').classList.remove('open'); }
+
+function closeViewer() {
+  document.getElementById('viewer').classList.remove('open');
+  const infoDiv = document.getElementById('viewer-info');
+  if (infoDiv) infoDiv.remove();
+}
 
 function viewerNav(dir) {
   const gps  = photos.map((p, i) => p.lat !== null ? i : -1).filter(i => i >= 0);
