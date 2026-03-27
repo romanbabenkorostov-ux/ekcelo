@@ -912,7 +912,7 @@ function enterManualGPSModeFromLightbox() {
   // Открываем панель ручного GPS
   enterManualGPSMode(activeIdx);
 
-  // Если координаты уже есть — предзаполняем их
+  // Предзаполняем данные, если они есть
   if (p.lat !== null && p.lon !== null) {
     tempLat = p.lat;
     tempLon = p.lon;
@@ -922,13 +922,19 @@ function enterManualGPSModeFromLightbox() {
     coordsEl.classList.add('set');
     document.getElementById('mgps-bearing-wrap').style.display = 'block';
     document.getElementById('mgps-save-btn').disabled = false;
+  }
 
-    // Если угол уже есть — предзаполняем его
-    if (p.bearing !== null && !isNaN(p.bearing)) {
-      tempBearing = Math.round(p.bearing);
-      document.getElementById('mgps-bearing').value = tempBearing;
-      document.getElementById('mgps-bearing-val').textContent = tempBearing + '°';
-    }
+  // Если угол уже есть — предзаполняем его
+  if (p.bearing !== null && !isNaN(p.bearing)) {
+    tempBearing = Math.round(p.bearing);
+    document.getElementById('mgps-bearing').value = tempBearing;
+    document.getElementById('mgps-bearing-val').textContent = tempBearing + '°';
+    updateTempMarker(); // обновляем маркер с углом
+  } else {
+    // Если угла нет — сбрасываем на 0 и показываем слайдер
+    tempBearing = 0;
+    document.getElementById('mgps-bearing').value = 0;
+    document.getElementById('mgps-bearing-val').textContent = '0°';
   }
 }
 
@@ -1019,7 +1025,7 @@ function buildRows(p) {
     add('Угол съёмки', p.bearing.toFixed(1) + '°', true);
   } else {
     // Важно: вызываем ту же функцию, что и для координат
-    add('Угол съёмки', '', false, `enterManualGPSModeFromLightbox()`);
+    add('Угол съёмки', '', false, null, `enterManualGPSModeFromLightbox()`);
   }
 
   // Дата
