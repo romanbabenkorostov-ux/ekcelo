@@ -1305,14 +1305,67 @@ function extractYandexId(url) {
  * Яндекс.Диск: оригинальная ссылка (отдаёт изображение напрямую для публичных файлов)
  * Другое: без изменений
  */
-function getDirectUrlForFetch(url) {
-  const type = detectRemoteType(url);
-  if (type === 'gdrive') {
-    const id = extractGdriveId(url);
-    if (id) return `https://drive.google.com/uc?export=view&id=${id}`;
+/**
+ * Преобразует любую ссылку на фото в прямую ссылку для fetch()
+ * Поддерживает:
+ * - Google Drive
+ * - Yandex Disk (короткие и длинные ссылки)
+ * - S3 Timeweb
+ */
+async function getDirectUrlForFetch(url) {
+  try {
+    const originalUrl = url.trim();
+
+    // Google Drive
+    if (originalUrl.includes('drive.google.com')) {
+      const fileId = originalUrl.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1] ||
+                     originalUrl.match(/id=([a-zA-Z0-9_-]+)/)?.[1];
+      if (fileId) {
+        return `https://drive.google.com/uc?export=download&id=${fileId}`;
+      }
+    }
+
+    // Yandex Disk — улучшенная обработка
+    if (originalUrl.includes('disk.yandex.ru') || originalUrl.includes('yadi.sk')) {
+      let publicKey = '';
+
+      // Извлекаем ключ из короткой ссылки
+      const shortMatch = originalUrl.match(/\/i\/([a-zA-Z0-9_-]+)/);
+      if (shortMatch) {
+        publicKey = shortMatch[1];
+      } else {
+        // Из длинной ссылки
+        const longMatch = originalUrl.match(/https?:\/\/disk\.yandex\.ru\/i\/([a-zA-Z0-9_-]+)/);
+        if (longMatch) publicKey = longMatch[1];
+      }
+
+      if (publicKey) {
+        // Пробуем получить прямую ссылку через Яндекс API
+        try {
+          const apiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources?public_key=https://yadi.sk/i/${publicKey}`;
+          const response = await fetch(apiUrl);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.file) {
+              return data.file; // это уже прямая ссылка на скачивание
+            }
+          }
+        } catch (e) {
+          console.warn('Не удалось получить прямую ссылку через Yandex API', e);
+        }
+
+        // Fallback — старая схема
+        return `https://yadi.sk/i/${publicKey}`;
+      }
+    }
+
+    // S3 Timeweb и прямые ссылки — оставляем как есть
+    return originalUrl;
+
+  } catch (err) {
+    console.error('Ошибка при обработке ссылки:', err);
+    return url;
   }
-  // Яндекс.Диск и другие ссылки используем напрямую
-  return url;
 }
 
 /**
@@ -1381,10 +1434,20 @@ async function loadSingleRemotePhoto(viewUrl, customName) {
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     blob = await resp.blob();
   } catch (err) {
-    const hint = type === 'yandex'
-      ? 'Убедитесь, что ссылка Яндекс.Диска открыта «Для всех»'
-      : 'Проверьте, что файл Google Drive доступен по ссылке';
-    showToast(`❌ Не удалось загрузить: ${name} — ${hint}`, 'error', 6000);
+    console.error('Ошибка загрузки удалённого фото:', err);
+
+    if (viewUrl.includes('yandex') || viewUrl.includes('yadi.sk')) {
+      showToast(`⚠️ Не удалось загрузить фото с Яндекс.Диска.<br>
+                 Убедитесь, что ссылка открыта «Для всех» и попробуйте снова.`, 
+                'error', 8000);
+    } else if (viewUrl.includes('drive.google.com')) {
+      showToast(`⚠️ Не удалось загрузить фото с Google Drive.<br>
+                 Убедитесь, что файл доступен по ссылке без авторизации.`, 
+                'error', 8000);
+    } else {
+      showToast(`❌ Не удалось загрузить фото по ссылке`, 'error', 6000);
+    }
+    
     console.warn('[ekcelo] fetch error:', err, viewUrl);
     // Добавляем фото без EXIF (без маркера на карте, но в списке)
     addPhoto({
