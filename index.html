@@ -508,6 +508,7 @@ map.on('move zoom', () => {
 //           marker, isRemote, file?, originalBlob?, gdId?, yandexId?, remoteViewUrl? }
 // ─────────────────────────────────────────────────────────────────────────────
 let photos = [], activeIdx = null, lbLL = null, lbScale = 1;
+let deeplinkPhotoLoaded = false;   // флаг для автоматического открытия фото по deeplink
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LOCAL FILE UPLOAD
@@ -541,6 +542,7 @@ async function addLocalPhoto(file) {
 
   const displayUrl = URL.createObjectURL(file);
   let lat = null, lon = null, bearing = null, altitude = null, date = '';
+  let gppData = null; // переменная для хранения GPP данных
 
   try {
     const e = await exifr.parse(file, { gps: true, tiff: true, exif: true, ifd0: true, translateValues: true });
@@ -551,12 +553,15 @@ async function addLocalPhoto(file) {
       bearing  = r !== null ? parseFloat(r) : null;
       altitude = e.GPSAltitude ?? null;
       date     = e.DateTimeOriginal ?? e.DateTime ?? '';
+      
+      gppData = parseGPPUserComment(e);
     }
   } catch (err) { console.warn('EXIF:', file.name, err); }
 
   // Сохраняем file-объект для последующей записи EXIF (ТЗ 2)
   addPhoto({ name: file.name, size: file.size, displayUrl, thumbUrl: displayUrl,
-             lat, lon, bearing, altitude, date, isRemote: false, file });
+             lat, lon, bearing, altitude, date, isRemote: false, file, 
+             experimentData: gppData || null });
   return true;
 }
 
@@ -990,8 +995,17 @@ function copyToClipboard(text) {
   });
 }
 
+function copyExperimentData(jsonString) {
+  navigator.clipboard.writeText(jsonString).then(() => {
+    showToast('✅ Полные данные опыта скопированы в буфер', 'success', 2500);
+  }).catch(() => {
+    showToast('Не удалось скопировать', 'error');
+  });
+}
+
 function buildRows(p) {
   const rows = [];
+  const gpp = p.experimentData || null;
 
   const add = (label, value, hasData, copyText = null, editAction = null) => {
     let html = `<tr><td>${label}</td><td>`;
@@ -1013,7 +1027,6 @@ function buildRows(p) {
                   </button>`;
       }
     }
-
     html += `</td></tr>`;
     rows.push(html);
   };
@@ -1040,6 +1053,39 @@ function buildRows(p) {
     add('Дата', formatDate(p.date), true);
   } else {
     add('Дата', 'нет данных', false);
+  }
+
+  // === НОВОЕ: Данные опыта из GPP UserComment ===
+  if (gpp && gpp.experiment) {
+    const exp = gpp.experiment;
+
+    rows.push(`<tr><td colspan="2" style="background:rgba(232,255,71,.08);padding:6px 8px;font-weight:700;color:var(--accent)">📋 Данные опыта</td></tr>`);
+
+    add('Номер опыта', exp.doc || '—', true);
+    add('Организация', exp.org || '—', true);
+    add('Оператор', exp.op ? `@${exp.op}` : '—', true);
+    add('Дата отбора', exp.dt || '—', true);
+
+    if (exp.seeded) {
+      add('Культура', exp.crop || '—', true);
+      add('Сорт / Гибрид', exp.variety || '—', true);
+      add('Поколение', exp.gen || '—', true);
+      add('BBCH', exp.bbch || '—', true);
+    }
+
+    // Влага
+    if (exp.m20 !== undefined) add('Влага 0-20 см', exp.m20 + ' мм', true);
+    if (exp.m60 !== undefined) add('Влага 0-60 см', exp.m60 + ' мм', true);
+    if (exp.m100 !== undefined) add('Влага 0-100 см', exp.m100 + ' мм', true);
+
+    // Кнопка "Копировать опыт"
+    const fullJson = JSON.stringify(gpp, null, 2);
+    rows.push(`<tr><td colspan="2" style="padding:8px 0">
+      <button onclick="copyExperimentData('${esc(fullJson)}')" 
+              style="width:100%;background:#22c55e;color:#fff;border:none;border-radius:6px;padding:8px 12px;font-weight:700;cursor:pointer">
+        📋 Копировать опыт (JSON)
+      </button>
+    </td></tr>`);
   }
 
   return rows.join('');
@@ -1345,7 +1391,8 @@ async function loadSingleRemotePhoto(viewUrl, customName) {
       name, size: null, displayUrl, thumbUrl,
       lat: null, lon: null, bearing: null, altitude: null, date: '',
       isRemote: true, remoteViewUrl: viewUrl,
-      gdId, yandexId: ydId
+      gdId, yandexId: ydId,
+      experimentData: null
     });
     remotePhotos.push({ originalUrl: viewUrl, name });
     updateStats(); renderList(); updateShareButton(); updateTimelineData();
@@ -1354,6 +1401,8 @@ async function loadSingleRemotePhoto(viewUrl, customName) {
 
   // Читаем EXIF
   let lat = null, lon = null, bearing = null, altitude = null, date = '';
+  let gppData = null; // переменная для хранения GPP данных
+  
   try {
     const e = await exifr.parse(blob, { gps: true, tiff: true, exif: true, translateValues: true });
     if (e) {
@@ -1363,6 +1412,8 @@ async function loadSingleRemotePhoto(viewUrl, customName) {
       bearing  = r !== null ? parseFloat(r) : null;
       altitude = e.GPSAltitude ?? null;
       date     = e.DateTimeOriginal ?? e.DateTime ?? '';
+      
+      gppData = parseGPPUserComment(e);
     }
   } catch (err) { console.warn('[ekcelo] EXIF parse error:', err); }
 
@@ -1371,41 +1422,89 @@ async function loadSingleRemotePhoto(viewUrl, customName) {
     lat, lon, bearing, altitude, date,
     isRemote: true, remoteViewUrl: viewUrl,
     originalBlob: blob,  // сохраняем для записи EXIF (ТЗ 2)
-    gdId, yandexId: ydId
+    gdId, yandexId: ydId,
+    experimentData: gppData || null
   });
 
   remotePhotos.push({ originalUrl: viewUrl, name });
   updateStats(); renderList(); updateShareButton(); updateTimelineData();
   showToast(`✅ Добавлено: ${name}${lat !== null ? '' : ' (без GPS)'}`, 'success');
+  
+  // Автоматическое открытие фото при загрузке по deeplink
+  if (deeplinkPhotoLoaded && photos.length > 0) {
+    const idx = photos.length - 1;
+    const p = photos[idx];
+
+    if (p.lat !== null && p.lon !== null) {
+      map.setView([p.lat, p.lon], 16, { animate: true });
+      openLightbox(idx, L.latLng(p.lat, p.lon));
+    } else {
+      openLightbox(idx, null);
+    }
+
+    deeplinkPhotoLoaded = false; // сбрасываем флаг
+  }
 }
 
 // ─── Автозагрузка из URL-параметров ──────────────────────────────────────────
 
 /**
- * Читает параметры ?photo1=URL&name1=...&photo2=URL&name2=...
- * и загружает все фото последовательно.
- * Поддерживает Google Drive и Яндекс.Диск.
+ * Загрузка фото по deeplink URL-параметрам
+ * Поддерживает:
+ * - Новый простой формат: ?photo=URL&name=Имя
+ * - Множественный формат: ?photo1=URL1&photo2=URL2&name1=Имя1&name2=Имя2
+ * Ограничение ~2000 символов
  */
 async function loadPhotosFromUrl() {
   const params = new URLSearchParams(window.location.search);
+
+  // Новый простой формат: один файл ?photo=URL
+  const singlePhotoUrl = params.get('photo');
+  if (singlePhotoUrl) {
+    const customName = params.get('name') || '';
+    deeplinkPhotoLoaded = true;
+    showToast(`📂 Загружаем фото по deeplink...`, 'info', 4000);
+    await loadSingleRemotePhoto(singlePhotoUrl, customName);
+    return;
+  }
+
+  // Множественный формат: ?photo1=...&photo2=...
   const photos_list = [];
 
   for (const [key, value] of params.entries()) {
     const m = key.match(/^photo(\d+)$/);
     if (!m) continue;
+
     const n = parseInt(m[1], 10);
-    photos_list.push({ n, url: value, name: params.get(`name${n}`) || '' });
+    photos_list.push({
+      n,
+      url: value,
+      name: params.get(`name${n}`) || ''
+    });
   }
 
   if (!photos_list.length) return;
 
-  // Сортируем по номеру параметра
+  // Сортируем по номеру
   photos_list.sort((a, b) => a.n - b.n);
 
-  showToast(`📂 Загружаем ${photos_list.length} фото из ссылки…`, 'info', 6000);
+  // Проверяем длину URL
+  const base = window.location.origin + window.location.pathname;
+  let totalLength = base.length + 50; // запас
+
+  showToast(`📂 Загружаем ${photos_list.length} фото по deeplink...`, 'info', 6000);
 
   for (const item of photos_list) {
+    // Проверяем, не превысим ли лимит ~2000 символов
+    const testUrl = `${base}?photo${item.n}=${encodeURIComponent(item.url)}${item.name ? `&name${item.n}=${encodeURIComponent(item.name)}` : ''}`;
+    
+    if (testUrl.length > 2000) {
+      showToast(`⚠️ Загружено только ${photos_list.indexOf(item)} фото (URL слишком длинный)`, 'warn', 5000);
+      break;
+    }
+
     await loadSingleRemotePhoto(item.url, item.name);
+    totalLength = testUrl.length;
   }
 
   fitMapToPhotos();
@@ -1993,6 +2092,47 @@ function parsePhotoDate(dateInput) {
     return new Date(+y, +mo - 1, +d, +h, +mi, +s);
   }
   return null;
+}
+
+/**
+ * Парсит обогащённые данные опыта из EXIF UserComment (GPP формат)
+ * Возвращает объект experiment или null
+ */
+function parseGPPUserComment(exif) {
+  if (!exif || !exif.UserComment) return null;
+
+  let raw = exif.UserComment;
+
+  // exifr может вернуть строку или Uint8Array
+  if (typeof raw === 'string') {
+    raw = new TextEncoder().encode(raw);
+  }
+
+  // Проверяем префикс ASCII\x00\x00\x00 (8 байт)
+  const prefixASCII = new Uint8Array([0x41, 0x53, 0x43, 0x49, 0x49, 0x00, 0x00, 0x00]);
+
+  let jsonBytes;
+  if (raw.length >= 8 && raw.slice(0, 8).every((byte, i) => byte === prefixASCII[i])) {
+    jsonBytes = raw.slice(8);
+  } else {
+    jsonBytes = raw; // пробуем как есть
+  }
+
+  try {
+    const jsonStr = new TextDecoder('utf-8').decode(jsonBytes).replace(/\0/g, '').trim();
+    const data = JSON.parse(jsonStr);
+
+    if (data.app !== 'gpp' || !data.exp) return null;
+
+    return {
+      version: data.v || 1,
+      experiment: data.exp,
+      photoMeta: data.photo || {}
+    };
+  } catch (e) {
+    console.warn('Не удалось распарсить GPP UserComment', e);
+    return null;
+  }
 }
 
 function isPhotoInRange(p) {
