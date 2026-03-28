@@ -29,9 +29,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .stat-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.5px}
 #clear-btn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:var(--r);padding:5px 10px;font-size:12px;font-family:'JetBrains Mono',monospace;cursor:pointer;transition:all .15s}
 #clear-btn:hover{border-color:var(--danger);color:var(--danger)}
-/* Кнопка «Поделиться» в шапке (ТЗ 1) */
+/* Кнопки «Поделиться» в шапке */
 #share-btn{display:none;background:#3b82f6;color:#fff;border:none;border-radius:var(--r);padding:6px 13px;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;transition:background .15s}
 #share-btn:hover{background:#2563eb}
+#share-list-btn{display:none;background:#0f766e;color:#fff;border:none;border-radius:var(--r);padding:6px 13px;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;transition:background .15s}
+#share-list-btn:hover{background:#0d9488}
 
 /* SIDEBAR */
 #sidebar{background:var(--surface);border-right:1px solid var(--border);overflow:hidden;display:flex;flex-direction:column;min-height:0}
@@ -237,8 +239,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     Загрузить фото
   </button>
   <input type="file" id="file-input" multiple accept="image/jpeg,image/jpg"/>
-  <!-- Кнопка «Поделиться» — видна только при наличии remote-фото (ТЗ 1) -->
-  <button id="share-btn" onclick="copyShareLink()">🔗 Поделиться этими фото</button>
+  <!-- Кнопка «Поделиться» — видна только при наличии remote-фото -->
+  <button id="share-btn" onclick="copyShareLink()" title="Скопировать deeplink (до ~2000 символов)">🔗 Поделиться</button>
+  <button id="share-list-btn" onclick="copyShareLinkMd()" title="Скопировать список ссылок в формате JSON (для ?photolist=)" style="display:none">📋 Список URL</button>
   <div id="stats">
     <div class="stat"><span class="stat-val" id="stat-total">0</span><span class="stat-lbl">фото</span></div>
     <div class="stat"><span class="stat-val" id="stat-gps">0</span><span class="stat-lbl">с GPS</span></div>
@@ -1312,6 +1315,26 @@ function extractYandexId(url) {
  * - Yandex Disk (короткие и длинные ссылки)
  * - S3 Timeweb
  */
+// CORS-прокси для обхода ограничений браузера при запросах к Яндекс API
+const CORS_PROXY = 'https://corsproxy.io/?url=';
+
+/**
+ * Пытается выполнить fetch сначала напрямую, затем через CORS-прокси.
+ * @param {string} url
+ * @param {RequestInit} [opts]
+ * @returns {Promise<Response>}
+ */
+async function fetchWithFallback(url, opts = {}) {
+  try {
+    const resp = await fetch(url, opts);
+    if (resp.ok) return resp;
+    throw new Error(`HTTP ${resp.status}`);
+  } catch (e) {
+    console.warn('[ekcelo] direct fetch failed, trying CORS proxy:', e.message);
+    return fetch(CORS_PROXY + encodeURIComponent(url), opts);
+  }
+}
+
 async function getDirectUrlForFetch(url) {
   try {
     const originalUrl = url.trim();
@@ -1325,45 +1348,31 @@ async function getDirectUrlForFetch(url) {
       }
     }
 
-    // Yandex Disk — улучшенная обработка
+    // Yandex Disk
     if (originalUrl.includes('disk.yandex.ru') || originalUrl.includes('yadi.sk')) {
-      let publicKey = '';
-
-      // Извлекаем ключ из короткой ссылки
-      const shortMatch = originalUrl.match(/\/i\/([a-zA-Z0-9_-]+)/);
-      if (shortMatch) {
-        publicKey = shortMatch[1];
-      } else {
-        // Из длинной ссылки
-        const longMatch = originalUrl.match(/https?:\/\/disk\.yandex\.ru\/i\/([a-zA-Z0-9_-]+)/);
-        if (longMatch) publicKey = longMatch[1];
-      }
-
-      if (publicKey) {
-        // Пробуем получить прямую ссылку через Яндекс API
-        try {
-          const apiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources?public_key=https://yadi.sk/i/${publicKey}`;
-          const response = await fetch(apiUrl);
-          if (response.ok) {
-            const data = await response.json();
-            if (data.file) {
-              return data.file; // это уже прямая ссылка на скачивание
-            }
-          }
-        } catch (e) {
-          console.warn('Не удалось получить прямую ссылку через Yandex API', e);
+      // Используем правильный endpoint /resources/download с полным URL как public_key
+      const apiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=${encodeURIComponent(originalUrl)}`;
+      try {
+        const response = await fetchWithFallback(apiUrl);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.href) return data.href; // прямая ссылка для скачивания
         }
-
-        // Fallback — старая схема
-        return `https://yadi.sk/i/${publicKey}`;
+      } catch (e) {
+        console.warn('[ekcelo] Yandex API error:', e);
       }
+
+      // Fallback — короткий ID
+      const shortKey = originalUrl.match(/\/i\/([a-zA-Z0-9_-]+)/)?.[1];
+      if (shortKey) return `https://yadi.sk/i/${shortKey}`;
+      return originalUrl;
     }
 
-    // S3 Timeweb и прямые ссылки — оставляем как есть
+    // S3 Timeweb и прямые ссылки — без изменений
     return originalUrl;
 
   } catch (err) {
-    console.error('Ошибка при обработке ссылки:', err);
+    console.error('[ekcelo] Ошибка при обработке ссылки:', err);
     return url;
   }
 }
@@ -1423,7 +1432,7 @@ async function loadSingleRemotePhoto(viewUrl, customName) {
 
   showToast(`⏳ Загружаем: ${name}`, 'info', 5000);
 
-  const directUrl  = getDirectUrlForFetch(viewUrl);
+  const directUrl  = await getDirectUrlForFetch(viewUrl);
   const displayUrl = getDisplayUrl(viewUrl);
   const thumbUrl   = getThumbUrl(viewUrl);
 
@@ -1437,8 +1446,9 @@ async function loadSingleRemotePhoto(viewUrl, customName) {
     console.error('Ошибка загрузки удалённого фото:', err);
 
     if (viewUrl.includes('yandex') || viewUrl.includes('yadi.sk')) {
-      showToast(`⚠️ Не удалось загрузить фото с Яндекс.Диска.<br>
-                 Убедитесь, что ссылка открыта «Для всех» и попробуйте снова.`, 
+      showToast(`⚠️ Не удалось загрузить EXIF с Яндекс.Диска.<br>
+                 Фото добавлено без GPS (CORS-ограничение браузера).<br>
+                 Убедитесь, что ссылка открыта «Для всех».`, 
                 'error', 8000);
     } else if (viewUrl.includes('drive.google.com')) {
       showToast(`⚠️ Не удалось загрузить фото с Google Drive.<br>
@@ -1512,6 +1522,69 @@ async function loadSingleRemotePhoto(viewUrl, customName) {
 // ─── Автозагрузка из URL-параметров ──────────────────────────────────────────
 
 /**
+ * Загружает список фото из удалённого файла (JSON или txt).
+ *
+ * Поддерживаемые форматы файла:
+ *   JSON-массив URL-строк:
+ *     ["https://disk.yandex.ru/i/AAA", "https://disk.yandex.ru/i/BBB"]
+ *
+ *   JSON-массив объектов:
+ *     [{"url":"https://disk.yandex.ru/i/AAA","name":"фото1.jpg"}, ...]
+ *
+ *   Текст (одна ссылка в строке):
+ *     https://disk.yandex.ru/i/AAA
+ *     https://disk.yandex.ru/i/BBB
+ *
+ * @param {string} listFileUrl — ссылка на файл-список (Яндекс.Диск / GDrive / S3 / прямая)
+ */
+async function loadPhotosFromListFile(listFileUrl) {
+  showToast('📋 Загружаем список фотографий…', 'info', 5000);
+  let text = '';
+  try {
+    const directUrl = await getDirectUrlForFetch(listFileUrl);
+    const resp = await fetchWithFallback(directUrl);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    text = await resp.text();
+  } catch (err) {
+    showToast(`❌ Не удалось загрузить файл списка: ${err.message}`, 'error', 8000);
+    console.error('[ekcelo] photolist fetch error:', err);
+    return;
+  }
+
+  // Парсим список
+  let entries = []; // [{url, name}]
+  try {
+    const parsed = JSON.parse(text.trim());
+    if (Array.isArray(parsed)) {
+      entries = parsed.map(item =>
+        typeof item === 'string'
+          ? { url: item.trim(), name: '' }
+          : { url: (item.url || '').trim(), name: (item.name || '').trim() }
+      ).filter(e => e.url);
+    }
+  } catch (_) {
+    // Не JSON — пробуем как текст: одна ссылка в строке
+    entries = text.split('\n')
+      .map(line => line.trim())
+      .filter(line => line.startsWith('http'))
+      .map(url => ({ url, name: '' }));
+  }
+
+  if (!entries.length) {
+    showToast('⚠️ Файл списка пуст или не содержит ссылок', 'warn', 6000);
+    return;
+  }
+
+  showToast(`📂 Загружаем ${entries.length} фото из списка…`, 'info', 8000);
+  deeplinkPhotoLoaded = true;
+
+  for (const entry of entries) {
+    await loadSingleRemotePhoto(entry.url, entry.name);
+  }
+  fitMapToPhotos();
+}
+
+/**
  * Загрузка фото по deeplink URL-параметрам
  * Поддерживает:
  * - Новый простой формат: ?photo=URL&name=Имя
@@ -1520,6 +1593,13 @@ async function loadSingleRemotePhoto(viewUrl, customName) {
  */
 async function loadPhotosFromUrl() {
   const params = new URLSearchParams(window.location.search);
+
+  // ── Формат ?photolist=URL — файл со списком фотографий ───────────────────
+  const photolistUrl = params.get('photolist');
+  if (photolistUrl) {
+    await loadPhotosFromListFile(photolistUrl);
+    return;
+  }
 
   // Новый простой формат: один файл ?photo=URL
   const singlePhotoUrl = params.get('photo');
@@ -1575,10 +1655,11 @@ async function loadPhotosFromUrl() {
 
 // ─── Кнопка «Поделиться этими фото» ──────────────────────────────────────────
 
-/** Обновляет видимость кнопки «Поделиться» */
+/** Обновляет видимость кнопок «Поделиться» */
 function updateShareButton() {
-  document.getElementById('share-btn').style.display =
-    remotePhotos.length > 0 ? 'inline-block' : 'none';
+  const show = remotePhotos.length > 0 ? 'inline-block' : 'none';
+  document.getElementById('share-btn').style.display = show;
+  document.getElementById('share-list-btn').style.display = show;
 }
 
 /**
@@ -1624,8 +1705,35 @@ function copyShareLink() {
     });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Запрос кадастра только по кнопке (чтобы не тормозить при каждом клике)
+// ─── Кнопка «Список URL» — JSON для ?photolist= ──────────────────────────────
+
+/**
+ * Копирует JSON-массив ссылок текущих remote-фото в буфер обмена.
+ * Этот JSON можно:
+ *  1. Сохранить на Яндекс.Диск / S3 / GDrive как .json файл
+ *  2. Передать в deeplink как ?photolist=<URL файла>
+ *
+ * Пример итогового deeplink:
+ *   https://romanbabenkorostov-ux.github.io/ekcelo/?photolist=https://disk.yandex.ru/i/XXX
+ */
+function copyShareLinkMd() {
+  if (!remotePhotos.length) { showToast('Нет remote-фото для шаринга', 'warn'); return; }
+
+  const list = remotePhotos.map(p => ({ url: p.originalUrl, name: p.name }));
+  const json = JSON.stringify(list, null, 2);
+
+  navigator.clipboard.writeText(json)
+    .then(() => showToast('📋 JSON-список скопирован! Сохраните в файл на Яндекс.Диске и используйте ?photolist=<URL файла>', 'success', 8000))
+    .catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = json; ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); ta.remove();
+      showToast('📋 JSON-список скопирован! Сохраните в файл на Яндекс.Диске и используйте ?photolist=<URL файла>', 'success', 8000);
+    });
+}
+
+// ───────────────────────────────────────────────────────────────────────────── (чтобы не тормозить при каждом клике)
 // ─────────────────────────────────────────────────────────────────────────────
 async function queryNSPDAtPoint() {
   if (!window.lastClickedPoint) {
@@ -2053,7 +2161,7 @@ async function writeEXIFWithGPS() {
     } else if (p.remoteViewUrl) {
       // Remote — нужно скачать
       showToast('⏳ Скачиваем оригинал…', 'info', 8000);
-      const resp = await fetch(getDirectUrlForFetch(p.remoteViewUrl));
+      const resp = await fetch(await getDirectUrlForFetch(p.remoteViewUrl));
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       blob = await resp.blob();
     } else {
