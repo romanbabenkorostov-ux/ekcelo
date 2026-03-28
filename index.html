@@ -59,8 +59,16 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .photo-item.active{background:rgba(232,255,71,.08);border-color:rgba(232,255,71,.25)}
 .photo-item.no-gps{opacity:.55}
 .photo-item.manual-active{opacity:1;border-color:rgba(71,200,255,.5);background:rgba(71,200,255,.07)}
+/* Прогресс-бар загрузки */
+#load-progress{position:fixed;top:0;left:0;right:0;height:3px;background:transparent;z-index:9999;pointer-events:none;opacity:0;transition:opacity .2s}
+#load-progress.active{opacity:1}
+#load-progress-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .4s ease;border-radius:0 2px 2px 0}
+/* Миниатюры */
 .thumb-area{cursor:pointer;flex-shrink:0}
 .thumb{width:84px;height:84px;border-radius:5px;object-fit:cover;background:var(--border);display:block}
+/* Скелетон миниатюры во время загрузки */
+.thumb.loading{background:linear-gradient(90deg,var(--border) 25%,#2a3450 50%,var(--border) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .photo-meta{flex:1;min-width:0;padding-top:2px;cursor:pointer}
 .photo-item.no-gps .thumb-area,.photo-item.no-gps .photo-meta{cursor:default;pointer-events:none}
 .photo-name{font-size:8px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
@@ -229,6 +237,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <body>
 <div id="app">
 
+<div id="load-progress"><div id="load-progress-bar"></div></div>
 <header id="header">
   <div id="logo">Ekcelo<span>Foto</span></div>
   <button id="upload-btn" onclick="document.getElementById('file-input').click()">
@@ -791,7 +800,11 @@ function renderList() {
     thumbArea.className = 'thumb-area';
     const img = document.createElement('img');
     img.className = 'thumb'; img.alt = ''; img.loading = 'lazy';
-    if (p.thumbUrl) img.src = p.thumbUrl;
+    if (p._loading) {
+      img.classList.add('loading');
+    } else if (p.thumbUrl) {
+      img.src = p.thumbUrl;
+    }
     thumbArea.appendChild(img);
 
     // Мета
@@ -1220,16 +1233,29 @@ function setProgress(pct) { document.getElementById('progress-bar').style.width 
  * Toast с поддержкой типов: 'info' | 'success' | 'error' | 'warn'
  */
 let _tt;
-function showToast(msg, type = 'info', duration = 2800) {
+let _toastTimers = {};
+function showToast(msg, type = 'info', duration = 2800, id = null) {
   const t = document.getElementById('toast');
-  t.textContent = msg;
+  t.innerHTML = msg;
   const bg = { info: 'var(--surface)', success: '#0f2a0f', error: '#2a0f0f', warn: '#2a200a' };
   const bc = { info: 'var(--border)', success: '#22c55e', error: '#ef4444', warn: '#f59e0b' };
   t.style.background  = bg[type]  || bg.info;
   t.style.borderColor = bc[type]  || bc.info;
   t.classList.add('show');
+  if (id) t.dataset.toastId = id;
   clearTimeout(_tt);
-  _tt = setTimeout(() => t.classList.remove('show'), duration);
+  if (id) clearTimeout(_toastTimers[id]);
+  const tid = setTimeout(() => { t.classList.remove('show'); }, duration);
+  if (id) _toastTimers[id] = tid;
+  else _tt = tid;
+}
+function dismissToast(id) {
+  const t = document.getElementById('toast');
+  if (t.dataset.toastId === id) {
+    clearTimeout(_toastTimers[id]);
+    t.classList.remove('show');
+    delete t.dataset.toastId;
+  }
 }
 
 function esc(s) {
@@ -1315,6 +1341,40 @@ function extractYandexId(url) {
  * - Yandex Disk (короткие и длинные ссылки)
  * - S3 Timeweb
  */
+
+// ─── Прогресс-бар загрузки ────────────────────────────────────────────────────
+const Progress = (() => {
+  const getBar  = () => document.getElementById('load-progress-bar');
+  const getWrap = () => document.getElementById('load-progress');
+  let current = 0, simTimer = null, hideTimer = null;
+  const toastId = 'progress-toast';
+
+  function set(pct) { current = pct; getBar().style.width = pct + '%'; }
+
+  function start(label) {
+    clearTimeout(hideTimer); clearInterval(simTimer);
+    getBar().style.background = '';
+    getWrap().classList.add('active');
+    set(8);
+    simTimer = setInterval(() => { if (current < 88) set(current + (88 - current) * 0.06); }, 700);
+    if (label) showToast('⏳ ' + label, 'info', 120000, toastId);
+  }
+  function finish() {
+    clearInterval(simTimer);
+    dismissToast(toastId);
+    set(100);
+    hideTimer = setTimeout(() => { getWrap().classList.remove('active'); set(0); }, 500);
+  }
+  function fail() {
+    clearInterval(simTimer);
+    dismissToast(toastId);
+    getBar().style.background = 'var(--danger)';
+    set(100);
+    hideTimer = setTimeout(() => { getWrap().classList.remove('active'); getBar().style.background = ''; set(0); }, 800);
+  }
+  return { start, finish, fail };
+})();
+
 // ─────────────────────────────────────────────────────────────────────────────
 // НАСТРОЙКА ПРОКСИ
 // Задеплойте worker.js на Cloudflare Workers (бесплатно) и вставьте URL сюда.
@@ -1488,18 +1548,28 @@ async function loadSingleRemotePhoto(viewUrl, customName) {
   const name   = customName || defaultNameFromId(anyId, type);
 
   showToast(`⏳ Загружаем: ${name}`, 'info', 5000);
+  Progress.start(`Загружаем ${name}…`);
 
   const displayUrl = getDisplayUrl(viewUrl);
   const thumbUrl   = getThumbUrl(viewUrl);
+
+  // Добавляем «заглушку» в список сразу — пользователь видит карточку со скелетоном
+  const placeholderIdx = photos.length;
+  addPhoto({
+    name, size: null, displayUrl: null, thumbUrl: null,
+    lat: null, lon: null, bearing: null, altitude: null, date: '',
+    isRemote: true, remoteViewUrl: viewUrl,
+    gdId, yandexId: ydId, experimentData: null,
+    _loading: true
+  });
+  updateStats(); renderList(); updateShareButton(); updateTimelineData();
 
   // Скачиваем blob для чтения EXIF
   let blob = null;
   try {
     if (type === 'yandex') {
-      // Яндекс: двухшаговый flow через прокси (API → href → файл)
       blob = await fetchYandexBlob(viewUrl);
     } else {
-      // Google Drive / S3 / прямые ссылки
       const directUrl = await getDirectUrlForFetch(viewUrl);
       const resp = await fetchTimeout(directUrl, 20000);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -1507,6 +1577,7 @@ async function loadSingleRemotePhoto(viewUrl, customName) {
     }
   } catch (err) {
     console.warn('[ekcelo] fetch error:', err.message, viewUrl);
+    Progress.fail();
 
     let hint = '';
     if (type === 'yandex') {
@@ -1520,17 +1591,16 @@ async function loadSingleRemotePhoto(viewUrl, customName) {
       showToast(`❌ Не удалось загрузить фото по ссылке: ${err.message}`, 'error', 6000);
     }
 
-    // Добавляем фото без EXIF (без маркера на карте, но в списке)
-    addPhoto({
-      name, size: null, displayUrl, thumbUrl,
-      lat: null, lon: null, bearing: null, altitude: null, date: '',
-      isRemote: true, remoteViewUrl: viewUrl,
-      gdId, yandexId: ydId, experimentData: null
-    });
+    // Обновляем заглушку — убираем флаг загрузки
+    const ph = photos[placeholderIdx];
+    if (ph) { ph._loading = false; ph.displayUrl = displayUrl; ph.thumbUrl = thumbUrl; }
     remotePhotos.push({ originalUrl: viewUrl, name });
     updateStats(); renderList(); updateShareButton(); updateTimelineData();
     return;
   }
+
+  // Blob получен — создаём ObjectURL для миниатюры (работает без CORS)
+  const blobUrl = URL.createObjectURL(blob);
 
   // Читаем EXIF
   let lat = null, lon = null, bearing = null, altitude = null, date = '';
@@ -1550,15 +1620,25 @@ async function loadSingleRemotePhoto(viewUrl, customName) {
     }
   } catch (err) { console.warn('[ekcelo] EXIF parse error:', err); }
 
-  addPhoto({
-    name, size: blob.size, displayUrl, thumbUrl,
-    lat, lon, bearing, altitude, date,
-    isRemote: true, remoteViewUrl: viewUrl,
-    originalBlob: blob,  // сохраняем для записи EXIF (ТЗ 2)
-    gdId, yandexId: ydId,
-    experimentData: gppData || null
-  });
+  // Обновляем заглушку реальными данными (не добавляем новый элемент)
+  const ph = photos[placeholderIdx];
+  if (ph) {
+    ph._loading   = false;
+    ph.size       = blob.size;
+    ph.displayUrl = blobUrl;
+    ph.thumbUrl   = blobUrl;
+    ph.lat        = lat;
+    ph.lon        = lon;
+    ph.bearing    = bearing;
+    ph.altitude   = altitude;
+    ph.date       = date;
+    ph.dateObj    = date ? parsePhotoDate(date) : undefined;
+    ph.originalBlob = blob;
+    ph.experimentData = gppData || null;
+    if (lat !== null && lon !== null) addMarker(ph, placeholderIdx);
+  }
 
+  Progress.finish();
   remotePhotos.push({ originalUrl: viewUrl, name });
   updateStats(); renderList(); updateShareButton(); updateTimelineData();
   showToast(`✅ Добавлено: ${name}${lat !== null ? '' : ' (без GPS)'}`, 'success');
