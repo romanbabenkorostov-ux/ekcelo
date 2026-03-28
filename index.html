@@ -1315,94 +1315,123 @@ function extractYandexId(url) {
  * - Yandex Disk (короткие и длинные ссылки)
  * - S3 Timeweb
  */
-// ─── CORS-прокси цепочка ──────────────────────────────────────────────────────
-// Пробуем по порядку; останавливаемся на первом успешном ответе.
-const CORS_PROXIES = [
-  url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-  url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+// ─────────────────────────────────────────────────────────────────────────────
+// НАСТРОЙКА ПРОКСИ
+// Задеплойте worker.js на Cloudflare Workers (бесплатно) и вставьте URL сюда.
+// Инструкция: https://dash.cloudflare.com → Workers → Create Worker
+// Без прокси Яндекс.Диск работать НЕ будет (CORS-блокировка браузера).
+// ─────────────────────────────────────────────────────────────────────────────
+const YANDEX_PROXY = ''; // 'https://ekcelo-proxy.roman-babenko-rostov.workers.dev/
+
+// Публичные CORS-прокси — fallback, если свой прокси не настроен.
+// Ненадёжны для бинарников (рейт-лимиты), но лучше, чем ничего.
+const PUBLIC_PROXIES = [
+  u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
 ];
 
 /**
- * Fetch с таймаутом.
+ * Fetch с таймаутом (abort по истечении ms).
  */
-async function fetchTimeout(url, opts = {}, ms = 7000) {
+async function fetchTimeout(url, ms = 8000) {
   const ctrl = new AbortController();
   const tid = setTimeout(() => ctrl.abort(), ms);
   try {
-    return await fetch(url, { ...opts, signal: ctrl.signal });
+    const r = await fetch(url, { signal: ctrl.signal });
+    return r;
   } finally {
     clearTimeout(tid);
   }
 }
 
 /**
- * Пробует fetch напрямую, затем по цепочке CORS-прокси.
- * Возвращает первый успешный Response или бросает ошибку.
+ * Оборачивает URL в собственный прокси (Cloudflare Worker) или
+ * публичный CORS-прокси.
+ *
+ * Собственный прокси надёжен для ЛЮБЫХ запросов (JSON + бинарник).
+ * Публичные прокси надёжны только для лёгкого JSON.
  */
-async function fetchWithProxies(url, opts = {}) {
-  // 1. Прямой запрос (работает для S3, CDN-ссылок Яндекса)
-  try {
-    const r = await fetchTimeout(url, opts, 6000);
-    if (r.ok) return r;
-  } catch (e) {
-    console.warn('[ekcelo] direct fetch failed:', e.message);
-  }
-
-  // 2. Пробуем прокси по цепочке
-  for (const makeProxy of CORS_PROXIES) {
-    const proxyUrl = makeProxy(url);
-    try {
-      const r = await fetchTimeout(proxyUrl, opts, 8000);
-      if (r.ok) return r;
-    } catch (e) {
-      console.warn('[ekcelo] proxy failed:', proxyUrl, e.message);
-    }
-  }
-  throw new Error('Все CORS-прокси недоступны');
+function proxyUrl(target, usePublicIdx = 0) {
+  if (YANDEX_PROXY) return `${YANDEX_PROXY}?url=${encodeURIComponent(target)}`;
+  return PUBLIC_PROXIES[usePublicIdx % PUBLIC_PROXIES.length](target);
 }
 
 /**
- * Получает прямую CDN-ссылку Яндекс.Диска через публичный API.
- * Яндекс API → JSON { href: "https://downloader.disk.yandex.ru/..." }
- * CDN-ссылка работает без CORS ограничений.
+ * Шаг 1: получаем прямую ссылку скачивания через Яндекс API.
+ * Возвращает href вида https://downloader.disk.yandex.ru/...
+ *
+ * API без CORS заголовков → всегда через прокси.
  */
-async function resolveYandexDirectUrl(publicUrl) {
-  const apiUrl =
-    `https://cloud-api.yandex.net/v1/disk/public/resources/download` +
-    `?public_key=${encodeURIComponent(publicUrl)}`;
+async function resolveYandexHref(publicUrl) {
+  const api = `https://cloud-api.yandex.net/v1/disk/public/resources/download` +
+               `?public_key=${encodeURIComponent(publicUrl)}`;
 
-  // API-запрос сам по себе заблокирован CORS → нужен прокси
-  const resp = await fetchWithProxies(apiUrl);
-  const data = await resp.json();
-  if (!data.href) throw new Error('Яндекс API не вернул href');
-  return data.href; // прямая CDN-ссылка
+  for (let i = 0; i < PUBLIC_PROXIES.length + 1; i++) {
+    const url = i === 0 && YANDEX_PROXY ? proxyUrl(api) : PUBLIC_PROXIES[i - (YANDEX_PROXY ? 1 : 0)]?.(api);
+    if (!url) break;
+    try {
+      const r = await fetchTimeout(url, 8000);
+      if (!r.ok) continue;
+      const data = await r.json();
+      if (data.href) return data.href;
+    } catch (e) {
+      console.warn('[ekcelo] resolveYandexHref attempt failed:', url, e.message);
+    }
+  }
+  throw new Error('Не удалось получить ссылку от Яндекс API');
 }
 
-async function getDirectUrlForFetch(url) {
-  const originalUrl = url.trim();
-
-  // Google Drive
-  if (originalUrl.includes('drive.google.com')) {
-    const fileId =
-      originalUrl.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1] ||
-      originalUrl.match(/id=([a-zA-Z0-9_-]+)/)?.[1];
-    if (fileId) return `https://drive.google.com/uc?export=download&id=${fileId}`;
+/**
+ * Шаг 2: скачиваем бинарный файл.
+ *
+ * downloader.disk.yandex.ru НЕ имеет Access-Control-Allow-Origin → прокси обязателен.
+ * Если свой Worker задеплоен — используем его.
+ * Иначе — публичные прокси (ненадёжно для файлов > ~1 МБ).
+ */
+async function fetchBlob(href) {
+  // 1. Через свой Worker (надёжно)
+  if (YANDEX_PROXY) {
+    const r = await fetchTimeout(proxyUrl(href), 30000);
+    if (r.ok) return r.blob();
+    throw new Error(`Worker вернул ${r.status}`);
   }
 
-  // Yandex Disk — двухшаговый резолв
-  if (originalUrl.includes('disk.yandex.ru') || originalUrl.includes('yadi.sk')) {
+  // 2. Прямо (вдруг CDN разрешает — для некоторых регионов работает)
+  try {
+    const r = await fetchTimeout(href, 10000);
+    if (r.ok) return r.blob();
+  } catch (_) {}
+
+  // 3. Публичные прокси как последний шанс
+  for (let i = 0; i < PUBLIC_PROXIES.length; i++) {
     try {
-      return await resolveYandexDirectUrl(originalUrl);
+      const r = await fetchTimeout(PUBLIC_PROXIES[i](href), 20000);
+      if (r.ok) return r.blob();
     } catch (e) {
-      console.warn('[ekcelo] Yandex resolve failed, falling back:', e.message);
-      // Fallback: попробуем короткую ссылку напрямую
-      const key = originalUrl.match(/\/i\/([a-zA-Z0-9_-]+)/)?.[1];
-      if (key) return `https://yadi.sk/i/${key}`;
+      console.warn('[ekcelo] public proxy blob failed:', e.message);
     }
   }
 
-  return originalUrl;
+  throw new Error('Файл недоступен: настройте YANDEX_PROXY в index.html');
+}
+
+/**
+ * Полный двухшаговый flow Яндекс.Диска:
+ * publicUrl → API (через прокси) → href → скачивание (через прокси) → Blob
+ */
+async function fetchYandexBlob(publicUrl) {
+  const href = await resolveYandexHref(publicUrl);
+  console.log('[ekcelo] Yandex href resolved:', href.substring(0, 80) + '...');
+  return fetchBlob(href);
+}
+
+async function getDirectUrlForFetch(url) {
+  const u = url.trim();
+  if (u.includes('drive.google.com')) {
+    const id = u.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1] || u.match(/id=([a-zA-Z0-9_-]+)/)?.[1];
+    if (id) return `https://drive.google.com/uc?export=download&id=${id}`;
+  }
+  return u; // S3, прямые ссылки — без изменений
 }
 
 /**
@@ -1463,36 +1492,40 @@ async function loadSingleRemotePhoto(viewUrl, customName) {
   const displayUrl = getDisplayUrl(viewUrl);
   const thumbUrl   = getThumbUrl(viewUrl);
 
-  // Попытка fetch для чтения EXIF (резолв URL + прокси-цепочка)
+  // Скачиваем blob для чтения EXIF
   let blob = null;
   try {
-    const directUrl = await getDirectUrlForFetch(viewUrl);
-    const resp = await fetchWithProxies(directUrl);
-    blob = await resp.blob();
-  } catch (err) {
-    console.warn('[ekcelo] fetch error:', err, viewUrl);
-
-    if (viewUrl.includes('yandex') || viewUrl.includes('yadi.sk')) {
-      showToast(`⚠️ Не удалось загрузить EXIF с Яндекс.Диска.<br>
-                 Фото добавлено без GPS (CORS-ограничение браузера).<br>
-                 Убедитесь, что ссылка открыта «Для всех».`, 
-                'error', 8000);
-    } else if (viewUrl.includes('drive.google.com')) {
-      showToast(`⚠️ Не удалось загрузить фото с Google Drive.<br>
-                 Убедитесь, что файл доступен по ссылке без авторизации.`, 
-                'error', 8000);
+    if (type === 'yandex') {
+      // Яндекс: двухшаговый flow через прокси (API → href → файл)
+      blob = await fetchYandexBlob(viewUrl);
     } else {
-      showToast(`❌ Не удалось загрузить фото по ссылке`, 'error', 6000);
+      // Google Drive / S3 / прямые ссылки
+      const directUrl = await getDirectUrlForFetch(viewUrl);
+      const resp = await fetchTimeout(directUrl, 20000);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      blob = await resp.blob();
     }
-    
-    console.warn('[ekcelo] fetch error:', err, viewUrl);
+  } catch (err) {
+    console.warn('[ekcelo] fetch error:', err.message, viewUrl);
+
+    let hint = '';
+    if (type === 'yandex') {
+      hint = YANDEX_PROXY
+        ? `Убедитесь, что файл открыт «Для всех» на Яндекс.Диске.`
+        : `Для работы с Яндекс.Диском задеплойте worker.js → вставьте URL в YANDEX_PROXY в index.html.`;
+      showToast(`⚠️ Яндекс.Диск: ${hint}`, 'error', 10000);
+    } else if (type === 'gdrive') {
+      showToast(`⚠️ Google Drive: убедитесь, что файл доступен по ссылке без авторизации.`, 'error', 8000);
+    } else {
+      showToast(`❌ Не удалось загрузить фото по ссылке: ${err.message}`, 'error', 6000);
+    }
+
     // Добавляем фото без EXIF (без маркера на карте, но в списке)
     addPhoto({
       name, size: null, displayUrl, thumbUrl,
       lat: null, lon: null, bearing: null, altitude: null, date: '',
       isRemote: true, remoteViewUrl: viewUrl,
-      gdId, yandexId: ydId,
-      experimentData: null
+      gdId, yandexId: ydId, experimentData: null
     });
     remotePhotos.push({ originalUrl: viewUrl, name });
     updateStats(); renderList(); updateShareButton(); updateTimelineData();
@@ -1568,9 +1601,17 @@ async function loadPhotosFromListFile(listFileUrl) {
   showToast('📋 Загружаем список фотографий…', 'info', 5000);
   let text = '';
   try {
-    const directUrl = await getDirectUrlForFetch(listFileUrl);
-    const resp = await fetchWithProxies(directUrl);
-    text = await resp.text();
+    const type = detectRemoteType(listFileUrl);
+    let blob;
+    if (type === 'yandex') {
+      blob = await fetchYandexBlob(listFileUrl);
+    } else {
+      const directUrl = await getDirectUrlForFetch(listFileUrl);
+      const resp = await fetchTimeout(directUrl, 15000);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      blob = await resp.blob();
+    }
+    text = await blob.text();
   } catch (err) {
     showToast(`❌ Не удалось загрузить файл списка: ${err.message}`, 'error', 8000);
     console.error('[ekcelo] photolist fetch error:', err);
@@ -2187,8 +2228,14 @@ async function writeEXIFWithGPS() {
     } else if (p.remoteViewUrl) {
       // Remote — нужно скачать
       showToast('⏳ Скачиваем оригинал…', 'info', 8000);
-      const resp = await fetchWithProxies(await getDirectUrlForFetch(p.remoteViewUrl));
-      blob = await resp.blob();
+      const rtype = detectRemoteType(p.remoteViewUrl);
+      if (rtype === 'yandex') {
+        blob = await fetchYandexBlob(p.remoteViewUrl);
+      } else {
+        const resp = await fetchTimeout(await getDirectUrlForFetch(p.remoteViewUrl), 20000);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        blob = await resp.blob();
+      }
     } else {
       throw new Error('Нет источника для записи EXIF');
     }
