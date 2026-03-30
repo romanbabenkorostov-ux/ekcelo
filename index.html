@@ -20,6 +20,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #header{grid-column:1/-1;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;padding:0 20px;z-index:1000}
 #logo{font-size:18px;font-weight:800;letter-spacing:-.5px;color:var(--accent);white-space:nowrap}
 #logo span{color:var(--text)}
+#invite-btn{display:none;align-items:center;gap:7px;background:var(--accent2);color:#0d0f14;border:none;border-radius:var(--r);padding:7px 14px;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;cursor:pointer;text-decoration:none;white-space:nowrap;transition:opacity .15s}
+#invite-btn:hover{opacity:.85}
 #upload-btn{display:flex;align-items:center;gap:7px;background:var(--accent);color:#0d0f14;border:none;border-radius:var(--r);padding:7px 14px;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;cursor:pointer;transition:opacity .15s;white-space:nowrap}
 #upload-btn:hover{opacity:.85}
 #file-input{display:none}
@@ -34,6 +36,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #share-btn:hover{background:#2563eb}
 #share-list-btn{display:none;background:#0f766e;color:#fff;border:none;border-radius:var(--r);padding:6px 13px;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;transition:background .15s}
 #share-list-btn:hover{background:#0d9488}
+#invite-btn{display:none;align-items:center;gap:7px;background:var(--accent2);color:#0d0f14;border:none;border-radius:var(--r);padding:7px 14px;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;cursor:pointer;text-decoration:none;white-space:nowrap;transition:opacity .15s}
+#invite-btn:hover{opacity:.85}
 
 /* SIDEBAR */
 #sidebar{background:var(--surface);border-right:1px solid var(--border);overflow:hidden;display:flex;flex-direction:column;min-height:0}
@@ -240,6 +244,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 <header id="header">
   <div id="logo">Ekcelo<span>Foto</span></div>
+  <!-- Кнопка «Зайти на основной сайт» — видна только при наличии invite_url в EXIF -->
+  <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+      <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+    </svg>
+    Зайти на основной сайт
+  </a>
   <button id="upload-btn" onclick="document.getElementById('file-input').click()">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -698,6 +710,7 @@ function addPhoto(photo) {
 
   // Обновляем таймлайн после каждого фото
   updateTimelineData();
+  updateInviteButton();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -880,7 +893,7 @@ function deletePhoto(idx) {
   }
   if (manualModePhotoIndex !== null && manualModePhotoIndex > idx) manualModePhotoIndex--;
   rebuildMarkerListeners();
-  updateStats(); renderList();
+  updateStats(); renderList(); updateInviteButton();
   if (!photos.some(p => p.lat !== null)) document.getElementById('map-hint').classList.remove('hidden');
 }
 
@@ -1023,84 +1036,118 @@ function buildRows(p) {
   const rows = [];
   const gpp = p.experimentData || null;
 
-  const add = (label, value, hasData, copyText = null, editAction = null) => {
+  // ── Вспомогательные функции рендера строк ──
+  const addRow = (label, value, copyText = null, editAction = null) => {
     let html = `<tr><td>${label}</td><td>`;
-
-    if (hasData) {
+    if (value !== null && value !== undefined && value !== '') {
       html += esc(String(value));
       if (copyText) {
-        html += ` <button onclick="copyToClipboard('${copyText}')" 
-                    style="margin-left:8px;background:rgba(232,255,71,.15);border:1px solid rgba(232,255,71,.4);color:var(--accent);border-radius:4px;padding:1px 7px;font-size:9px;cursor:pointer">
-                    Копировать
-                  </button>`;
+        html += ` <button onclick="copyToClipboard('${copyText}')"
+                    style="margin-left:6px;background:rgba(232,255,71,.15);border:1px solid rgba(232,255,71,.4);
+                           color:var(--accent);border-radius:4px;padding:1px 7px;font-size:9px;cursor:pointer">
+                    Копировать</button>`;
       }
     } else {
       html += `<span style="color:var(--muted);font-style:italic">нет данных</span>`;
       if (editAction) {
-        html += ` <button onclick="${editAction}" 
-                    style="margin-left:8px;background:rgba(71,200,255,.15);border:1px solid rgba(71,200,255,.4);color:var(--accent2);border-radius:4px;padding:2px 8px;font-size:9px;cursor:pointer">
-                    Установить
-                  </button>`;
+        html += ` <button onclick="${editAction}"
+                    style="margin-left:6px;background:rgba(71,200,255,.15);border:1px solid rgba(71,200,255,.4);
+                           color:var(--accent2);border-radius:4px;padding:2px 8px;font-size:9px;cursor:pointer">
+                    Установить</button>`;
       }
     }
     html += `</td></tr>`;
     rows.push(html);
   };
 
-  // Координаты
+  const sectionHeader = (icon, label) =>
+    rows.push(`<tr><td colspan="2" style="background:rgba(232,255,71,.08);padding:5px 8px 4px;
+               font-weight:700;color:var(--accent);font-size:10px;text-transform:uppercase;letter-spacing:.4px;
+               font-family:'JetBrains Mono',monospace">${icon} ${label}</td></tr>`);
+
+  // ═══ СЕКЦИЯ 1: Геолокация и съёмка ═══════════════════════════════════════
+  sectionHeader('📍', 'Геолокация и съёмка');
+
   const hasCoords = p.lat !== null && p.lon !== null;
   if (hasCoords) {
     const coordText = `${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}`;
-    add('Координаты', coordText, true, coordText);
+    addRow('Координаты', coordText, coordText);
   } else {
-    add('Координаты', '', false, null, `enterManualGPSModeFromLightbox()`);
+    addRow('Координаты', null, null, `enterManualGPSModeFromLightbox()`);
   }
 
-  // Угол съёмки
   const hasBearing = p.bearing !== null && !isNaN(p.bearing) && p.bearing !== 0;
-  if (hasBearing) {
-    add('Угол съёмки', p.bearing.toFixed(1) + '°', true);
-  } else {
-    add('Угол съёмки', '', false, null, `enterManualGPSModeFromLightbox()`);
-  }
+  addRow('Угол съёмки',
+    hasBearing ? p.bearing.toFixed(1) + '°' : null,
+    null,
+    hasBearing ? null : `enterManualGPSModeFromLightbox()`);
 
-  // Дата
-  if (p.date) {
-    add('Дата', formatDate(p.date), true);
-  } else {
-    add('Дата', 'нет данных', false);
-  }
+  if (p.altitude !== null && p.altitude !== undefined)
+    addRow('Высота', p.altitude.toFixed(1) + ' м');
 
-  // === НОВОЕ: Данные опыта из GPP UserComment ===
+  addRow('Дата съёмки', p.date ? formatDate(p.date) : null);
+
+  // ═══ СЕКЦИЯ 2: Данные опыта GPP ══════════════════════════════════════════
   if (gpp && gpp.experiment) {
     const exp = gpp.experiment;
 
-    rows.push(`<tr><td colspan="2" style="background:rgba(232,255,71,.08);padding:6px 8px;font-weight:700;color:var(--accent)">📋 Данные опыта</td></tr>`);
-
-    add('Номер опыта', exp.doc || '—', true);
-    add('Организация', exp.org || '—', true);
-    add('Оператор', exp.op ? `@${exp.op}` : '—', true);
-    add('Дата отбора', exp.dt || '—', true);
+    sectionHeader('📋', 'Данные опыта');
+    if (exp.doc)  addRow('Номер опыта', exp.doc);
+    if (exp.org)  addRow('Организация', exp.org);
+    if (exp.op)   addRow('Оператор', '@' + exp.op);
+    if (exp.dt)   addRow('Дата отбора', exp.dt);
 
     if (exp.seeded) {
-      add('Культура', exp.crop || '—', true);
-      add('Сорт / Гибрид', exp.variety || '—', true);
-      add('Поколение', exp.gen || '—', true);
-      add('BBCH', exp.bbch || '—', true);
+      if (exp.crop)    addRow('Культура', exp.crop);
+      if (exp.variety) addRow('Сорт / Гибрид', exp.variety);
+      if (exp.gen)     addRow('Поколение', exp.gen);
+      if (exp.bbch)    addRow('BBCH', exp.bbch);
+      if (exp.sow_date)    addRow('Дата сева', exp.sow_date);
+      if (exp.emerge_date) addRow('Дата всходов', exp.emerge_date);
     }
 
-    // Влага
-    if (exp.m20 !== undefined) add('Влага 0-20 см', exp.m20 + ' мм', true);
-    if (exp.m60 !== undefined) add('Влага 0-60 см', exp.m60 + ' мм', true);
-    if (exp.m100 !== undefined) add('Влага 0-100 см', exp.m100 + ' мм', true);
+    // ═══ СЕКЦИЯ 3: Влажность почвы ════════════════════════════════════════
+    const hasMoisture = exp.m20 != null || exp.m60 != null || exp.m100 != null || exp.m200 != null;
+    if (hasMoisture) {
+      sectionHeader('💧', 'Влажность почвы');
+      if (exp.m20  != null) addRow('0–20 см',  exp.m20  + ' мм');
+      if (exp.m60  != null) addRow('0–60 см',  exp.m60  + ' мм');
+      if (exp.m100 != null) addRow('0–100 см', exp.m100 + ' мм');
+      if (exp.m200 != null) addRow('0–200 см', exp.m200 + ' мм');
+    }
 
-    // Кнопка "Копировать опыт"
-    const fullJson = JSON.stringify(gpp, null, 2);
-    rows.push(`<tr><td colspan="2" style="padding:8px 0">
-      <button onclick="copyExperimentData('${esc(fullJson)}')" 
-              style="width:100%;background:#22c55e;color:#fff;border:none;border-radius:6px;padding:8px 12px;font-weight:700;cursor:pointer">
-        📋 Копировать опыт (JSON)
-      </button>
+    // ═══ СЕКЦИЯ 4: Суммы температур ════════════════════════════════════════
+    const hasGDD = exp.gdd5 != null || exp.gdd10 != null || exp.gdd15 != null;
+    if (hasGDD) {
+      sectionHeader('🌡', 'Суммы температур');
+      if (exp.gdd5  != null) addRow('ГДД ≥5°C',  exp.gdd5.toFixed(1)  + ' °С·д');
+      if (exp.gdd10 != null) addRow('ГДД ≥10°C', exp.gdd10.toFixed(1) + ' °С·д');
+      if (exp.gdd15 != null) addRow('ГДД ≥15°C', exp.gdd15.toFixed(1) + ' °С·д');
+    }
+
+    // ═══ Кнопки действий ══════════════════════════════════════════════════
+    const safeJson = esc(JSON.stringify(gpp, null, 2));
+    rows.push(`<tr><td colspan="2" style="padding:8px 0 4px">
+      <div style="display:flex;gap:6px">
+        <button onclick="copyExperimentData('${safeJson}')"
+                style="flex:1;background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.3);
+                       border-radius:6px;padding:6px 10px;font-family:'JetBrains Mono',monospace;
+                       font-size:9px;cursor:pointer;font-weight:700;transition:background .15s"
+                onmouseover="this.style.background='rgba(34,197,94,.28)'"
+                onmouseout="this.style.background='rgba(34,197,94,.15)'">
+          📋 Копировать JSON
+        </button>
+        ${exp.invite_url ? `<a href="${esc(exp.invite_url)}" target="_blank" rel="noopener"
+                style="flex:1;display:flex;align-items:center;justify-content:center;
+                       background:rgba(71,200,255,.15);color:var(--accent2);
+                       border:1px solid rgba(71,200,255,.3);border-radius:6px;
+                       padding:6px 10px;font-family:'JetBrains Mono',monospace;
+                       font-size:9px;text-decoration:none;font-weight:700;transition:background .15s"
+                onmouseover="this.style.background='rgba(71,200,255,.28)'"
+                onmouseout="this.style.background='rgba(71,200,255,.15)'">
+          🌐 Открыть опыт
+        </a>` : ''}
+      </div>
     </td></tr>`);
   }
 
@@ -1222,7 +1269,7 @@ function clearAll() {
   updateShareButton();
   document.getElementById('file-input').value = '';
   document.getElementById('gd-status').textContent = '';
-  updateStats(); renderList();
+  updateStats(); renderList(); updateInviteButton();
   document.getElementById('map-hint').classList.remove('hidden');
   showToast('Все фото удалены');
 }
@@ -1807,6 +1854,38 @@ function updateShareButton() {
   const show = remotePhotos.length > 0 ? 'inline-block' : 'none';
   document.getElementById('share-btn').style.display = show;
   document.getElementById('share-list-btn').style.display = show;
+}
+
+// ─── Кнопка «Зайти на основной сайт» — инвайт из EXIF UserComment ────────────
+
+/**
+ * Возвращает первый валидный invite_url из данных опыта любого из загруженных фото.
+ * @returns {string|null}
+ */
+function getInviteUrlFromPhotos() {
+  for (const p of photos) {
+    const url = p.experimentData?.experiment?.invite_url;
+    if (url) {
+      try { new URL(url); return url; } catch (_) {}
+    }
+  }
+  return null;
+}
+
+/**
+ * Показывает / скрывает кнопку #invite-btn.
+ * Вызывается при добавлении, удалении фото и очистке списка.
+ */
+function updateInviteButton() {
+  const url = getInviteUrlFromPhotos();
+  const btn = document.getElementById('invite-btn');
+  if (!btn) return;
+  if (url) {
+    btn.href = url;
+    btn.style.display = 'flex';
+  } else {
+    btn.style.display = 'none';
+  }
 }
 
 /**
