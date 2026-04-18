@@ -8,7 +8,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<!-- piexifjs — запись GPS в EXIF (ТЗ 2) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/piexifjs/1.0.6/piexif.min.js"></script>
 <style>
 :root{--bg:#0d0f14;--surface:#161a24;--border:#252b3a;--accent:#e8ff47;--accent2:#47c8ff;--text:#e4e8f0;--muted:#5a6480;--danger:#ff5c5c;--r:6px}
@@ -17,7 +16,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #app{display:grid;grid-template-rows:52px 1fr;grid-template-columns:320px 1fr;height:100vh}
 
 /* HEADER */
-#header{grid-column:1/-1;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;padding:0 20px;z-index:1000}
+#header{grid-column:1/-1;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 16px;z-index:1000;overflow:hidden}
 #logo{font-size:18px;font-weight:800;letter-spacing:-.5px;color:var(--accent);white-space:nowrap}
 #logo span{color:var(--text)}
 #invite-btn{display:none;align-items:center;gap:7px;background:var(--accent2);color:#0d0f14;border:none;border-radius:var(--r);padding:7px 14px;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;cursor:pointer;text-decoration:none;white-space:nowrap;transition:opacity .15s}
@@ -25,19 +24,23 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #upload-btn{display:flex;align-items:center;gap:7px;background:var(--accent);color:#0d0f14;border:none;border-radius:var(--r);padding:7px 14px;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;cursor:pointer;transition:opacity .15s;white-space:nowrap}
 #upload-btn:hover{opacity:.85}
 #file-input{display:none}
+
+/* ── AUTO-SAVE CHECKBOX ── */
+#auto-save-label{display:flex;align-items:center;gap:6px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);white-space:nowrap;padding:5px 8px;border:1px solid var(--border);border-radius:var(--r);transition:border-color .15s,color .15s;user-select:none;flex-shrink:0}
+#auto-save-label:hover{border-color:var(--accent);color:var(--accent)}
+#auto-save-label input{accent-color:var(--accent);cursor:pointer;width:13px;height:13px}
+#auto-save-label.active-label{border-color:var(--accent);color:var(--accent);background:rgba(232,255,71,.08)}
+
 #stats{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);margin-left:auto;display:flex;gap:20px}
 .stat{display:flex;flex-direction:column}
 .stat-val{color:var(--text);font-weight:500;font-size:14px}
 .stat-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.5px}
 #clear-btn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:var(--r);padding:5px 10px;font-size:12px;font-family:'JetBrains Mono',monospace;cursor:pointer;transition:all .15s}
 #clear-btn:hover{border-color:var(--danger);color:var(--danger)}
-/* Кнопки «Поделиться» в шапке */
 #share-btn{display:none;background:#3b82f6;color:#fff;border:none;border-radius:var(--r);padding:6px 13px;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;transition:background .15s}
 #share-btn:hover{background:#2563eb}
 #share-list-btn{display:none;background:#0f766e;color:#fff;border:none;border-radius:var(--r);padding:6px 13px;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;transition:background .15s}
 #share-list-btn:hover{background:#0d9488}
-#invite-btn{display:none;align-items:center;gap:7px;background:var(--accent2);color:#0d0f14;border:none;border-radius:var(--r);padding:7px 14px;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;cursor:pointer;text-decoration:none;white-space:nowrap;transition:opacity .15s}
-#invite-btn:hover{opacity:.85}
 
 /* SIDEBAR */
 #sidebar{background:var(--surface);border-right:1px solid var(--border);overflow:hidden;display:flex;flex-direction:column;min-height:0}
@@ -63,14 +66,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .photo-item.active{background:rgba(232,255,71,.08);border-color:rgba(232,255,71,.25)}
 .photo-item.no-gps{opacity:.55}
 .photo-item.manual-active{opacity:1;border-color:rgba(71,200,255,.5);background:rgba(71,200,255,.07)}
-/* Прогресс-бар загрузки */
+.photo-item.no-gps:hover{opacity:.85;background:rgba(71,200,255,.05);border-color:rgba(71,200,255,.2)}
 #load-progress{position:fixed;top:0;left:0;right:0;height:3px;background:transparent;z-index:9999;pointer-events:none;opacity:0;transition:opacity .2s}
 #load-progress.active{opacity:1}
 #load-progress-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .4s ease;border-radius:0 2px 2px 0}
-/* Миниатюры */
 .thumb-area{cursor:pointer;flex-shrink:0}
 .thumb{width:84px;height:84px;border-radius:5px;object-fit:cover;background:var(--border);display:block}
-/* Скелетон миниатюры во время загрузки */
 .thumb.loading{background:linear-gradient(90deg,var(--border) 25%,#2a3450 50%,var(--border) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .photo-meta{flex:1;min-width:0;padding-top:2px;cursor:pointer}
@@ -83,10 +84,17 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .del-btn{position:absolute;top:4px;right:4px;width:17px;height:17px;background:rgba(13,15,20,.8);border:1px solid var(--border);border-radius:50%;color:var(--muted);font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,background .15s,color .15s,border-color .15s;padding:0;line-height:1}
 .photo-item:hover .del-btn{opacity:1}
 .del-btn:hover{background:rgba(255,92,92,.2);border-color:var(--danger);color:var(--danger)}
-/* Кнопка ручного GPS (ТЗ 2) */
 .gps-manual-btn{display:block;margin-top:5px;background:rgba(71,200,255,.1);border:1px solid rgba(71,200,255,.3);border-radius:4px;color:var(--accent2);font-size:9px;font-family:'JetBrains Mono',monospace;padding:3px 6px;cursor:pointer;transition:all .15s;text-align:left;pointer-events:auto}
 .gps-manual-btn:hover{background:rgba(71,200,255,.2);border-color:var(--accent2)}
 #no-photos{padding:20px 14px;text-align:center;color:var(--muted);font-size:11px;line-height:1.7}
+
+/* ── HOVER PREVIEW (no-GPS) ── */
+#hover-preview{display:none;position:fixed;z-index:8000;background:var(--surface);border:1px solid rgba(71,200,255,.5);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.85);width:264px;pointer-events:none;animation:pop-in .15s ease both}
+#hover-preview img{width:100%;height:175px;object-fit:contain;background:#080a0e;border-radius:10px 10px 0 0;display:block}
+#hover-preview-body{padding:9px 12px 11px}
+#hover-preview-name{font-size:9px;font-weight:700;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:5px}
+#hover-preview-hint{font-size:11px;color:var(--accent2);font-family:'JetBrains Mono',monospace;margin-bottom:3px}
+#hover-preview-sub{font-size:10px;color:var(--muted)}
 
 /* MAP */
 #map-wrap{position:relative;overflow:hidden}
@@ -102,16 +110,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #map-hint.hidden{opacity:0}
 .hint-icon{font-size:44px;opacity:.16}
 .hint-text{font-size:14px;color:var(--muted);text-align:center;line-height:1.7}
-
-/* GPS mode — курсор-прицел по всей карте */
 #map-wrap.gps-picking{cursor:crosshair}
 #map-wrap.gps-picking .leaflet-container{cursor:crosshair !important}
-
-/* GPS hint overlay поверх карты (ТЗ 2) */
 #gps-hint-overlay{display:none;position:absolute;top:60px;left:50%;transform:translateX(-50%);z-index:650;background:rgba(71,200,255,.18);border:1px solid rgba(71,200,255,.5);border-radius:8px;color:var(--accent2);font-size:13px;font-family:'JetBrains Mono',monospace;padding:8px 18px;pointer-events:none;white-space:nowrap}
 #gps-hint-overlay.visible{display:block}
 
-/* MANUAL GPS PANEL (ТЗ 2) */
+/* MANUAL GPS PANEL */
 #manual-gps-panel{display:none;position:absolute;bottom:28px;right:12px;z-index:700;width:290px;background:var(--surface);border:1px solid rgba(71,200,255,.4);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.7);padding:12px 14px;font-family:'JetBrains Mono',monospace}
 #manual-gps-panel.visible{display:block}
 #mgps-title{font-size:10px;color:var(--accent2);font-weight:700;letter-spacing:.4px;text-transform:uppercase;margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -141,9 +145,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 /* MARKERS */
 .pm-wrap{position:relative}
 .marker-dot{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:11px;height:11px;background:var(--accent);border:2px solid #0d0f14;border-radius:50%;cursor:pointer;transition:transform .15s,background .15s,box-shadow .15s,width .15s,height .15s;z-index:1}
-.pm-wrap:hover .marker-dot{transform:translate(-50%,-50%) scale(1.55)}
+.pm-wrap:hover .marker-dot,.marker-dot:hover{transform:translate(-50%,-50%) scale(1.55)}
 .marker-dot.active{background:#ff3c3c !important;border-color:#fff !important;box-shadow:0 0 10px rgba(255,60,60,.85) !important;width:15px !important;height:15px !important}
-/* Временный маркер ручного GPS */
 .marker-dot.temp{background:var(--accent2) !important;border-color:#fff !important;animation:pulse-gps 1.2s ease-in-out infinite}
 @keyframes pulse-gps{0%,100%{box-shadow:0 0 0 0 rgba(71,200,255,.5)}50%{box-shadow:0 0 0 6px rgba(71,200,255,0)}}
 
@@ -169,7 +172,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #lb-table td{padding:2.5px 0}
 #lb-table td:first-child{color:var(--muted);width:88px}
 #lb-table td:last-child{color:var(--text)}
-/* Кнопка ручного GPS в лайтбоксе */
 #lb-gps-btn{display:none;width:100%;margin-top:8px;background:rgba(71,200,255,.1);border:1px solid rgba(71,200,255,.3);border-radius:var(--r);color:var(--accent2);font-size:10px;font-family:'JetBrains Mono',monospace;padding:6px;cursor:pointer;transition:all .15s}
 #lb-gps-btn:hover{background:rgba(71,200,255,.2);border-color:var(--accent2)}
 #lb-nav{display:flex;gap:6px;margin-top:8px}
@@ -193,7 +195,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #toast{position:absolute;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 16px;font-size:12px;white-space:nowrap;z-index:900;transition:transform .3s cubic-bezier(.34,1.56,.64,1),opacity .3s;opacity:0;pointer-events:none}
 #toast.show{transform:translateX(-50%) translateY(0);opacity:1}
 
-/* TIMELINE — улучшенная версия с режимами */
+/* TIMELINE */
 #timeline{position:absolute;bottom:0;left:0;right:0;height:128px;background:var(--surface);border-top:1px solid var(--border);z-index:550;padding:8px 16px 6px;display:none;flex-direction:column;font-size:11px;color:var(--text);box-shadow:0 -4px 12px rgba(0,0,0,.4)}
 #timeline.visible{display:flex}
 .timeline-header{display:flex;align-items:center;gap:12px;margin-bottom:6px;font-family:'Syne',sans-serif;font-weight:700}
@@ -211,15 +213,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .timeline-handle.end::before{content:'▶';font-size:12px;color:#0d0f14}
 .timeline-dot{position:absolute;top:50%;width:7px;height:7px;background:#e8ff47;border:1.5px solid #0d0f14;border-radius:50%;transform:translateY(-50%);z-index:10;pointer-events:none;box-shadow:0 0 4px var(--accent)}
 .timeline-dot.in-range{background:#ffeb3b;transform:translateY(-50%) scale(1.4);box-shadow:0 0 10px #e8ff47;z-index:15}
+.timeline-dot.active-dot{background:#ff3c3c !important;border-color:#fff !important;transform:translateY(-50%) scale(1.6) !important;box-shadow:0 0 12px #ff3c3c !important;z-index:20}
 .timeline-labels{display:flex;justify-content:space-between;margin-top:3px;font-size:9px;color:var(--muted);font-family:'JetBrains Mono',monospace}
 .time-fine-controls{margin-top:6px;display:none;align-items:center;gap:10px;background:rgba(71,200,255,.08);border:1px solid rgba(71,200,255,.3);border-radius:6px;padding:7px 12px;font-size:10px}
-.timeline-dot.active-dot {
-  background: #ff3c3c !important;
-  border-color: #fff !important;
-  transform: translateY(-50%) scale(1.6) !important;
-  box-shadow: 0 0 12px #ff3c3c !important;
-  z-index: 20;
-}
 .time-fine-controls input[type=time]{background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;border-radius:4px;padding:4px 7px}
 
 /* FULLSCREEN */
@@ -244,7 +240,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 <header id="header">
   <div id="logo">Ekcelo<span>Foto</span></div>
-  <!-- Кнопка «Зайти на основной сайт» — видна только при наличии invite_url в EXIF -->
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
       <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
@@ -260,9 +255,16 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     Загрузить фото
   </button>
   <input type="file" id="file-input" multiple accept="image/jpeg,image/jpg"/>
-  <!-- Кнопка «Поделиться» — видна только при наличии remote-фото -->
-  <button id="share-btn" onclick="copyShareLink()" title="Скопировать deeplink (до ~2000 символов)">🔗 Поделиться</button>
-  <button id="share-list-btn" onclick="copyShareLinkMd()" title="Скопировать список ссылок в формате JSON (для ?photolist=)" style="display:none">📋 Список URL</button>
+
+  <!-- ── АВТО-ЗАПИСЬ EXIF ── -->
+  <label id="auto-save-label"
+    title="При переходе к следующему фото — автоматически записать EXIF и скачать файл. Дата съёмки (DateTimeOriginal) сохраняется; системная дата файла будет текущей (ограничение браузера).">
+    <input type="checkbox" id="auto-save-cb" onchange="onAutoSaveCbChange(this)"/>
+    Авто-запись EXIF
+  </label>
+
+  <button id="share-btn" onclick="copyShareLink()" title="Скопировать deeplink">🔗 Поделиться</button>
+  <button id="share-list-btn" onclick="copyShareLinkMd()" style="display:none">📋 Список URL</button>
   <div id="stats">
     <div class="stat"><span class="stat-val" id="stat-total">0</span><span class="stat-lbl">фото</span></div>
     <div class="stat"><span class="stat-val" id="stat-gps">0</span><span class="stat-lbl">с GPS</span></div>
@@ -281,7 +283,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     <div id="gd-key-row" style="display:flex;gap:6px;margin-top:5px">
       <input type="text" id="gd-key" placeholder="Google API Key…" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:10px;padding:5px 8px;outline:none;min-width:0"/>
       <a href="https://console.cloud.google.com/apis/credentials" target="_blank"
-         style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--accent2);text-decoration:none;align-self:center;white-space:nowrap;flex-shrink:0" title="Создать бесплатный ключ">+ ключ</a>
+         style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--accent2);text-decoration:none;align-self:center;white-space:nowrap;flex-shrink:0">+ ключ</a>
     </div>
     <div id="gd-status"></div>
   </div>
@@ -295,10 +297,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     <div class="hint-text">Загрузите JPG с GPS-метками<br/>— точки появятся на карте</div>
   </div>
 
-  <!-- Подсказка при активном режиме ручного GPS (ТЗ 2) -->
   <div id="gps-hint-overlay">📍 Кликните по карте в место съёмки</div>
 
-  <!-- Панель ручного GPS (ТЗ 2) -->
   <div id="manual-gps-panel">
     <div id="mgps-title">📍 Ручной GPS</div>
     <div id="mgps-mode-btns">
@@ -342,9 +342,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
       <div id="lb-info">
         <div id="lb-name"></div>
         <table id="lb-table"><tbody id="lb-tbody"></tbody></table>
-		<!-- Кнопка ручного GPS появляется только для фото без координат или без угла -->
         <button id="lb-gps-btn" style="display:none"></button>
-		
         <div id="lb-nav">
           <button class="lb-nav-btn" onclick="navPhoto(-1)">&#8592; пред.</button>
           <button class="lb-nav-btn" onclick="navPhoto(1)">след. &#8594;</button>
@@ -355,9 +353,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 
   <button id="fit-btn" onclick="fitMapToPhotos()">&#8861; По фото</button>
   <button id="cadastre-btn" onclick="toggleCadastre()">&#9633; Кадастр</button>
-  
   <button id="layer-btn" onclick="toggleLayer()">&#128752; Спутник</button>
-  
   <div id="progress-bar" style="width:0"></div>
   <div id="cadastre-opacity">
     <span>Кадастр</span>
@@ -365,42 +361,32 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     <span id="cadastre-pct">70%</span>
   </div>
 
-  <!-- ТАЙМЛАЙН — Диапазон визуализации (с переключателем режимов) -->
   <div id="timeline">
     <div class="timeline-header">
       <span>📅 Диапазон визуализации</span>
-      
-      <!-- Переключатель режимов: Весь диапазон / Выделенный период -->
       <div id="timeline-mode">
         <div class="timeline-mode-btn active" data-mode="full">Весь диапазон</div>
         <div class="timeline-mode-btn" data-mode="zoom">Выделенный период</div>
       </div>
-
       <div id="range-display">—</div>
       <button id="timeline-reset" onclick="resetTimelineFilter()">⟳ Сбросить</button>
     </div>
-    
     <div id="timeline-track" class="timeline-track">
       <div id="selected-bar" class="timeline-selected-bar"></div>
       <div id="handle-start" class="timeline-handle start" style="left:0%"></div>
       <div id="handle-end" class="timeline-handle end" style="left:100%"></div>
     </div>
-    
     <div class="timeline-labels">
       <span id="min-date-label"></span>
       <span id="max-date-label"></span>
     </div>
-    
     <div id="time-fine-controls" class="time-fine-controls">
       <span style="color:var(--accent2)">⏰ Точное время:</span>
-      
       <div style="display:flex;align-items:center;gap:6px">
         <span style="font-size:13px;cursor:pointer" onclick="document.getElementById('start-time-input').showPicker()">🕒</span>
         <input type="time" id="start-time-input" onchange="updateTimeFromInputs()">
       </div>
-      
       <span>—</span>
-      
       <div style="display:flex;align-items:center;gap:6px">
         <span style="font-size:13px;cursor:pointer" onclick="document.getElementById('end-time-input').showPicker()">🕒</span>
         <input type="time" id="end-time-input" onchange="updateTimeFromInputs()">
@@ -410,6 +396,16 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 
   <div id="toast"></div>
 </div>
+</div>
+
+<!-- HOVER PREVIEW — для фото без GPS -->
+<div id="hover-preview">
+  <img id="hover-preview-img" src="" alt=""/>
+  <div id="hover-preview-body">
+    <div id="hover-preview-name"></div>
+    <div id="hover-preview-hint">📍 Координаты не установлены</div>
+    <div id="hover-preview-sub">Нажмите «Указать точку вручную» в списке</div>
+  </div>
 </div>
 
 <div id="viewer">
@@ -425,30 +421,32 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 'use strict';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MAP
+// MAP  — maxZoom 22 (navZoom 19, tiles maxNativeZoom 19 → scale beyond)
 // ─────────────────────────────────────────────────────────────────────────────
-const map = L.map('map', { center: [55.75, 37.61], zoom: 5, zoomControl: true });
+const map = L.map('map', { center: [55.75, 37.61], zoom: 5, zoomControl: true, maxZoom: 22 });
 map.attributionControl.setPrefix(false);
 L.control.scale({ imperial: false, metric: true, position: 'bottomleft' }).addTo(map);
 
 const TILES = {
-  osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 19 }),
-  sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '© Esri', maxZoom: 19 })
+  osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap', maxZoom: 22, maxNativeZoom: 19
+  }),
+  sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: '© Esri', maxZoom: 22, maxNativeZoom: 19
+  })
 };
 TILES.osm.addTo(map);
 let currentLayer = 'osm';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// КАДАСТРОВЫЙ СЛОЙ — НСПД nspd.gov.ru
+// КАДАСТРОВЫЙ СЛОЙ — НСПД
 // ─────────────────────────────────────────────────────────────────────────────
 const NSPD_IDS = [36329, 36328, 36049, 36048, 36071];
-
 const NSPD_WMS_OPTS = {
-  service: 'WMS', version: '1.3.0', format: 'image/png', transparent: true,
-  styles: '', authkey: '0', tileSize: 256, attribution: '© НСПД Росреестр',
-  zIndex: 450, keepBuffer: 2, updateWhenIdle: false, updateWhenZooming: false,
+  service:'WMS',version:'1.3.0',format:'image/png',transparent:true,
+  styles:'',authkey:'0',tileSize:256,attribution:'© НСПД Росреестр',
+  zIndex:450,keepBuffer:2,updateWhenIdle:false,updateWhenZooming:false,
 };
-
 let cadastreLayers = [], cadastreActive = false;
 
 function toggleCadastre() {
@@ -463,23 +461,17 @@ function toggleCadastre() {
       );
     }
     cadastreLayers.forEach(l => l.addTo(map));
-    cadastreActive = true;
-    btn.classList.add('active');
-    opPanel.classList.add('visible');
+    cadastreActive = true; btn.classList.add('active'); opPanel.classList.add('visible');
     if (map.getZoom() < 13) showToast('Кадастр виден с zoom ≥ 13');
   } else {
     cadastreLayers.forEach(l => map.removeLayer(l));
-    cadastreActive = false;
-    btn.classList.remove('active');
-    opPanel.classList.remove('visible');
+    cadastreActive = false; btn.classList.remove('active'); opPanel.classList.remove('visible');
   }
 }
-
 function setCadastreOpacity(val) {
   document.getElementById('cadastre-pct').textContent = val + '%';
   if (cadastreActive) cadastreLayers.forEach(l => l.setOpacity(val / 100));
 }
-
 function toggleLayer() {
   const btn = document.getElementById('layer-btn');
   if (currentLayer === 'osm') {
@@ -492,54 +484,36 @@ function toggleLayer() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// КЛИК ПО КАРТЕ — теперь открывает popup с координатами + кнопкой кадастра
+// MAP CLICK
 // ─────────────────────────────────────────────────────────────────────────────
-map.on('click', function (e) {
-  if (manualGPSActive) {
-    handleMapClickForGPS(e);
-    return;
-  }
-
+map.on('click', function(e) {
+  if (manualGPSActive) { handleMapClickForGPS(e); return; }
   closeLightbox();
-
-  const lat = e.latlng.lat.toFixed(6);
-  const lng = e.latlng.lng.toFixed(6);
-
-  // Сохраняем точку
+  const lat = e.latlng.lat.toFixed(6), lng = e.latlng.lng.toFixed(6);
   window.lastClickedPoint = e.latlng;
-
-  const content = `
-    <b>📍 Координаты точки</b><br>
+  const content = `<b>📍 Координаты точки</b><br>
     <code style="background:#f0f0f0;padding:4px 8px;border-radius:4px;font-family:JetBrains Mono">${lat}, ${lng}</code><br><br>
-    <button onclick="queryNSPDAtPoint()" 
-            style="background:#ff9500;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-weight:700;width:100%">
+    <button onclick="queryNSPDAtPoint()"
+      style="background:#ff9500;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-weight:700;width:100%">
       📍 Запросить кадастр в этой точке
     </button>`;
-
-  L.popup({ maxWidth: 300, closeButton: true })
-    .setLatLng(e.latlng)
-    .setContent(content)
-    .openOn(map);
+  L.popup({ maxWidth: 300, closeButton: true }).setLatLng(e.latlng).setContent(content).openOn(map);
 });
-
 map.on('move zoom', () => {
   if (lbLL && document.getElementById('lightbox').classList.contains('visible')) posLightbox(lbLL);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // STATE
-// photo = { name, size, displayUrl, thumbUrl, lat, lon, bearing, altitude, date,
-//           marker, isRemote, file?, originalBlob?, gdId?, yandexId?, remoteViewUrl? }
 // ─────────────────────────────────────────────────────────────────────────────
 let photos = [], activeIdx = null, lbLL = null, lbScale = 1;
-let deeplinkPhotoLoaded = false;   // флаг для автоматического открытия фото по deeplink
+let deeplinkPhotoLoaded = false;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LOCAL FILE UPLOAD
 // ─────────────────────────────────────────────────────────────────────────────
 document.getElementById('file-input').addEventListener('change', e => {
-  handleLocalFiles([...e.target.files]);
-  e.target.value = '';
+  handleLocalFiles([...e.target.files]); e.target.value = '';
 });
 document.getElementById('map-wrap').addEventListener('dragover', e => e.preventDefault());
 document.getElementById('map-wrap').addEventListener('drop', e => {
@@ -549,8 +523,7 @@ document.getElementById('map-wrap').addEventListener('drop', e => {
 });
 
 async function handleLocalFiles(files) {
-  setProgress(0);
-  let added = 0;
+  setProgress(0); let added = 0;
   for (let i = 0; i < files.length; i++) {
     if (await addLocalPhoto(files[i])) added++;
     setProgress(Math.round((i + 1) / files.length * 100));
@@ -561,36 +534,29 @@ async function handleLocalFiles(files) {
 }
 
 async function addLocalPhoto(file) {
-  // Дедупликация по имени+размеру
   if (photos.find(p => p.name === file.name && p.size === file.size)) return false;
-
   const displayUrl = URL.createObjectURL(file);
-  let lat = null, lon = null, bearing = null, altitude = null, date = '';
-  let gppData = null; // переменная для хранения GPP данных
-
+  let lat = null, lon = null, bearing = null, altitude = null, date = '', gppData = null;
   try {
-    const e = await exifr.parse(file, { gps: true, tiff: true, exif: true, ifd0: true, translateValues: true });
+    const e = await exifr.parse(file, { gps:true,tiff:true,exif:true,ifd0:true,translateValues:true });
     if (e) {
-      lat      = e.latitude  ?? e.GPSLatitude  ?? null;
-      lon      = e.longitude ?? e.GPSLongitude ?? null;
-      const r  = e.GPSImgDirection ?? e.ImgDirection ?? e.GPSDestBearing ?? null;
-      bearing  = r !== null ? parseFloat(r) : null;
+      lat = e.latitude ?? e.GPSLatitude ?? null;
+      lon = e.longitude ?? e.GPSLongitude ?? null;
+      const r = e.GPSImgDirection ?? e.ImgDirection ?? e.GPSDestBearing ?? null;
+      bearing = r !== null ? parseFloat(r) : null;
       altitude = e.GPSAltitude ?? null;
-      date     = e.DateTimeOriginal ?? e.DateTime ?? '';
-      
+      date = e.DateTimeOriginal ?? e.DateTime ?? '';
       gppData = parseGPPUserComment(e);
     }
   } catch (err) { console.warn('EXIF:', file.name, err); }
-
-  // Сохраняем file-объект для последующей записи EXIF (ТЗ 2)
-  addPhoto({ name: file.name, size: file.size, displayUrl, thumbUrl: displayUrl,
-             lat, lon, bearing, altitude, date, isRemote: false, file, 
+  addPhoto({ name:file.name, size:file.size, displayUrl, thumbUrl:displayUrl,
+             lat, lon, bearing, altitude, date, isRemote:false, file,
              experimentData: gppData || null });
   return true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GOOGLE DRIVE — загрузка папки (требует API-ключ)
+// GOOGLE DRIVE
 // ─────────────────────────────────────────────────────────────────────────────
 function parseFolderId(url) {
   const m = url.match(/folders\/([a-zA-Z0-9_-]+)/);
@@ -598,7 +564,6 @@ function parseFolderId(url) {
   if (/^[a-zA-Z0-9_-]{10,}$/.test(url.trim())) return url.trim();
   return null;
 }
-
 const gdThumb   = id => `https://drive.google.com/thumbnail?id=${id}&sz=w300`;
 const gdDisplay = id => `https://drive.google.com/thumbnail?id=${id}&sz=w1600`;
 
@@ -607,35 +572,21 @@ async function loadFromGoogleDrive() {
   const gdBtn    = document.getElementById('gd-btn');
   const folderUrl = document.getElementById('gd-url').value.trim();
   const apiKey    = document.getElementById('gd-key').value.trim();
-
   if (!folderUrl) { statusEl.textContent = 'Введите ссылку на папку'; return; }
   if (!apiKey)    { statusEl.textContent = 'Введите API-ключ Google'; return; }
-
   const folderId = parseFolderId(folderUrl);
-  if (!folderId) { statusEl.textContent = 'Не удалось извлечь ID папки из ссылки'; return; }
-
-  gdBtn.disabled = true;
-  setProgress(2);
-  statusEl.textContent = 'Получаем список файлов…';
-
+  if (!folderId) { statusEl.textContent = 'Не удалось извлечь ID папки'; return; }
+  gdBtn.disabled = true; setProgress(2); statusEl.textContent = 'Получаем список файлов…';
   const FIELDS = 'nextPageToken,files(id,name,size,imageMediaMetadata)';
   const BASE   = 'https://www.googleapis.com/drive/v3/files';
   const QUERY  = `'${folderId}' in parents and mimeType='image/jpeg' and trashed=false`;
-
   let allFiles = [], pageToken = '';
-
   try {
     while (true) {
-      let apiUrl = `${BASE}?q=${encodeURIComponent(QUERY)}`
-        + `&fields=${encodeURIComponent(FIELDS)}`
-        + `&pageSize=1000&orderBy=name&key=${encodeURIComponent(apiKey)}`;
+      let apiUrl = `${BASE}?q=${encodeURIComponent(QUERY)}&fields=${encodeURIComponent(FIELDS)}&pageSize=1000&orderBy=name&key=${encodeURIComponent(apiKey)}`;
       if (pageToken) apiUrl += `&pageToken=${encodeURIComponent(pageToken)}`;
-
-      const res  = await fetch(apiUrl);
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error?.message || `HTTP ${res.status}`);
-      }
+      const res = await fetch(apiUrl);
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error?.message || `HTTP ${res.status}`); }
       const data = await res.json();
       allFiles.push(...(data.files || []));
       statusEl.textContent = `Сканируем: ${allFiles.length} файлов…`;
@@ -645,35 +596,21 @@ async function loadFromGoogleDrive() {
     }
   } catch (e) {
     statusEl.textContent = 'Ошибка API: ' + e.message;
-    setProgress(0); gdBtn.disabled = false;
-    showToast('Ошибка Google Drive API'); return;
+    setProgress(0); gdBtn.disabled = false; showToast('Ошибка Google Drive API'); return;
   }
-
-  if (!allFiles.length) {
-    statusEl.textContent = 'Нет JPEG-файлов в папке';
-    setProgress(0); gdBtn.disabled = false; return;
-  }
-
+  if (!allFiles.length) { statusEl.textContent = 'Нет JPEG-файлов в папке'; setProgress(0); gdBtn.disabled = false; return; }
   let added = 0, noGps = 0;
   for (let i = 0; i < allFiles.length; i++) {
-    const f    = allFiles[i];
+    const f = allFiles[i];
     if (photos.find(p => p.name === f.name && p.gdId === f.id)) continue;
-
-    const meta = f.imageMediaMetadata || {};
-    const loc  = meta.location || {};
-    const lat  = (loc.latitude  != null) ? parseFloat(loc.latitude)  : null;
-    const lon  = (loc.longitude != null) ? parseFloat(loc.longitude) : null;
-    const alt  = (loc.altitude  != null) ? parseFloat(loc.altitude)  : null;
+    const meta = f.imageMediaMetadata || {}, loc = meta.location || {};
+    const lat = loc.latitude  != null ? parseFloat(loc.latitude)  : null;
+    const lon = loc.longitude != null ? parseFloat(loc.longitude) : null;
+    const alt = loc.altitude  != null ? parseFloat(loc.altitude)  : null;
     if (lat === null || lon === null) noGps++;
-
-    addPhoto({
-      name: f.name, size: f.size, gdId: f.id,
-      thumbUrl: gdThumb(f.id), displayUrl: gdDisplay(f.id),
-      lat, lon, bearing: null, altitude: alt, date: meta.time || '',
-      isRemote: true
-    });
+    addPhoto({ name:f.name, size:f.size, gdId:f.id, thumbUrl:gdThumb(f.id), displayUrl:gdDisplay(f.id),
+               lat, lon, bearing:null, altitude:alt, date:meta.time || '', isRemote:true });
     added++;
-
     if (added % 20 === 0 || added === allFiles.length) {
       setProgress(Math.round(20 + added / allFiles.length * 80));
       statusEl.textContent = `Обработано ${added} / ${allFiles.length}…`;
@@ -682,68 +619,86 @@ async function loadFromGoogleDrive() {
       await new Promise(r => setTimeout(r, 0));
     }
   }
-
-  fitMapToPhotos();
-  setTimeout(() => setProgress(0), 400);
-  updateTimelineData();
-  updateStats(); renderList();
+  fitMapToPhotos(); setTimeout(() => setProgress(0), 400);
+  updateTimelineData(); updateStats(); renderList();
   statusEl.textContent = `Загружено: ${added} фото${noGps > 0 ? ` (${noGps} без GPS)` : ''}`;
-  showToast(`Google Drive: ${added} фото добавлено`);
-  gdBtn.disabled = false;
+  showToast(`Google Drive: ${added} фото добавлено`); gdBtn.disabled = false;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PHOTO REGISTRY
 // ─────────────────────────────────────────────────────────────────────────────
 function addPhoto(photo) {
-  // Автоматически парсим дату
-  if (photo.date && !photo.dateObj) {
-    photo.dateObj = parsePhotoDate(photo.date);
-  }
-
+  if (photo.date && !photo.dateObj) photo.dateObj = parsePhotoDate(photo.date);
   photos.push({ marker: null, ...photo });
   const idx = photos.length - 1;
-
-  if (photo.lat !== null && photo.lon !== null) {
-    addMarker(photos[idx], idx);
-  }
-
-  // Обновляем таймлайн после каждого фото
+  if (photo.lat !== null && photo.lon !== null) addMarker(photos[idx], idx);
   updateTimelineData();
   updateInviteButton();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MARKERS
+// FOV / HEADLIGHT BEAM SVG
+// Dual-cone "headlight" effect:
+//   outer diffuse glow  ±65°, fill opacity 0.04
+//   inner bright beam   ±22°, fill opacity 0.07, subtle stroke
+// Total fill opacity ≈ half of original (was 0.13, now effective ~0.065)
 // ─────────────────────────────────────────────────────────────────────────────
 function fovSvg(bearing, R) {
   if (bearing === null || isNaN(bearing)) return '';
-  const fov = 55, cx = R, cy = R;
-  const al = (bearing - fov - 90) * Math.PI / 180;
-  const ar = (bearing + fov - 90) * Math.PI / 180;
-  const x1 = cx + R * Math.cos(al), y1 = cy + R * Math.sin(al);
-  const x2 = cx + R * Math.cos(ar), y2 = cy + R * Math.sin(ar);
-  const nx = cx + R * .5 * Math.cos((bearing - 90) * Math.PI / 180);
-  const ny = cy + R * .5 * Math.sin((bearing - 90) * Math.PI / 180);
-  const S = R * 2;
+  const cx = R, cy = R, S = R * 2;
+  const rad = a => a * Math.PI / 180;
+  const b = bearing - 90;
+
+  // outer diffuse glow (±65°)
+  const oL = rad(b - 65), oR = rad(b + 65);
+  const ox1 = cx + R * Math.cos(oL), oy1 = cy + R * Math.sin(oL);
+  const ox2 = cx + R * Math.cos(oR), oy2 = cy + R * Math.sin(oR);
+
+  // inner bright beam (±22°)
+  const iL = rad(b - 22), iR = rad(b + 22);
+  const ix1 = cx + R * Math.cos(iL), iy1 = cy + R * Math.sin(iL);
+  const ix2 = cx + R * Math.cos(iR), iy2 = cy + R * Math.sin(iR);
+
+  // direction line
+  const nx = cx + R * .55 * Math.cos(rad(b)), ny = cy + R * .55 * Math.sin(rad(b));
+
   return `<svg width="${S}" height="${S}" viewBox="0 0 ${S} ${S}" `
-    + `style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none">`
-    + `<path d="M${cx},${cy} L${x1},${y1} A${R},${R} 0 0,1 ${x2},${y2} Z" `
-    + `fill="rgba(232,255,71,.13)" stroke="#e8ff47" stroke-width="1.2" stroke-linejoin="round"/>`
-    + `<line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="#e8ff47" stroke-width="1.5" stroke-linecap="round" opacity=".9"/>`
+    + `style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;overflow:visible">`
+    + `<path d="M${cx},${cy} L${ox1},${oy1} A${R},${R} 0 0,1 ${ox2},${oy2} Z" fill="rgba(232,255,71,0.04)" stroke="none"/>`
+    + `<path d="M${cx},${cy} L${ix1},${iy1} A${R},${R} 0 0,1 ${ix2},${iy2} Z" `
+    + `fill="rgba(232,255,71,0.07)" stroke="rgba(232,255,71,0.20)" stroke-width="0.8" stroke-linejoin="round"/>`
+    + `<line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="rgba(232,255,71,0.55)" stroke-width="1.3" stroke-linecap="round"/>`
     + `</svg>`;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MARKERS — hit area reduced to 20 px, visual SVG overflows but is pointer-none
+// ─────────────────────────────────────────────────────────────────────────────
 function addMarker(photo, idx) {
-  const hb = photo.bearing !== null && !isNaN(photo.bearing), S = hb ? 100 : 20;
-  const html = `<div class="pm-wrap" style="width:${S}px;height:${S}px">`
-    + (hb ? fovSvg(photo.bearing, S / 2) : '')
-    + `<div class="marker-dot"></div></div>`;
-  const icon = L.divIcon({ html, className: '', iconSize: [S, S], iconAnchor: [S / 2, S / 2] });
+  const hb  = photo.bearing !== null && !isNaN(photo.bearing);
+  const S   = 100;  // visual size (px) for the SVG cone
+  const HIT = 20;   // Leaflet click-area — small, precise
+
+  let html;
+  if (hb) {
+    html = `<div style="width:${HIT}px;height:${HIT}px;position:relative;overflow:visible">`
+      + `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);`
+      + `width:${S}px;height:${S}px;pointer-events:none">`
+      + fovSvg(photo.bearing, S / 2)
+      + `</div>`
+      + `<div class="marker-dot"></div>`
+      + `</div>`;
+  } else {
+    html = `<div style="width:${HIT}px;height:${HIT}px;position:relative">`
+      + `<div class="marker-dot"></div></div>`;
+  }
+
+  const icon = L.divIcon({ html, className: '', iconSize: [HIT, HIT], iconAnchor: [HIT / 2, HIT / 2] });
   const marker = L.marker([photo.lat, photo.lon], { icon }).addTo(map)
     .on('click', () => {
       openLightbox(photos.indexOf(photo), marker.getLatLng());
-      highlightTimelineDot(photo);   // ← добавленная строка
+      highlightTimelineDot(photo);
     });
   photo.marker = marker;
 }
@@ -764,7 +719,6 @@ function setActiveMarker(idx) {
     dot.classList.toggle('active', i === idx);
   });
 }
-
 function clearActiveMarker() {
   photos.forEach(p => {
     if (!p.marker) return;
@@ -774,14 +728,38 @@ function clearActiveMarker() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FIT MAP
+// FIT MAP — single photo nav zoom 19
 // ─────────────────────────────────────────────────────────────────────────────
 function fitMapToPhotos() {
   const pts = photos.filter(p => p.lat !== null);
   if (!pts.length) return;
   document.getElementById('map-hint').classList.add('hidden');
-  if (pts.length === 1) map.setView([pts[0].lat, pts[0].lon], 16);
-  else map.fitBounds(L.latLngBounds(pts.map(p => [p.lat, p.lon])), { padding: [60, 60], maxZoom: 17 });
+  if (pts.length === 1) map.setView([pts[0].lat, pts[0].lon], 19);
+  else map.fitBounds(L.latLngBounds(pts.map(p => [p.lat, p.lon])), { padding: [60,60], maxZoom: 19 });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HOVER PREVIEW — shows enlarged photo+hint for no-GPS items on hover
+// ─────────────────────────────────────────────────────────────────────────────
+let _hoverTimer = null;
+function showHoverPreview(p, el) {
+  clearTimeout(_hoverTimer);
+  const preview = document.getElementById('hover-preview');
+  const img = document.getElementById('hover-preview-img');
+  img.src = p.thumbUrl || p.displayUrl || '';
+  document.getElementById('hover-preview-name').textContent = p.name;
+  const sidebar  = document.getElementById('sidebar');
+  const sidebarR = sidebar.getBoundingClientRect().right;
+  const elRect   = el.getBoundingClientRect();
+  const top = Math.max(60, Math.min(elRect.top, window.innerHeight - 300));
+  preview.style.left    = (sidebarR + 10) + 'px';
+  preview.style.top     = top + 'px';
+  preview.style.display = 'block';
+}
+function hideHoverPreview() {
+  _hoverTimer = setTimeout(() => {
+    document.getElementById('hover-preview').style.display = 'none';
+  }, 100);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -790,7 +768,6 @@ function fitMapToPhotos() {
 function renderList() {
   const list = document.getElementById('photo-list');
   while (list.firstChild) list.removeChild(list.firstChild);
-
   if (!photos.length) {
     const el = document.createElement('div');
     el.id = 'no-photos'; el.textContent = 'Фотографии не добавлены';
@@ -808,19 +785,19 @@ function renderList() {
       + (isDimmed ? ' dimmed' : '');
     item.dataset.idx = i;
 
-    // Превью
+    // Hover preview for no-GPS photos (sidebar)
+    if (p.lat === null) {
+      item.addEventListener('mouseenter', () => showHoverPreview(p, item));
+      item.addEventListener('mouseleave', hideHoverPreview);
+    }
+
     const thumbArea = document.createElement('div');
     thumbArea.className = 'thumb-area';
     const img = document.createElement('img');
     img.className = 'thumb'; img.alt = ''; img.loading = 'lazy';
-    if (p._loading) {
-      img.classList.add('loading');
-    } else if (p.thumbUrl) {
-      img.src = p.thumbUrl;
-    }
+    if (p._loading) { img.classList.add('loading'); } else if (p.thumbUrl) { img.src = p.thumbUrl; }
     thumbArea.appendChild(img);
 
-    // Мета
     const meta = document.createElement('div');
     meta.className = 'photo-meta';
     const coords = p.lat !== null ? p.lat.toFixed(5) + ', ' + p.lon.toFixed(5) : 'нет GPS';
@@ -829,35 +806,29 @@ function renderList() {
       + `<span class="gps-badge ${p.lat !== null ? 'gps-ok' : 'gps-no'}">`
       + (p.lat !== null ? 'GPS' : 'нет') + '</span>';
 
-    // Кнопка ручного GPS для фото без координат (ТЗ 2)
     if (p.lat === null) {
       const gpsBtn = document.createElement('button');
       gpsBtn.className = 'gps-manual-btn';
       gpsBtn.textContent = isManualActive ? '📍 Режим GPS активен…' : '📍 Указать точку вручную';
       gpsBtn.addEventListener('click', ev => {
         ev.stopPropagation();
-        if (isManualActive) exitManualGPSMode();
-        else enterManualGPSMode(i);
+        if (isManualActive) exitManualGPSMode(); else enterManualGPSMode(i);
       });
       meta.appendChild(gpsBtn);
-      // Разрешаем клик на мета-блоке только для кнопки
       meta.style.cursor = 'default';
       meta.style.pointerEvents = 'auto';
     }
 
-    // Кнопка удаления
     const del = document.createElement('button');
     del.className = 'del-btn'; del.title = 'Удалить'; del.innerHTML = '&#215;';
     del.addEventListener('click', ev => { ev.stopPropagation(); deletePhoto(i); });
 
-    item.appendChild(thumbArea);
-    item.appendChild(meta);
-    item.appendChild(del);
+    item.appendChild(thumbArea); item.appendChild(meta); item.appendChild(del);
 
-    // Клик открывает лайтбокс (только если есть GPS)
     if (p.lat !== null) {
       const go = () => {
-        map.setView([p.lat, p.lon], Math.max(map.getZoom(), 15), { animate: true });
+        // Navigate zoom increased to 19
+        map.setView([p.lat, p.lon], Math.max(map.getZoom(), 19), { animate: true });
         openLightbox(i, L.latLng(p.lat, p.lon));
       };
       thumbArea.addEventListener('click', go);
@@ -866,13 +837,12 @@ function renderList() {
       thumbArea.style.cursor = 'default';
       thumbArea.style.pointerEvents = 'none';
     }
-
     list.appendChild(item);
   });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DELETE ONE PHOTO
+// DELETE
 // ─────────────────────────────────────────────────────────────────────────────
 function deletePhoto(idx) {
   const p = photos[idx]; if (!p) return;
@@ -880,7 +850,6 @@ function deletePhoto(idx) {
   if (manualModePhotoIndex === idx) exitManualGPSMode();
   if (p.marker) map.removeLayer(p.marker);
   if (!p.isRemote && p.displayUrl) URL.revokeObjectURL(p.displayUrl);
-  // Удаляем из remotePhotos если это remote
   if (p.isRemote && p.remoteViewUrl) {
     const ri = remotePhotos.findIndex(r => r.originalUrl === p.remoteViewUrl);
     if (ri >= 0) remotePhotos.splice(ri, 1);
@@ -901,65 +870,36 @@ function deletePhoto(idx) {
 // LIGHTBOX
 // ─────────────────────────────────────────────────────────────────────────────
 async function openLightbox(idx, latlng) {
-  const p = photos[idx];
-  if (!p) return;
-
-  activeIdx = idx;
-  lbLL = latlng;
-  lbScale = 1;
-
-  // Снимаем выделение со всех элементов списка
+  const p = photos[idx]; if (!p) return;
+  activeIdx = idx; lbLL = latlng; lbScale = 1;
   document.querySelectorAll('.photo-item').forEach(el => el.classList.remove('active'));
   const item = document.querySelector(`.photo-item[data-idx="${idx}"]`);
-  if (item) {
-    item.classList.add('active');
-    item.scrollIntoView({ block: 'nearest' });
-  }
-
-  // Заполняем лайтбокс
+  if (item) { item.classList.add('active'); item.scrollIntoView({ block: 'nearest' }); }
   const lbImg = document.getElementById('lb-img');
   lbImg.src = p.displayUrl || p.thumbUrl || '';
   lbImg.style.transform = 'scale(1)';
   document.getElementById('lb-zoom-val').textContent = '100%';
   document.getElementById('lb-name').textContent = p.name;
   document.getElementById('lb-tbody').innerHTML = buildRows(p);
-
-  // Кнопка ручного GPS внизу больше не нужна — все действия через кнопки "Установить" в таблице
   document.getElementById('lb-gps-btn').style.display = 'none';
-
-  // Показываем лайтбокс
   document.getElementById('lightbox').classList.add('visible');
   setActiveMarker(idx);
   requestAnimationFrame(() => posLightbox(latlng));
-
-  // Выделяем точку на таймлайне
   highlightTimelineDot(p);
 }
 
-// Вход в ручной GPS режим из лайтбокса
 function enterManualGPSModeFromLightbox() {
   if (activeIdx === null) return;
   const p = photos[activeIdx];
-
-  // НЕ закрываем лайтбокс полностью
-  // document.getElementById('lightbox').classList.remove('visible');
-
-  // Открываем панель ручного GPS
   enterManualGPSMode(activeIdx);
-
-  // Предзаполняем координаты, если они есть
   if (p.lat !== null && p.lon !== null) {
-    tempLat = p.lat;
-    tempLon = p.lon;
-
+    tempLat = p.lat; tempLon = p.lon;
     const coordsEl = document.getElementById('mgps-coords-display');
     coordsEl.textContent = `${tempLat.toFixed(6)}, ${tempLon.toFixed(6)}`;
     coordsEl.classList.add('set');
     document.getElementById('mgps-bearing-wrap').style.display = 'block';
     document.getElementById('mgps-save-btn').disabled = false;
   }
-
-  // Предзаполняем угол, если он есть
   if (p.bearing !== null && !isNaN(p.bearing)) {
     tempBearing = Math.round(p.bearing);
     document.getElementById('mgps-bearing').value = tempBearing;
@@ -972,10 +912,11 @@ function enterManualGPSModeFromLightbox() {
 }
 
 function posLightbox(latlng) {
-  const lb   = document.getElementById('lightbox');
+  const lb = document.getElementById('lightbox');
   const card = document.getElementById('lb-card');
-  const mw   = document.getElementById('map-wrap');
-  const pt   = map.latLngToContainerPoint(latlng);
+  const mw = document.getElementById('map-wrap');
+  if (!latlng) { lb.style.left = '20px'; lb.style.top = '60px'; return; }
+  const pt = map.latLngToContainerPoint(latlng);
   const cw = card.offsetWidth || 330, ch = card.offsetHeight || 380;
   const W = mw.offsetWidth, H = mw.offsetHeight, gap = 36;
   let left = pt.x + gap, top = pt.y - ch / 2;
@@ -992,13 +933,17 @@ function closeLightbox() {
   clearActiveMarker(); activeIdx = null;
 }
 
-function navPhoto(dir) {
+async function navPhoto(dir) {
+  // Auto-save if checkbox enabled and there are pending GPS edits
+  if (document.getElementById('auto-save-cb').checked && manualGPSActive && tempLat !== null) {
+    await writeEXIFWithGPS();
+  }
   const gi = photos.map((p, i) => p.lat !== null ? i : -1).filter(i => i >= 0);
   if (!gi.length) return;
-  const pos  = gi.indexOf(activeIdx);
+  const pos = gi.indexOf(activeIdx);
   const next = gi[(pos + dir + gi.length) % gi.length];
   const p = photos[next];
-  map.setView([p.lat, p.lon], map.getZoom(), { animate: true });
+  map.setView([p.lat, p.lon], Math.max(map.getZoom(), 19), { animate: true });
   openLightbox(next, L.latLng(p.lat, p.lon));
 }
 
@@ -1017,96 +962,60 @@ function formatDate(dateStr) {
 }
 
 function copyToClipboard(text) {
-  navigator.clipboard.writeText(text).then(() => {
-    showToast('✅ Координаты скопированы в буфер', 'success', 2000);
-  }).catch(() => {
-    showToast('Не удалось скопировать', 'error');
-  });
+  navigator.clipboard.writeText(text).then(() => showToast('✅ Координаты скопированы в буфер', 'success', 2000))
+    .catch(() => showToast('Не удалось скопировать', 'error'));
 }
-
 function copyExperimentData(jsonString) {
-  navigator.clipboard.writeText(jsonString).then(() => {
-    showToast('✅ Полные данные опыта скопированы в буфер', 'success', 2500);
-  }).catch(() => {
-    showToast('Не удалось скопировать', 'error');
-  });
+  navigator.clipboard.writeText(jsonString).then(() => showToast('✅ Данные опыта скопированы', 'success', 2500))
+    .catch(() => showToast('Не удалось скопировать', 'error'));
 }
 
 function buildRows(p) {
   const rows = [];
   const gpp = p.experimentData || null;
-
-  // ── Вспомогательные функции рендера строк ──
   const addRow = (label, value, copyText = null, editAction = null) => {
     let html = `<tr><td>${label}</td><td>`;
     if (value !== null && value !== undefined && value !== '') {
       html += esc(String(value));
-      if (copyText) {
-        html += ` <button onclick="copyToClipboard('${copyText}')"
-                    style="margin-left:6px;background:rgba(232,255,71,.15);border:1px solid rgba(232,255,71,.4);
-                           color:var(--accent);border-radius:4px;padding:1px 7px;font-size:9px;cursor:pointer">
-                    Копировать</button>`;
-      }
+      if (copyText) html += ` <button onclick="copyToClipboard('${copyText}')"
+        style="margin-left:6px;background:rgba(232,255,71,.15);border:1px solid rgba(232,255,71,.4);color:var(--accent);border-radius:4px;padding:1px 7px;font-size:9px;cursor:pointer">Копировать</button>`;
     } else {
       html += `<span style="color:var(--muted);font-style:italic">нет данных</span>`;
-      if (editAction) {
-        html += ` <button onclick="${editAction}"
-                    style="margin-left:6px;background:rgba(71,200,255,.15);border:1px solid rgba(71,200,255,.4);
-                           color:var(--accent2);border-radius:4px;padding:2px 8px;font-size:9px;cursor:pointer">
-                    Установить</button>`;
-      }
+      if (editAction) html += ` <button onclick="${editAction}"
+        style="margin-left:6px;background:rgba(71,200,255,.15);border:1px solid rgba(71,200,255,.4);color:var(--accent2);border-radius:4px;padding:2px 8px;font-size:9px;cursor:pointer">Установить</button>`;
     }
-    html += `</td></tr>`;
-    rows.push(html);
+    html += `</td></tr>`; rows.push(html);
   };
+  const sectionHeader = (icon, label) => rows.push(
+    `<tr><td colspan="2" style="background:rgba(232,255,71,.08);padding:5px 8px 4px;font-weight:700;color:var(--accent);font-size:10px;text-transform:uppercase;letter-spacing:.4px;font-family:'JetBrains Mono',monospace">${icon} ${label}</td></tr>`
+  );
 
-  const sectionHeader = (icon, label) =>
-    rows.push(`<tr><td colspan="2" style="background:rgba(232,255,71,.08);padding:5px 8px 4px;
-               font-weight:700;color:var(--accent);font-size:10px;text-transform:uppercase;letter-spacing:.4px;
-               font-family:'JetBrains Mono',monospace">${icon} ${label}</td></tr>`);
-
-  // ═══ СЕКЦИЯ 1: Геолокация и съёмка ═══════════════════════════════════════
   sectionHeader('📍', 'Геолокация и съёмка');
-
   const hasCoords = p.lat !== null && p.lon !== null;
   if (hasCoords) {
     const coordText = `${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}`;
     addRow('Координаты', coordText, coordText);
-  } else {
-    addRow('Координаты', null, null, `enterManualGPSModeFromLightbox()`);
-  }
-
+  } else { addRow('Координаты', null, null, `enterManualGPSModeFromLightbox()`); }
   const hasBearing = p.bearing !== null && !isNaN(p.bearing) && p.bearing !== 0;
-  addRow('Угол съёмки',
-    hasBearing ? p.bearing.toFixed(1) + '°' : null,
-    null,
-    hasBearing ? null : `enterManualGPSModeFromLightbox()`);
-
-  if (p.altitude !== null && p.altitude !== undefined)
-    addRow('Высота', p.altitude.toFixed(1) + ' м');
-
+  addRow('Угол съёмки', hasBearing ? p.bearing.toFixed(1) + '°' : null, null, hasBearing ? null : `enterManualGPSModeFromLightbox()`);
+  if (p.altitude !== null && p.altitude !== undefined) addRow('Высота', p.altitude.toFixed(1) + ' м');
   addRow('Дата съёмки', p.date ? formatDate(p.date) : null);
 
-  // ═══ СЕКЦИЯ 2: Данные опыта GPP ══════════════════════════════════════════
   if (gpp && gpp.experiment) {
     const exp = gpp.experiment;
-
     sectionHeader('📋', 'Данные опыта');
     if (exp.doc)  addRow('Номер опыта', exp.doc);
     if (exp.org)  addRow('Организация', exp.org);
     if (exp.op)   addRow('Оператор', '@' + exp.op);
     if (exp.dt)   addRow('Дата отбора', exp.dt);
-
     if (exp.seeded) {
-      if (exp.crop)    addRow('Культура', exp.crop);
-      if (exp.variety) addRow('Сорт / Гибрид', exp.variety);
-      if (exp.gen)     addRow('Поколение', exp.gen);
-      if (exp.bbch)    addRow('BBCH', exp.bbch);
+      if (exp.crop)        addRow('Культура', exp.crop);
+      if (exp.variety)     addRow('Сорт / Гибрид', exp.variety);
+      if (exp.gen)         addRow('Поколение', exp.gen);
+      if (exp.bbch)        addRow('BBCH', exp.bbch);
       if (exp.sow_date)    addRow('Дата сева', exp.sow_date);
       if (exp.emerge_date) addRow('Дата всходов', exp.emerge_date);
     }
-
-    // ═══ СЕКЦИЯ 3: Влажность почвы ════════════════════════════════════════
     const hasMoisture = exp.m20 != null || exp.m60 != null || exp.m100 != null || exp.m200 != null;
     if (hasMoisture) {
       sectionHeader('💧', 'Влажность почвы');
@@ -1115,8 +1024,6 @@ function buildRows(p) {
       if (exp.m100 != null) addRow('0–100 см', exp.m100 + ' мм');
       if (exp.m200 != null) addRow('0–200 см', exp.m200 + ' мм');
     }
-
-    // ═══ СЕКЦИЯ 4: Суммы температур ════════════════════════════════════════
     const hasGDD = exp.gdd5 != null || exp.gdd10 != null || exp.gdd15 != null;
     if (hasGDD) {
       sectionHeader('🌡', 'Суммы температур');
@@ -1124,38 +1031,22 @@ function buildRows(p) {
       if (exp.gdd10 != null) addRow('ГДД ≥10°C', exp.gdd10.toFixed(1) + ' °С·д');
       if (exp.gdd15 != null) addRow('ГДД ≥15°C', exp.gdd15.toFixed(1) + ' °С·д');
     }
-
-    // ═══ Кнопки действий ══════════════════════════════════════════════════
     const safeJson = esc(JSON.stringify(gpp, null, 2));
-    rows.push(`<tr><td colspan="2" style="padding:8px 0 4px">
-      <div style="display:flex;gap:6px">
-        <button onclick="copyExperimentData('${safeJson}')"
-                style="flex:1;background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.3);
-                       border-radius:6px;padding:6px 10px;font-family:'JetBrains Mono',monospace;
-                       font-size:9px;cursor:pointer;font-weight:700;transition:background .15s"
-                onmouseover="this.style.background='rgba(34,197,94,.28)'"
-                onmouseout="this.style.background='rgba(34,197,94,.15)'">
-          📋 Копировать JSON
-        </button>
-        ${exp.invite_url ? `<a href="${esc(exp.invite_url)}" target="_blank" rel="noopener"
-                style="flex:1;display:flex;align-items:center;justify-content:center;
-                       background:rgba(71,200,255,.15);color:var(--accent2);
-                       border:1px solid rgba(71,200,255,.3);border-radius:6px;
-                       padding:6px 10px;font-family:'JetBrains Mono',monospace;
-                       font-size:9px;text-decoration:none;font-weight:700;transition:background .15s"
-                onmouseover="this.style.background='rgba(71,200,255,.28)'"
-                onmouseout="this.style.background='rgba(71,200,255,.15)'">
-          🌐 Открыть опыт
-        </a>` : ''}
-      </div>
-    </td></tr>`);
+    rows.push(`<tr><td colspan="2" style="padding:8px 0 4px"><div style="display:flex;gap:6px">
+      <button onclick="copyExperimentData('${safeJson}')"
+        style="flex:1;background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.3);border-radius:6px;padding:6px 10px;font-family:'JetBrains Mono',monospace;font-size:9px;cursor:pointer;font-weight:700">
+        📋 Копировать JSON
+      </button>
+      ${exp.invite_url ? `<a href="${esc(exp.invite_url)}" target="_blank" rel="noopener"
+        style="flex:1;display:flex;align-items:center;justify-content:center;background:rgba(71,200,255,.15);color:var(--accent2);border:1px solid rgba(71,200,255,.3);border-radius:6px;padding:6px 10px;font-family:'JetBrains Mono',monospace;font-size:9px;text-decoration:none;font-weight:700">
+        🌐 Открыть опыт</a>` : ''}
+    </div></td></tr>`);
   }
-
   return rows.join('');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ZOOM IN LIGHTBOX
+// LIGHTBOX ZOOM
 // ─────────────────────────────────────────────────────────────────────────────
 function applyLbZoom() {
   document.getElementById('lb-img').style.transform = `scale(${lbScale})`;
@@ -1164,87 +1055,77 @@ function applyLbZoom() {
 function lbZoomIn()    { lbScale = Math.min(5, lbScale * 1.25); applyLbZoom(); }
 function lbZoomOut()   { lbScale = Math.max(0.2, lbScale / 1.25); applyLbZoom(); }
 function lbZoomReset() { lbScale = 1; applyLbZoom(); }
-
 document.getElementById('lb-img-wrap').addEventListener('wheel', e => {
-  e.preventDefault();
-  if (e.deltaY < 0) lbZoomIn(); else lbZoomOut();
+  e.preventDefault(); if (e.deltaY < 0) lbZoomIn(); else lbZoomOut();
 }, { passive: false });
 document.getElementById('lb-img-wrap').addEventListener('click', () => openViewer());
 
+// ─────────────────────────────────────────────────────────────────────────────
+// FULLSCREEN VIEWER — scroll to thumbnail on close
+// ─────────────────────────────────────────────────────────────────────────────
 function updateViewerInfo(p) {
   let infoHTML = '';
-
-  if (p.lat !== null && p.lon !== null) {
-    infoHTML += `<div>📍 ${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}</div>`;
-  }
-  if (p.bearing !== null && !isNaN(p.bearing) && p.bearing !== 0) {
-    infoHTML += `<div>↗ ${p.bearing.toFixed(1)}°</div>`;
-  }
-  if (p.date) {
-    infoHTML += `<div>${formatDate(p.date)}</div>`;
-  }
-
+  if (p.lat !== null && p.lon !== null) infoHTML += `<div>📍 ${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}</div>`;
+  if (p.bearing !== null && !isNaN(p.bearing) && p.bearing !== 0) infoHTML += `<div>↗ ${p.bearing.toFixed(1)}°</div>`;
+  if (p.date) infoHTML += `<div>${formatDate(p.date)}</div>`;
   let infoDiv = document.getElementById('viewer-info');
   if (!infoDiv) {
-    infoDiv = document.createElement('div');
-    infoDiv.id = 'viewer-info';
-    infoDiv.style.cssText = `
-      position:absolute; bottom:30px; left:50%; transform:translateX(-50%);
-      background:rgba(13,15,20,0.85); color:#e4e8f0; padding:8px 18px;
-      border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:13px;
-      display:flex; gap:20px; z-index:10002; box-shadow:0 4px 20px rgba(0,0,0,0.6);
-    `;
+    infoDiv = document.createElement('div'); infoDiv.id = 'viewer-info';
+    infoDiv.style.cssText = `position:absolute;bottom:30px;left:50%;transform:translateX(-50%);background:rgba(13,15,20,0.85);color:#e4e8f0;padding:8px 18px;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:13px;display:flex;gap:20px;z-index:10002;box-shadow:0 4px 20px rgba(0,0,0,0.6)`;
     document.getElementById('viewer').appendChild(infoDiv);
   }
-
   infoDiv.innerHTML = infoHTML || '<div style="color:#666">Нет данных EXIF</div>';
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FULLSCREEN VIEWER
-// ─────────────────────────────────────────────────────────────────────────────
 function openViewer() {
-  const p = activeIdx !== null ? photos[activeIdx] : null;
-  if (!p) return;
-
-  const src = p.displayUrl || p.thumbUrl || '';
-  if (!src) return;
-
+  const p = activeIdx !== null ? photos[activeIdx] : null; if (!p) return;
+  const src = p.displayUrl || p.thumbUrl || ''; if (!src) return;
   document.getElementById('viewer-img').src = src;
   document.getElementById('viewer').classList.add('open');
-
   updateViewerInfo(p);
 }
 
 function closeViewer() {
   document.getElementById('viewer').classList.remove('open');
-  const infoDiv = document.getElementById('viewer-info');
-  if (infoDiv) infoDiv.remove();
+  const infoDiv = document.getElementById('viewer-info'); if (infoDiv) infoDiv.remove();
+  // Scroll sidebar to the photo where fullscreen was stopped
+  if (activeIdx !== null) {
+    const item = document.querySelector(`.photo-item[data-idx="${activeIdx}"]`);
+    if (item) item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
 }
 
-function viewerNav(dir) {
+async function viewerNav(dir) {
+  // Auto-save if checkbox enabled and there are pending GPS edits
+  if (document.getElementById('auto-save-cb').checked && manualGPSActive && tempLat !== null) {
+    await writeEXIFWithGPS();
+  }
   const gpsPhotos = photos.map((p, i) => p.lat !== null ? i : -1).filter(i => i >= 0);
   if (!gpsPhotos.length) return;
-
   let cur = activeIdx !== null ? activeIdx : gpsPhotos[0];
   let pos = gpsPhotos.indexOf(cur);
   let next = gpsPhotos[(pos + dir + gpsPhotos.length) % gpsPhotos.length];
-
-  const p = photos[next];
-  activeIdx = next;
-
+  const p = photos[next]; activeIdx = next;
   document.getElementById('viewer-img').src = p.displayUrl || p.thumbUrl || '';
-
-  setActiveMarker(next);
-  updateViewerInfo(p);        // ← обновляем данные при смене фото
-
-  // Обновляем выделение в списке
+  setActiveMarker(next); updateViewerInfo(p);
   document.querySelectorAll('.photo-item').forEach(el => el.classList.remove('active'));
   const item = document.querySelector(`.photo-item[data-idx="${next}"]`);
-  if (item) {
-    item.classList.add('active');
-    item.scrollIntoView({ block: 'nearest' });
+  if (item) { item.classList.add('active'); item.scrollIntoView({ block: 'nearest' }); }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTO-SAVE CHECKBOX
+// ─────────────────────────────────────────────────────────────────────────────
+function onAutoSaveCbChange(cb) {
+  const lbl = document.getElementById('auto-save-label');
+  if (cb.checked) {
+    lbl.classList.add('active-label');
+    showToast('✅ Авто-запись EXIF включена — при переходе → файл скачается автоматически', 'success', 3000);
+  } else {
+    lbl.classList.remove('active-label');
+    showToast('Авто-запись EXIF выключена', 'info', 2000);
   }
+  try { localStorage.setItem('autoSaveEXIF', cb.checked ? '1' : '0'); } catch(_) {}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1257,16 +1138,13 @@ function updateStats() {
 }
 
 function clearAll() {
-  closeLightbox(); closeViewer();
-  exitManualGPSMode();
+  closeLightbox(); closeViewer(); exitManualGPSMode();
   photos.forEach(p => {
     if (p.marker) map.removeLayer(p.marker);
     if (!p.isRemote && p.displayUrl) URL.revokeObjectURL(p.displayUrl);
   });
   photos = []; activeIdx = null;
-  // Очищаем список remote-фото для share (ТЗ 1)
-  remotePhotos.length = 0;
-  updateShareButton();
+  remotePhotos.length = 0; updateShareButton();
   document.getElementById('file-input').value = '';
   document.getElementById('gd-status').textContent = '';
   updateStats(); renderList(); updateInviteButton();
@@ -1276,39 +1154,28 @@ function clearAll() {
 
 function setProgress(pct) { document.getElementById('progress-bar').style.width = pct + '%'; }
 
-/**
- * Toast с поддержкой типов: 'info' | 'success' | 'error' | 'warn'
- */
 let _tt;
 let _toastTimers = {};
 function showToast(msg, type = 'info', duration = 2800, id = null) {
   const t = document.getElementById('toast');
   t.innerHTML = msg;
-  const bg = { info: 'var(--surface)', success: '#0f2a0f', error: '#2a0f0f', warn: '#2a200a' };
-  const bc = { info: 'var(--border)', success: '#22c55e', error: '#ef4444', warn: '#f59e0b' };
-  t.style.background  = bg[type]  || bg.info;
-  t.style.borderColor = bc[type]  || bc.info;
+  const bg = { info:'var(--surface)', success:'#0f2a0f', error:'#2a0f0f', warn:'#2a200a' };
+  const bc = { info:'var(--border)', success:'#22c55e', error:'#ef4444', warn:'#f59e0b' };
+  t.style.background = bg[type] || bg.info; t.style.borderColor = bc[type] || bc.info;
   t.classList.add('show');
   if (id) t.dataset.toastId = id;
   clearTimeout(_tt);
   if (id) clearTimeout(_toastTimers[id]);
   const tid = setTimeout(() => { t.classList.remove('show'); }, duration);
-  if (id) _toastTimers[id] = tid;
-  else _tt = tid;
+  if (id) _toastTimers[id] = tid; else _tt = tid;
 }
 function dismissToast(id) {
   const t = document.getElementById('toast');
-  if (t.dataset.toastId === id) {
-    clearTimeout(_toastTimers[id]);
-    t.classList.remove('show');
-    delete t.dataset.toastId;
-  }
+  if (t.dataset.toastId === id) { clearTimeout(_toastTimers[id]); t.classList.remove('show'); delete t.dataset.toastId; }
 }
 
 function esc(s) {
-  return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 document.addEventListener('keydown', e => {
@@ -1320,215 +1187,111 @@ document.addEventListener('keydown', e => {
   const inViewer = document.getElementById('viewer').classList.contains('open');
   if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
     const dir = e.key === 'ArrowRight' ? 1 : -1;
-    if (inViewer) viewerNav(dir);
-    else if (activeIdx !== null) navPhoto(dir);
+    if (inViewer) viewerNav(dir); else if (activeIdx !== null) navPhoto(dir);
   }
 });
 
-// Начальный рендер
+// Restore auto-save checkbox state from localStorage
+(function() {
+  try {
+    if (localStorage.getItem('autoSaveEXIF') === '1') {
+      const cb = document.getElementById('auto-save-cb');
+      if (cb) { cb.checked = true; document.getElementById('auto-save-label').classList.add('active-label'); }
+    }
+  } catch(_) {}
+})();
+
 renderList();
 
 // ═════════════════════════════════════════════════════════════════════════════
-// ТЗ 1: REMOTE-ФОТО — Google Drive (одиночный файл) + Яндекс.Диск
+// REMOTE PHOTOS — Google Drive (single) + Yandex Disk
 // ═════════════════════════════════════════════════════════════════════════════
-
-/**
- * Список remote-фото, загруженных через URL-параметры.
- * Используется для формирования share-ссылки.
- * Элемент: { originalUrl: string, name: string }
- */
 const remotePhotos = [];
 
-// ─── Определение типа ссылки ─────────────────────────────────────────────────
-
-/**
- * Определяет тип remote-ссылки.
- * @returns {'gdrive'|'yandex'|'other'}
- */
 function detectRemoteType(url) {
   if (/drive\.google\.com|docs\.google\.com/i.test(url)) return 'gdrive';
   if (/disk\.yandex\.(ru|com)|yadi\.sk/i.test(url)) return 'yandex';
   return 'other';
 }
-
-/** Проверяет, является ли ссылка Яндекс.Диском */
 function isYandexLink(url) { return detectRemoteType(url) === 'yandex'; }
 
-/**
- * Извлекает File ID из ссылки Google Drive.
- * Поддерживает /file/d/ID/view и ?id=ID
- */
 function extractGdriveId(url) {
-  const m1 = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-  if (m1) return m1[1];
-  const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-  if (m2) return m2[1];
+  const m1 = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/); if (m1) return m1[1];
+  const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/); if (m2) return m2[1];
   return null;
 }
-
-/**
- * Извлекает ID из ссылки Яндекс.Диска.
- * Поддерживает disk.yandex.ru/i/ID и yadi.sk/i/ID
- */
 function extractYandexId(url) {
-  const m = url.match(/\/i\/([a-zA-Z0-9_-]+)/);
-  return m ? m[1] : null;
+  const m = url.match(/\/i\/([a-zA-Z0-9_-]+)/); return m ? m[1] : null;
 }
 
-/**
- * Возвращает прямой URL для fetch() в зависимости от типа ссылки.
- * Google Drive: uc?export=view&id=...
- * Яндекс.Диск: оригинальная ссылка (отдаёт изображение напрямую для публичных файлов)
- * Другое: без изменений
- */
-/**
- * Преобразует любую ссылку на фото в прямую ссылку для fetch()
- * Поддерживает:
- * - Google Drive
- * - Yandex Disk (короткие и длинные ссылки)
- * - S3 Timeweb
- */
-
-// ─── Прогресс-бар загрузки ────────────────────────────────────────────────────
 const Progress = (() => {
   const getBar  = () => document.getElementById('load-progress-bar');
   const getWrap = () => document.getElementById('load-progress');
   let current = 0, simTimer = null, hideTimer = null;
   const toastId = 'progress-toast';
-
   function set(pct) { current = pct; getBar().style.width = pct + '%'; }
-
   function start(label) {
-    clearTimeout(hideTimer); clearInterval(simTimer);
-    getBar().style.background = '';
-    getWrap().classList.add('active');
-    set(8);
+    clearTimeout(hideTimer); clearInterval(simTimer); getBar().style.background = '';
+    getWrap().classList.add('active'); set(8);
     simTimer = setInterval(() => { if (current < 88) set(current + (88 - current) * 0.06); }, 700);
     if (label) showToast('⏳ ' + label, 'info', 120000, toastId);
   }
   function finish() {
-    clearInterval(simTimer);
-    dismissToast(toastId);
-    set(100);
+    clearInterval(simTimer); dismissToast(toastId); set(100);
     hideTimer = setTimeout(() => { getWrap().classList.remove('active'); set(0); }, 500);
   }
   function fail() {
-    clearInterval(simTimer);
-    dismissToast(toastId);
-    getBar().style.background = 'var(--danger)';
-    set(100);
+    clearInterval(simTimer); dismissToast(toastId); getBar().style.background = 'var(--danger)'; set(100);
     hideTimer = setTimeout(() => { getWrap().classList.remove('active'); getBar().style.background = ''; set(0); }, 800);
   }
   return { start, finish, fail };
 })();
 
-// ─────────────────────────────────────────────────────────────────────────────
-// НАСТРОЙКА ПРОКСИ
-// Задеплойте worker.js на Cloudflare Workers (бесплатно) и вставьте URL сюда.
-// Инструкция: https://dash.cloudflare.com → Workers → Create Worker
-// Без прокси Яндекс.Диск работать НЕ будет (CORS-блокировка браузера).
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── CORS proxy config ───────────────────────────────────────────────────────
 const YANDEX_PROXY = 'https://ekcelo-proxy.roman-babenko-rostov.workers.dev';
-
-// Публичные CORS-прокси — fallback, если свой прокси не настроен.
-// Ненадёжны для бинарников (рейт-лимиты), но лучше, чем ничего.
 const PUBLIC_PROXIES = [
   u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
   u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
 ];
 
-/**
- * Fetch с таймаутом (abort по истечении ms).
- */
 async function fetchTimeout(url, ms = 8000) {
   const ctrl = new AbortController();
   const tid = setTimeout(() => ctrl.abort(), ms);
-  try {
-    const r = await fetch(url, { signal: ctrl.signal });
-    return r;
-  } finally {
-    clearTimeout(tid);
-  }
+  try { const r = await fetch(url, { signal: ctrl.signal }); return r; } finally { clearTimeout(tid); }
 }
-
-/**
- * Оборачивает URL в собственный прокси (Cloudflare Worker) или
- * публичный CORS-прокси.
- *
- * Собственный прокси надёжен для ЛЮБЫХ запросов (JSON + бинарник).
- * Публичные прокси надёжны только для лёгкого JSON.
- */
 function proxyUrl(target, usePublicIdx = 0) {
   if (YANDEX_PROXY) return `${YANDEX_PROXY}?url=${encodeURIComponent(target)}`;
   return PUBLIC_PROXIES[usePublicIdx % PUBLIC_PROXIES.length](target);
 }
 
-/**
- * Шаг 1: получаем прямую ссылку скачивания через Яндекс API.
- * Возвращает href вида https://downloader.disk.yandex.ru/...
- *
- * API без CORS заголовков → всегда через прокси.
- */
 async function resolveYandexHref(publicUrl) {
-  const api = `https://cloud-api.yandex.net/v1/disk/public/resources/download` +
-               `?public_key=${encodeURIComponent(publicUrl)}`;
-
+  const api = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=${encodeURIComponent(publicUrl)}`;
   for (let i = 0; i < PUBLIC_PROXIES.length + 1; i++) {
     const url = i === 0 && YANDEX_PROXY ? proxyUrl(api) : PUBLIC_PROXIES[i - (YANDEX_PROXY ? 1 : 0)]?.(api);
     if (!url) break;
     try {
-      const r = await fetchTimeout(url, 8000);
-      if (!r.ok) continue;
-      const data = await r.json();
-      if (data.href) return data.href;
-    } catch (e) {
-      console.warn('[ekcelo] resolveYandexHref attempt failed:', url, e.message);
-    }
+      const r = await fetchTimeout(url, 8000); if (!r.ok) continue;
+      const data = await r.json(); if (data.href) return data.href;
+    } catch (e) { console.warn('[ekcelo] resolveYandexHref:', e.message); }
   }
   throw new Error('Не удалось получить ссылку от Яндекс API');
 }
 
-/**
- * Шаг 2: скачиваем бинарный файл.
- *
- * downloader.disk.yandex.ru НЕ имеет Access-Control-Allow-Origin → прокси обязателен.
- * Если свой Worker задеплоен — используем его.
- * Иначе — публичные прокси (ненадёжно для файлов > ~1 МБ).
- */
 async function fetchBlob(href) {
-  // 1. Через свой Worker (надёжно)
   if (YANDEX_PROXY) {
-    const r = await fetchTimeout(proxyUrl(href), 30000);
-    if (r.ok) return r.blob();
+    const r = await fetchTimeout(proxyUrl(href), 30000); if (r.ok) return r.blob();
     throw new Error(`Worker вернул ${r.status}`);
   }
-
-  // 2. Прямо (вдруг CDN разрешает — для некоторых регионов работает)
-  try {
-    const r = await fetchTimeout(href, 10000);
-    if (r.ok) return r.blob();
-  } catch (_) {}
-
-  // 3. Публичные прокси как последний шанс
+  try { const r = await fetchTimeout(href, 10000); if (r.ok) return r.blob(); } catch(_) {}
   for (let i = 0; i < PUBLIC_PROXIES.length; i++) {
-    try {
-      const r = await fetchTimeout(PUBLIC_PROXIES[i](href), 20000);
-      if (r.ok) return r.blob();
-    } catch (e) {
-      console.warn('[ekcelo] public proxy blob failed:', e.message);
-    }
+    try { const r = await fetchTimeout(PUBLIC_PROXIES[i](href), 20000); if (r.ok) return r.blob(); }
+    catch (e) { console.warn('[ekcelo] public proxy blob failed:', e.message); }
   }
-
   throw new Error('Файл недоступен: настройте YANDEX_PROXY в index.html');
 }
 
-/**
- * Полный двухшаговый flow Яндекс.Диска:
- * publicUrl → API (через прокси) → href → скачивание (через прокси) → Blob
- */
 async function fetchYandexBlob(publicUrl) {
   const href = await resolveYandexHref(publicUrl);
-  console.log('[ekcelo] Yandex href resolved:', href.substring(0, 80) + '...');
   return fetchBlob(href);
 }
 
@@ -1538,85 +1301,43 @@ async function getDirectUrlForFetch(url) {
     const id = u.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1] || u.match(/id=([a-zA-Z0-9_-]+)/)?.[1];
     if (id) return `https://drive.google.com/uc?export=download&id=${id}`;
   }
-  return u; // S3, прямые ссылки — без изменений
+  return u;
 }
 
-/**
- * Возвращает URL для отображения в <img> (thumbnail).
- * Google Drive: thumbnail API (без CORS проблем)
- * Яндекс: тот же оригинальный URL
- */
 function getDisplayUrl(url) {
   const type = detectRemoteType(url);
-  if (type === 'gdrive') {
-    const id = extractGdriveId(url);
-    if (id) return gdDisplay(id);
-  }
+  if (type === 'gdrive') { const id = extractGdriveId(url); if (id) return gdDisplay(id); }
   return url;
 }
-
 function getThumbUrl(url) {
   const type = detectRemoteType(url);
-  if (type === 'gdrive') {
-    const id = extractGdriveId(url);
-    if (id) return gdThumb(id);
-  }
+  if (type === 'gdrive') { const id = extractGdriveId(url); if (id) return gdThumb(id); }
   return url;
 }
-
-/**
- * Формирует имя файла по умолчанию из ID (первые 8 символов).
- * @param {string|null} id
- * @param {'gdrive'|'yandex'|'other'} type
- */
 function defaultNameFromId(id, type = 'other') {
   if (!id) return 'photo.jpg';
-  const prefix = type === 'yandex' ? 'yd_' : 'gd_';
-  return `photo_${prefix}${id.substring(0, 8)}.jpg`;
+  return `photo_${type === 'yandex' ? 'yd_' : 'gd_'}${id.substring(0,8)}.jpg`;
 }
 
-// ─── Загрузка одного remote-фото ─────────────────────────────────────────────
-
-/**
- * Универсальная загрузка remote-фото (Google Drive / Яндекс.Диск / любой URL).
- * 1. Определяет тип ссылки
- * 2. Получает прямой URL для fetch()
- * 3. Читает EXIF → добавляет на карту
- * 4. Запоминает для share-ссылки
- *
- * @param {string} viewUrl    — исходная ссылка (та, что будет в share-ссылке)
- * @param {string} customName — имя файла (или '' для автоматического)
- */
 async function loadSingleRemotePhoto(viewUrl, customName) {
   const type   = detectRemoteType(viewUrl);
   const gdId   = type === 'gdrive' ? extractGdriveId(viewUrl) : null;
   const ydId   = type === 'yandex' ? extractYandexId(viewUrl) : null;
   const anyId  = gdId || ydId;
   const name   = customName || defaultNameFromId(anyId, type);
-
   showToast(`⏳ Загружаем: ${name}`, 'info', 5000);
   Progress.start(`Загружаем ${name}…`);
-
-  const displayUrl = getDisplayUrl(viewUrl);
-  const thumbUrl   = getThumbUrl(viewUrl);
-
-  // Добавляем «заглушку» в список сразу — пользователь видит карточку со скелетоном
+  const displayUrl = getDisplayUrl(viewUrl), thumbUrl = getThumbUrl(viewUrl);
   const placeholderIdx = photos.length;
-  addPhoto({
-    name, size: null, displayUrl: null, thumbUrl: null,
-    lat: null, lon: null, bearing: null, altitude: null, date: '',
-    isRemote: true, remoteViewUrl: viewUrl,
-    gdId, yandexId: ydId, experimentData: null,
-    _loading: true
-  });
+  addPhoto({ name, size:null, displayUrl:null, thumbUrl:null, lat:null, lon:null,
+             bearing:null, altitude:null, date:'', isRemote:true, remoteViewUrl:viewUrl,
+             gdId, yandexId:ydId, experimentData:null, _loading:true });
   updateStats(); renderList(); updateShareButton(); updateTimelineData();
 
-  // Скачиваем blob для чтения EXIF
   let blob = null;
   try {
-    if (type === 'yandex') {
-      blob = await fetchYandexBlob(viewUrl);
-    } else {
+    if (type === 'yandex') blob = await fetchYandexBlob(viewUrl);
+    else {
       const directUrl = await getDirectUrlForFetch(viewUrl);
       const resp = await fetchTimeout(directUrl, 20000);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -1625,354 +1346,171 @@ async function loadSingleRemotePhoto(viewUrl, customName) {
   } catch (err) {
     console.warn('[ekcelo] fetch error:', err.message, viewUrl);
     Progress.fail();
-
     let hint = '';
-    if (type === 'yandex') {
-      hint = YANDEX_PROXY
-        ? `Убедитесь, что файл открыт «Для всех» на Яндекс.Диске.`
-        : `Для работы с Яндекс.Диском задеплойте worker.js → вставьте URL в YANDEX_PROXY в index.html.`;
-      showToast(`⚠️ Яндекс.Диск: ${hint}`, 'error', 10000);
-    } else if (type === 'gdrive') {
-      showToast(`⚠️ Google Drive: убедитесь, что файл доступен по ссылке без авторизации.`, 'error', 8000);
-    } else {
-      showToast(`❌ Не удалось загрузить фото по ссылке: ${err.message}`, 'error', 6000);
-    }
-
-    // Обновляем заглушку — убираем флаг загрузки
+    if (type === 'yandex') hint = YANDEX_PROXY ? `Убедитесь, что файл открыт «Для всех» на Яндекс.Диске.` : `Задеплойте worker.js → вставьте URL в YANDEX_PROXY.`;
+    else if (type === 'gdrive') hint = `Убедитесь, что файл доступен по ссылке без авторизации.`;
+    else hint = err.message;
+    showToast(`⚠️ ${hint}`, 'error', 10000);
     const ph = photos[placeholderIdx];
     if (ph) { ph._loading = false; ph.displayUrl = displayUrl; ph.thumbUrl = thumbUrl; }
     remotePhotos.push({ originalUrl: viewUrl, name });
-    updateStats(); renderList(); updateShareButton(); updateTimelineData();
-    return;
+    updateStats(); renderList(); updateShareButton(); updateTimelineData(); return;
   }
 
-  // Blob получен — создаём ObjectURL для миниатюры (работает без CORS)
   const blobUrl = URL.createObjectURL(blob);
-
-  // Читаем EXIF
-  let lat = null, lon = null, bearing = null, altitude = null, date = '';
-  let gppData = null; // переменная для хранения GPP данных
-  
+  let lat = null, lon = null, bearing = null, altitude = null, date = '', gppData = null;
   try {
-    const e = await exifr.parse(blob, { gps: true, tiff: true, exif: true, translateValues: true });
+    const e = await exifr.parse(blob, { gps:true,tiff:true,exif:true,translateValues:true });
     if (e) {
-      lat      = e.latitude  ?? e.GPSLatitude  ?? null;
-      lon      = e.longitude ?? e.GPSLongitude ?? null;
-      const r  = e.GPSImgDirection ?? e.ImgDirection ?? e.GPSDestBearing ?? null;
-      bearing  = r !== null ? parseFloat(r) : null;
+      lat = e.latitude ?? e.GPSLatitude ?? null;
+      lon = e.longitude ?? e.GPSLongitude ?? null;
+      const r = e.GPSImgDirection ?? e.ImgDirection ?? e.GPSDestBearing ?? null;
+      bearing = r !== null ? parseFloat(r) : null;
       altitude = e.GPSAltitude ?? null;
-      date     = e.DateTimeOriginal ?? e.DateTime ?? '';
-      
+      date = e.DateTimeOriginal ?? e.DateTime ?? '';
       gppData = parseGPPUserComment(e);
     }
   } catch (err) { console.warn('[ekcelo] EXIF parse error:', err); }
 
-  // Обновляем заглушку реальными данными (не добавляем новый элемент)
   const ph = photos[placeholderIdx];
   if (ph) {
-    ph._loading   = false;
-    ph.size       = blob.size;
-    ph.displayUrl = blobUrl;
-    ph.thumbUrl   = blobUrl;
-    ph.lat        = lat;
-    ph.lon        = lon;
-    ph.bearing    = bearing;
-    ph.altitude   = altitude;
-    ph.date       = date;
-    ph.dateObj    = date ? parsePhotoDate(date) : undefined;
-    ph.originalBlob = blob;
-    ph.experimentData = gppData || null;
+    ph._loading = false; ph.size = blob.size; ph.displayUrl = blobUrl; ph.thumbUrl = blobUrl;
+    ph.lat = lat; ph.lon = lon; ph.bearing = bearing; ph.altitude = altitude; ph.date = date;
+    ph.dateObj = date ? parsePhotoDate(date) : undefined;
+    ph.originalBlob = blob; ph.experimentData = gppData || null;
     if (lat !== null && lon !== null) addMarker(ph, placeholderIdx);
   }
-
   Progress.finish();
   remotePhotos.push({ originalUrl: viewUrl, name });
   updateStats(); renderList(); updateShareButton(); updateTimelineData();
   showToast(`✅ Добавлено: ${name}${lat !== null ? '' : ' (без GPS)'}`, 'success');
-  
-  // Автоматическое открытие фото при загрузке по deeplink
+
   if (deeplinkPhotoLoaded && photos.length > 0) {
-    const idx = photos.length - 1;
-    const p = photos[idx];
-
-    if (p.lat !== null && p.lon !== null) {
-      map.setView([p.lat, p.lon], 16, { animate: true });
-      openLightbox(idx, L.latLng(p.lat, p.lon));
-    } else {
-      openLightbox(idx, null);
-    }
-
-    deeplinkPhotoLoaded = false; // сбрасываем флаг
+    const idx = photos.length - 1, p = photos[idx];
+    if (p.lat !== null && p.lon !== null) { map.setView([p.lat, p.lon], 16, { animate: true }); openLightbox(idx, L.latLng(p.lat, p.lon)); }
+    else openLightbox(idx, null);
+    deeplinkPhotoLoaded = false;
   }
 }
 
-// ─── Автозагрузка из URL-параметров ──────────────────────────────────────────
-
-/**
- * Загружает список фото из удалённого файла (JSON или txt).
- *
- * Поддерживаемые форматы файла:
- *   JSON-массив URL-строк:
- *     ["https://disk.yandex.ru/i/AAA", "https://disk.yandex.ru/i/BBB"]
- *
- *   JSON-массив объектов:
- *     [{"url":"https://disk.yandex.ru/i/AAA","name":"фото1.jpg"}, ...]
- *
- *   Текст (одна ссылка в строке):
- *     https://disk.yandex.ru/i/AAA
- *     https://disk.yandex.ru/i/BBB
- *
- * @param {string} listFileUrl — ссылка на файл-список (Яндекс.Диск / GDrive / S3 / прямая)
- */
 async function loadPhotosFromListFile(listFileUrl) {
   showToast('📋 Загружаем список фотографий…', 'info', 5000);
   let text = '';
   try {
     const type = detectRemoteType(listFileUrl);
     let blob;
-    if (type === 'yandex') {
-      blob = await fetchYandexBlob(listFileUrl);
-    } else {
+    if (type === 'yandex') blob = await fetchYandexBlob(listFileUrl);
+    else {
       const directUrl = await getDirectUrlForFetch(listFileUrl);
       const resp = await fetchTimeout(directUrl, 15000);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       blob = await resp.blob();
     }
     text = await blob.text();
-  } catch (err) {
-    showToast(`❌ Не удалось загрузить файл списка: ${err.message}`, 'error', 8000);
-    console.error('[ekcelo] photolist fetch error:', err);
-    return;
-  }
+  } catch (err) { showToast(`❌ Не удалось загрузить файл списка: ${err.message}`, 'error', 8000); return; }
 
-  // Парсим список
-  let entries = []; // [{url, name}]
+  let entries = [];
   try {
     const parsed = JSON.parse(text.trim());
     if (Array.isArray(parsed)) {
       entries = parsed.map(item =>
-        typeof item === 'string'
-          ? { url: item.trim(), name: '' }
+        typeof item === 'string' ? { url: item.trim(), name: '' }
           : { url: (item.url || '').trim(), name: (item.name || '').trim() }
       ).filter(e => e.url);
     }
-  } catch (_) {
-    // Не JSON — пробуем как текст: одна ссылка в строке
-    entries = text.split('\n')
-      .map(line => line.trim())
-      .filter(line => line.startsWith('http'))
-      .map(url => ({ url, name: '' }));
+  } catch(_) {
+    entries = text.split('\n').map(line => line.trim()).filter(line => line.startsWith('http')).map(url => ({ url, name: '' }));
   }
-
-  if (!entries.length) {
-    showToast('⚠️ Файл списка пуст или не содержит ссылок', 'warn', 6000);
-    return;
-  }
-
+  if (!entries.length) { showToast('⚠️ Файл списка пуст или не содержит ссылок', 'warn', 6000); return; }
   showToast(`📂 Загружаем ${entries.length} фото из списка…`, 'info', 8000);
   deeplinkPhotoLoaded = true;
-
-  for (const entry of entries) {
-    await loadSingleRemotePhoto(entry.url, entry.name);
-  }
+  for (const entry of entries) await loadSingleRemotePhoto(entry.url, entry.name);
   fitMapToPhotos();
 }
 
-/**
- * Загрузка фото по deeplink URL-параметрам
- * Поддерживает:
- * - Новый простой формат: ?photo=URL&name=Имя
- * - Множественный формат: ?photo1=URL1&photo2=URL2&name1=Имя1&name2=Имя2
- * Ограничение ~2000 символов
- */
 async function loadPhotosFromUrl() {
   const params = new URLSearchParams(window.location.search);
-
-  // ── Формат ?photolist=URL — файл со списком фотографий ───────────────────
   const photolistUrl = params.get('photolist');
-  if (photolistUrl) {
-    await loadPhotosFromListFile(photolistUrl);
-    return;
-  }
-
-  // Новый простой формат: один файл ?photo=URL
+  if (photolistUrl) { await loadPhotosFromListFile(photolistUrl); return; }
   const singlePhotoUrl = params.get('photo');
   if (singlePhotoUrl) {
     const customName = params.get('name') || '';
     deeplinkPhotoLoaded = true;
     showToast(`📂 Загружаем фото по deeplink...`, 'info', 4000);
-    await loadSingleRemotePhoto(singlePhotoUrl, customName);
-    return;
+    await loadSingleRemotePhoto(singlePhotoUrl, customName); return;
   }
-
-  // Множественный формат: ?photo1=...&photo2=...
   const photos_list = [];
-
   for (const [key, value] of params.entries()) {
     const m = key.match(/^photo(\d+)$/);
     if (!m) continue;
-
     const n = parseInt(m[1], 10);
-    photos_list.push({
-      n,
-      url: value,
-      name: params.get(`name${n}`) || ''
-    });
+    photos_list.push({ n, url: value, name: params.get(`name${n}`) || '' });
   }
-
   if (!photos_list.length) return;
-
-  // Сортируем по номеру
   photos_list.sort((a, b) => a.n - b.n);
-
-  // Проверяем длину URL
   const base = window.location.origin + window.location.pathname;
-  let totalLength = base.length + 50; // запас
-
   showToast(`📂 Загружаем ${photos_list.length} фото по deeplink...`, 'info', 6000);
-
   for (const item of photos_list) {
-    // Проверяем, не превысим ли лимит ~2000 символов
     const testUrl = `${base}?photo${item.n}=${encodeURIComponent(item.url)}${item.name ? `&name${item.n}=${encodeURIComponent(item.name)}` : ''}`;
-    
-    if (testUrl.length > 2000) {
-      showToast(`⚠️ Загружено только ${photos_list.indexOf(item)} фото (URL слишком длинный)`, 'warn', 5000);
-      break;
-    }
-
+    if (testUrl.length > 2000) { showToast(`⚠️ Загружено ${photos_list.indexOf(item)} из ${photos_list.length} фото (URL слишком длинный)`, 'warn', 5000); break; }
     await loadSingleRemotePhoto(item.url, item.name);
-    totalLength = testUrl.length;
   }
-
   fitMapToPhotos();
 }
 
-// ─── Кнопка «Поделиться этими фото» ──────────────────────────────────────────
-
-/** Обновляет видимость кнопок «Поделиться» */
 function updateShareButton() {
   const show = remotePhotos.length > 0 ? 'inline-block' : 'none';
   document.getElementById('share-btn').style.display = show;
   document.getElementById('share-list-btn').style.display = show;
 }
 
-// ─── Кнопка «Зайти на основной сайт» — инвайт из EXIF UserComment ────────────
-
-/**
- * Возвращает первый валидный invite_url из данных опыта любого из загруженных фото.
- * @returns {string|null}
- */
 function getInviteUrlFromPhotos() {
   for (const p of photos) {
     const url = p.experimentData?.experiment?.invite_url;
-    if (url) {
-      try { new URL(url); return url; } catch (_) {}
-    }
+    if (url) { try { new URL(url); return url; } catch(_) {} }
   }
   return null;
 }
-
-/**
- * Показывает / скрывает кнопку #invite-btn.
- * Вызывается при добавлении, удалении фото и очистке списка.
- */
 function updateInviteButton() {
   const url = getInviteUrlFromPhotos();
-  const btn = document.getElementById('invite-btn');
-  if (!btn) return;
-  if (url) {
-    btn.href = url;
-    btn.style.display = 'flex';
-  } else {
-    btn.style.display = 'none';
-  }
+  const btn = document.getElementById('invite-btn'); if (!btn) return;
+  if (url) { btn.href = url; btn.style.display = 'flex'; } else { btn.style.display = 'none'; }
 }
 
-/**
- * Формирует share-ссылку из текущих remote-фото и копирует в буфер.
- * Сохраняет оригинальные ссылки (Яндекс / Google Drive).
- * Обрезает до ~2000 символов.
- */
 function copyShareLink() {
   const base = window.location.origin + window.location.pathname;
-  const MAX_LEN = 2000;
-  const params = new URLSearchParams();
+  const MAX_LEN = 2000, params = new URLSearchParams();
   let count = 0;
-
   for (const photo of remotePhotos) {
     count++;
     const test = new URLSearchParams(params);
     test.set(`photo${count}`, photo.originalUrl);
     if (photo.name) test.set(`name${count}`, photo.name);
-
     if (`${base}?${test}`.length > MAX_LEN) {
-      showToast(`⚠️ Вошли ${count - 1} из ${remotePhotos.length} фото (URL слишком длинный)`, 'warn', 5000);
-      count--;
-      break;
+      showToast(`⚠️ Вошли ${count-1} из ${remotePhotos.length} фото (URL слишком длинный)`, 'warn', 5000);
+      count--; break;
     }
     params.set(`photo${count}`, photo.originalUrl);
     if (photo.name) params.set(`name${count}`, photo.name);
   }
-
   if (!count) { showToast('Нет remote-фото для шаринга', 'warn'); return; }
-
   const shareUrl = `${base}?${params}`;
-
-  // URL в адресной строке НЕ меняем — только копируем
-  navigator.clipboard.writeText(shareUrl)
-    .then(() => showToast('📋 Ссылка скопирована!', 'success'))
-    .catch(() => {
-      // Фолбэк через textarea
-      const ta = document.createElement('textarea');
-      ta.value = shareUrl; ta.style.cssText = 'position:fixed;opacity:0';
-      document.body.appendChild(ta); ta.select();
-      document.execCommand('copy'); ta.remove();
-      showToast('📋 Ссылка скопирована!', 'success');
-    });
+  navigator.clipboard.writeText(shareUrl).then(() => showToast('📋 Ссылка скопирована!', 'success'))
+    .catch(() => { const ta = document.createElement('textarea'); ta.value = shareUrl; ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); showToast('📋 Ссылка скопирована!', 'success'); });
 }
 
-// ─── Кнопка «Список URL» — JSON для ?photolist= ──────────────────────────────
-
-/**
- * Копирует JSON-массив ссылок текущих remote-фото в буфер обмена.
- * Этот JSON можно:
- *  1. Сохранить на Яндекс.Диск / S3 / GDrive как .json файл
- *  2. Передать в deeplink как ?photolist=<URL файла>
- *
- * Пример итогового deeplink:
- *   https://romanbabenkorostov-ux.github.io/ekcelo/?photolist=https://disk.yandex.ru/i/XXX
- */
 function copyShareLinkMd() {
   if (!remotePhotos.length) { showToast('Нет remote-фото для шаринга', 'warn'); return; }
-
-  const list = remotePhotos.map(p => ({ url: p.originalUrl, name: p.name }));
-  const json = JSON.stringify(list, null, 2);
-
-  navigator.clipboard.writeText(json)
-    .then(() => showToast('📋 JSON-список скопирован! Сохраните в файл на Яндекс.Диске и используйте ?photolist=<URL файла>', 'success', 8000))
-    .catch(() => {
-      const ta = document.createElement('textarea');
-      ta.value = json; ta.style.cssText = 'position:fixed;opacity:0';
-      document.body.appendChild(ta); ta.select();
-      document.execCommand('copy'); ta.remove();
-      showToast('📋 JSON-список скопирован! Сохраните в файл на Яндекс.Диске и используйте ?photolist=<URL файла>', 'success', 8000);
-    });
+  const json = JSON.stringify(remotePhotos.map(p => ({ url: p.originalUrl, name: p.name })), null, 2);
+  navigator.clipboard.writeText(json).then(() => showToast('📋 JSON-список скопирован!', 'success', 8000))
+    .catch(() => { const ta = document.createElement('textarea'); ta.value = json; ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); showToast('📋 JSON-список скопирован!', 'success', 8000); });
 }
 
-// ───────────────────────────────────────────────────────────────────────────── (чтобы не тормозить при каждом клике)
-// ─────────────────────────────────────────────────────────────────────────────
 async function queryNSPDAtPoint() {
-  if (!window.lastClickedPoint) {
-    showToast('Сначала кликните по карте', 'warn');
-    return;
-  }
-
+  if (!window.lastClickedPoint) { showToast('Сначала кликните по карте', 'warn'); return; }
   const e = { latlng: window.lastClickedPoint };
   showToast('🔍 Запрос к НСПД...', 'info', 4000);
-
   const results = new Set();
-  let errorMsg = null;
-
   try {
     const promises = NSPD_IDS.map(async id => {
       const latlng = e.latlng;
@@ -1980,282 +1518,125 @@ async function queryNSPDAtPoint() {
       const cx = latlng.lng * R / 180;
       const cy = Math.log(Math.tan((90 + latlng.lat) * Math.PI / 360)) * R / Math.PI;
       const buffer = 120;
-      const bbox = `${cx - buffer},${cy - buffer},${cx + buffer},${cy + buffer}`;
-
-      const url = `https://nspd.gov.ru/api/aeggis/v3/${id}/wms?` +
-        new URLSearchParams({
-          SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetFeatureInfo',
-          LAYERS: String(id), QUERY_LAYERS: String(id),
-          INFO_FORMAT: 'text/html', FEATURE_COUNT: '20',
-          X: '128', Y: '128', WIDTH: '256', HEIGHT: '256',
-          CRS: 'EPSG:3857', BBOX: bbox, STYLES: ''
-        });
-
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const bbox = `${cx-buffer},${cy-buffer},${cx+buffer},${cy+buffer}`;
+      const url = `https://nspd.gov.ru/api/aeggis/v3/${id}/wms?`+new URLSearchParams({SERVICE:'WMS',VERSION:'1.3.0',REQUEST:'GetFeatureInfo',LAYERS:String(id),QUERY_LAYERS:String(id),INFO_FORMAT:'text/html',FEATURE_COUNT:'20',X:'128',Y:'128',WIDTH:'256',HEIGHT:'256',CRS:'EPSG:3857',BBOX:bbox,STYLES:''});
+      const res = await fetch(url); if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const text = await res.text();
-      const found = text.match(/\b(\d{2}:\d{2,3}:\d{6,10}:\d{1,6})\b/g) || [];
-      found.forEach(n => results.add(n.trim()));
+      (text.match(/\b(\d{2}:\d{2,3}:\d{6,10}:\d{1,6})\b/g) || []).forEach(n => results.add(n.trim()));
     });
-
     await Promise.allSettled(promises);
-  } catch (err) {
-    errorMsg = 'Не удалось получить данные';
-    console.warn(err);
-  }
-
-  const cadList = Array.from(results).sort();
-  const count = cadList.length;
-
-  let html = `
-    <b>📍 Координаты</b><br>
-    <code style="background:#f0f0f0;padding:4px 8px;border-radius:4px">${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}</code><br><br>`;
-
-  if (errorMsg) {
-    html += `<span style="color:#d32f2f">${errorMsg}</span>`;
-  } else if (count === 0) {
-    html += `<span style="color:#555">Участков не найдено</span>`;
-  } else {
+  } catch(err) { console.warn(err); }
+  const cadList = Array.from(results).sort(), count = cadList.length;
+  let html = `<b>📍 Координаты</b><br><code style="background:#f0f0f0;padding:4px 8px;border-radius:4px">${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}</code><br><br>`;
+  if (count === 0) html += `<span style="color:#555">Участков не найдено</span>`;
+  else {
     html += `<b>🏠 Найдено участков: ${count}</b><br>`;
-    html += cadList.map(cad => {
-      const link = `https://nspd.gov.ru/map?thematic=Default&zoom=17.5&selectedCard=${encodeURIComponent(cad)}`;
-      return `• <span style="color:#d32f2f;font-weight:700">${cad}</span> <a href="${link}" target="_blank" style="color:#1976d2">→ открыть в НСПД</a><br>`;
-    }).join('');
+    html += cadList.map(cad => `• <span style="color:#d32f2f;font-weight:700">${cad}</span> <a href="https://nspd.gov.ru/map?thematic=Default&zoom=17.5&selectedCard=${encodeURIComponent(cad)}" target="_blank" style="color:#1976d2">→ открыть в НСПД</a><br>`).join('');
   }
-
-  L.popup({ maxWidth: 300 })
-    .setLatLng(e.latlng)
-    .setContent(`<div style="font-family:system-ui;line-height:1.45;font-size:13.5px">${html}</div>`)
-    .openOn(map);
-
+  L.popup({ maxWidth: 300 }).setLatLng(e.latlng).setContent(`<div style="font-family:system-ui;line-height:1.45;font-size:13.5px">${html}</div>`).openOn(map);
   showToast(count > 0 ? `Найдено ${count} участок(-ов)` : 'Участков не найдено', count > 0 ? 'success' : 'warn');
 }
 
-// ─── Инициализация при загрузке страницы ────────────────────────────────────
 window.addEventListener('load', () => {
   updateShareButton();
   loadPhotosFromUrl();
-  initTimeline();                    // ← запуск таймлайна
+  initTimeline();
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
-// ТЗ 2: РУЧНОЙ GPS — указание координат и угла съёмки, запись в EXIF
+// РУЧНОЙ GPS
 // ═════════════════════════════════════════════════════════════════════════════
+let manualGPSActive = false, manualModePhotoIndex = null, manualInputMode = 'map';
+let tempLat = null, tempLon = null, tempBearing = 0, tempMarker = null;
 
-// ─── Состояние режима ────────────────────────────────────────────────────────
-let manualGPSActive        = false;  // режим активен
-let manualModePhotoIndex   = null;   // индекс фото в массиве photos
-let manualInputMode        = 'map';  // 'map' | 'text' — способ ввода координат
-let tempLat                = null;   // временные координаты
-let tempLon                = null;
-let tempBearing            = 0;      // временный угол (0–359)
-let tempMarker             = null;   // временный маркер на карте
-
-// ─── Вход в режим ────────────────────────────────────────────────────────────
-
-/**
- * Активирует режим ручного GPS для фото с индексом idx.
- * Фото должно не иметь GPS (p.lat === null).
- */
 function enterManualGPSMode(idx) {
-  const p = photos[idx];
-  if (!p) return;
-
-  // Если фото уже имеет GPS — выходим (кроме случая, когда хотим только добавить/изменить угол)
-  if (p.lat !== null && p.lon !== null && p.bearing !== null && p.bearing !== 0) {
-    return;
-  }
-
-  // Сбрасываем предыдущий режим, если был активен
-  if (manualGPSActive) {
-    exitManualGPSMode(true);
-  }
-
-  manualGPSActive = true;
-  manualModePhotoIndex = idx;
-  tempLat = null;
-  tempLon = null;
-  tempBearing = 0;
-
-  // Предзаполняем данные из фото, если они есть
-  if (p.lat !== null && p.lon !== null) {
-    tempLat = p.lat;
-    tempLon = p.lon;
-  }
-
-  if (p.bearing !== null && !isNaN(p.bearing)) {
-    tempBearing = Math.round(p.bearing);
-  }
-
-  // Подсвечиваем фото в списке
+  const p = photos[idx]; if (!p) return;
+  if (p.lat !== null && p.lon !== null && p.bearing !== null && p.bearing !== 0) return;
+  if (manualGPSActive) exitManualGPSMode(true);
+  manualGPSActive = true; manualModePhotoIndex = idx;
+  tempLat = null; tempLon = null; tempBearing = 0;
+  if (p.lat !== null && p.lon !== null) { tempLat = p.lat; tempLon = p.lon; }
+  if (p.bearing !== null && !isNaN(p.bearing)) tempBearing = Math.round(p.bearing);
   renderList();
-
-  // Активируем режим карты по умолчанию
   setGPSInputMode('map');
-
-  // Показываем панель ручного GPS
   const panel = document.getElementById('manual-gps-panel');
-  if (panel) {
-    panel.classList.add('visible');
-    panel.style.zIndex = '750';           // поднимаем над лайтбоксом
-  }
-
+  if (panel) { panel.classList.add('visible'); panel.style.zIndex = '750'; }
   document.getElementById('mgps-title').textContent = `📍 Ручной GPS — ${p.name}`;
-
-  // Предзаполняем координаты, если они есть
   const coordsEl = document.getElementById('mgps-coords-display');
   if (tempLat !== null && tempLon !== null) {
-    coordsEl.textContent = `${tempLat.toFixed(6)}, ${tempLon.toFixed(6)}`;
-    coordsEl.classList.add('set');
+    coordsEl.textContent = `${tempLat.toFixed(6)}, ${tempLon.toFixed(6)}`; coordsEl.classList.add('set');
     document.getElementById('mgps-bearing-wrap').style.display = 'block';
     document.getElementById('mgps-save-btn').disabled = false;
   } else {
-    coordsEl.textContent = '— координаты не выбраны —';
-    coordsEl.classList.remove('set');
+    coordsEl.textContent = '— координаты не выбраны —'; coordsEl.classList.remove('set');
     document.getElementById('mgps-bearing-wrap').style.display = 'none';
     document.getElementById('mgps-save-btn').disabled = true;
   }
-
-  // Предзаполняем угол
   document.getElementById('mgps-bearing').value = tempBearing;
   document.getElementById('mgps-bearing-val').textContent = tempBearing + '°';
-
-  showToast('📍 Кликните на карте для установки точки съёмки (или введите угол)', 'info', 5000);
+  showToast('📍 Кликните на карте для установки точки съёмки', 'info', 5000);
 }
 
-/**
- * Переключает способ ввода координат: 'map' или 'text'
- */
 function setGPSInputMode(mode) {
   manualInputMode = mode;
-  const mapBtn  = document.getElementById('mgps-btn-map');
-  const textBtn = document.getElementById('mgps-btn-text');
+  const mapBtn = document.getElementById('mgps-btn-map'), textBtn = document.getElementById('mgps-btn-text');
   const textWrap = document.getElementById('mgps-coord-input-wrap');
   const hintOverlay = document.getElementById('gps-hint-overlay');
-  const mapWrap  = document.getElementById('map-wrap');
-
+  const mapWrap = document.getElementById('map-wrap');
   if (mode === 'map') {
     mapBtn.classList.add('active'); textBtn.classList.remove('active');
-    textWrap.style.display = 'none';
-    hintOverlay.classList.add('visible');
-    mapWrap.classList.add('gps-picking');
+    textWrap.style.display = 'none'; hintOverlay.classList.add('visible'); mapWrap.classList.add('gps-picking');
   } else {
     textBtn.classList.add('active'); mapBtn.classList.remove('active');
-    textWrap.style.display = 'block';
-    hintOverlay.classList.remove('visible');
-    mapWrap.classList.remove('gps-picking');
+    textWrap.style.display = 'block'; hintOverlay.classList.remove('visible'); mapWrap.classList.remove('gps-picking');
     document.getElementById('mgps-coord-field').focus();
   }
 }
 
-// ─── Выход из режима ────────────────────────────────────────────────────────
-
-/**
- * Выключает режим ручного GPS, удаляет временный маркер.
- * @param {boolean} silent — без уведомления (для внутренних сбросов)
- */
 function exitManualGPSMode(silent = false) {
-  manualGPSActive = false;
-  manualModePhotoIndex = null;
-  tempLat = null;
-  tempLon = null;
-  tempBearing = 0;
-
-  // Удаляем временный маркер
-  if (tempMarker) {
-    map.removeLayer(tempMarker);
-    tempMarker = null;
-  }
-
-  // Скрываем панель
-  const panel = document.getElementById('manual-gps-panel');
-  if (panel) {
-    panel.classList.remove('visible');
-  }
-
+  manualGPSActive = false; manualModePhotoIndex = null; tempLat = null; tempLon = null; tempBearing = 0;
+  if (tempMarker) { map.removeLayer(tempMarker); tempMarker = null; }
+  const panel = document.getElementById('manual-gps-panel'); if (panel) panel.classList.remove('visible');
   document.getElementById('gps-hint-overlay').classList.remove('visible');
   document.getElementById('map-wrap').classList.remove('gps-picking');
-
   renderList();
-
-  if (!silent) {
-    showToast('Режим GPS отменён');
-  }
+  if (!silent) showToast('Режим GPS отменён');
 }
 
-// ─── Обработчик клика по карте в режиме GPS ──────────────────────────────────
-
-/**
- * Вызывается из обработчика map.on('click') когда manualGPSActive = true.
- * Устанавливает временные координаты и перерисовывает маркер.
- */
 function handleMapClickForGPS(e) {
-  tempLat = e.latlng.lat;
-  tempLon = e.latlng.lng;
-  updateTempMarker();
-  onCoordsSet();
+  tempLat = e.latlng.lat; tempLon = e.latlng.lng;
+  updateTempMarker(); onCoordsSet();
 }
 
-// ─── Ввод координат текстом ──────────────────────────────────────────────────
-
-/**
- * Применяет координаты из текстового поля.
- * Поддерживает форматы:
- *   47.373533, 39.899542
- *   47°22'24.72"С 39°53'58.35"В  (С=N, Ю=S, В=E, З=W)
- */
 function applyCoordInput() {
   const raw = document.getElementById('mgps-coord-field').value.trim();
   const result = parseCoordInput(raw);
-  if (!result) {
-    showToast('❌ Не удалось разобрать координаты. Пример: 47.373533, 39.899542', 'error');
-    return;
-  }
+  if (!result) { showToast('❌ Не удалось разобрать координаты. Пример: 47.373533, 39.899542', 'error'); return; }
   tempLat = result.lat; tempLon = result.lon;
   updateTempMarker();
-  // Центрируем карту
   map.setView([tempLat, tempLon], Math.max(map.getZoom(), 14), { animate: true });
   onCoordsSet();
 }
 
-/**
- * Парсит строку с координатами.
- * @returns {{ lat: number, lon: number } | null}
- */
 function parseCoordInput(str) {
   str = str.trim().replace(/\s+/g, ' ');
-
-  // Формат 1: "47.373533, 39.899542" или "47.373533 39.899542"
   const dec = str.match(/^(-?[\d.]+)[,\s]+(-?[\d.]+)$/);
-  if (dec) {
-    const lat = parseFloat(dec[1]), lon = parseFloat(dec[2]);
-    if (!isNaN(lat) && !isNaN(lon)) return { lat, lon };
-  }
-
-  // Формат 2: "47°22'24.72"С 39°53'58.35"В"
-  // Разрешаем разные виды кавычек и градусных знаков
+  if (dec) { const lat = parseFloat(dec[1]), lon = parseFloat(dec[2]); if (!isNaN(lat) && !isNaN(lon)) return { lat, lon }; }
   const DMS = /(\d+)[°]\s*(\d+)['''`]\s*([\d.]+)["""″'']\s*([СсNn]|[ЮюSs])\s+(\d+)[°]\s*(\d+)['''`]\s*([\d.]+)["""″'']\s*([ВвEe]|[ЗзWw])/;
   const m = str.match(DMS);
   if (m) {
-    const dmsToDecimal = (d, min, sec) => parseInt(d) + parseInt(min) / 60 + parseFloat(sec) / 3600;
-    let lat = dmsToDecimal(m[1], m[2], m[3]);
-    let lon = dmsToDecimal(m[5], m[6], m[7]);
-    const latRef = m[4].toUpperCase();
-    const lonRef = m[8].toUpperCase();
-    if (latRef === 'Ю' || latRef === 'S') lat = -lat;
-    if (lonRef === 'З' || lonRef === 'W') lon = -lon;
+    const dms = (d, min, sec) => parseInt(d) + parseInt(min)/60 + parseFloat(sec)/3600;
+    let lat = dms(m[1], m[2], m[3]), lon = dms(m[5], m[6], m[7]);
+    if (/[ЮюSs]/.test(m[4])) lat = -lat;
+    if (/[ЗзWw]/.test(m[8])) lon = -lon;
     return { lat, lon };
   }
-
   return null;
 }
 
-// ─── Координаты установлены — обновляем UI ───────────────────────────────────
-
 function onCoordsSet() {
   const coordsEl = document.getElementById('mgps-coords-display');
-  coordsEl.textContent = `${tempLat.toFixed(6)}, ${tempLon.toFixed(6)}`;
-  coordsEl.classList.add('set');
+  coordsEl.textContent = `${tempLat.toFixed(6)}, ${tempLon.toFixed(6)}`; coordsEl.classList.add('set');
   document.getElementById('mgps-bearing-wrap').style.display = 'block';
   document.getElementById('mgps-save-btn').disabled = false;
   document.getElementById('gps-hint-overlay').classList.remove('visible');
@@ -2263,84 +1644,72 @@ function onCoordsSet() {
   showToast(`📍 ${tempLat.toFixed(5)}, ${tempLon.toFixed(5)}`, 'success', 2000);
 }
 
-// ─── Временный маркер на карте ────────────────────────────────────────────────
-
-/**
- * Создаёт или обновляет временный маркер с текущим углом tempBearing.
- */
-function updateTempMarker() {
-  if (tempMarker) map.removeLayer(tempMarker);
-  if (tempLat === null) return;
-
-  const bearing = tempBearing;
-  const hb = bearing !== null, S = hb ? 100 : 20;
-  const html = `<div class="pm-wrap" style="width:${S}px;height:${S}px">`
-    + fovSvgAccent(bearing, S / 2)
-    + `<div class="marker-dot temp"></div></div>`;
-  const icon = L.divIcon({ html, className: '', iconSize: [S, S], iconAnchor: [S / 2, S / 2] });
-  tempMarker = L.marker([tempLat, tempLon], { icon, zIndexOffset: 1000 }).addTo(map);
-}
-
-/**
- * SVG конуса для временного маркера — другой цвет (accent2)
- */
+// ─── Temp marker — headlight beam (blue/accent2), hit area 20px ──────────────
 function fovSvgAccent(bearing, R) {
   if (bearing === null || isNaN(bearing)) return '';
-  const fov = 55, cx = R, cy = R;
-  const al = (bearing - fov - 90) * Math.PI / 180;
-  const ar = (bearing + fov - 90) * Math.PI / 180;
-  const x1 = cx + R * Math.cos(al), y1 = cy + R * Math.sin(al);
-  const x2 = cx + R * Math.cos(ar), y2 = cy + R * Math.sin(ar);
-  const nx = cx + R * .5 * Math.cos((bearing - 90) * Math.PI / 180);
-  const ny = cy + R * .5 * Math.sin((bearing - 90) * Math.PI / 180);
-  const S = R * 2;
+  const cx = R, cy = R, S = R * 2;
+  const rad = a => a * Math.PI / 180;
+  const b = bearing - 90;
+  const oL = rad(b-65), oR = rad(b+65);
+  const ox1 = cx+R*Math.cos(oL), oy1 = cy+R*Math.sin(oL);
+  const ox2 = cx+R*Math.cos(oR), oy2 = cy+R*Math.sin(oR);
+  const iL = rad(b-22), iR = rad(b+22);
+  const ix1 = cx+R*Math.cos(iL), iy1 = cy+R*Math.sin(iL);
+  const ix2 = cx+R*Math.cos(iR), iy2 = cy+R*Math.sin(iR);
+  const nx = cx+R*.55*Math.cos(rad(b)), ny = cy+R*.55*Math.sin(rad(b));
   return `<svg width="${S}" height="${S}" viewBox="0 0 ${S} ${S}" `
-    + `style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none">`
-    + `<path d="M${cx},${cy} L${x1},${y1} A${R},${R} 0 0,1 ${x2},${y2} Z" `
-    + `fill="rgba(71,200,255,.18)" stroke="#47c8ff" stroke-width="1.2" stroke-linejoin="round"/>`
-    + `<line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="#47c8ff" stroke-width="1.5" stroke-linecap="round" opacity=".9"/>`
+    + `style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;overflow:visible">`
+    + `<path d="M${cx},${cy} L${ox1},${oy1} A${R},${R} 0 0,1 ${ox2},${oy2} Z" fill="rgba(71,200,255,0.04)" stroke="none"/>`
+    + `<path d="M${cx},${cy} L${ix1},${iy1} A${R},${R} 0 0,1 ${ix2},${iy2} Z" `
+    + `fill="rgba(71,200,255,0.08)" stroke="rgba(71,200,255,0.22)" stroke-width="0.8" stroke-linejoin="round"/>`
+    + `<line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="rgba(71,200,255,0.60)" stroke-width="1.3" stroke-linecap="round"/>`
     + `</svg>`;
 }
 
-// ─── Слайдер угла ────────────────────────────────────────────────────────────
+function updateTempMarker() {
+  if (tempMarker) map.removeLayer(tempMarker);
+  if (tempLat === null) return;
+  const bearing = tempBearing, hb = bearing !== null;
+  const S = 100, HIT = 20;
+  let html;
+  if (hb) {
+    html = `<div style="width:${HIT}px;height:${HIT}px;position:relative;overflow:visible">`
+      + `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:${S}px;height:${S}px;pointer-events:none">`
+      + fovSvgAccent(bearing, S / 2)
+      + `</div><div class="marker-dot temp"></div></div>`;
+  } else {
+    html = `<div style="width:${HIT}px;height:${HIT}px;position:relative"><div class="marker-dot temp"></div></div>`;
+  }
+  const icon = L.divIcon({ html, className:'', iconSize:[HIT,HIT], iconAnchor:[HIT/2,HIT/2] });
+  tempMarker = L.marker([tempLat, tempLon], { icon, zIndexOffset:1000 }).addTo(map);
+}
 
-/**
- * Вызывается oninput слайдера — обновляет угол и перерисовывает маркер.
- */
 function onBearingSlider(val) {
   tempBearing = parseInt(val, 10);
   document.getElementById('mgps-bearing-val').textContent = tempBearing + '°';
   if (tempLat !== null) updateTempMarker();
 }
 
-// Колёсико мыши на слайдере
 document.getElementById('mgps-bearing').addEventListener('wheel', function(e) {
   e.preventDefault();
   const delta = e.deltaY < 0 ? 1 : -1;
   const newVal = ((parseInt(this.value, 10) + delta + 360) % 360);
-  this.value = newVal;
-  onBearingSlider(newVal);
+  this.value = newVal; onBearingSlider(newVal);
 }, { passive: false });
 
-// ─── Запись EXIF ─────────────────────────────────────────────────────────────
-
-/**
- * Конвертирует десятичные градусы в формат piexif: [[deg,1],[min,1],[sec*100,100]]
- * @returns {[Array, string]} [dmsArray, ref]
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// EXIF WRITE — preserves DateTimeOriginal; system file date = now (browser limit)
+// Supports local files AND remote files (downloads blob, modifies, offers download)
+// ─────────────────────────────────────────────────────────────────────────────
 function decimalToDMSForPiexif(decimal, axis) {
-  const ref = axis === 'lat'
-    ? (decimal >= 0 ? 'N' : 'S')
-    : (decimal >= 0 ? 'E' : 'W');
+  const ref = axis === 'lat' ? (decimal >= 0 ? 'N' : 'S') : (decimal >= 0 ? 'E' : 'W');
   const abs = Math.abs(decimal);
   const deg = Math.floor(abs);
-  const minF = (abs - deg) * 60;
-  const min  = Math.floor(minF);
-  const secInt = Math.round((minF - min) * 6000); // sec * 100 для знаменателя 100
-  return [[[deg, 1], [min, 1], [secInt, 100]], ref];
+  const minF = (abs - deg) * 60, min = Math.floor(minF);
+  const secInt = Math.round((minF - min) * 6000);
+  return [[[deg,1],[min,1],[secInt,100]], ref];
 }
 
-/** Конвертирует Blob/File в Data URL */
 function blobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
@@ -2349,192 +1718,112 @@ function blobToDataUrl(blob) {
     r.readAsDataURL(blob);
   });
 }
-
-/** Конвертирует Data URL в Blob */
 function dataUrlToBlob(dataUrl) {
   const [meta, b64] = dataUrl.split(',');
   const mime = (meta.match(/:(.*?);/) || [])[1] || 'image/jpeg';
-  const bin  = atob(b64);
-  const arr  = new Uint8Array(bin.length);
+  const bin = atob(b64), arr = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
   return new Blob([arr], { type: mime });
 }
 
-/**
- * Записывает GPS + угол в EXIF файла и предлагает скачать.
- * После успеха обновляет фото в реестре и добавляет маркер на карту.
- */
 async function writeEXIFWithGPS() {
-  if (tempLat === null || tempLon === null) {
-    showToast('❌ Сначала укажите координаты', 'error'); return;
-  }
-  const idx = manualModePhotoIndex;
-  const p   = photos[idx];
-  if (!p) return;
-
+  if (tempLat === null || tempLon === null) { showToast('❌ Сначала укажите координаты', 'error'); return; }
+  const idx = manualModePhotoIndex, p = photos[idx]; if (!p) return;
   document.getElementById('mgps-save-btn').disabled = true;
   showToast('⏳ Записываем EXIF…', 'info', 8000);
 
-  // Получаем бинарные данные файла
   let blob = null;
   try {
-    if (p.file) {
-      // Локальный файл
-      blob = p.file;
-    } else if (p.originalBlob) {
-      // Remote — уже скачан при загрузке
-      blob = p.originalBlob;
-    } else if (p.remoteViewUrl) {
-      // Remote — нужно скачать
-      showToast('⏳ Скачиваем оригинал…', 'info', 8000);
+    if (p.file) blob = p.file;
+    else if (p.originalBlob) blob = p.originalBlob;
+    else if (p.remoteViewUrl) {
+      showToast('⏳ Скачиваем оригинал для записи EXIF…', 'info', 8000);
       const rtype = detectRemoteType(p.remoteViewUrl);
-      if (rtype === 'yandex') {
-        blob = await fetchYandexBlob(p.remoteViewUrl);
-      } else {
+      if (rtype === 'yandex') blob = await fetchYandexBlob(p.remoteViewUrl);
+      else {
         const resp = await fetchTimeout(await getDirectUrlForFetch(p.remoteViewUrl), 20000);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         blob = await resp.blob();
       }
-    } else {
-      throw new Error('Нет источника для записи EXIF');
-    }
+    } else throw new Error('Нет источника для записи EXIF');
   } catch (err) {
     showToast(`❌ Не удалось получить файл: ${err.message}`, 'error', 6000);
-    document.getElementById('mgps-save-btn').disabled = false;
-    return;
+    document.getElementById('mgps-save-btn').disabled = false; return;
   }
 
-  // Конвертируем в DataURL для piexifjs
   let dataUrl;
-  try {
-    dataUrl = await blobToDataUrl(blob);
-  } catch (err) {
-    showToast('❌ Ошибка чтения файла', 'error'); return;
-  }
+  try { dataUrl = await blobToDataUrl(blob); }
+  catch (err) { showToast('❌ Ошибка чтения файла', 'error'); return; }
 
-  // Загружаем/создаём EXIF-объект
-  let exifObj = { '0th': {}, 'Exif': {}, 'GPS': {}, '1st': {} };
+  // Load existing EXIF (preserves DateTimeOriginal and all other tags)
+  let exifObj = { '0th':{}, 'Exif':{}, 'GPS':{}, '1st':{} };
   try { exifObj = piexif.load(dataUrl); } catch(e) {}
   if (!exifObj['GPS']) exifObj['GPS'] = {};
 
-  // Записываем GPS
+  // Write only GPS fields — all date/time EXIF tags are preserved as-is
   const [latDMS, latRef] = decimalToDMSForPiexif(tempLat, 'lat');
   const [lonDMS, lonRef] = decimalToDMSForPiexif(tempLon, 'lon');
-
   exifObj['GPS'][piexif.GPSIFD.GPSLatitude]        = latDMS;
   exifObj['GPS'][piexif.GPSIFD.GPSLatitudeRef]     = latRef;
   exifObj['GPS'][piexif.GPSIFD.GPSLongitude]       = lonDMS;
   exifObj['GPS'][piexif.GPSIFD.GPSLongitudeRef]    = lonRef;
   exifObj['GPS'][piexif.GPSIFD.GPSImgDirection]    = [Math.round(tempBearing * 100), 100];
-  exifObj['GPS'][piexif.GPSIFD.GPSImgDirectionRef] = 'T'; // True north
+  exifObj['GPS'][piexif.GPSIFD.GPSImgDirectionRef] = 'T';
 
-  // Вставляем EXIF обратно в JPEG
   let newDataUrl;
   try {
     const exifBytes = piexif.dump(exifObj);
     newDataUrl = piexif.insert(exifBytes, dataUrl);
   } catch (err) {
     showToast(`❌ Ошибка записи EXIF: ${err.message}`, 'error', 6000);
-    console.error('[ekcelo] piexif error:', err);
-    document.getElementById('mgps-save-btn').disabled = false;
-    return;
+    document.getElementById('mgps-save-btn').disabled = false; return;
   }
 
-  // Предлагаем скачать модифицированный файл
   const a = document.createElement('a');
-  a.href = newDataUrl;
-  a.download = p.name;
-  a.click();
+  a.href = newDataUrl; a.download = p.name; a.click();
 
-  // Обновляем фото в реестре
-  const newBlob    = dataUrlToBlob(newDataUrl);
+  const newBlob = dataUrlToBlob(newDataUrl);
   const newBlobUrl = URL.createObjectURL(newBlob);
-
-  // Освобождаем старый ObjectURL если это был локальный файл
   if (!p.isRemote && p.displayUrl) URL.revokeObjectURL(p.displayUrl);
-
-  p.lat        = tempLat;
-  p.lon        = tempLon;
-  p.bearing    = tempBearing === 0 ? null : tempBearing;
-  p.displayUrl = newBlobUrl;
-  p.thumbUrl   = newBlobUrl;
-  p.originalBlob = newBlob;
-
-  // Удаляем старый маркер, добавляем новый
-  if (p.marker) map.removeLayer(p.marker);
-  p.marker = null;
-  addMarker(p, idx);
-  rebuildMarkerListeners();
-
-  updateStats(); renderList();
-  fitMapToPhotos();
-
-  // Выходим из режима
+  p.lat = tempLat; p.lon = tempLon;
+  p.bearing = tempBearing === 0 ? null : tempBearing;
+  p.displayUrl = newBlobUrl; p.thumbUrl = newBlobUrl; p.originalBlob = newBlob;
+  if (p.marker) map.removeLayer(p.marker); p.marker = null;
+  addMarker(p, idx); rebuildMarkerListeners();
+  updateStats(); renderList(); fitMapToPhotos();
   exitManualGPSMode(true);
-  showToast('✅ EXIF записан, файл скачан!', 'success', 4000);
+  showToast('✅ EXIF записан, файл скачан! Дата съёмки сохранена.', 'success', 4000);
 }
-/* ─────────────────────────────────────────────────────────────────────────────
-   ТАЙМЛАЙН — УЛУЧШЕННАЯ ВЕРСИЯ С РЕЖИМАМИ (2026)
-   ───────────────────────────────────────────────────────────────────────────── */
 
-let filterStart = null;
-let filterEnd = null;
-let minDateGlobal = null;
-let maxDateGlobal = null;
-let datedPhotosGlobal = [];
-let timelineMode = 'full'; // 'full' или 'zoom'
+// ═════════════════════════════════════════════════════════════════════════════
+// TIMELINE
+// ═════════════════════════════════════════════════════════════════════════════
+let filterStart = null, filterEnd = null, minDateGlobal = null, maxDateGlobal = null;
+let datedPhotosGlobal = [], timelineMode = 'full';
 
 function parsePhotoDate(dateInput) {
   if (!dateInput) return null;
   if (dateInput instanceof Date) return new Date(dateInput);
   const str = String(dateInput);
   const match = str.match(/(\d{4})[:\-](\d{2})[:\-](\d{2})[T\s](\d{2})[:\-](\d{2})[:\-](\d{2})/);
-  if (match) {
-    const [_, y, mo, d, h, mi, s] = match;
-    return new Date(+y, +mo - 1, +d, +h, +mi, +s);
-  }
+  if (match) { const [_, y, mo, d, h, mi, s] = match; return new Date(+y, +mo-1, +d, +h, +mi, +s); }
   return null;
 }
 
-/**
- * Парсит обогащённые данные опыта из EXIF UserComment (GPP формат)
- * Возвращает объект experiment или null
- */
 function parseGPPUserComment(exif) {
   if (!exif || !exif.UserComment) return null;
-
   let raw = exif.UserComment;
-
-  // exifr может вернуть строку или Uint8Array
-  if (typeof raw === 'string') {
-    raw = new TextEncoder().encode(raw);
-  }
-
-  // Проверяем префикс ASCII\x00\x00\x00 (8 байт)
-  const prefixASCII = new Uint8Array([0x41, 0x53, 0x43, 0x49, 0x49, 0x00, 0x00, 0x00]);
-
+  if (typeof raw === 'string') raw = new TextEncoder().encode(raw);
+  const prefixASCII = new Uint8Array([0x41,0x53,0x43,0x49,0x49,0x00,0x00,0x00]);
   let jsonBytes;
-  if (raw.length >= 8 && raw.slice(0, 8).every((byte, i) => byte === prefixASCII[i])) {
-    jsonBytes = raw.slice(8);
-  } else {
-    jsonBytes = raw; // пробуем как есть
-  }
-
+  if (raw.length >= 8 && raw.slice(0,8).every((byte,i) => byte === prefixASCII[i])) jsonBytes = raw.slice(8);
+  else jsonBytes = raw;
   try {
-    const jsonStr = new TextDecoder('utf-8').decode(jsonBytes).replace(/\0/g, '').trim();
+    const jsonStr = new TextDecoder('utf-8').decode(jsonBytes).replace(/\0/g,'').trim();
     const data = JSON.parse(jsonStr);
-
     if (data.app !== 'gpp' || !data.exp) return null;
-
-    return {
-      version: data.v || 1,
-      experiment: data.exp,
-      photoMeta: data.photo || {}
-    };
-  } catch (e) {
-    console.warn('Не удалось распарсить GPP UserComment', e);
-    return null;
-  }
+    return { version: data.v || 1, experiment: data.exp, photoMeta: data.photo || {} };
+  } catch(e) { console.warn('GPP UserComment parse error', e); return null; }
 }
 
 function isPhotoInRange(p) {
@@ -2544,61 +1833,43 @@ function isPhotoInRange(p) {
 
 function updateMarkerOpacities() {
   photos.forEach(p => {
-    if (p.marker && typeof p.marker.setOpacity === 'function') {
-      p.marker.setOpacity(isPhotoInRange(p) ? 1 : 0.25);
-    }
+    if (p.marker && typeof p.marker.setOpacity === 'function') p.marker.setOpacity(isPhotoInRange(p) ? 1 : 0.25);
   });
 }
 
 function updateTimelineData() {
-  datedPhotosGlobal = photos
-    .filter(p => p.dateObj instanceof Date)
-    .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
-
-  if (datedPhotosGlobal.length === 0) {
-    document.getElementById('timeline').classList.remove('visible');
-    return;
-  }
-
+  datedPhotosGlobal = photos.filter(p => p.dateObj instanceof Date).sort((a,b) => a.dateObj.getTime() - b.dateObj.getTime());
+  if (!datedPhotosGlobal.length) { document.getElementById('timeline').classList.remove('visible'); return; }
   minDateGlobal = datedPhotosGlobal[0].dateObj;
-  maxDateGlobal = datedPhotosGlobal[datedPhotosGlobal.length - 1].dateObj;
-
-  // Исправление: при старте и дозагрузке бегунки должны быть по краям
+  maxDateGlobal = datedPhotosGlobal[datedPhotosGlobal.length-1].dateObj;
   filterStart = new Date(minDateGlobal.getTime());
   filterEnd   = new Date(maxDateGlobal.getTime());
-
   document.getElementById('timeline').classList.add('visible');
   renderTimeline();
 }
 
 function formatDateShort(d) {
   if (!d) return '';
-  const pad = n => String(n).padStart(2, '0');
+  const pad = n => String(n).padStart(2,'0');
   return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${String(d.getFullYear()).slice(2)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function renderTimeline() {
   if (!minDateGlobal || !maxDateGlobal) return;
-
   const fullDuration = maxDateGlobal.getTime() - minDateGlobal.getTime();
   const track = document.getElementById('timeline-track');
-
   track.querySelectorAll('.timeline-dot').forEach(d => d.remove());
 
   datedPhotosGlobal.forEach(p => {
     let perc = 0;
-    if (timelineMode === 'full') {
-      perc = ((p.dateObj.getTime() - minDateGlobal.getTime()) / fullDuration) * 100;
-    } else {
+    if (timelineMode === 'full') perc = ((p.dateObj.getTime() - minDateGlobal.getTime()) / fullDuration) * 100;
+    else {
       const selDur = filterEnd.getTime() - filterStart.getTime();
       if (selDur > 0) perc = ((p.dateObj.getTime() - filterStart.getTime()) / selDur) * 100;
     }
-
     const dot = document.createElement('div');
-    dot.className = 'timeline-dot';
-    dot.style.left = `${Math.max(2, Math.min(98, perc))}%`;   // отступ от краёв
+    dot.className = 'timeline-dot'; dot.style.left = `${Math.max(2, Math.min(98, perc))}%`;
     dot.title = formatDate(p.dateObj);
-
     if (isPhotoInRange(p)) dot.classList.add('in-range');
     track.appendChild(dot);
   });
@@ -2608,237 +1879,115 @@ function renderTimeline() {
     startPerc = ((filterStart.getTime() - minDateGlobal.getTime()) / fullDuration) * 100;
     endPerc   = ((filterEnd.getTime()   - minDateGlobal.getTime()) / fullDuration) * 100;
   }
-
   startPerc = Math.max(0, Math.min(100, startPerc));
   endPerc   = Math.max(startPerc, Math.min(100, endPerc));
-
   document.getElementById('handle-start').style.left = `${startPerc}%`;
   document.getElementById('handle-end').style.left   = `${endPerc}%`;
-
   updateSelectedBar();
-
   document.getElementById('min-date-label').textContent = formatDateShort(minDateGlobal);
   document.getElementById('max-date-label').textContent = formatDateShort(maxDateGlobal);
-  document.getElementById('range-display').innerHTML = 
-    `<b>${formatDateShort(filterStart)}</b> — <b>${formatDateShort(filterEnd)}</b>`;
-
-  // Точное время при < 48 часов
-  const selectedHours = (filterEnd.getTime() - filterStart.getTime()) / (1000 * 60 * 60);
+  document.getElementById('range-display').innerHTML = `<b>${formatDateShort(filterStart)}</b> — <b>${formatDateShort(filterEnd)}</b>`;
+  const selectedHours = (filterEnd.getTime() - filterStart.getTime()) / (1000*60*60);
   const fineEl = document.getElementById('time-fine-controls');
   if (selectedHours < 48 && selectedHours > 0) {
     fineEl.style.display = 'flex';
-    document.getElementById('start-time-input').value = 
-      `${String(filterStart.getHours()).padStart(2,'0')}:${String(filterStart.getMinutes()).padStart(2,'0')}`;
-    document.getElementById('end-time-input').value = 
-      `${String(filterEnd.getHours()).padStart(2,'0')}:${String(filterEnd.getMinutes()).padStart(2,'0')}`;
-  } else {
-    fineEl.style.display = 'none';
-  }
+    document.getElementById('start-time-input').value = `${String(filterStart.getHours()).padStart(2,'0')}:${String(filterStart.getMinutes()).padStart(2,'0')}`;
+    document.getElementById('end-time-input').value   = `${String(filterEnd.getHours()).padStart(2,'0')}:${String(filterEnd.getMinutes()).padStart(2,'0')}`;
+  } else { fineEl.style.display = 'none'; }
 }
 
 function updateSelectedBar() {
   const bar = document.getElementById('selected-bar');
   const s = parseFloat(document.getElementById('handle-start').style.left) || 0;
   const e = parseFloat(document.getElementById('handle-end').style.left) || 100;
-  bar.style.left = `${s}%`;
-  bar.style.width = `${e - s}%`;
+  bar.style.left = `${s}%`; bar.style.width = `${e - s}%`;
 }
 
-// Выделение точки на таймлайне красным (при клике на карту или лайтбокс)
 function highlightTimelineDot(photo) {
-  // Убираем предыдущее выделение
-  document.querySelectorAll('.timeline-dot').forEach(dot => {
-    dot.classList.remove('active-dot');
-  });
-
+  document.querySelectorAll('.timeline-dot').forEach(dot => dot.classList.remove('active-dot'));
   if (!photo || !photo.dateObj) return;
-
-  const duration = maxDateGlobal.getTime() - minDateGlobal.getTime();
-  if (duration <= 0) return;
-
+  const duration = maxDateGlobal.getTime() - minDateGlobal.getTime(); if (duration <= 0) return;
   let perc = 0;
-  if (timelineMode === 'full') {
-    perc = ((photo.dateObj.getTime() - minDateGlobal.getTime()) / duration) * 100;
-  } else {
-    const selDur = filterEnd.getTime() - filterStart.getTime();
-    if (selDur > 0) perc = ((photo.dateObj.getTime() - filterStart.getTime()) / selDur) * 100;
-  }
-
-  // Находим ближайшую точку и выделяем её
-  let closestDot = null;
-  let minDiff = Infinity;
-
+  if (timelineMode === 'full') perc = ((photo.dateObj.getTime() - minDateGlobal.getTime()) / duration) * 100;
+  else { const selDur = filterEnd.getTime() - filterStart.getTime(); if (selDur > 0) perc = ((photo.dateObj.getTime() - filterStart.getTime()) / selDur) * 100; }
+  let closestDot = null, minDiff = Infinity;
   document.querySelectorAll('.timeline-dot').forEach(dot => {
-    const dotPerc = parseFloat(dot.style.left);
-    const diff = Math.abs(dotPerc - perc);
-    if (diff < minDiff) {
-      minDiff = diff;
-      closestDot = dot;
-    }
+    const diff = Math.abs(parseFloat(dot.style.left) - perc);
+    if (diff < minDiff) { minDiff = diff; closestDot = dot; }
   });
-
-  if (closestDot) {
-    closestDot.classList.add('active-dot');
-  }
+  if (closestDot) closestDot.classList.add('active-dot');
 }
 
 function initTimeline() {
   const track = document.getElementById('timeline-track');
-  const startH = document.getElementById('handle-start');
-  const endH = document.getElementById('handle-end');
+  const startH = document.getElementById('handle-start'), endH = document.getElementById('handle-end');
   let dragging = null;
 
-  // Переключатель режимов
   document.querySelectorAll('.timeline-mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const newMode = btn.dataset.mode;
-  
       if (newMode === 'full' && timelineMode === 'zoom') {
-        // При переходе из "Выделенный период" в "Весь диапазон" — расширяем, но сохраняем выбранный интервал внутри
-        const currentStartTime = filterStart ? filterStart.getTime() : minDateGlobal.getTime();
-        const currentEndTime   = filterEnd   ? filterEnd.getTime()   : maxDateGlobal.getTime();
-  
-        filterStart = new Date(minDateGlobal.getTime());
-        filterEnd   = new Date(maxDateGlobal.getTime());
-  
-        // Если выбранный ранее интервал всё ещё внутри полного — оставляем его
-        if (currentStartTime > filterStart.getTime() && currentEndTime < filterEnd.getTime()) {
-          filterStart = new Date(currentStartTime);
-          filterEnd   = new Date(currentEndTime);
-        }
+        const cS = filterStart ? filterStart.getTime() : minDateGlobal.getTime();
+        const cE = filterEnd   ? filterEnd.getTime()   : maxDateGlobal.getTime();
+        filterStart = new Date(minDateGlobal.getTime()); filterEnd = new Date(maxDateGlobal.getTime());
+        if (cS > filterStart.getTime() && cE < filterEnd.getTime()) { filterStart = new Date(cS); filterEnd = new Date(cE); }
       }
-  
       timelineMode = newMode;
-      document.querySelectorAll('.timeline-mode-btn').forEach(b => 
-        b.classList.toggle('active', b.dataset.mode === timelineMode)
-      );
-  
-      renderTimeline();
-      applyTimeFilter();
+      document.querySelectorAll('.timeline-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === timelineMode));
+      renderTimeline(); applyTimeFilter();
     });
   });
 
-  function startDrag(e, type) {
-    e.preventDefault();
-    dragging = type;
-    document.addEventListener('mousemove', doDrag);
-    document.addEventListener('mouseup', stopDrag);
-  }
-
+  function startDrag(e, type) { e.preventDefault(); dragging = type; document.addEventListener('mousemove', doDrag); document.addEventListener('mouseup', stopDrag); }
   function doDrag(e) {
     if (!dragging) return;
-
     const rect = track.getBoundingClientRect();
     let perc = ((e.clientX - rect.left) / rect.width) * 100;
-    perc = Math.max(-60, Math.min(160, perc));   // большой запас для расширения
-
-    if (dragging === 'start') {
-      let endP = parseFloat(endH.style.left) || 100;
-      if (perc > endP) perc = endP;
-      startH.style.left = `${perc}%`;
-    } else {
-      let startP = parseFloat(startH.style.left) || 0;
-      if (perc < startP) perc = startP;
-      endH.style.left = `${perc}%`;
-    }
+    perc = Math.max(-60, Math.min(160, perc));
+    if (dragging === 'start') { let endP = parseFloat(endH.style.left)||100; if (perc>endP) perc=endP; startH.style.left=`${perc}%`; }
+    else { let startP = parseFloat(startH.style.left)||0; if (perc<startP) perc=startP; endH.style.left=`${perc}%`; }
     updateSelectedBar();
   }
-
   function stopDrag() {
     if (!dragging) return;
-    document.removeEventListener('mousemove', doDrag);
-    document.removeEventListener('mouseup', stopDrag);
-
-    let startPerc = parseFloat(startH.style.left) || 0;
-    let endPerc   = parseFloat(endH.style.left)   || 100;
-
+    document.removeEventListener('mousemove', doDrag); document.removeEventListener('mouseup', stopDrag);
+    let startPerc = parseFloat(startH.style.left)||0, endPerc = parseFloat(endH.style.left)||100;
     if (timelineMode === 'full') {
-      // === РЕЖИМ "Весь диапазон" ===
-      const fullDuration = maxDateGlobal.getTime() - minDateGlobal.getTime();
-      const base = minDateGlobal.getTime();
-
-      if (startPerc < 0) {
-        const extend = (Math.abs(startPerc) / 50) * fullDuration * 1.2;
-        filterStart = new Date(base - extend);
-      }
-      if (endPerc > 100) {
-        const extend = ((endPerc - 100) / 50) * fullDuration * 1.2;
-        filterEnd = new Date(base + fullDuration + extend);
-      }
-
-      filterStart = new Date(base + (Math.max(0, startPerc) / 100) * fullDuration);
-      filterEnd   = new Date(base + (Math.min(100, endPerc) / 100) * fullDuration);
-
+      const fullDuration = maxDateGlobal.getTime() - minDateGlobal.getTime(), base = minDateGlobal.getTime();
+      filterStart = new Date(base + (Math.max(0,startPerc)/100) * fullDuration);
+      filterEnd   = new Date(base + (Math.min(100,endPerc)/100) * fullDuration);
     } else {
-      // === РЕЖИМ "Выделенный период" — ИСПРАВЛЕНИЕ ЗДЕСЬ ===
-      let currentDuration = filterEnd.getTime() - filterStart.getTime();
-      if (currentDuration <= 0) currentDuration = 3600000; // минимум 1 час
-
+      let currentDuration = filterEnd.getTime() - filterStart.getTime(); if (currentDuration<=0) currentDuration=3600000;
       const base = filterStart.getTime();
-
-      if (startPerc < 0) {
-        const extend = (Math.abs(startPerc) / 45) * currentDuration * 1.3;
-        filterStart = new Date(base - extend);
-      }
-      if (endPerc > 100) {
-        const extend = ((endPerc - 100) / 45) * currentDuration * 1.3;
-        filterEnd = new Date(base + currentDuration + extend);
-      }
-
-      // Пересчитываем позиции после возможного расширения
-      currentDuration = filterEnd.getTime() - filterStart.getTime();
-      filterStart = new Date(base + (Math.max(0, startPerc) / 100) * currentDuration);
-      filterEnd   = new Date(base + (Math.min(100, endPerc) / 100) * currentDuration);
+      if (startPerc<0) { const extend=(Math.abs(startPerc)/45)*currentDuration*1.3; filterStart=new Date(base-extend); }
+      if (endPerc>100) { const extend=((endPerc-100)/45)*currentDuration*1.3; filterEnd=new Date(base+currentDuration+extend); }
+      currentDuration = filterEnd.getTime()-filterStart.getTime();
+      filterStart = new Date(base+(Math.max(0,startPerc)/100)*currentDuration);
+      filterEnd   = new Date(base+(Math.min(100,endPerc)/100)*currentDuration);
     }
-
     if (filterStart > filterEnd) [filterStart, filterEnd] = [filterEnd, filterStart];
-
-    renderTimeline();
-    applyTimeFilter();
-    dragging = null;
+    renderTimeline(); applyTimeFilter(); dragging = null;
   }
 
   startH.addEventListener('mousedown', e => startDrag(e, 'start'));
   endH.addEventListener('mousedown', e => startDrag(e, 'end'));
 
-  // Клик по точке в таймлайне — выделяем фото и на карте, и на таймлайне
   track.addEventListener('click', e => {
     if (dragging) return;
-
-    const rect = track.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const perc = (clickX / rect.width) * 100;
-
-    let closestPhoto = null;
-    let minDiff = Infinity;
-
+    const rect = track.getBoundingClientRect(), perc = ((e.clientX-rect.left)/rect.width)*100;
+    let closestPhoto = null, minDiff = Infinity;
     datedPhotosGlobal.forEach(p => {
       let photoPerc = 0;
-      if (timelineMode === 'full') {
-        photoPerc = ((p.dateObj.getTime() - minDateGlobal.getTime()) / (maxDateGlobal.getTime() - minDateGlobal.getTime())) * 100;
-      } else {
-        const selDur = filterEnd.getTime() - filterStart.getTime();
-        if (selDur > 0) photoPerc = ((p.dateObj.getTime() - filterStart.getTime()) / selDur) * 100;
-      }
-
-      const diff = Math.abs(photoPerc - perc);
-      if (diff < minDiff) {
-        minDiff = diff;
-        closestPhoto = p;
-      }
+      if (timelineMode==='full') photoPerc = ((p.dateObj.getTime()-minDateGlobal.getTime())/(maxDateGlobal.getTime()-minDateGlobal.getTime()))*100;
+      else { const selDur=filterEnd.getTime()-filterStart.getTime(); if (selDur>0) photoPerc=((p.dateObj.getTime()-filterStart.getTime())/selDur)*100; }
+      const diff = Math.abs(photoPerc-perc);
+      if (diff < minDiff) { minDiff = diff; closestPhoto = p; }
     });
-
     if (closestPhoto) {
       const idx = photos.findIndex(photo => photo === closestPhoto);
       if (idx !== -1) {
-        // Выделяем на карте
-        if (closestPhoto.lat !== null) {
-          map.setView([closestPhoto.lat, closestPhoto.lon], Math.max(map.getZoom(), 15), { animate: true });
-        }
-        // Открываем лайтбокс
+        if (closestPhoto.lat !== null) map.setView([closestPhoto.lat, closestPhoto.lon], Math.max(map.getZoom(),19), { animate:true });
         openLightbox(idx, closestPhoto.lat ? L.latLng(closestPhoto.lat, closestPhoto.lon) : null);
-        
-        // Выделяем точку на таймлайне
         highlightTimelineDot(closestPhoto);
       }
     }
@@ -2847,57 +1996,22 @@ function initTimeline() {
 
 function updateTimeFromInputs() {
   if (!filterStart || !filterEnd) return;
-
-  const startInput = document.getElementById('start-time-input');
-  const endInput   = document.getElementById('end-time-input');
-
-  if (startInput.value) {
-    const [h, m] = startInput.value.split(':').map(Number);
-    filterStart.setHours(h, m, 0, 0);
-  }
-  if (endInput.value) {
-    const [h, m] = endInput.value.split(':').map(Number);
-    filterEnd.setHours(h, m, 0, 0);
-  }
-
+  const startInput = document.getElementById('start-time-input'), endInput = document.getElementById('end-time-input');
+  if (startInput.value) { const [h,m]=startInput.value.split(':').map(Number); filterStart.setHours(h,m,0,0); }
+  if (endInput.value)   { const [h,m]=endInput.value.split(':').map(Number);   filterEnd.setHours(h,m,0,0); }
   if (filterEnd < filterStart) [filterStart, filterEnd] = [filterEnd, filterStart];
-
-  renderTimeline();
-  applyTimeFilter();
+  renderTimeline(); applyTimeFilter();
 }
 
 function resetTimelineFilter() {
   if (!minDateGlobal || !maxDateGlobal) return;
-
-  // Переключаемся в режим "Весь диапазон"
   timelineMode = 'full';
-  document.querySelectorAll('.timeline-mode-btn').forEach(b => 
-    b.classList.toggle('active', b.dataset.mode === 'full')
-  );
-
-  // Сохраняем текущие выбранные даты (чтобы бегунки не улетали влево)
-  const currentStart = filterStart ? filterStart.getTime() : minDateGlobal.getTime();
-  const currentEnd   = filterEnd   ? filterEnd.getTime()   : maxDateGlobal.getTime();
-
-  // Расширяем до полного диапазона
-  filterStart = new Date(minDateGlobal.getTime());
-  filterEnd   = new Date(maxDateGlobal.getTime());
-
-  // Если предыдущий выбранный диапазон был внутри полного — оставляем его как внутренний
-  if (currentStart > filterStart.getTime() && currentEnd < filterEnd.getTime()) {
-    filterStart = new Date(currentStart);
-    filterEnd   = new Date(currentEnd);
-  }
-
-  renderTimeline();
-  applyTimeFilter();
+  document.querySelectorAll('.timeline-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode==='full'));
+  filterStart = new Date(minDateGlobal.getTime()); filterEnd = new Date(maxDateGlobal.getTime());
+  renderTimeline(); applyTimeFilter();
 }
 
-function applyTimeFilter() {
-  renderList();
-  updateMarkerOpacities();
-}
-
+function applyTimeFilter() { renderList(); updateMarkerOpacities(); }
 </script>
 </body>
 </html>
