@@ -1070,12 +1070,19 @@ function posLightbox(latlng,fast=false){
 
 function closeLightbox(){document.getElementById('lightbox').classList.remove('visible');document.getElementById('lb-card').classList.remove('gps-active');document.querySelectorAll('.photo-item').forEach(el=>el.classList.remove('active'));clearActiveMarker();activeIdx=null;}
 
+// Sorted navigation order: all photos by shooting date (fallback: file mtime)
+function getSortedNavOrder(){
+  return [...photos.keys()].sort((a,b)=>getSortTs(photos[a])-getSortTs(photos[b]));
+}
+
 async function navPhoto(dir){
   if(document.getElementById('auto-save-cb').checked&&manualGPSActive&&tempLat!==null)await writeEXIFWithGPS();
-  const gi=photos.map((p,i)=>p.lat!=null?i:-1).filter(i=>i>=0);if(!gi.length)return;
-  const next=gi[(gi.indexOf(activeIdx)+dir+gi.length)%gi.length];const p=photos[next];
-  map.setView([p.lat,p.lon],Math.max(map.getZoom(),19),{animate:true});
-  openLightbox(next,L.latLng(p.lat,p.lon));
+  const order=getSortedNavOrder();if(!order.length)return;
+  const pos=order.indexOf(activeIdx);
+  const next=order[(pos+dir+order.length)%order.length];
+  const p=photos[next];
+  if(p.lat!=null)map.setView([p.lat,p.lon],Math.max(map.getZoom(),19),{animate:true});
+  openLightbox(next,p.lat!=null?L.latLng(p.lat,p.lon):null);
 }
 
 function applyLbZoom(){document.getElementById('lb-img').style.transform=`scale(${lbScale})`;document.getElementById('lb-zoom-val').textContent=Math.round(lbScale*100)+'%';}
@@ -1099,7 +1106,21 @@ function updateViewerInfoBar(p){
 
 function openViewer(){const p=activeIdx!=null?photos[activeIdx]:null;if(!p)return;document.getElementById('viewer-img').src=p.displayUrl||p.thumbUrl||'';document.getElementById('viewer').classList.add('open');updateViewerInfoBar(p);}
 function closeViewer(){document.getElementById('viewer').classList.remove('open');document.getElementById('viewer-info-bar').innerHTML='';if(activeIdx!=null){const p=photos[activeIdx];openLightbox(activeIdx,p.lat!=null?L.latLng(p.lat,p.lon):null);}}
-async function viewerNav(dir){if(document.getElementById('auto-save-cb').checked&&manualGPSActive&&tempLat!==null)await writeEXIFWithGPS();const gi=photos.map((p,i)=>p.lat!=null?i:-1).filter(i=>i>=0);if(!gi.length)return;const next=gi[(gi.indexOf(activeIdx)+dir+gi.length)%gi.length];activeIdx=next;const p=photos[next];document.getElementById('viewer-img').src=p.displayUrl||p.thumbUrl||'';setActiveMarker(next);document.querySelectorAll('.photo-item').forEach(el=>el.classList.remove('active'));document.querySelector(`.photo-item[data-idx="${next}"]`)?.classList.add('active');updateViewerInfoBar(p);}
+async function viewerNav(dir){
+  if(document.getElementById('auto-save-cb').checked&&manualGPSActive&&tempLat!==null)await writeEXIFWithGPS();
+  const order=getSortedNavOrder();if(!order.length)return;
+  const pos=order.indexOf(activeIdx);
+  const next=order[(pos+dir+order.length)%order.length];
+  activeIdx=next;
+  const p=photos[next];
+  document.getElementById('viewer-img').src=p.displayUrl||p.thumbUrl||'';
+  setActiveMarker(next);
+  document.querySelectorAll('.photo-item').forEach(el=>el.classList.remove('active'));
+  document.querySelector(`.photo-item[data-idx="${next}"]`)?.classList.add('active');
+  updateViewerInfoBar(p);
+  // Pan map to photo if it has coords
+  if(p.lat!=null)map.setView([p.lat,p.lon],Math.max(map.getZoom(),19),{animate:true});
+}
 
 // ═══ UTILS ════════════════════════════════════════════════════════
 function updateStats(){document.getElementById('stat-total').textContent=photos.length;document.getElementById('stat-gps').textContent=photos.filter(p=>p.lat!=null).length;document.getElementById('stat-angle').textContent=photos.filter(p=>p.bearing!=null).length;}
