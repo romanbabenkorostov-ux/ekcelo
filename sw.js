@@ -1,19 +1,22 @@
-// EkceloFoto — sw.js v2.6
+// EkceloFoto — sw.js v2.7
 // Service Worker: кэширует тайлы кадастрового слоя (nspd.gov.ru)
-// Срок хранения: 7 дней. При следующем входе тайлы не скачиваются заново.
+// Срок хранения: 30 дней. Лимит: 40000 тайлов (FIFO при переполнении).
+// Центральные тайлы загружаются браузером первыми (Leaflet сам приоритизирует центр).
 
-const CACHE_NAME   = 'ekcelo-cadastre-v1';
+const CACHE_NAME   = 'ekcelo-cadastre-v2';
 const CACHE_HOST   = 'nspd.gov.ru';
-const MAX_AGE_MS   = 7 * 24 * 60 * 60 * 1000;   // 7 дней
-const MAX_ENTRIES  = 8000;                         // максимум тайлов в кэше
+const MAX_AGE_MS   = 30 * 24 * 60 * 60 * 1000;  // 30 дней
+const MAX_ENTRIES  = 40000;
 
 self.addEventListener('install',  () => self.skipWaiting());
-self.addEventListener('activate', e  => e.waitUntil(self.clients.claim()));
+self.addEventListener('activate', e  => e.waitUntil(
+  caches.keys().then(keys =>
+    Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+  ).then(() => self.clients.claim())
+));
 
 self.addEventListener('fetch', e => {
-  const { url } = e.request;
-  if (!url.includes(CACHE_HOST)) return;          // пропускаем не-кадастровые запросы
-
+  if (!e.request.url.includes(CACHE_HOST)) return;
   e.respondWith(handleCadastre(e.request));
 });
 
@@ -24,41 +27,58 @@ async function handleCadastre(request) {
   if (cached) {
     const age = parseInt(cached.headers.get('x-sw-cached-at') || '0');
     if (Date.now() - age < MAX_AGE_MS) {
-      return cached;                               // свежий кэш — отдаём сразу
+      return cached;  // Свежий кэш — отдаём немедленно
     }
+    // Устаревший — обновляем в фоне, отдаём пока старый
+    refreshInBackground(cache, request);
+    return cached;
   }
 
+  return fetchAndCache(cache, request);
+}
+
+async function fetchAndCache(cache, request) {
   try {
     const response = await fetch(request, { mode: 'cors', credentials: 'omit' });
     if (response.ok) {
-      // Копируем ответ, добавляем метку времени
       const headers = new Headers(response.headers);
       headers.set('x-sw-cached-at', String(Date.now()));
       const clone = new Response(await response.arrayBuffer(), {
-        status:  response.status,
+        status: response.status,
         headers,
       });
-      // Ограничиваем размер кэша
-      await pruneCache(cache, MAX_ENTRIES - 1);
+      await pruneCache(cache);
       cache.put(request, clone.clone());
       return clone;
     }
     return response;
   } catch (_) {
-    // Offline или ошибка сети — вернуть устаревший кэш если есть
-    return cached || new Response('', { status: 503 });
+    return new Response('', { status: 503 });
   }
 }
 
-async function pruneCache(cache, limit) {
+async function refreshInBackground(cache, request) {
+  try {
+    const response = await fetch(request, { mode: 'cors', credentials: 'omit' });
+    if (response.ok) {
+      const headers = new Headers(response.headers);
+      headers.set('x-sw-cached-at', String(Date.now()));
+      const clone = new Response(await response.arrayBuffer(), { status: response.status, headers });
+      cache.put(request, clone);
+    }
+  } catch (_) {}
+}
+
+// FIFO pruning: удаляем самые старые записи при переполнении
+async function pruneCache(cache) {
   const keys = await cache.keys();
-  if (keys.length <= limit) return;
-  // Удаляем старейшие записи (FIFO)
-  const toDelete = keys.slice(0, keys.length - limit);
+  if (keys.length <= MAX_ENTRIES - 1) return;
+  // Удаляем первые (самые старые по порядку insertion)
+  const toDelete = keys.slice(0, keys.length - (MAX_ENTRIES - 1));
   await Promise.all(toDelete.map(k => cache.delete(k)));
 }
 
-// Сообщение от основного потока: очистить кэш вручную
+// Команды от основного потока
 self.addEventListener('message', async e => {
   if (e.data === 'clearCadastreCache') {
     await caches.delete(CACHE_NAME);
