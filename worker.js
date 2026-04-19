@@ -1,15 +1,6 @@
-/**
- * EkceloFoto — Cloudflare Worker CORS-прокси для Яндекс.Диска
- *
- * Деплой (бесплатно, 2 минуты):
- * 1. https://dash.cloudflare.com → Workers → Create Worker
- * 1.1 Выберите "Start with Hello World!"
- * 1.2 Введите имя воркера, например ekcelo-proxy
- * 1.3 Нажмите "Deploy", затем "Edit code"
- * 1.4 Удалите код по умолчанию и вставьте этот скрипт
- * 2. Скопируйте адрес вида https://ekcelo-proxy.ВАШ-SUBDOMAIN.workers.dev
- * 3. Вставьте его в index.html в константу YANDEX_PROXY
- */
+// Cloudflare Worker — CORS-прокси для Яндекс.Диска
+// Деплой: https://dash.cloudflare.com → Workers → Create Worker → вставить код
+// После деплоя: вставьте URL воркера в YANDEX_PROXY в index.html
 
 const ALLOWED_HOSTS = [
   'cloud-api.yandex.net',
@@ -18,59 +9,60 @@ const ALLOWED_HOSTS = [
   'yadi.sk',
 ];
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Max-Age': '86400',
-};
+const MAX_SIZE = 50 * 1024 * 1024; // 50 МБ
 
 export default {
-  async fetch(request) {
+  async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: CORS_HEADERS });
-    }
-
-    const incoming = new URL(request.url);
-    const target = incoming.searchParams.get('url');
-
-    if (!target) {
-      return new Response(JSON.stringify({ error: 'Missing ?url= param' }), {
-        status: 400,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      return new Response(null, {
+        status: 204,
+        headers: corsHeaders(request),
       });
     }
 
-    let targetUrl;
-    try { targetUrl = new URL(target); }
-    catch {
-      return new Response(JSON.stringify({ error: 'Invalid URL' }), {
-        status: 400,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      });
+    const urlParam = new URL(request.url).searchParams.get('url');
+    if (!urlParam) {
+      return new Response('Missing ?url=', { status: 400, headers: corsHeaders(request) });
     }
 
-    const hostOk = ALLOWED_HOSTS.some(h => targetUrl.hostname === h || targetUrl.hostname.endsWith('.' + h));
-    if (!hostOk) {
-      return new Response(JSON.stringify({ error: `Host not allowed: ${targetUrl.hostname}` }), {
-        status: 403,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      });
+    let target;
+    try { target = new URL(urlParam); }
+    catch (_) { return new Response('Invalid URL', { status: 400, headers: corsHeaders(request) }); }
+
+    if (!ALLOWED_HOSTS.some(h => target.hostname === h || target.hostname.endsWith('.' + h))) {
+      return new Response('Host not allowed: ' + target.hostname, { status: 403, headers: corsHeaders(request) });
     }
 
-    const upstream = await fetch(target, {
+    const upstream = await fetch(target.toString(), {
+      headers: { 'User-Agent': 'EkceloFoto/2.5' },
       redirect: 'follow',
-      headers: { 'User-Agent': 'EkceloFoto/1.0 (CORS proxy)' },
     });
 
-    const respHeaders = new Headers(upstream.headers);
-    Object.entries(CORS_HEADERS).forEach(([k, v]) => respHeaders.set(k, v));
-    respHeaders.delete('Content-Security-Policy');
-    respHeaders.delete('X-Frame-Options');
+    const ct = upstream.headers.get('content-type') || '';
+    const cl = parseInt(upstream.headers.get('content-length') || '0');
+
+    if (cl > MAX_SIZE) {
+      return new Response('File too large', { status: 413, headers: corsHeaders(request) });
+    }
 
     return new Response(upstream.body, {
-      status: upstream.status,
-      headers: respHeaders,
+      status:  upstream.status,
+      headers: {
+        ...corsHeaders(request),
+        'content-type': ct,
+        'cache-control': 'no-store',
+      },
     });
   },
 };
+
+function corsHeaders(req) {
+  const origin = req.headers.get('origin') || '*';
+  return {
+    'access-control-allow-origin':  origin,
+    'access-control-allow-methods': 'GET, OPTIONS',
+    'access-control-allow-headers': 'content-type',
+    'access-control-max-age':       '86400',
+    'vary': 'origin',
+  };
+}

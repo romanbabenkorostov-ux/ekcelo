@@ -10,22 +10,33 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/piexifjs/1.0.6/piexif.min.js"></script>
 <style>
-:root{--bg:#0d0f14;--surface:#161a24;--border:#252b3a;--accent:#e8ff47;--accent2:#47c8ff;--text:#e4e8f0;--muted:#5a6480;--danger:#ff5c5c;--r:6px}
+:root{--bg:#0d0f14;--surface:#161a24;--border:#252b3a;--accent:#e8ff47;--accent2:#47c8ff;--text:#e4e8f0;--muted:#5a6480;--danger:#ff5c5c;--warn:#f59e0b;--r:6px}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;overflow:hidden}
 #app{display:grid;grid-template-rows:52px 1fr;grid-template-columns:320px 1fr;height:100vh}
 
 /* HEADER */
-#header{grid-column:1/-1;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 16px;z-index:1000;overflow:hidden}
+#header{grid-column:1/-1;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 16px;z-index:1000;position:relative}
 #logo{font-size:18px;font-weight:800;letter-spacing:-.5px;color:var(--accent);white-space:nowrap}
 #logo span{color:var(--text)}
 #invite-btn{display:none;align-items:center;gap:7px;background:var(--accent2);color:#0d0f14;border:none;border-radius:var(--r);padding:7px 14px;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;cursor:pointer;text-decoration:none;white-space:nowrap;transition:opacity .15s}
 #invite-btn:hover{opacity:.85}
+
+/* UPLOAD BUTTON + DROPDOWN */
+.upload-wrap{position:relative;flex-shrink:0}
 #upload-btn{display:flex;align-items:center;gap:7px;background:var(--accent);color:#0d0f14;border:none;border-radius:var(--r);padding:7px 14px;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;cursor:pointer;transition:opacity .15s;white-space:nowrap}
 #upload-btn:hover{opacity:.85}
-#file-input{display:none}
+#upload-menu{display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:3000;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:0 8px 32px rgba(0,0,0,.7);min-width:210px;padding:4px 0;animation:pop-in .15s ease both}
+#upload-menu.open{display:block}
+#upload-menu button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:transparent;border:none;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;padding:9px 14px;cursor:pointer;transition:background .1s}
+#upload-menu button:hover{background:rgba(255,255,255,.07)}
+#upload-menu hr{border:none;border-top:1px solid var(--border);margin:3px 0}
 
-/* ── AUTO-SAVE CHECKBOX ── */
+/* HIDDEN FILE INPUTS */
+#file-input{display:none}
+#folder-input{display:none}
+
+/* AUTO-SAVE */
 #auto-save-label{display:flex;align-items:center;gap:6px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);white-space:nowrap;padding:5px 8px;border:1px solid var(--border);border-radius:var(--r);transition:border-color .15s,color .15s;user-select:none;flex-shrink:0}
 #auto-save-label:hover{border-color:var(--accent);color:var(--accent)}
 #auto-save-label input{accent-color:var(--accent);cursor:pointer;width:13px;height:13px}
@@ -37,14 +48,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .stat-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.5px}
 #clear-btn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:var(--r);padding:5px 10px;font-size:12px;font-family:'JetBrains Mono',monospace;cursor:pointer;transition:all .15s}
 #clear-btn:hover{border-color:var(--danger);color:var(--danger)}
-#share-btn{display:none;background:#3b82f6;color:#fff;border:none;border-radius:var(--r);padding:6px 13px;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;transition:background .15s}
+#share-btn{display:none;background:#3b82f6;color:#fff;border:none;border-radius:var(--r);padding:6px 13px;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap}
 #share-btn:hover{background:#2563eb}
-#share-list-btn{display:none;background:#0f766e;color:#fff;border:none;border-radius:var(--r);padding:6px 13px;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;transition:background .15s}
+#share-list-btn{display:none;background:#0f766e;color:#fff;border:none;border-radius:var(--r);padding:6px 13px;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap}
 #share-list-btn:hover{background:#0d9488}
 
 /* SIDEBAR */
 #sidebar{background:var(--surface);border-right:1px solid var(--border);overflow:hidden;display:flex;flex-direction:column;min-height:0}
-#gd-wrap{padding:10px 10px 6px;flex-shrink:0;border-bottom:1px solid var(--border)}
+#gd-wrap{padding:8px 10px 6px;flex-shrink:0;border-bottom:1px solid var(--border)}
 #gd-wrap label{font-size:10px;color:var(--muted);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px;font-family:'JetBrains Mono',monospace}
 #gd-row{display:flex;gap:6px}
 #gd-url{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:10px;padding:5px 8px;outline:none;transition:border-color .15s;min-width:0}
@@ -53,7 +64,36 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #gd-btn{background:var(--accent2);color:#0d0f14;border:none;border-radius:var(--r);padding:5px 10px;font-family:'Syne',sans-serif;font-weight:700;font-size:11px;cursor:pointer;transition:opacity .15s;white-space:nowrap;flex-shrink:0}
 #gd-btn:hover{opacity:.8}
 #gd-btn:disabled{opacity:.4;cursor:not-allowed}
+#gd-key-row{display:flex;gap:6px;margin-top:5px}
+#gd-key{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:10px;padding:5px 8px;outline:none;min-width:0}
 #gd-status{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);margin-top:5px;min-height:13px;line-height:1.4;word-break:break-all}
+
+/* FOLDER TREE PANEL */
+#folder-tree-panel{flex-shrink:0;border-bottom:1px solid var(--border);display:none}
+#folder-tree-panel.visible{display:block}
+.ftree-header{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;cursor:pointer;user-select:none}
+.ftree-header:hover{background:rgba(255,255,255,.03)}
+.ftree-title{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-family:'JetBrains Mono',monospace;display:flex;align-items:center;gap:5px}
+.ftree-actions{display:flex;gap:4px}
+.ftree-action-btn{background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted);font-size:10px;padding:2px 6px;cursor:pointer;font-family:'JetBrains Mono',monospace;transition:all .12s}
+.ftree-action-btn:hover{border-color:var(--accent2);color:var(--accent2)}
+#folder-tree-content{max-height:160px;overflow-y:auto;padding:3px 0}
+.fnode-row{display:flex;align-items:center;gap:4px;padding:3px 8px;cursor:pointer;border-radius:4px;margin:1px 4px;transition:background .1s;user-select:none}
+.fnode-row:hover{background:rgba(255,255,255,.05)}
+.fnode-row.selected{background:rgba(232,255,71,.1);border:1px solid rgba(232,255,71,.25)}
+.fnode-row.drag-over{background:rgba(71,200,255,.15);border:1px dashed var(--accent2)}
+.fnode-toggle{font-size:9px;color:var(--muted);width:12px;text-align:center;flex-shrink:0;transition:transform .15s}
+.fnode-toggle.open{transform:rotate(90deg)}
+.fnode-icon{font-size:11px;flex-shrink:0}
+.fnode-label{font-size:11px;font-family:'JetBrains Mono',monospace;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fnode-label.editing input{background:var(--bg);border:1px solid var(--accent2);border-radius:3px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;padding:1px 4px;outline:none;width:100%}
+.fnode-count{font-size:9px;color:var(--muted);font-family:'JetBrains Mono',monospace;flex-shrink:0}
+.fnode-del{opacity:0;background:transparent;border:none;color:var(--muted);font-size:11px;cursor:pointer;padding:0 2px;line-height:1;transition:opacity .1s,color .1s;flex-shrink:0}
+.fnode-row:hover .fnode-del{opacity:1}
+.fnode-del:hover{color:var(--danger)}
+#folder-tree-content::-webkit-scrollbar{width:4px}
+#folder-tree-content::-webkit-scrollbar-track{background:#0a0c10}
+#folder-tree-content::-webkit-scrollbar-thumb{background:#2a3247;border-radius:2px}
 
 /* PHOTO LIST */
 #photo-list{flex:1;padding:6px 6px 14px;overflow-y:auto;overflow-x:hidden;min-height:0}
@@ -64,9 +104,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .photo-item{display:flex;align-items:flex-start;gap:8px;padding:6px 7px;border-radius:var(--r);border:1px solid transparent;margin-bottom:3px;position:relative;transition:background .15s}
 .photo-item:hover{background:rgba(255,255,255,.04)}
 .photo-item.active{background:rgba(232,255,71,.08);border-color:rgba(232,255,71,.25)}
-.photo-item.no-gps{opacity:.55}
+.photo-item.no-gps{opacity:.65}
+.photo-item.no-gps:hover{opacity:.9;background:rgba(71,200,255,.04);border-color:rgba(71,200,255,.2)}
 .photo-item.manual-active{opacity:1;border-color:rgba(71,200,255,.5);background:rgba(71,200,255,.07)}
-.photo-item.no-gps:hover{opacity:.85;background:rgba(71,200,255,.05);border-color:rgba(71,200,255,.2)}
+.photo-item.dragging{opacity:.4}
 #load-progress{position:fixed;top:0;left:0;right:0;height:3px;background:transparent;z-index:9999;pointer-events:none;opacity:0;transition:opacity .2s}
 #load-progress.active{opacity:1}
 #load-progress-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .4s ease;border-radius:0 2px 2px 0}
@@ -75,26 +116,33 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .thumb.loading{background:linear-gradient(90deg,var(--border) 25%,#2a3450 50%,var(--border) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .photo-meta{flex:1;min-width:0;padding-top:2px;cursor:pointer}
-.photo-item.no-gps .thumb-area,.photo-item.no-gps .photo-meta{cursor:default;pointer-events:none}
 .photo-name{font-size:8px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
 .photo-coords{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--muted);margin-top:3px;line-height:1.5}
 .gps-badge{font-size:8px;padding:1px 4px;border-radius:3px;font-family:'JetBrains Mono',monospace;margin-top:4px;display:inline-block}
 .gps-ok{background:rgba(232,255,71,.15);color:var(--accent)}
 .gps-no{background:rgba(255,92,92,.12);color:var(--danger)}
+.date-mismatch-badge{display:inline-flex;align-items:center;gap:3px;margin-top:3px;margin-left:4px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);border-radius:3px;color:var(--warn);font-size:8px;font-family:'JetBrains Mono',monospace;padding:1px 5px;cursor:pointer;vertical-align:middle}
+.date-mismatch-badge:hover{background:rgba(245,158,11,.22)}
 .del-btn{position:absolute;top:4px;right:4px;width:17px;height:17px;background:rgba(13,15,20,.8);border:1px solid var(--border);border-radius:50%;color:var(--muted);font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,background .15s,color .15s,border-color .15s;padding:0;line-height:1}
 .photo-item:hover .del-btn{opacity:1}
 .del-btn:hover{background:rgba(255,92,92,.2);border-color:var(--danger);color:var(--danger)}
 .gps-manual-btn{display:block;margin-top:5px;background:rgba(71,200,255,.1);border:1px solid rgba(71,200,255,.3);border-radius:4px;color:var(--accent2);font-size:9px;font-family:'JetBrains Mono',monospace;padding:3px 6px;cursor:pointer;transition:all .15s;text-align:left;pointer-events:auto}
 .gps-manual-btn:hover{background:rgba(71,200,255,.2);border-color:var(--accent2)}
+.loc-badge{font-size:8px;padding:1px 4px;border-radius:3px;font-family:'JetBrains Mono',monospace;margin-top:3px;display:inline-block;background:rgba(71,200,255,.1);color:var(--accent2);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
 #no-photos{padding:20px 14px;text-align:center;color:var(--muted);font-size:11px;line-height:1.7}
 
-/* ── HOVER PREVIEW (no-GPS) ── */
-#hover-preview{display:none;position:fixed;z-index:8000;background:var(--surface);border:1px solid rgba(71,200,255,.5);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.85);width:264px;pointer-events:none;animation:pop-in .15s ease both}
-#hover-preview img{width:100%;height:175px;object-fit:contain;background:#080a0e;border-radius:10px 10px 0 0;display:block}
-#hover-preview-body{padding:9px 12px 11px}
-#hover-preview-name{font-size:9px;font-weight:700;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:5px}
-#hover-preview-hint{font-size:11px;color:var(--accent2);font-family:'JetBrains Mono',monospace;margin-bottom:3px}
-#hover-preview-sub{font-size:10px;color:var(--muted)}
+/* YANDEX DIALOG */
+#yandex-dialog{display:none;position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.65);align-items:center;justify-content:center}
+#yandex-dialog.open{display:flex}
+.dialog-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px 24px;width:420px;box-shadow:0 20px 60px rgba(0,0,0,.8);animation:pop-in .2s ease both}
+.dialog-title{font-weight:700;font-size:15px;margin-bottom:14px;color:var(--accent2)}
+.dialog-input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;padding:8px 10px;outline:none;margin-bottom:10px;transition:border-color .15s}
+.dialog-input:focus{border-color:var(--accent2)}
+.dialog-hint{font-size:10px;color:var(--muted);margin-bottom:14px;font-family:'JetBrains Mono',monospace;line-height:1.5}
+.dialog-actions{display:flex;gap:8px;justify-content:flex-end}
+.dialog-btn{background:var(--accent2);color:#0d0f14;border:none;border-radius:var(--r);padding:7px 16px;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer}
+.dialog-btn.cancel{background:transparent;border:1px solid var(--border);color:var(--muted)}
+.dialog-btn.cancel:hover{border-color:var(--danger);color:var(--danger)}
 
 /* MAP */
 #map-wrap{position:relative;overflow:hidden}
@@ -116,7 +164,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #gps-hint-overlay.visible{display:block}
 
 /* MANUAL GPS PANEL */
-#manual-gps-panel{display:none;position:absolute;bottom:28px;right:12px;z-index:700;width:290px;background:var(--surface);border:1px solid rgba(71,200,255,.4);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.7);padding:12px 14px;font-family:'JetBrains Mono',monospace}
+#manual-gps-panel{display:none;position:absolute;bottom:28px;right:12px;z-index:800;width:290px;background:var(--surface);border:1px solid rgba(71,200,255,.4);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.7);padding:12px 14px;font-family:'JetBrains Mono',monospace}
 #manual-gps-panel.visible{display:block}
 #mgps-title{font-size:10px;color:var(--accent2);font-weight:700;letter-spacing:.4px;text-transform:uppercase;margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #mgps-mode-btns{display:flex;gap:6px;margin-bottom:10px}
@@ -153,7 +201,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 /* LIGHTBOX */
 #lightbox{display:none;position:absolute;z-index:2000;pointer-events:none}
 #lightbox.visible{display:block;pointer-events:all}
-#lb-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;width:330px;box-shadow:0 20px 60px rgba(0,0,0,.8);animation:pop-in .2s cubic-bezier(.34,1.56,.64,1) both}
+#lb-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;width:330px;box-shadow:0 20px 60px rgba(0,0,0,.8);animation:pop-in .2s cubic-bezier(.34,1.56,.64,1) both;transition:opacity .25s}
+/* P7: semi-transparent during GPS picking */
+#lb-card.gps-active{opacity:0.28;pointer-events:none}
 @keyframes pop-in{from{transform:scale(.88) translateY(8px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}
 #lb-img-wrap{position:relative;width:100%;height:200px;overflow:hidden;background:#080a0e;cursor:zoom-in}
 #lb-img{width:100%;height:100%;object-fit:contain;transition:transform .18s ease;transform-origin:center center}
@@ -166,17 +216,24 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .lbz-sep{flex:1}
 #lb-fullscreen-btn{background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text);border-radius:3px;height:20px;padding:0 8px;font-size:9px;font-family:'JetBrains Mono',monospace;cursor:pointer;transition:all .15s}
 #lb-fullscreen-btn:hover{border-color:var(--accent2);color:var(--accent2)}
-#lb-info{padding:8px 11px}
+#lb-info{padding:8px 11px;max-height:320px;overflow-y:auto}
+#lb-info::-webkit-scrollbar{width:4px}
+#lb-info::-webkit-scrollbar-thumb{background:#2a3247;border-radius:2px}
 #lb-name{font-weight:700;font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:6px;color:var(--muted)}
 #lb-table{width:100%;border-collapse:collapse;font-family:'JetBrains Mono',monospace;font-size:11px}
 #lb-table td{padding:2.5px 0}
 #lb-table td:first-child{color:var(--muted);width:88px}
 #lb-table td:last-child{color:var(--text)}
-#lb-gps-btn{display:none;width:100%;margin-top:8px;background:rgba(71,200,255,.1);border:1px solid rgba(71,200,255,.3);border-radius:var(--r);color:var(--accent2);font-size:10px;font-family:'JetBrains Mono',monospace;padding:6px;cursor:pointer;transition:all .15s}
-#lb-gps-btn:hover{background:rgba(71,200,255,.2);border-color:var(--accent2)}
+#lb-gps-btn{display:none}
 #lb-nav{display:flex;gap:6px;margin-top:8px}
 .lb-nav-btn{flex:1;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-size:11px;font-family:'JetBrains Mono',monospace;padding:5px;cursor:pointer;transition:all .15s}
 .lb-nav-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* GPS action buttons inside lightbox table */
+.gps-action-btn{background:rgba(71,200,255,.1);border:1px solid rgba(71,200,255,.3);border-radius:4px;color:var(--accent2);font-size:9px;font-family:'JetBrains Mono',monospace;padding:2px 7px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.gps-action-btn:hover{background:rgba(71,200,255,.22);border-color:var(--accent2)}
+.gps-action-btn.accent{background:rgba(232,255,71,.1);border-color:rgba(232,255,71,.3);color:var(--accent)}
+.gps-action-btn.accent:hover{background:rgba(232,255,71,.22)}
 
 /* MAP BUTTONS */
 #layer-btn{position:absolute;top:12px;right:12px;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 11px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);cursor:pointer;transition:all .15s}
@@ -213,6 +270,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .timeline-handle.end::before{content:'▶';font-size:12px;color:#0d0f14}
 .timeline-dot{position:absolute;top:50%;width:7px;height:7px;background:#e8ff47;border:1.5px solid #0d0f14;border-radius:50%;transform:translateY(-50%);z-index:10;pointer-events:none;box-shadow:0 0 4px var(--accent)}
 .timeline-dot.in-range{background:#ffeb3b;transform:translateY(-50%) scale(1.4);box-shadow:0 0 10px #e8ff47;z-index:15}
+/* P4: folder-filtered photos highlighted green */
+.timeline-dot.folder-match{background:#22c55e !important;box-shadow:0 0 10px #22c55e !important;z-index:16}
 .timeline-dot.active-dot{background:#ff3c3c !important;border-color:#fff !important;transform:translateY(-50%) scale(1.6) !important;box-shadow:0 0 12px #ff3c3c !important;z-index:20}
 .timeline-labels{display:flex;justify-content:space-between;margin-top:3px;font-size:9px;color:var(--muted);font-family:'JetBrains Mono',monospace}
 .time-fine-controls{margin-top:6px;display:none;align-items:center;gap:10px;background:rgba(71,200,255,.08);border:1px solid rgba(71,200,255,.3);border-radius:6px;padding:7px 12px;font-size:10px}
@@ -236,8 +295,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 </head>
 <body>
 <div id="app">
-
 <div id="load-progress"><div id="load-progress-bar"></div></div>
+
 <header id="header">
   <div id="logo">Ekcelo<span>Foto</span></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer">
@@ -247,23 +306,35 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     </svg>
     Зайти на основной сайт
   </a>
-  <button id="upload-btn" onclick="document.getElementById('file-input').click()">
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-      <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-    </svg>
-    Загрузить фото
-  </button>
-  <input type="file" id="file-input" multiple accept="image/jpeg,image/jpg"/>
 
-  <!-- ── АВТО-ЗАПИСЬ EXIF ── -->
+  <!-- UPLOAD DROPDOWN -->
+  <div class="upload-wrap">
+    <button id="upload-btn" onclick="toggleUploadMenu(event)">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      Загрузить фото ▾
+    </button>
+    <div id="upload-menu">
+      <button onclick="closeUploadMenu();triggerFolderUpload()">📂 Из локальной папки (рекурсивно)</button>
+      <button onclick="closeUploadMenu();triggerFileUpload()">📸 Выбрать файлы</button>
+      <hr/>
+      <button onclick="closeUploadMenu();showYandexDialog()">🌐 Яндекс.Диск (ссылка)</button>
+      <button onclick="closeUploadMenu();showGDrivePanel()">📁 Google Drive (папка)</button>
+    </div>
+  </div>
+
+  <input type="file" id="file-input"   multiple accept="image/jpeg,image/jpg"/>
+  <input type="file" id="folder-input" multiple accept="image/jpeg,image/jpg" webkitdirectory/>
+
   <label id="auto-save-label"
-    title="При переходе к следующему фото — автоматически записать EXIF и скачать файл. Дата съёмки (DateTimeOriginal) сохраняется; системная дата файла будет текущей (ограничение браузера).">
+    title="При переходе к следующему фото — автоматически записать EXIF и скачать файл.">
     <input type="checkbox" id="auto-save-cb" onchange="onAutoSaveCbChange(this)"/>
     Авто-запись EXIF
   </label>
 
-  <button id="share-btn" onclick="copyShareLink()" title="Скопировать deeplink">🔗 Поделиться</button>
+  <button id="share-btn"      onclick="copyShareLink()">🔗 Поделиться</button>
   <button id="share-list-btn" onclick="copyShareLinkMd()" style="display:none">📋 Список URL</button>
   <div id="stats">
     <div class="stat"><span class="stat-val" id="stat-total">0</span><span class="stat-lbl">фото</span></div>
@@ -273,20 +344,56 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
   <button id="clear-btn" onclick="clearAll()">очистить</button>
 </header>
 
+<!-- YANDEX DIALOG -->
+<div id="yandex-dialog">
+  <div class="dialog-card">
+    <div class="dialog-title">🌐 Загрузить с Яндекс.Диска</div>
+    <input class="dialog-input" id="yd-url-field" type="text"
+           placeholder="https://disk.yandex.ru/i/… или yadi.sk/i/…"/>
+    <input class="dialog-input" id="yd-name-field" type="text" placeholder="Имя файла (необязательно)"/>
+    <div class="dialog-hint">
+      Файл должен быть открыт «Для всех» на Яндекс.Диске.<br/>
+      Требуется настроенный CORS-прокси (YANDEX_PROXY в коде).
+    </div>
+    <div class="dialog-actions">
+      <button class="dialog-btn cancel" onclick="closeYandexDialog()">Отмена</button>
+      <button class="dialog-btn" onclick="loadYandexFromDialog()">Загрузить</button>
+    </div>
+  </div>
+</div>
+
 <aside id="sidebar">
-  <div id="gd-wrap">
+  <!-- Google Drive panel (hidden by default, shown via showGDrivePanel) -->
+  <div id="gd-wrap" style="display:none">
     <label>📁 Папка Google Drive</label>
     <div id="gd-row">
       <input type="text" id="gd-url" placeholder="https://drive.google.com/drive/folders/…"/>
       <button id="gd-btn" onclick="loadFromGoogleDrive()">Загрузить</button>
     </div>
-    <div id="gd-key-row" style="display:flex;gap:6px;margin-top:5px">
-      <input type="text" id="gd-key" placeholder="Google API Key…" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:10px;padding:5px 8px;outline:none;min-width:0"/>
+    <div id="gd-key-row">
+      <input type="text" id="gd-key" placeholder="Google API Key…"/>
       <a href="https://console.cloud.google.com/apis/credentials" target="_blank"
          style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--accent2);text-decoration:none;align-self:center;white-space:nowrap;flex-shrink:0">+ ключ</a>
     </div>
     <div id="gd-status"></div>
   </div>
+
+  <!-- FOLDER TREE PANEL (P4) -->
+  <div id="folder-tree-panel">
+    <div class="ftree-header" onclick="toggleFolderTree()">
+      <div class="ftree-title">
+        <span id="ftree-arrow">▶</span>
+        📁 Структура объекта
+        <span id="ftree-filter-badge" style="display:none;background:rgba(232,255,71,.2);border-radius:3px;padding:0 5px;font-size:9px;color:var(--accent)">фильтр</span>
+      </div>
+      <div class="ftree-actions" onclick="event.stopPropagation()">
+        <button class="ftree-action-btn" onclick="createRootFolder()" title="Создать корневую папку">+ папка</button>
+        <button class="ftree-action-btn" onclick="clearFolderFilter()" title="Сбросить фильтр">× фильтр</button>
+      </div>
+    </div>
+    <div id="folder-tree-content" style="display:none"></div>
+  </div>
+
   <div id="photo-list"></div>
 </aside>
 
@@ -297,7 +404,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     <div class="hint-text">Загрузите JPG с GPS-метками<br/>— точки появятся на карте</div>
   </div>
 
-  <div id="gps-hint-overlay">📍 Кликните по карте в место съёмки</div>
+  <div id="gps-hint-overlay">📍 Кликните по карте — или перетащите маркер</div>
 
   <div id="manual-gps-panel">
     <div id="mgps-title">📍 Ручной GPS</div>
@@ -335,7 +442,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
         <button class="lbz-btn" onclick="lbZoomOut()">&#8722;</button>
         <span id="lb-zoom-val">100%</span>
         <button class="lbz-btn" onclick="lbZoomIn()">&#43;</button>
-        <button class="lbz-btn" onclick="lbZoomReset()" title="Сбросить">&#8634;</button>
+        <button class="lbz-btn" onclick="lbZoomReset()">&#8634;</button>
         <span class="lbz-sep"></span>
         <button id="lb-fullscreen-btn" onclick="openViewer()">&#x26F6; полный экран</button>
       </div>
@@ -398,16 +505,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 </div>
 </div>
 
-<!-- HOVER PREVIEW — для фото без GPS -->
-<div id="hover-preview">
-  <img id="hover-preview-img" src="" alt=""/>
-  <div id="hover-preview-body">
-    <div id="hover-preview-name"></div>
-    <div id="hover-preview-hint">📍 Координаты не установлены</div>
-    <div id="hover-preview-sub">Нажмите «Указать точку вручную» в списке</div>
-  </div>
-</div>
-
 <div id="viewer">
   <button id="viewer-close" onclick="closeViewer()">&#215;</button>
   <button id="viewer-prev" onclick="viewerNav(-1)">&#8592;</button>
@@ -420,33 +517,21 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <script>
 'use strict';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MAP  — maxZoom 22 (navZoom 19, tiles maxNativeZoom 19 → scale beyond)
-// ─────────────────────────────────────────────────────────────────────────────
-const map = L.map('map', { center: [55.75, 37.61], zoom: 5, zoomControl: true, maxZoom: 22 });
+// ─── MAP ──────────────────────────────────────────────────────────────────────
+const map = L.map('map', { center:[55.75,37.61], zoom:5, zoomControl:true, maxZoom:22 });
 map.attributionControl.setPrefix(false);
-L.control.scale({ imperial: false, metric: true, position: 'bottomleft' }).addTo(map);
+L.control.scale({ imperial:false, metric:true, position:'bottomleft' }).addTo(map);
 
 const TILES = {
-  osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap', maxZoom: 22, maxNativeZoom: 19
-  }),
-  sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    attribution: '© Esri', maxZoom: 22, maxNativeZoom: 19
-  })
+  osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:'© OpenStreetMap', maxZoom:22, maxNativeZoom:19 }),
+  sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution:'© Esri', maxZoom:22, maxNativeZoom:19 })
 };
 TILES.osm.addTo(map);
 let currentLayer = 'osm';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// КАДАСТРОВЫЙ СЛОЙ — НСПД
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── CADASTRE ─────────────────────────────────────────────────────────────────
 const NSPD_IDS = [36329, 36328, 36049, 36048, 36071];
-const NSPD_WMS_OPTS = {
-  service:'WMS',version:'1.3.0',format:'image/png',transparent:true,
-  styles:'',authkey:'0',tileSize:256,attribution:'© НСПД Росреестр',
-  zIndex:450,keepBuffer:2,updateWhenIdle:false,updateWhenZooming:false,
-};
+const NSPD_WMS_OPTS = { service:'WMS',version:'1.3.0',format:'image/png',transparent:true,styles:'',authkey:'0',tileSize:256,attribution:'© НСПД Росреестр',zIndex:450,keepBuffer:2,updateWhenIdle:false,updateWhenZooming:false };
 let cadastreLayers = [], cadastreActive = false;
 
 function toggleCadastre() {
@@ -455,10 +540,7 @@ function toggleCadastre() {
   if (!cadastreActive) {
     if (!cadastreLayers.length) {
       const opacity = document.getElementById('cadastre-range').value / 100;
-      cadastreLayers = NSPD_IDS.map(id =>
-        L.tileLayer.wms(`https://nspd.gov.ru/api/aeggis/v2/${id}/wms`,
-          { ...NSPD_WMS_OPTS, layers: String(id), opacity })
-      );
+      cadastreLayers = NSPD_IDS.map(id => L.tileLayer.wms(`https://nspd.gov.ru/api/aeggis/v2/${id}/wms`, { ...NSPD_WMS_OPTS, layers:String(id), opacity }));
     }
     cadastreLayers.forEach(l => l.addTo(map));
     cadastreActive = true; btn.classList.add('active'); opPanel.classList.add('visible');
@@ -474,18 +556,11 @@ function setCadastreOpacity(val) {
 }
 function toggleLayer() {
   const btn = document.getElementById('layer-btn');
-  if (currentLayer === 'osm') {
-    map.removeLayer(TILES.osm); TILES.sat.addTo(map);
-    currentLayer = 'sat'; btn.textContent = '🗺 OSM';
-  } else {
-    map.removeLayer(TILES.sat); TILES.osm.addTo(map);
-    currentLayer = 'osm'; btn.textContent = '🛰 Спутник';
-  }
+  if (currentLayer === 'osm') { map.removeLayer(TILES.osm); TILES.sat.addTo(map); currentLayer='sat'; btn.textContent='🗺 OSM'; }
+  else { map.removeLayer(TILES.sat); TILES.osm.addTo(map); currentLayer='osm'; btn.textContent='🛰 Спутник'; }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MAP CLICK
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── MAP CLICK ────────────────────────────────────────────────────────────────
 map.on('click', function(e) {
   if (manualGPSActive) { handleMapClickForGPS(e); return; }
   closeLightbox();
@@ -493,74 +568,141 @@ map.on('click', function(e) {
   window.lastClickedPoint = e.latlng;
   const content = `<b>📍 Координаты точки</b><br>
     <code style="background:#f0f0f0;padding:4px 8px;border-radius:4px;font-family:JetBrains Mono">${lat}, ${lng}</code><br><br>
-    <button onclick="queryNSPDAtPoint()"
-      style="background:#ff9500;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-weight:700;width:100%">
+    <button onclick="queryNSPDAtPoint()" style="background:#ff9500;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-weight:700;width:100%">
       📍 Запросить кадастр в этой точке
     </button>`;
-  L.popup({ maxWidth: 300, closeButton: true }).setLatLng(e.latlng).setContent(content).openOn(map);
+  L.popup({ maxWidth:300 }).setLatLng(e.latlng).setContent(content).openOn(map);
 });
 map.on('move zoom', () => {
   if (lbLL && document.getElementById('lightbox').classList.contains('visible')) posLightbox(lbLL);
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// STATE
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── STATE ────────────────────────────────────────────────────────────────────
 let photos = [], activeIdx = null, lbLL = null, lbScale = 1;
 let deeplinkPhotoLoaded = false;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// LOCAL FILE UPLOAD
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── UPLOAD MENU ──────────────────────────────────────────────────────────────
+function toggleUploadMenu(e) {
+  e.stopPropagation();
+  document.getElementById('upload-menu').classList.toggle('open');
+}
+function closeUploadMenu() {
+  document.getElementById('upload-menu').classList.remove('open');
+}
+document.addEventListener('click', () => closeUploadMenu());
+
+function triggerFileUpload()   { document.getElementById('file-input').click(); }
+function triggerFolderUpload() { document.getElementById('folder-input').click(); }
+function showYandexDialog()    { document.getElementById('yandex-dialog').classList.add('open'); document.getElementById('yd-url-field').focus(); }
+function closeYandexDialog()   { document.getElementById('yandex-dialog').classList.remove('open'); }
+function showGDrivePanel()     { const w = document.getElementById('gd-wrap'); w.style.display = w.style.display === 'none' ? '' : 'none'; }
+
+async function loadYandexFromDialog() {
+  const url  = document.getElementById('yd-url-field').value.trim();
+  const name = document.getElementById('yd-name-field').value.trim();
+  if (!url) return;
+  closeYandexDialog();
+  document.getElementById('yd-url-field').value = '';
+  document.getElementById('yd-name-field').value = '';
+  deeplinkPhotoLoaded = false;
+  await loadSingleRemotePhoto(url, name);
+  fitMapToPhotos();
+}
+
+// ─── FILE INPUTS ──────────────────────────────────────────────────────────────
 document.getElementById('file-input').addEventListener('change', e => {
-  handleLocalFiles([...e.target.files]); e.target.value = '';
+  handleLocalFiles([...e.target.files], null); e.target.value = '';
+});
+// P3: webkitdirectory — folder loading with recursive paths
+document.getElementById('folder-input').addEventListener('change', e => {
+  const files = [...e.target.files];
+  if (!files.length) return;
+  // Extract root folder name from first file's webkitRelativePath
+  const firstRel = files[0].webkitRelativePath || '';
+  const rootName = firstRel.split('/')[0] || '';
+  handleLocalFiles(files, rootName);
+  e.target.value = '';
 });
 document.getElementById('map-wrap').addEventListener('dragover', e => e.preventDefault());
 document.getElementById('map-wrap').addEventListener('drop', e => {
   e.preventDefault();
   const files = [...e.dataTransfer.files].filter(f => /jpe?g/i.test(f.type));
-  if (files.length) handleLocalFiles(files);
+  if (files.length) handleLocalFiles(files, null);
 });
 
-async function handleLocalFiles(files) {
+async function handleLocalFiles(files, rootFolderName) {
   setProgress(0); let added = 0;
   for (let i = 0; i < files.length; i++) {
-    if (await addLocalPhoto(files[i])) added++;
+    if (/jpe?g/i.test(files[i].type || '') || /\.jpe?g$/i.test(files[i].name)) {
+      if (await addLocalPhoto(files[i], rootFolderName)) added++;
+    }
     setProgress(Math.round((i + 1) / files.length * 100));
   }
   setTimeout(() => setProgress(0), 500);
   updateStats(); renderList(); fitMapToPhotos(); updateTimelineData();
-  showToast(`Добавлено: ${added} / ${files.length} фото`);
+  updateFolderTreePanel();
+  showToast(`Добавлено: ${added} фото`);
 }
 
-async function addLocalPhoto(file) {
+// ─── P3: derive loc.path from webkitRelativePath ─────────────────────────────
+function deriveFolderPath(file, rootFolderName) {
+  const rel = file.webkitRelativePath || '';
+  if (!rel) return '';
+  const parts = rel.split('/');
+  // parts[0] = rootFolderName, parts[last] = filename
+  if (parts.length <= 2) return ''; // file directly in selected folder
+  // Strip root folder name and filename → intermediate segments
+  const folderParts = parts.slice(1, parts.length - 1);
+  return folderParts.join('/');
+}
+
+// ─── P5: date mismatch detection ─────────────────────────────────────────────
+function detectDateMismatch(file, dateExif) {
+  if (!file || !file.lastModified || !dateExif) return false;
+  const m = String(dateExif).match(/(\d{4})[:\-](\d{2})[:\-](\d{2})[T\s](\d{2})[:\-](\d{2})[:\-](\d{2})/);
+  if (!m) return false;
+  try {
+    const exifTs = new Date(+m[1], +m[2]-1, +m[3], +m[4], +m[5], +m[6]).getTime();
+    return Math.abs(exifTs - file.lastModified) > 60000; // >60 sec diff
+  } catch { return false; }
+}
+
+async function addLocalPhoto(file, rootFolderName) {
   if (photos.find(p => p.name === file.name && p.size === file.size)) return false;
   const displayUrl = URL.createObjectURL(file);
-  let lat = null, lon = null, bearing = null, altitude = null, date = '', gppData = null;
+  let lat=null, lon=null, bearing=null, altitude=null, date='', gppData=null;
   try {
     const e = await exifr.parse(file, { gps:true,tiff:true,exif:true,ifd0:true,translateValues:true });
     if (e) {
-      lat = e.latitude ?? e.GPSLatitude ?? null;
-      lon = e.longitude ?? e.GPSLongitude ?? null;
-      const r = e.GPSImgDirection ?? e.ImgDirection ?? e.GPSDestBearing ?? null;
-      bearing = r !== null ? parseFloat(r) : null;
+      lat      = e.latitude  ?? e.GPSLatitude  ?? null;
+      lon      = e.longitude ?? e.GPSLongitude ?? null;
+      const r  = e.GPSImgDirection ?? e.ImgDirection ?? e.GPSDestBearing ?? null;
+      bearing  = r !== null ? parseFloat(r) : null;
       altitude = e.GPSAltitude ?? null;
-      date = e.DateTimeOriginal ?? e.DateTime ?? '';
-      gppData = parseGPPUserComment(e);
+      date     = e.DateTimeOriginal ?? e.DateTime ?? '';
+      gppData  = parseGPPUserComment(e);
     }
-  } catch (err) { console.warn('EXIF:', file.name, err); }
-  addPhoto({ name:file.name, size:file.size, displayUrl, thumbUrl:displayUrl,
-             lat, lon, bearing, altitude, date, isRemote:false, file,
-             experimentData: gppData || null });
+  } catch(err) { console.warn('EXIF:', file.name, err); }
+
+  // P3: derive loc.path from filesystem structure
+  const locPath = deriveFolderPath(file, rootFolderName);
+  // P5: check date mismatch
+  const dateMismatch = detectDateMismatch(file, date);
+
+  addPhoto({
+    name:file.name, size:file.size, displayUrl, thumbUrl:displayUrl,
+    lat, lon, bearing, altitude, date, isRemote:false, file,
+    experimentData:gppData || null,
+    locPath,           // derived from webkitRelativePath
+    dateMismatch,      // P5
+    sourceType:'local'
+  });
   return true;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GOOGLE DRIVE
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── GOOGLE DRIVE ─────────────────────────────────────────────────────────────
 function parseFolderId(url) {
-  const m = url.match(/folders\/([a-zA-Z0-9_-]+)/);
-  if (m) return m[1];
+  const m = url.match(/folders\/([a-zA-Z0-9_-]+)/); if (m) return m[1];
   if (/^[a-zA-Z0-9_-]{10,}$/.test(url.trim())) return url.trim();
   return null;
 }
@@ -572,134 +714,285 @@ async function loadFromGoogleDrive() {
   const gdBtn    = document.getElementById('gd-btn');
   const folderUrl = document.getElementById('gd-url').value.trim();
   const apiKey    = document.getElementById('gd-key').value.trim();
-  if (!folderUrl) { statusEl.textContent = 'Введите ссылку на папку'; return; }
-  if (!apiKey)    { statusEl.textContent = 'Введите API-ключ Google'; return; }
+  if (!folderUrl) { statusEl.textContent='Введите ссылку на папку'; return; }
+  if (!apiKey)    { statusEl.textContent='Введите API-ключ Google'; return; }
   const folderId = parseFolderId(folderUrl);
-  if (!folderId) { statusEl.textContent = 'Не удалось извлечь ID папки'; return; }
-  gdBtn.disabled = true; setProgress(2); statusEl.textContent = 'Получаем список файлов…';
-  const FIELDS = 'nextPageToken,files(id,name,size,imageMediaMetadata)';
-  const BASE   = 'https://www.googleapis.com/drive/v3/files';
-  const QUERY  = `'${folderId}' in parents and mimeType='image/jpeg' and trashed=false`;
-  let allFiles = [], pageToken = '';
+  if (!folderId) { statusEl.textContent='Не удалось извлечь ID папки'; return; }
+  gdBtn.disabled=true; setProgress(2); statusEl.textContent='Получаем список файлов…';
+  const FIELDS='nextPageToken,files(id,name,size,imageMediaMetadata)';
+  const BASE='https://www.googleapis.com/drive/v3/files';
+  const QUERY=`'${folderId}' in parents and mimeType='image/jpeg' and trashed=false`;
+  let allFiles=[], pageToken='';
   try {
-    while (true) {
-      let apiUrl = `${BASE}?q=${encodeURIComponent(QUERY)}&fields=${encodeURIComponent(FIELDS)}&pageSize=1000&orderBy=name&key=${encodeURIComponent(apiKey)}`;
-      if (pageToken) apiUrl += `&pageToken=${encodeURIComponent(pageToken)}`;
-      const res = await fetch(apiUrl);
-      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error?.message || `HTTP ${res.status}`); }
-      const data = await res.json();
-      allFiles.push(...(data.files || []));
-      statusEl.textContent = `Сканируем: ${allFiles.length} файлов…`;
-      setProgress(Math.round(2 + Math.min(allFiles.length / 50, 1) * 18));
-      pageToken = data.nextPageToken || '';
-      if (!pageToken) break;
+    while(true) {
+      let apiUrl=`${BASE}?q=${encodeURIComponent(QUERY)}&fields=${encodeURIComponent(FIELDS)}&pageSize=1000&orderBy=name&key=${encodeURIComponent(apiKey)}`;
+      if (pageToken) apiUrl+=`&pageToken=${encodeURIComponent(pageToken)}`;
+      const res=await fetch(apiUrl);
+      if (!res.ok) { const err=await res.json().catch(()=>({})); throw new Error(err.error?.message||`HTTP ${res.status}`); }
+      const data=await res.json();
+      allFiles.push(...(data.files||[]));
+      statusEl.textContent=`Сканируем: ${allFiles.length} файлов…`;
+      setProgress(Math.round(2+Math.min(allFiles.length/50,1)*18));
+      pageToken=data.nextPageToken||''; if (!pageToken) break;
     }
-  } catch (e) {
-    statusEl.textContent = 'Ошибка API: ' + e.message;
-    setProgress(0); gdBtn.disabled = false; showToast('Ошибка Google Drive API'); return;
-  }
-  if (!allFiles.length) { statusEl.textContent = 'Нет JPEG-файлов в папке'; setProgress(0); gdBtn.disabled = false; return; }
-  let added = 0, noGps = 0;
-  for (let i = 0; i < allFiles.length; i++) {
-    const f = allFiles[i];
-    if (photos.find(p => p.name === f.name && p.gdId === f.id)) continue;
-    const meta = f.imageMediaMetadata || {}, loc = meta.location || {};
-    const lat = loc.latitude  != null ? parseFloat(loc.latitude)  : null;
-    const lon = loc.longitude != null ? parseFloat(loc.longitude) : null;
-    const alt = loc.altitude  != null ? parseFloat(loc.altitude)  : null;
-    if (lat === null || lon === null) noGps++;
-    addPhoto({ name:f.name, size:f.size, gdId:f.id, thumbUrl:gdThumb(f.id), displayUrl:gdDisplay(f.id),
-               lat, lon, bearing:null, altitude:alt, date:meta.time || '', isRemote:true });
+  } catch(e) { statusEl.textContent='Ошибка API: '+e.message; setProgress(0); gdBtn.disabled=false; showToast('Ошибка Google Drive API'); return; }
+  if (!allFiles.length) { statusEl.textContent='Нет JPEG-файлов'; setProgress(0); gdBtn.disabled=false; return; }
+  let added=0, noGps=0;
+  for (let i=0; i<allFiles.length; i++) {
+    const f=allFiles[i];
+    if (photos.find(p=>p.name===f.name&&p.gdId===f.id)) continue;
+    const meta=f.imageMediaMetadata||{}, loc=meta.location||{};
+    const lat=loc.latitude!=null?parseFloat(loc.latitude):null;
+    const lon=loc.longitude!=null?parseFloat(loc.longitude):null;
+    const alt=loc.altitude!=null?parseFloat(loc.altitude):null;
+    if (!lat||!lon) noGps++;
+    addPhoto({ name:f.name,size:f.size,gdId:f.id,thumbUrl:gdThumb(f.id),displayUrl:gdDisplay(f.id),lat,lon,bearing:null,altitude:alt,date:meta.time||'',isRemote:true,sourceType:'gdrive' });
     added++;
-    if (added % 20 === 0 || added === allFiles.length) {
-      setProgress(Math.round(20 + added / allFiles.length * 80));
-      statusEl.textContent = `Обработано ${added} / ${allFiles.length}…`;
-      updateStats(); renderList();
-      if (added === 20) fitMapToPhotos();
-      await new Promise(r => setTimeout(r, 0));
-    }
+    if (added%20===0||added===allFiles.length) { setProgress(Math.round(20+added/allFiles.length*80)); statusEl.textContent=`Обработано ${added}/${allFiles.length}…`; updateStats(); renderList(); if (added===20) fitMapToPhotos(); await new Promise(r=>setTimeout(r,0)); }
   }
-  fitMapToPhotos(); setTimeout(() => setProgress(0), 400);
+  fitMapToPhotos(); setTimeout(()=>setProgress(0),400);
   updateTimelineData(); updateStats(); renderList();
-  statusEl.textContent = `Загружено: ${added} фото${noGps > 0 ? ` (${noGps} без GPS)` : ''}`;
-  showToast(`Google Drive: ${added} фото добавлено`); gdBtn.disabled = false;
+  statusEl.textContent=`Загружено: ${added} фото${noGps>0?` (${noGps} без GPS)`:''}`; showToast(`GDrive: ${added} фото`); gdBtn.disabled=false;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PHOTO REGISTRY
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── PHOTO REGISTRY ───────────────────────────────────────────────────────────
 function addPhoto(photo) {
   if (photo.date && !photo.dateObj) photo.dateObj = parsePhotoDate(photo.date);
-  photos.push({ marker: null, ...photo });
+  photos.push({ marker:null, locPath:'', dateMismatch:false, ...photo });
   const idx = photos.length - 1;
   if (photo.lat !== null && photo.lon !== null) addMarker(photos[idx], idx);
   updateTimelineData();
   updateInviteButton();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FOV / HEADLIGHT BEAM SVG
-// Dual-cone "headlight" effect:
-//   outer diffuse glow  ±65°, fill opacity 0.04
-//   inner bright beam   ±22°, fill opacity 0.07, subtle stroke
-// Total fill opacity ≈ half of original (was 0.13, now effective ~0.065)
-// ─────────────────────────────────────────────────────────────────────────────
-function fovSvg(bearing, R) {
-  if (bearing === null || isNaN(bearing)) return '';
-  const cx = R, cy = R, S = R * 2;
-  const rad = a => a * Math.PI / 180;
-  const b = bearing - 90;
+// ─── P4: VIRTUAL FOLDER TREE ──────────────────────────────────────────────────
+// Built from locPath of loaded local photos.
+let selectedFolderPath = null;  // null = no filter
+let folderTreeExpanded = {};    // path → bool
+let folderTreeOpen = false;
 
-  // outer diffuse glow (±65°)
-  const oL = rad(b - 65), oR = rad(b + 65);
-  const ox1 = cx + R * Math.cos(oL), oy1 = cy + R * Math.sin(oL);
-  const ox2 = cx + R * Math.cos(oR), oy2 = cy + R * Math.sin(oR);
-
-  // inner bright beam (±22°)
-  const iL = rad(b - 22), iR = rad(b + 22);
-  const ix1 = cx + R * Math.cos(iL), iy1 = cy + R * Math.sin(iL);
-  const ix2 = cx + R * Math.cos(iR), iy2 = cy + R * Math.sin(iR);
-
-  // direction line
-  const nx = cx + R * .55 * Math.cos(rad(b)), ny = cy + R * .55 * Math.sin(rad(b));
-
-  return `<svg width="${S}" height="${S}" viewBox="0 0 ${S} ${S}" `
-    + `style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;overflow:visible">`
-    + `<path d="M${cx},${cy} L${ox1},${oy1} A${R},${R} 0 0,1 ${ox2},${oy2} Z" fill="rgba(232,255,71,0.04)" stroke="none"/>`
-    + `<path d="M${cx},${cy} L${ix1},${iy1} A${R},${R} 0 0,1 ${ix2},${iy2} Z" `
-    + `fill="rgba(232,255,71,0.07)" stroke="rgba(232,255,71,0.20)" stroke-width="0.8" stroke-linejoin="round"/>`
-    + `<line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="rgba(232,255,71,0.55)" stroke-width="1.3" stroke-linecap="round"/>`
-    + `</svg>`;
+function buildFolderTree() {
+  const tree = {};  // path → { path, name, children:{}, photoCount:0 }
+  photos.forEach((p, i) => {
+    if (p.isRemote || !p.locPath) return;
+    const parts = p.locPath.split('/').filter(Boolean);
+    let cur = tree;
+    let pathSoFar = '';
+    parts.forEach((part, depth) => {
+      pathSoFar = pathSoFar ? pathSoFar + '/' + part : part;
+      if (!cur[part]) cur[part] = { path:pathSoFar, name:part, children:{}, photoCount:0 };
+      cur[part].photoCount++;
+      cur = cur[part].children;
+    });
+  });
+  return tree;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MARKERS — hit area reduced to 20 px, visual SVG overflows but is pointer-none
-// ─────────────────────────────────────────────────────────────────────────────
-function addMarker(photo, idx) {
-  const hb  = photo.bearing !== null && !isNaN(photo.bearing);
-  const S   = 100;  // visual size (px) for the SVG cone
-  const HIT = 20;   // Leaflet click-area — small, precise
+function updateFolderTreePanel() {
+  const tree = buildFolderTree();
+  const hasNodes = Object.keys(tree).length > 0;
+  document.getElementById('folder-tree-panel').classList.toggle('visible', hasNodes);
+  if (hasNodes) renderFolderTree(tree);
+}
 
+function renderFolderTree(tree) {
+  const container = document.getElementById('folder-tree-content');
+  container.innerHTML = '';
+  if (!Object.keys(tree).length) {
+    container.innerHTML = '<div style="padding:8px 12px;font-size:10px;color:var(--muted);font-family:JetBrains Mono,monospace">Нет структуры папок</div>';
+    return;
+  }
+  renderFolderNodes(tree, container, 0);
+}
+
+function renderFolderNodes(nodes, container, depth) {
+  Object.values(nodes).sort((a,b) => a.name.localeCompare(b.name, 'ru')).forEach(node => {
+    const hasChildren = Object.keys(node.children).length > 0;
+    const isOpen = folderTreeExpanded[node.path] !== false && depth === 0; // root open by default
+    const isSelected = selectedFolderPath === node.path;
+
+    const row = document.createElement('div');
+    row.className = 'fnode-row' + (isSelected ? ' selected' : '');
+    row.style.paddingLeft = (8 + depth * 16) + 'px';
+    row.dataset.path = node.path;
+
+    // Drag-and-drop target
+    row.addEventListener('dragover', e => { e.preventDefault(); row.classList.add('drag-over'); });
+    row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
+    row.addEventListener('drop', e => {
+      e.preventDefault(); row.classList.remove('drag-over');
+      const idx = parseInt(e.dataTransfer.getData('photoIdx'));
+      if (!isNaN(idx)) assignPhotoToFolder(idx, node.path);
+    });
+
+    const toggle = document.createElement('span');
+    toggle.className = 'fnode-toggle' + (hasChildren && isOpen ? ' open' : '');
+    toggle.textContent = hasChildren ? '▶' : '';
+    toggle.addEventListener('click', e => { e.stopPropagation(); toggleFolderNode(node.path); });
+
+    const icon = document.createElement('span');
+    icon.className = 'fnode-icon';
+    icon.textContent = isSelected ? '📂' : '📁';
+
+    const label = document.createElement('span');
+    label.className = 'fnode-label';
+    label.textContent = node.name;
+    label.addEventListener('dblclick', e => { e.stopPropagation(); startFolderRename(label, node.path); });
+
+    const count = document.createElement('span');
+    count.className = 'fnode-count';
+    count.textContent = node.photoCount;
+
+    row.appendChild(toggle);
+    row.appendChild(icon);
+    row.appendChild(label);
+    row.appendChild(count);
+
+    row.addEventListener('click', () => {
+      selectedFolderPath = (selectedFolderPath === node.path) ? null : node.path;
+      document.getElementById('ftree-filter-badge').style.display = selectedFolderPath ? '' : 'none';
+      updateFolderTreePanel();
+      renderList();
+      renderTimeline();
+    });
+
+    container.appendChild(row);
+
+    if (hasChildren) {
+      const childContainer = document.createElement('div');
+      childContainer.style.display = isOpen ? 'block' : 'none';
+      childContainer.dataset.parent = node.path;
+      renderFolderNodes(node.children, childContainer, depth + 1);
+      container.appendChild(childContainer);
+    }
+  });
+}
+
+function toggleFolderNode(path) {
+  folderTreeExpanded[path] = !(folderTreeExpanded[path] !== false);
+  updateFolderTreePanel();
+}
+
+function toggleFolderTree() {
+  folderTreeOpen = !folderTreeOpen;
+  document.getElementById('folder-tree-content').style.display = folderTreeOpen ? 'block' : 'none';
+  document.getElementById('ftree-arrow').textContent = folderTreeOpen ? '▼' : '▶';
+}
+
+function clearFolderFilter() {
+  selectedFolderPath = null;
+  document.getElementById('ftree-filter-badge').style.display = 'none';
+  updateFolderTreePanel();
+  renderList();
+  renderTimeline();
+}
+
+function createRootFolder() {
+  const name = prompt('Имя новой папки:');
+  if (!name || !name.trim()) return;
+  // Assign all unassigned local photos to this folder
+  const path = name.trim();
+  photos.forEach((p, i) => { if (!p.isRemote && !p.locPath) p.locPath = path; });
+  updateFolderTreePanel();
+  renderList();
+}
+
+function startFolderRename(label, path) {
+  const oldName = label.textContent;
+  const input = document.createElement('input');
+  input.value = oldName;
+  label.textContent = '';
+  label.appendChild(input);
+  input.focus(); input.select();
+  const commit = () => {
+    const newName = input.value.trim() || oldName;
+    const oldPath = path;
+    const parentPath = path.includes('/') ? path.substring(0, path.lastIndexOf('/')) : '';
+    const newPath = parentPath ? parentPath + '/' + newName : newName;
+    // Rename all photos with this prefix
+    photos.forEach(p => {
+      if (p.locPath === oldPath || p.locPath.startsWith(oldPath + '/')) {
+        p.locPath = newPath + p.locPath.slice(oldPath.length);
+      }
+    });
+    if (selectedFolderPath === oldPath) selectedFolderPath = newPath;
+    updateFolderTreePanel();
+    renderList();
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); if (e.key === 'Escape') { input.value = oldName; input.blur(); } });
+}
+
+function assignPhotoToFolder(idx, folderPath) {
+  if (photos[idx]) {
+    photos[idx].locPath = folderPath;
+    renderList();
+    updateFolderTreePanel();
+    showToast(`📁 ${photos[idx].name} → ${folderPath}`, 'success', 2000);
+  }
+}
+
+function isPhotoInSelectedFolder(p) {
+  if (!selectedFolderPath) return false;
+  return p.locPath === selectedFolderPath || p.locPath.startsWith(selectedFolderPath + '/');
+}
+
+// ─── FOV / HEADLIGHT BEAM ─────────────────────────────────────────────────────
+function fovSvg(bearing, R) {
+  if (bearing === null || isNaN(bearing)) return '';
+  const cx=R, cy=R, S=R*2;
+  const rad = a => a*Math.PI/180;
+  const b = bearing - 90;
+  const oL=rad(b-65), oR=rad(b+65);
+  const ox1=cx+R*Math.cos(oL), oy1=cy+R*Math.sin(oL);
+  const ox2=cx+R*Math.cos(oR), oy2=cy+R*Math.sin(oR);
+  const iL=rad(b-22), iR=rad(b+22);
+  const ix1=cx+R*Math.cos(iL), iy1=cy+R*Math.sin(iL);
+  const ix2=cx+R*Math.cos(iR), iy2=cy+R*Math.sin(iR);
+  const nx=cx+R*.55*Math.cos(rad(b)), ny=cy+R*.55*Math.sin(rad(b));
+  return `<svg width="${S}" height="${S}" viewBox="0 0 ${S} ${S}" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;overflow:visible">`
+    +`<path d="M${cx},${cy} L${ox1},${oy1} A${R},${R} 0 0,1 ${ox2},${oy2} Z" fill="rgba(232,255,71,0.04)" stroke="none"/>`
+    +`<path d="M${cx},${cy} L${ix1},${iy1} A${R},${R} 0 0,1 ${ix2},${iy2} Z" fill="rgba(232,255,71,0.07)" stroke="rgba(232,255,71,0.20)" stroke-width="0.8" stroke-linejoin="round"/>`
+    +`<line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="rgba(232,255,71,0.55)" stroke-width="1.3" stroke-linecap="round"/>`
+    +`</svg>`;
+}
+
+// P8: brighter blue flashlight for temp marker
+function fovSvgAccent(bearing, R) {
+  if (bearing === null || isNaN(bearing)) return '';
+  const cx=R, cy=R, S=R*2;
+  const rad = a => a*Math.PI/180;
+  const b = bearing - 90;
+  const oL=rad(b-65), oR=rad(b+65);
+  const ox1=cx+R*Math.cos(oL), oy1=cy+R*Math.sin(oL);
+  const ox2=cx+R*Math.cos(oR), oy2=cy+R*Math.sin(oR);
+  const iL=rad(b-22), iR=rad(b+22);
+  const ix1=cx+R*Math.cos(iL), iy1=cy+R*Math.sin(iL);
+  const ix2=cx+R*Math.cos(iR), iy2=cy+R*Math.sin(iR);
+  const nx=cx+R*.55*Math.cos(rad(b)), ny=cy+R*.55*Math.sin(rad(b));
+  // P8: significantly brighter values (was 0.04/0.08/0.22/0.60, now 0.10/0.22/0.55/1.0)
+  return `<svg width="${S}" height="${S}" viewBox="0 0 ${S} ${S}" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;overflow:visible">`
+    +`<path d="M${cx},${cy} L${ox1},${oy1} A${R},${R} 0 0,1 ${ox2},${oy2} Z" fill="rgba(71,200,255,0.10)" stroke="none"/>`
+    +`<path d="M${cx},${cy} L${ix1},${iy1} A${R},${R} 0 0,1 ${ix2},${iy2} Z" fill="rgba(71,200,255,0.22)" stroke="rgba(71,200,255,0.55)" stroke-width="1.2" stroke-linejoin="round"/>`
+    +`<line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="rgba(71,200,255,1.0)" stroke-width="1.6" stroke-linecap="round"/>`
+    +`</svg>`;
+}
+
+// ─── MARKERS ─────────────────────────────────────────────────────────────────
+function addMarker(photo, idx) {
+  const hb = photo.bearing !== null && !isNaN(photo.bearing);
+  const S=100, HIT=20;
   let html;
   if (hb) {
-    html = `<div style="width:${HIT}px;height:${HIT}px;position:relative;overflow:visible">`
-      + `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);`
-      + `width:${S}px;height:${S}px;pointer-events:none">`
-      + fovSvg(photo.bearing, S / 2)
-      + `</div>`
-      + `<div class="marker-dot"></div>`
-      + `</div>`;
+    html=`<div style="width:${HIT}px;height:${HIT}px;position:relative;overflow:visible">`
+      +`<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:${S}px;height:${S}px;pointer-events:none">`
+      +fovSvg(photo.bearing, S/2)+`</div><div class="marker-dot"></div></div>`;
   } else {
-    html = `<div style="width:${HIT}px;height:${HIT}px;position:relative">`
-      + `<div class="marker-dot"></div></div>`;
+    html=`<div style="width:${HIT}px;height:${HIT}px;position:relative"><div class="marker-dot"></div></div>`;
   }
-
-  const icon = L.divIcon({ html, className: '', iconSize: [HIT, HIT], iconAnchor: [HIT / 2, HIT / 2] });
+  const icon = L.divIcon({ html, className:'', iconSize:[HIT,HIT], iconAnchor:[HIT/2,HIT/2] });
   const marker = L.marker([photo.lat, photo.lon], { icon }).addTo(map)
-    .on('click', () => {
-      openLightbox(photos.indexOf(photo), marker.getLatLng());
-      highlightTimelineDot(photo);
-    });
+    .on('click', () => { openLightbox(photos.indexOf(photo), marker.getLatLng()); highlightTimelineDot(photo); });
   photo.marker = marker;
 }
 
@@ -714,109 +1007,100 @@ function rebuildMarkerListeners() {
 function setActiveMarker(idx) {
   photos.forEach((p, i) => {
     if (!p.marker) return;
-    const el = p.marker.getElement(); if (!el) return;
-    const dot = el.querySelector('.marker-dot'); if (!dot) return;
-    dot.classList.toggle('active', i === idx);
+    const el=p.marker.getElement(); if (!el) return;
+    const dot=el.querySelector('.marker-dot'); if (!dot) return;
+    dot.classList.toggle('active', i===idx);
   });
 }
 function clearActiveMarker() {
   photos.forEach(p => {
     if (!p.marker) return;
-    const el = p.marker.getElement(); if (!el) return;
-    const dot = el.querySelector('.marker-dot'); if (dot) dot.classList.remove('active');
+    const el=p.marker.getElement(); if (!el) return;
+    const dot=el.querySelector('.marker-dot'); if (dot) dot.classList.remove('active');
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FIT MAP — single photo nav zoom 19
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── FIT MAP ──────────────────────────────────────────────────────────────────
 function fitMapToPhotos() {
   const pts = photos.filter(p => p.lat !== null);
   if (!pts.length) return;
   document.getElementById('map-hint').classList.add('hidden');
   if (pts.length === 1) map.setView([pts[0].lat, pts[0].lon], 19);
-  else map.fitBounds(L.latLngBounds(pts.map(p => [p.lat, p.lon])), { padding: [60,60], maxZoom: 19 });
+  else map.fitBounds(L.latLngBounds(pts.map(p=>[p.lat,p.lon])), { padding:[60,60], maxZoom:19 });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HOVER PREVIEW — shows enlarged photo+hint for no-GPS items on hover
-// ─────────────────────────────────────────────────────────────────────────────
-let _hoverTimer = null;
-function showHoverPreview(p, el) {
-  clearTimeout(_hoverTimer);
-  const preview = document.getElementById('hover-preview');
-  const img = document.getElementById('hover-preview-img');
-  img.src = p.thumbUrl || p.displayUrl || '';
-  document.getElementById('hover-preview-name').textContent = p.name;
-  const sidebar  = document.getElementById('sidebar');
-  const sidebarR = sidebar.getBoundingClientRect().right;
-  const elRect   = el.getBoundingClientRect();
-  const top = Math.max(60, Math.min(elRect.top, window.innerHeight - 300));
-  preview.style.left    = (sidebarR + 10) + 'px';
-  preview.style.top     = top + 'px';
-  preview.style.display = 'block';
-}
-function hideHoverPreview() {
-  _hoverTimer = setTimeout(() => {
-    document.getElementById('hover-preview').style.display = 'none';
-  }, 100);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SIDEBAR LIST
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── SIDEBAR LIST ─────────────────────────────────────────────────────────────
 function renderList() {
   const list = document.getElementById('photo-list');
   while (list.firstChild) list.removeChild(list.firstChild);
   if (!photos.length) {
-    const el = document.createElement('div');
-    el.id = 'no-photos'; el.textContent = 'Фотографии не добавлены';
+    const el=document.createElement('div'); el.id='no-photos'; el.textContent='Фотографии не добавлены';
     list.appendChild(el); return;
   }
 
   photos.forEach((p, i) => {
     const isManualActive = manualModePhotoIndex === i;
-    const item = document.createElement('div');
     const isDimmed = !isPhotoInRange(p);
+    const inFolder = selectedFolderPath ? isPhotoInSelectedFolder(p) : false;
+
+    const item = document.createElement('div');
     item.className = 'photo-item'
       + (p.lat === null ? ' no-gps' : '')
       + (activeIdx === i ? ' active' : '')
       + (isManualActive ? ' manual-active' : '')
       + (isDimmed ? ' dimmed' : '');
     item.dataset.idx = i;
+    item.draggable = !p.isRemote;  // P4: local photos are draggable
 
-    // Hover preview for no-GPS photos (sidebar)
-    if (p.lat === null) {
-      item.addEventListener('mouseenter', () => showHoverPreview(p, item));
-      item.addEventListener('mouseleave', hideHoverPreview);
+    // P4: drag for folder assignment
+    if (!p.isRemote) {
+      item.addEventListener('dragstart', e => {
+        e.dataTransfer.setData('photoIdx', String(i));
+        item.classList.add('dragging');
+      });
+      item.addEventListener('dragend', () => item.classList.remove('dragging'));
     }
 
     const thumbArea = document.createElement('div');
     thumbArea.className = 'thumb-area';
     const img = document.createElement('img');
     img.className = 'thumb'; img.alt = ''; img.loading = 'lazy';
-    if (p._loading) { img.classList.add('loading'); } else if (p.thumbUrl) { img.src = p.thumbUrl; }
+    if (p._loading) img.classList.add('loading');
+    else if (p.thumbUrl) img.src = p.thumbUrl;
     thumbArea.appendChild(img);
 
     const meta = document.createElement('div');
     meta.className = 'photo-meta';
-    const coords = p.lat !== null ? p.lat.toFixed(5) + ', ' + p.lon.toFixed(5) : 'нет GPS';
+    const coords = p.lat !== null ? p.lat.toFixed(5)+', '+p.lon.toFixed(5) : 'нет GPS';
     meta.innerHTML = `<div class="photo-name">${esc(p.name)}</div>`
-      + `<div class="photo-coords">${esc(coords)}</div>`
-      + `<span class="gps-badge ${p.lat !== null ? 'gps-ok' : 'gps-no'}">`
-      + (p.lat !== null ? 'GPS' : 'нет') + '</span>';
+      +`<div class="photo-coords">${esc(coords)}</div>`
+      +`<span class="gps-badge ${p.lat!==null?'gps-ok':'gps-no'}">${p.lat!==null?'GPS':'нет'}</span>`;
 
+    // P5: date mismatch badge
+    if (p.dateMismatch) {
+      const dmBadge = document.createElement('span');
+      dmBadge.className = 'date-mismatch-badge';
+      dmBadge.title = 'Дата файла ≠ дата съёмки. Watchdog с флагом --fix-dates исправит mtime.';
+      dmBadge.innerHTML = '⚠ дата';
+      meta.appendChild(dmBadge);
+    }
+
+    // loc.path badge
+    if (p.locPath) {
+      const locBadge = document.createElement('span');
+      locBadge.className = 'loc-badge';
+      locBadge.title = p.locPath;
+      locBadge.textContent = '📁 ' + p.locPath.split('/').pop();
+      meta.appendChild(locBadge);
+    }
+
+    // GPS mode button for no-GPS
     if (p.lat === null) {
       const gpsBtn = document.createElement('button');
       gpsBtn.className = 'gps-manual-btn';
       gpsBtn.textContent = isManualActive ? '📍 Режим GPS активен…' : '📍 Указать точку вручную';
-      gpsBtn.addEventListener('click', ev => {
-        ev.stopPropagation();
-        if (isManualActive) exitManualGPSMode(); else enterManualGPSMode(i);
-      });
+      gpsBtn.addEventListener('click', ev => { ev.stopPropagation(); if (isManualActive) exitManualGPSMode(); else enterManualGPSMode(i); });
       meta.appendChild(gpsBtn);
-      meta.style.cursor = 'default';
-      meta.style.pointerEvents = 'auto';
     }
 
     const del = document.createElement('button');
@@ -825,353 +1109,349 @@ function renderList() {
 
     item.appendChild(thumbArea); item.appendChild(meta); item.appendChild(del);
 
-    if (p.lat !== null) {
-      const go = () => {
-        // Navigate zoom increased to 19
-        map.setView([p.lat, p.lon], Math.max(map.getZoom(), 19), { animate: true });
+    // P7: ALL photos are now clickable → open lightbox
+    const go = () => {
+      if (p.lat !== null) {
+        map.setView([p.lat, p.lon], Math.max(map.getZoom(), 19), { animate:true });
         openLightbox(i, L.latLng(p.lat, p.lon));
-      };
-      thumbArea.addEventListener('click', go);
-      meta.addEventListener('click', go);
-    } else {
-      thumbArea.style.cursor = 'default';
-      thumbArea.style.pointerEvents = 'none';
-    }
+      } else {
+        openLightbox(i, null);  // P7: no-GPS → fixed position lightbox
+      }
+    };
+    thumbArea.style.cursor = 'pointer';
+    thumbArea.style.pointerEvents = 'auto';
+    thumbArea.addEventListener('click', go);
+    meta.style.cursor = p.lat !== null ? 'pointer' : 'default';
+    if (p.lat !== null) meta.addEventListener('click', go);
+
     list.appendChild(item);
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DELETE
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── DELETE ───────────────────────────────────────────────────────────────────
 function deletePhoto(idx) {
-  const p = photos[idx]; if (!p) return;
-  if (activeIdx === idx) closeLightbox();
-  if (manualModePhotoIndex === idx) exitManualGPSMode();
+  const p=photos[idx]; if (!p) return;
+  if (activeIdx===idx) closeLightbox();
+  if (manualModePhotoIndex===idx) exitManualGPSMode();
   if (p.marker) map.removeLayer(p.marker);
   if (!p.isRemote && p.displayUrl) URL.revokeObjectURL(p.displayUrl);
   if (p.isRemote && p.remoteViewUrl) {
-    const ri = remotePhotos.findIndex(r => r.originalUrl === p.remoteViewUrl);
-    if (ri >= 0) remotePhotos.splice(ri, 1);
-    updateShareButton();
+    const ri=remotePhotos.findIndex(r=>r.originalUrl===p.remoteViewUrl);
+    if (ri>=0) remotePhotos.splice(ri,1); updateShareButton();
   }
-  photos.splice(idx, 1);
-  if (activeIdx !== null) {
-    if (activeIdx === idx) activeIdx = null;
-    else if (activeIdx > idx) activeIdx--;
-  }
-  if (manualModePhotoIndex !== null && manualModePhotoIndex > idx) manualModePhotoIndex--;
+  photos.splice(idx,1);
+  if (activeIdx!==null) { if (activeIdx===idx) activeIdx=null; else if (activeIdx>idx) activeIdx--; }
+  if (manualModePhotoIndex!==null&&manualModePhotoIndex>idx) manualModePhotoIndex--;
   rebuildMarkerListeners();
-  updateStats(); renderList(); updateInviteButton();
-  if (!photos.some(p => p.lat !== null)) document.getElementById('map-hint').classList.remove('hidden');
+  updateStats(); renderList(); updateInviteButton(); updateFolderTreePanel();
+  if (!photos.some(p=>p.lat!==null)) document.getElementById('map-hint').classList.remove('hidden');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// LIGHTBOX
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── LIGHTBOX ─────────────────────────────────────────────────────────────────
 async function openLightbox(idx, latlng) {
-  const p = photos[idx]; if (!p) return;
-  activeIdx = idx; lbLL = latlng; lbScale = 1;
-  document.querySelectorAll('.photo-item').forEach(el => el.classList.remove('active'));
-  const item = document.querySelector(`.photo-item[data-idx="${idx}"]`);
-  if (item) { item.classList.add('active'); item.scrollIntoView({ block: 'nearest' }); }
-  const lbImg = document.getElementById('lb-img');
-  lbImg.src = p.displayUrl || p.thumbUrl || '';
-  lbImg.style.transform = 'scale(1)';
-  document.getElementById('lb-zoom-val').textContent = '100%';
-  document.getElementById('lb-name').textContent = p.name;
-  document.getElementById('lb-tbody').innerHTML = buildRows(p);
-  document.getElementById('lb-gps-btn').style.display = 'none';
+  const p=photos[idx]; if (!p) return;
+  activeIdx=idx; lbLL=latlng; lbScale=1;
+  document.querySelectorAll('.photo-item').forEach(el=>el.classList.remove('active'));
+  const item=document.querySelector(`.photo-item[data-idx="${idx}"]`);
+  if (item) { item.classList.add('active'); item.scrollIntoView({ block:'nearest' }); }
+  const lbImg=document.getElementById('lb-img');
+  lbImg.src=p.displayUrl||p.thumbUrl||''; lbImg.style.transform='scale(1)';
+  document.getElementById('lb-zoom-val').textContent='100%';
+  document.getElementById('lb-name').textContent=p.name;
+  document.getElementById('lb-tbody').innerHTML=buildRows(p);
+  document.getElementById('lb-gps-btn').style.display='none';
+  // Remove GPS active class when opening fresh
+  document.getElementById('lb-card').classList.remove('gps-active');
   document.getElementById('lightbox').classList.add('visible');
   setActiveMarker(idx);
   requestAnimationFrame(() => posLightbox(latlng));
   highlightTimelineDot(p);
 }
 
-function enterManualGPSModeFromLightbox() {
+// P7: GPS action buttons integrated into buildRows
+function enterGPSFromLightbox() {
   if (activeIdx === null) return;
   const p = photos[activeIdx];
+  // Make lightbox semi-transparent (P7)
+  document.getElementById('lb-card').classList.add('gps-active');
   enterManualGPSMode(activeIdx);
-  if (p.lat !== null && p.lon !== null) {
-    tempLat = p.lat; tempLon = p.lon;
-    const coordsEl = document.getElementById('mgps-coords-display');
-    coordsEl.textContent = `${tempLat.toFixed(6)}, ${tempLon.toFixed(6)}`;
-    coordsEl.classList.add('set');
-    document.getElementById('mgps-bearing-wrap').style.display = 'block';
-    document.getElementById('mgps-save-btn').disabled = false;
+  if (p.lat !== null) {
+    tempLat=p.lat; tempLon=p.lon;
+    const coordsEl=document.getElementById('mgps-coords-display');
+    coordsEl.textContent=`${tempLat.toFixed(6)}, ${tempLon.toFixed(6)}`; coordsEl.classList.add('set');
+    document.getElementById('mgps-bearing-wrap').style.display='block';
+    document.getElementById('mgps-save-btn').disabled=false;
   }
   if (p.bearing !== null && !isNaN(p.bearing)) {
-    tempBearing = Math.round(p.bearing);
-    document.getElementById('mgps-bearing').value = tempBearing;
-    document.getElementById('mgps-bearing-val').textContent = tempBearing + '°';
+    tempBearing=Math.round(p.bearing);
+    document.getElementById('mgps-bearing').value=tempBearing;
+    document.getElementById('mgps-bearing-val').textContent=tempBearing+'°';
   } else {
-    tempBearing = 0;
-    document.getElementById('mgps-bearing').value = 0;
-    document.getElementById('mgps-bearing-val').textContent = '0°';
+    tempBearing=0; document.getElementById('mgps-bearing').value=0; document.getElementById('mgps-bearing-val').textContent='0°';
   }
 }
 
+// P7: posLightbox handles null latlng for no-GPS photos
 function posLightbox(latlng) {
-  const lb = document.getElementById('lightbox');
-  const card = document.getElementById('lb-card');
-  const mw = document.getElementById('map-wrap');
-  if (!latlng) { lb.style.left = '20px'; lb.style.top = '60px'; return; }
-  const pt = map.latLngToContainerPoint(latlng);
-  const cw = card.offsetWidth || 330, ch = card.offsetHeight || 380;
-  const W = mw.offsetWidth, H = mw.offsetHeight, gap = 36;
-  let left = pt.x + gap, top = pt.y - ch / 2;
-  if (left + cw > W - gap) left = pt.x - cw - gap;
-  if (left < gap) left = gap;
-  if (top < gap) top = gap;
-  if (top + ch > H - gap) top = H - ch - gap;
-  lb.style.left = left + 'px'; lb.style.top = top + 'px';
+  const lb=document.getElementById('lightbox');
+  const card=document.getElementById('lb-card');
+  const mw=document.getElementById('map-wrap');
+  const cw=card.offsetWidth||330, ch=card.offsetHeight||420;
+  const W=mw.offsetWidth, H=mw.offsetHeight, gap=20;
+  if (!latlng) {
+    // Fixed position: right side of map, vertically centered
+    lb.style.left=(W-cw-gap)+'px';
+    lb.style.top=Math.max(gap, (H-ch)/2)+'px';
+    return;
+  }
+  const pt=map.latLngToContainerPoint(latlng);
+  let left=pt.x+36, top=pt.y-ch/2;
+  if (left+cw>W-gap) left=pt.x-cw-36;
+  if (left<gap) left=gap;
+  if (top<gap) top=gap;
+  if (top+ch>H-gap) top=H-ch-gap;
+  lb.style.left=left+'px'; lb.style.top=top+'px';
 }
 
 function closeLightbox() {
   document.getElementById('lightbox').classList.remove('visible');
-  document.querySelectorAll('.photo-item').forEach(el => el.classList.remove('active'));
-  clearActiveMarker(); activeIdx = null;
+  document.getElementById('lb-card').classList.remove('gps-active');
+  document.querySelectorAll('.photo-item').forEach(el=>el.classList.remove('active'));
+  clearActiveMarker(); activeIdx=null;
 }
 
 async function navPhoto(dir) {
-  // Auto-save if checkbox enabled and there are pending GPS edits
   if (document.getElementById('auto-save-cb').checked && manualGPSActive && tempLat !== null) {
     await writeEXIFWithGPS();
   }
-  const gi = photos.map((p, i) => p.lat !== null ? i : -1).filter(i => i >= 0);
+  const gi=photos.map((p,i)=>p.lat!==null?i:-1).filter(i=>i>=0);
   if (!gi.length) return;
-  const pos = gi.indexOf(activeIdx);
-  const next = gi[(pos + dir + gi.length) % gi.length];
-  const p = photos[next];
-  map.setView([p.lat, p.lon], Math.max(map.getZoom(), 19), { animate: true });
-  openLightbox(next, L.latLng(p.lat, p.lon));
+  const pos=gi.indexOf(activeIdx);
+  const next=gi[(pos+dir+gi.length)%gi.length];
+  const p=photos[next];
+  map.setView([p.lat,p.lon], Math.max(map.getZoom(),19), { animate:true });
+  openLightbox(next, L.latLng(p.lat,p.lon));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DATE FORMAT
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── DATE FORMAT ──────────────────────────────────────────────────────────────
 function formatDate(dateStr) {
   if (!dateStr) return '';
   if (dateStr instanceof Date) {
-    const pad = n => String(n).padStart(2, '0');
+    const pad=n=>String(n).padStart(2,'0');
     return `${pad(dateStr.getDate())}.${pad(dateStr.getMonth()+1)}.${dateStr.getFullYear()} в ${pad(dateStr.getHours())}:${pad(dateStr.getMinutes())}:${pad(dateStr.getSeconds())}`;
   }
-  const m = String(dateStr).match(/(\d{4})[-:](\d{2})[-:](\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);
+  const m=String(dateStr).match(/(\d{4})[-:](\d{2})[-:](\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);
   if (m) return `${m[3]}.${m[2]}.${m[1]} в ${m[4]}:${m[5]}:${m[6]}`;
   return dateStr;
 }
 
 function copyToClipboard(text) {
-  navigator.clipboard.writeText(text).then(() => showToast('✅ Координаты скопированы в буфер', 'success', 2000))
-    .catch(() => showToast('Не удалось скопировать', 'error'));
+  navigator.clipboard.writeText(text).then(()=>showToast('✅ Скопировано','success',2000)).catch(()=>showToast('Не удалось скопировать','error'));
 }
-function copyExperimentData(jsonString) {
-  navigator.clipboard.writeText(jsonString).then(() => showToast('✅ Данные опыта скопированы', 'success', 2500))
-    .catch(() => showToast('Не удалось скопировать', 'error'));
+function copyExperimentData(j) {
+  navigator.clipboard.writeText(j).then(()=>showToast('✅ JSON скопирован','success',2500)).catch(()=>showToast('Ошибка','error'));
 }
 
 function buildRows(p) {
-  const rows = [];
-  const gpp = p.experimentData || null;
-  const addRow = (label, value, copyText = null, editAction = null) => {
-    let html = `<tr><td>${label}</td><td>`;
-    if (value !== null && value !== undefined && value !== '') {
-      html += esc(String(value));
-      if (copyText) html += ` <button onclick="copyToClipboard('${copyText}')"
-        style="margin-left:6px;background:rgba(232,255,71,.15);border:1px solid rgba(232,255,71,.4);color:var(--accent);border-radius:4px;padding:1px 7px;font-size:9px;cursor:pointer">Копировать</button>`;
+  const rows=[];
+  const gpp=p.experimentData||null;
+  const addRow=(label,value,copyText=null,actions=[])=>{
+    let html=`<tr><td>${label}</td><td>`;
+    if (value!==null&&value!==undefined&&value!=='') {
+      html+=esc(String(value));
+      if (copyText) html+=` <button class="gps-action-btn accent" onclick="copyToClipboard('${copyText}')">Копировать</button>`;
     } else {
-      html += `<span style="color:var(--muted);font-style:italic">нет данных</span>`;
-      if (editAction) html += ` <button onclick="${editAction}"
-        style="margin-left:6px;background:rgba(71,200,255,.15);border:1px solid rgba(71,200,255,.4);color:var(--accent2);border-radius:4px;padding:2px 8px;font-size:9px;cursor:pointer">Установить</button>`;
+      html+=`<span style="color:var(--muted);font-style:italic">нет данных</span>`;
     }
-    html += `</td></tr>`; rows.push(html);
+    actions.forEach(a => { html+=` <button class="gps-action-btn" onclick="${a.fn}">${a.label}</button>`; });
+    html+=`</td></tr>`; rows.push(html);
   };
-  const sectionHeader = (icon, label) => rows.push(
+  const sectionHeader=(icon,label)=>rows.push(
     `<tr><td colspan="2" style="background:rgba(232,255,71,.08);padding:5px 8px 4px;font-weight:700;color:var(--accent);font-size:10px;text-transform:uppercase;letter-spacing:.4px;font-family:'JetBrains Mono',monospace">${icon} ${label}</td></tr>`
   );
 
-  sectionHeader('📍', 'Геолокация и съёмка');
-  const hasCoords = p.lat !== null && p.lon !== null;
+  sectionHeader('📍','Геолокация и съёмка');
+
+  // P7: redesigned GPS coordinate row
+  const hasCoords = p.lat!==null && p.lon!==null;
   if (hasCoords) {
-    const coordText = `${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}`;
-    addRow('Координаты', coordText, coordText);
-  } else { addRow('Координаты', null, null, `enterManualGPSModeFromLightbox()`); }
-  const hasBearing = p.bearing !== null && !isNaN(p.bearing) && p.bearing !== 0;
-  addRow('Угол съёмки', hasBearing ? p.bearing.toFixed(1) + '°' : null, null, hasBearing ? null : `enterManualGPSModeFromLightbox()`);
-  if (p.altitude !== null && p.altitude !== undefined) addRow('Высота', p.altitude.toFixed(1) + ' м');
+    const coordText=`${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}`;
+    addRow('Координаты', coordText,
+      null,
+      [
+        { label:'Копировать', fn:`copyToClipboard('${coordText}')` },
+        { label:'Изменить',   fn:`enterGPSFromLightbox()` }
+      ]
+    );
+  } else {
+    addRow('Координаты', null, null, [{ label:'Установить координаты', fn:'enterGPSFromLightbox()' }]);
+  }
+
+  const hasBearing = p.bearing!==null && !isNaN(p.bearing) && p.bearing!==0;
+  if (hasBearing) {
+    addRow('Угол съёмки', p.bearing.toFixed(1)+'°', null, [{ label:'Изменить азимут', fn:'enterGPSFromLightbox()' }]);
+  } else {
+    addRow('Угол съёмки', null, null, [{ label:'Установить азимут', fn:'enterGPSFromLightbox()' }]);
+  }
+
+  if (p.altitude!==null&&p.altitude!==undefined) addRow('Высота', p.altitude.toFixed(1)+' м');
   addRow('Дата съёмки', p.date ? formatDate(p.date) : null);
+  if (p.locPath) addRow('loc.path', p.locPath);
+  if (p.dateMismatch) {
+    rows.push(`<tr><td colspan="2" style="padding:4px 0;font-size:10px;color:var(--warn);font-family:'JetBrains Mono',monospace">⚠ Дата файла ≠ дата съёмки. Watchdog --fix-dates исправит mtime.</td></tr>`);
+  }
 
   if (gpp && gpp.experiment) {
-    const exp = gpp.experiment;
-    sectionHeader('📋', 'Данные опыта');
-    if (exp.doc)  addRow('Номер опыта', exp.doc);
-    if (exp.org)  addRow('Организация', exp.org);
-    if (exp.op)   addRow('Оператор', '@' + exp.op);
-    if (exp.dt)   addRow('Дата отбора', exp.dt);
+    const exp=gpp.experiment;
+    sectionHeader('📋','Данные опыта');
+    if (exp.doc)  addRow('Номер опыта',exp.doc);
+    if (exp.org)  addRow('Организация',exp.org);
+    if (exp.op)   addRow('Оператор','@'+exp.op);
+    if (exp.dt)   addRow('Дата отбора',exp.dt);
     if (exp.seeded) {
-      if (exp.crop)        addRow('Культура', exp.crop);
-      if (exp.variety)     addRow('Сорт / Гибрид', exp.variety);
-      if (exp.gen)         addRow('Поколение', exp.gen);
-      if (exp.bbch)        addRow('BBCH', exp.bbch);
-      if (exp.sow_date)    addRow('Дата сева', exp.sow_date);
-      if (exp.emerge_date) addRow('Дата всходов', exp.emerge_date);
+      if (exp.crop)        addRow('Культура',exp.crop);
+      if (exp.variety)     addRow('Сорт',exp.variety);
+      if (exp.gen)         addRow('Поколение',exp.gen);
+      if (exp.bbch)        addRow('BBCH',exp.bbch);
+      if (exp.sow_date)    addRow('Дата сева',exp.sow_date);
+      if (exp.emerge_date) addRow('Дата всходов',exp.emerge_date);
     }
-    const hasMoisture = exp.m20 != null || exp.m60 != null || exp.m100 != null || exp.m200 != null;
+    const hasMoisture=exp.m20!=null||exp.m60!=null||exp.m100!=null||exp.m200!=null;
     if (hasMoisture) {
-      sectionHeader('💧', 'Влажность почвы');
-      if (exp.m20  != null) addRow('0–20 см',  exp.m20  + ' мм');
-      if (exp.m60  != null) addRow('0–60 см',  exp.m60  + ' мм');
-      if (exp.m100 != null) addRow('0–100 см', exp.m100 + ' мм');
-      if (exp.m200 != null) addRow('0–200 см', exp.m200 + ' мм');
+      sectionHeader('💧','Влажность почвы');
+      if (exp.m20  !=null) addRow('0–20 см',exp.m20+' мм');
+      if (exp.m60  !=null) addRow('0–60 см',exp.m60+' мм');
+      if (exp.m100 !=null) addRow('0–100 см',exp.m100+' мм');
+      if (exp.m200 !=null) addRow('0–200 см',exp.m200+' мм');
     }
-    const hasGDD = exp.gdd5 != null || exp.gdd10 != null || exp.gdd15 != null;
+    const hasGDD=exp.gdd5!=null||exp.gdd10!=null||exp.gdd15!=null;
     if (hasGDD) {
-      sectionHeader('🌡', 'Суммы температур');
-      if (exp.gdd5  != null) addRow('ГДД ≥5°C',  exp.gdd5.toFixed(1)  + ' °С·д');
-      if (exp.gdd10 != null) addRow('ГДД ≥10°C', exp.gdd10.toFixed(1) + ' °С·д');
-      if (exp.gdd15 != null) addRow('ГДД ≥15°C', exp.gdd15.toFixed(1) + ' °С·д');
+      sectionHeader('🌡','Суммы температур');
+      if (exp.gdd5 !=null) addRow('ГДД ≥5°C',exp.gdd5.toFixed(1)+' °С·д');
+      if (exp.gdd10!=null) addRow('ГДД ≥10°C',exp.gdd10.toFixed(1)+' °С·д');
+      if (exp.gdd15!=null) addRow('ГДД ≥15°C',exp.gdd15.toFixed(1)+' °С·д');
     }
-    const safeJson = esc(JSON.stringify(gpp, null, 2));
+    const safeJson=esc(JSON.stringify(gpp,null,2));
     rows.push(`<tr><td colspan="2" style="padding:8px 0 4px"><div style="display:flex;gap:6px">
-      <button onclick="copyExperimentData('${safeJson}')"
-        style="flex:1;background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.3);border-radius:6px;padding:6px 10px;font-family:'JetBrains Mono',monospace;font-size:9px;cursor:pointer;font-weight:700">
-        📋 Копировать JSON
-      </button>
-      ${exp.invite_url ? `<a href="${esc(exp.invite_url)}" target="_blank" rel="noopener"
-        style="flex:1;display:flex;align-items:center;justify-content:center;background:rgba(71,200,255,.15);color:var(--accent2);border:1px solid rgba(71,200,255,.3);border-radius:6px;padding:6px 10px;font-family:'JetBrains Mono',monospace;font-size:9px;text-decoration:none;font-weight:700">
-        🌐 Открыть опыт</a>` : ''}
+      <button onclick="copyExperimentData('${safeJson}')" style="flex:1;background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.3);border-radius:6px;padding:6px 10px;font-family:'JetBrains Mono',monospace;font-size:9px;cursor:pointer;font-weight:700">📋 Копировать JSON</button>
+      ${exp.invite_url?`<a href="${esc(exp.invite_url)}" target="_blank" rel="noopener" style="flex:1;display:flex;align-items:center;justify-content:center;background:rgba(71,200,255,.15);color:var(--accent2);border:1px solid rgba(71,200,255,.3);border-radius:6px;padding:6px 10px;font-family:'JetBrains Mono',monospace;font-size:9px;text-decoration:none;font-weight:700">🌐 Открыть опыт</a>`:''}
     </div></td></tr>`);
   }
   return rows.join('');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// LIGHTBOX ZOOM
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── LIGHTBOX ZOOM ────────────────────────────────────────────────────────────
 function applyLbZoom() {
-  document.getElementById('lb-img').style.transform = `scale(${lbScale})`;
-  document.getElementById('lb-zoom-val').textContent = Math.round(lbScale * 100) + '%';
+  document.getElementById('lb-img').style.transform=`scale(${lbScale})`;
+  document.getElementById('lb-zoom-val').textContent=Math.round(lbScale*100)+'%';
 }
-function lbZoomIn()    { lbScale = Math.min(5, lbScale * 1.25); applyLbZoom(); }
-function lbZoomOut()   { lbScale = Math.max(0.2, lbScale / 1.25); applyLbZoom(); }
-function lbZoomReset() { lbScale = 1; applyLbZoom(); }
-document.getElementById('lb-img-wrap').addEventListener('wheel', e => {
-  e.preventDefault(); if (e.deltaY < 0) lbZoomIn(); else lbZoomOut();
-}, { passive: false });
-document.getElementById('lb-img-wrap').addEventListener('click', () => openViewer());
+function lbZoomIn()    { lbScale=Math.min(5,lbScale*1.25); applyLbZoom(); }
+function lbZoomOut()   { lbScale=Math.max(0.2,lbScale/1.25); applyLbZoom(); }
+function lbZoomReset() { lbScale=1; applyLbZoom(); }
+document.getElementById('lb-img-wrap').addEventListener('wheel', e => { e.preventDefault(); if(e.deltaY<0) lbZoomIn(); else lbZoomOut(); }, { passive:false });
+document.getElementById('lb-img-wrap').addEventListener('click', ()=>openViewer());
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FULLSCREEN VIEWER — scroll to thumbnail on close
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── FULLSCREEN VIEWER ────────────────────────────────────────────────────────
 function updateViewerInfo(p) {
-  let infoHTML = '';
-  if (p.lat !== null && p.lon !== null) infoHTML += `<div>📍 ${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}</div>`;
-  if (p.bearing !== null && !isNaN(p.bearing) && p.bearing !== 0) infoHTML += `<div>↗ ${p.bearing.toFixed(1)}°</div>`;
-  if (p.date) infoHTML += `<div>${formatDate(p.date)}</div>`;
-  let infoDiv = document.getElementById('viewer-info');
+  let html='';
+  if (p.lat!==null&&p.lon!==null) html+=`<div>📍 ${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}</div>`;
+  if (p.bearing!==null&&!isNaN(p.bearing)&&p.bearing!==0) html+=`<div>↗ ${p.bearing.toFixed(1)}°</div>`;
+  if (p.date) html+=`<div>${formatDate(p.date)}</div>`;
+  if (p.locPath) html+=`<div>📁 ${p.locPath}</div>`;
+  let infoDiv=document.getElementById('viewer-info');
   if (!infoDiv) {
-    infoDiv = document.createElement('div'); infoDiv.id = 'viewer-info';
-    infoDiv.style.cssText = `position:absolute;bottom:30px;left:50%;transform:translateX(-50%);background:rgba(13,15,20,0.85);color:#e4e8f0;padding:8px 18px;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:13px;display:flex;gap:20px;z-index:10002;box-shadow:0 4px 20px rgba(0,0,0,0.6)`;
+    infoDiv=document.createElement('div'); infoDiv.id='viewer-info';
+    infoDiv.style.cssText='position:absolute;bottom:30px;left:50%;transform:translateX(-50%);background:rgba(13,15,20,0.85);color:#e4e8f0;padding:8px 18px;border-radius:6px;font-family:\'JetBrains Mono\',monospace;font-size:13px;display:flex;gap:20px;z-index:10002;box-shadow:0 4px 20px rgba(0,0,0,0.6)';
     document.getElementById('viewer').appendChild(infoDiv);
   }
-  infoDiv.innerHTML = infoHTML || '<div style="color:#666">Нет данных EXIF</div>';
+  infoDiv.innerHTML=html||'<div style="color:#666">Нет данных EXIF</div>';
 }
 
 function openViewer() {
-  const p = activeIdx !== null ? photos[activeIdx] : null; if (!p) return;
-  const src = p.displayUrl || p.thumbUrl || ''; if (!src) return;
-  document.getElementById('viewer-img').src = src;
+  const p=activeIdx!==null?photos[activeIdx]:null; if (!p) return;
+  const src=p.displayUrl||p.thumbUrl||''; if (!src) return;
+  document.getElementById('viewer-img').src=src;
   document.getElementById('viewer').classList.add('open');
   updateViewerInfo(p);
 }
 
+// P6: closeViewer → sync lightbox to last fullscreen photo
 function closeViewer() {
   document.getElementById('viewer').classList.remove('open');
-  const infoDiv = document.getElementById('viewer-info'); if (infoDiv) infoDiv.remove();
-  // Scroll sidebar to the photo where fullscreen was stopped
-  if (activeIdx !== null) {
-    const item = document.querySelector(`.photo-item[data-idx="${activeIdx}"]`);
-    if (item) item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  const infoDiv=document.getElementById('viewer-info'); if (infoDiv) infoDiv.remove();
+  // P6: Re-open lightbox on the photo that was shown fullscreen
+  if (activeIdx!==null) {
+    const p=photos[activeIdx];
+    const ll=p.lat!==null ? L.latLng(p.lat,p.lon) : null;
+    openLightbox(activeIdx, ll);
   }
 }
 
 async function viewerNav(dir) {
-  // Auto-save if checkbox enabled and there are pending GPS edits
-  if (document.getElementById('auto-save-cb').checked && manualGPSActive && tempLat !== null) {
+  if (document.getElementById('auto-save-cb').checked && manualGPSActive && tempLat!==null) {
     await writeEXIFWithGPS();
   }
-  const gpsPhotos = photos.map((p, i) => p.lat !== null ? i : -1).filter(i => i >= 0);
+  const gpsPhotos=photos.map((p,i)=>p.lat!==null?i:-1).filter(i=>i>=0);
   if (!gpsPhotos.length) return;
-  let cur = activeIdx !== null ? activeIdx : gpsPhotos[0];
-  let pos = gpsPhotos.indexOf(cur);
-  let next = gpsPhotos[(pos + dir + gpsPhotos.length) % gpsPhotos.length];
-  const p = photos[next]; activeIdx = next;
-  document.getElementById('viewer-img').src = p.displayUrl || p.thumbUrl || '';
+  let cur=activeIdx!==null?activeIdx:gpsPhotos[0];
+  let pos=gpsPhotos.indexOf(cur);
+  let next=gpsPhotos[(pos+dir+gpsPhotos.length)%gpsPhotos.length];
+  const p=photos[next]; activeIdx=next;
+  document.getElementById('viewer-img').src=p.displayUrl||p.thumbUrl||'';
   setActiveMarker(next); updateViewerInfo(p);
-  document.querySelectorAll('.photo-item').forEach(el => el.classList.remove('active'));
-  const item = document.querySelector(`.photo-item[data-idx="${next}"]`);
-  if (item) { item.classList.add('active'); item.scrollIntoView({ block: 'nearest' }); }
+  document.querySelectorAll('.photo-item').forEach(el=>el.classList.remove('active'));
+  const item=document.querySelector(`.photo-item[data-idx="${next}"]`);
+  if (item) { item.classList.add('active'); item.scrollIntoView({ block:'nearest' }); }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// AUTO-SAVE CHECKBOX
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── AUTO-SAVE CHECKBOX ───────────────────────────────────────────────────────
 function onAutoSaveCbChange(cb) {
-  const lbl = document.getElementById('auto-save-label');
-  if (cb.checked) {
-    lbl.classList.add('active-label');
-    showToast('✅ Авто-запись EXIF включена — при переходе → файл скачается автоматически', 'success', 3000);
-  } else {
-    lbl.classList.remove('active-label');
-    showToast('Авто-запись EXIF выключена', 'info', 2000);
-  }
-  try { localStorage.setItem('autoSaveEXIF', cb.checked ? '1' : '0'); } catch(_) {}
+  const lbl=document.getElementById('auto-save-label');
+  lbl.classList.toggle('active-label', cb.checked);
+  showToast(cb.checked?'✅ Авто-запись EXIF включена':'Авто-запись EXIF выключена', cb.checked?'success':'info', 2500);
+  try { localStorage.setItem('autoSaveEXIF', cb.checked?'1':'0'); } catch(_) {}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MISC / UTILS
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── UTILS ────────────────────────────────────────────────────────────────────
 function updateStats() {
-  document.getElementById('stat-total').textContent = photos.length;
-  document.getElementById('stat-gps').textContent   = photos.filter(p => p.lat !== null).length;
-  document.getElementById('stat-angle').textContent  = photos.filter(p => p.bearing !== null).length;
+  document.getElementById('stat-total').textContent=photos.length;
+  document.getElementById('stat-gps').textContent=photos.filter(p=>p.lat!==null).length;
+  document.getElementById('stat-angle').textContent=photos.filter(p=>p.bearing!==null).length;
 }
 
 function clearAll() {
   closeLightbox(); closeViewer(); exitManualGPSMode();
-  photos.forEach(p => {
-    if (p.marker) map.removeLayer(p.marker);
-    if (!p.isRemote && p.displayUrl) URL.revokeObjectURL(p.displayUrl);
-  });
-  photos = []; activeIdx = null;
-  remotePhotos.length = 0; updateShareButton();
-  document.getElementById('file-input').value = '';
-  document.getElementById('gd-status').textContent = '';
+  photos.forEach(p => { if (p.marker) map.removeLayer(p.marker); if (!p.isRemote&&p.displayUrl) URL.revokeObjectURL(p.displayUrl); });
+  photos=[]; activeIdx=null;
+  remotePhotos.length=0; updateShareButton();
+  document.getElementById('file-input').value='';
+  document.getElementById('gd-status').textContent='';
+  selectedFolderPath=null; folderTreeExpanded={};
+  updateFolderTreePanel();
   updateStats(); renderList(); updateInviteButton();
   document.getElementById('map-hint').classList.remove('hidden');
   showToast('Все фото удалены');
 }
 
-function setProgress(pct) { document.getElementById('progress-bar').style.width = pct + '%'; }
+function setProgress(pct) { document.getElementById('progress-bar').style.width=pct+'%'; }
 
-let _tt;
-let _toastTimers = {};
-function showToast(msg, type = 'info', duration = 2800, id = null) {
-  const t = document.getElementById('toast');
-  t.innerHTML = msg;
-  const bg = { info:'var(--surface)', success:'#0f2a0f', error:'#2a0f0f', warn:'#2a200a' };
-  const bc = { info:'var(--border)', success:'#22c55e', error:'#ef4444', warn:'#f59e0b' };
-  t.style.background = bg[type] || bg.info; t.style.borderColor = bc[type] || bc.info;
+let _tt, _toastTimers={};
+function showToast(msg, type='info', duration=2800, id=null) {
+  const t=document.getElementById('toast');
+  t.innerHTML=msg;
+  const bg={ info:'var(--surface)',success:'#0f2a0f',error:'#2a0f0f',warn:'#2a200a' };
+  const bc={ info:'var(--border)',success:'#22c55e',error:'#ef4444',warn:'#f59e0b' };
+  t.style.background=bg[type]||bg.info; t.style.borderColor=bc[type]||bc.info;
   t.classList.add('show');
-  if (id) t.dataset.toastId = id;
+  if (id) t.dataset.toastId=id;
   clearTimeout(_tt);
   if (id) clearTimeout(_toastTimers[id]);
-  const tid = setTimeout(() => { t.classList.remove('show'); }, duration);
-  if (id) _toastTimers[id] = tid; else _tt = tid;
+  const tid=setTimeout(()=>{ t.classList.remove('show'); }, duration);
+  if (id) _toastTimers[id]=tid; else _tt=tid;
 }
 function dismissToast(id) {
-  const t = document.getElementById('toast');
-  if (t.dataset.toastId === id) { clearTimeout(_toastTimers[id]); t.classList.remove('show'); delete t.dataset.toastId; }
+  const t=document.getElementById('toast');
+  if (t.dataset.toastId===id) { clearTimeout(_toastTimers[id]); t.classList.remove('show'); delete t.dataset.toastId; }
 }
 
 function esc(s) {
@@ -1179,24 +1459,25 @@ function esc(s) {
 }
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') {
+  if (e.key==='Escape') {
     if (manualGPSActive) { exitManualGPSMode(); return; }
+    if (document.getElementById('yandex-dialog').classList.contains('open')) { closeYandexDialog(); return; }
     if (document.getElementById('viewer').classList.contains('open')) { closeViewer(); return; }
     closeLightbox(); return;
   }
-  const inViewer = document.getElementById('viewer').classList.contains('open');
-  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-    const dir = e.key === 'ArrowRight' ? 1 : -1;
-    if (inViewer) viewerNav(dir); else if (activeIdx !== null) navPhoto(dir);
+  const inViewer=document.getElementById('viewer').classList.contains('open');
+  if (e.key==='ArrowRight'||e.key==='ArrowLeft') {
+    const dir=e.key==='ArrowRight'?1:-1;
+    if (inViewer) viewerNav(dir); else if (activeIdx!==null) navPhoto(dir);
   }
 });
 
-// Restore auto-save checkbox state from localStorage
+// Restore auto-save
 (function() {
   try {
-    if (localStorage.getItem('autoSaveEXIF') === '1') {
-      const cb = document.getElementById('auto-save-cb');
-      if (cb) { cb.checked = true; document.getElementById('auto-save-label').classList.add('active-label'); }
+    if (localStorage.getItem('autoSaveEXIF')==='1') {
+      const cb=document.getElementById('auto-save-cb');
+      if (cb) { cb.checked=true; document.getElementById('auto-save-label').classList.add('active-label'); }
     }
   } catch(_) {}
 })();
@@ -1204,7 +1485,7 @@ document.addEventListener('keydown', e => {
 renderList();
 
 // ═════════════════════════════════════════════════════════════════════════════
-// REMOTE PHOTOS — Google Drive (single) + Yandex Disk
+// REMOTE PHOTOS
 // ═════════════════════════════════════════════════════════════════════════════
 const remotePhotos = [];
 
@@ -1213,781 +1494,628 @@ function detectRemoteType(url) {
   if (/disk\.yandex\.(ru|com)|yadi\.sk/i.test(url)) return 'yandex';
   return 'other';
 }
-function isYandexLink(url) { return detectRemoteType(url) === 'yandex'; }
-
 function extractGdriveId(url) {
-  const m1 = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/); if (m1) return m1[1];
-  const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/); if (m2) return m2[1];
+  const m1=url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/); if (m1) return m1[1];
+  const m2=url.match(/[?&]id=([a-zA-Z0-9_-]+)/); if (m2) return m2[1];
   return null;
 }
-function extractYandexId(url) {
-  const m = url.match(/\/i\/([a-zA-Z0-9_-]+)/); return m ? m[1] : null;
-}
+function extractYandexId(url) { const m=url.match(/\/i\/([a-zA-Z0-9_-]+)/); return m?m[1]:null; }
 
 const Progress = (() => {
-  const getBar  = () => document.getElementById('load-progress-bar');
-  const getWrap = () => document.getElementById('load-progress');
-  let current = 0, simTimer = null, hideTimer = null;
-  const toastId = 'progress-toast';
-  function set(pct) { current = pct; getBar().style.width = pct + '%'; }
+  const getBar=()=>document.getElementById('load-progress-bar');
+  const getWrap=()=>document.getElementById('load-progress');
+  let current=0, simTimer=null, hideTimer=null;
+  const toastId='progress-toast';
+  function set(pct) { current=pct; getBar().style.width=pct+'%'; }
   function start(label) {
-    clearTimeout(hideTimer); clearInterval(simTimer); getBar().style.background = '';
+    clearTimeout(hideTimer); clearInterval(simTimer); getBar().style.background='';
     getWrap().classList.add('active'); set(8);
-    simTimer = setInterval(() => { if (current < 88) set(current + (88 - current) * 0.06); }, 700);
-    if (label) showToast('⏳ ' + label, 'info', 120000, toastId);
+    simTimer=setInterval(()=>{ if (current<88) set(current+(88-current)*0.06); },700);
+    if (label) showToast('⏳ '+label,'info',120000,toastId);
   }
-  function finish() {
-    clearInterval(simTimer); dismissToast(toastId); set(100);
-    hideTimer = setTimeout(() => { getWrap().classList.remove('active'); set(0); }, 500);
-  }
-  function fail() {
-    clearInterval(simTimer); dismissToast(toastId); getBar().style.background = 'var(--danger)'; set(100);
-    hideTimer = setTimeout(() => { getWrap().classList.remove('active'); getBar().style.background = ''; set(0); }, 800);
-  }
-  return { start, finish, fail };
+  function finish() { clearInterval(simTimer); dismissToast(toastId); set(100); hideTimer=setTimeout(()=>{ getWrap().classList.remove('active'); set(0); },500); }
+  function fail()   { clearInterval(simTimer); dismissToast(toastId); getBar().style.background='var(--danger)'; set(100); hideTimer=setTimeout(()=>{ getWrap().classList.remove('active'); getBar().style.background=''; set(0); },800); }
+  return { start,finish,fail };
 })();
 
-// ─── CORS proxy config ───────────────────────────────────────────────────────
-const YANDEX_PROXY = 'https://ekcelo-proxy.roman-babenko-rostov.workers.dev';
-const PUBLIC_PROXIES = [
-  u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
-  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+const YANDEX_PROXY='https://ekcelo-proxy.roman-babenko-rostov.workers.dev';
+const PUBLIC_PROXIES=[
+  u=>`https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+  u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
 ];
 
-async function fetchTimeout(url, ms = 8000) {
-  const ctrl = new AbortController();
-  const tid = setTimeout(() => ctrl.abort(), ms);
-  try { const r = await fetch(url, { signal: ctrl.signal }); return r; } finally { clearTimeout(tid); }
+async function fetchTimeout(url, ms=8000) {
+  const ctrl=new AbortController(); const tid=setTimeout(()=>ctrl.abort(),ms);
+  try { return await fetch(url, { signal:ctrl.signal }); } finally { clearTimeout(tid); }
 }
-function proxyUrl(target, usePublicIdx = 0) {
+function proxyUrl(target) {
   if (YANDEX_PROXY) return `${YANDEX_PROXY}?url=${encodeURIComponent(target)}`;
-  return PUBLIC_PROXIES[usePublicIdx % PUBLIC_PROXIES.length](target);
+  return PUBLIC_PROXIES[0](target);
 }
 
 async function resolveYandexHref(publicUrl) {
-  const api = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=${encodeURIComponent(publicUrl)}`;
-  for (let i = 0; i < PUBLIC_PROXIES.length + 1; i++) {
-    const url = i === 0 && YANDEX_PROXY ? proxyUrl(api) : PUBLIC_PROXIES[i - (YANDEX_PROXY ? 1 : 0)]?.(api);
+  const api=`https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=${encodeURIComponent(publicUrl)}`;
+  for (let i=0; i<PUBLIC_PROXIES.length+1; i++) {
+    const url=i===0&&YANDEX_PROXY?proxyUrl(api):PUBLIC_PROXIES[i-(YANDEX_PROXY?1:0)]?.(api);
     if (!url) break;
-    try {
-      const r = await fetchTimeout(url, 8000); if (!r.ok) continue;
-      const data = await r.json(); if (data.href) return data.href;
-    } catch (e) { console.warn('[ekcelo] resolveYandexHref:', e.message); }
+    try { const r=await fetchTimeout(url,8000); if(!r.ok) continue; const d=await r.json(); if(d.href) return d.href; } catch(e) { console.warn('[ekcelo]',e.message); }
   }
   throw new Error('Не удалось получить ссылку от Яндекс API');
 }
-
 async function fetchBlob(href) {
-  if (YANDEX_PROXY) {
-    const r = await fetchTimeout(proxyUrl(href), 30000); if (r.ok) return r.blob();
-    throw new Error(`Worker вернул ${r.status}`);
-  }
-  try { const r = await fetchTimeout(href, 10000); if (r.ok) return r.blob(); } catch(_) {}
-  for (let i = 0; i < PUBLIC_PROXIES.length; i++) {
-    try { const r = await fetchTimeout(PUBLIC_PROXIES[i](href), 20000); if (r.ok) return r.blob(); }
-    catch (e) { console.warn('[ekcelo] public proxy blob failed:', e.message); }
-  }
-  throw new Error('Файл недоступен: настройте YANDEX_PROXY в index.html');
+  if (YANDEX_PROXY) { const r=await fetchTimeout(proxyUrl(href),30000); if(r.ok) return r.blob(); throw new Error(`Worker ${r.status}`); }
+  try { const r=await fetchTimeout(href,10000); if(r.ok) return r.blob(); } catch(_) {}
+  for (let i=0; i<PUBLIC_PROXIES.length; i++) { try { const r=await fetchTimeout(PUBLIC_PROXIES[i](href),20000); if(r.ok) return r.blob(); } catch(e) { console.warn(e); } }
+  throw new Error('Файл недоступен');
 }
-
-async function fetchYandexBlob(publicUrl) {
-  const href = await resolveYandexHref(publicUrl);
-  return fetchBlob(href);
-}
-
+async function fetchYandexBlob(publicUrl) { const href=await resolveYandexHref(publicUrl); return fetchBlob(href); }
 async function getDirectUrlForFetch(url) {
-  const u = url.trim();
-  if (u.includes('drive.google.com')) {
-    const id = u.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1] || u.match(/id=([a-zA-Z0-9_-]+)/)?.[1];
+  if (url.includes('drive.google.com')) {
+    const id=url.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1]||url.match(/id=([a-zA-Z0-9_-]+)/)?.[1];
     if (id) return `https://drive.google.com/uc?export=download&id=${id}`;
   }
-  return u;
-}
-
-function getDisplayUrl(url) {
-  const type = detectRemoteType(url);
-  if (type === 'gdrive') { const id = extractGdriveId(url); if (id) return gdDisplay(id); }
   return url;
 }
-function getThumbUrl(url) {
-  const type = detectRemoteType(url);
-  if (type === 'gdrive') { const id = extractGdriveId(url); if (id) return gdThumb(id); }
-  return url;
-}
-function defaultNameFromId(id, type = 'other') {
-  if (!id) return 'photo.jpg';
-  return `photo_${type === 'yandex' ? 'yd_' : 'gd_'}${id.substring(0,8)}.jpg`;
-}
+const gdD=id=>`https://drive.google.com/thumbnail?id=${id}&sz=w1600`;
+const gdT=id=>`https://drive.google.com/thumbnail?id=${id}&sz=w300`;
+function getDisplayUrl(url) { const type=detectRemoteType(url); if(type==='gdrive'){const id=extractGdriveId(url);if(id) return gdD(id);} return url; }
+function getThumbUrl(url)   { const type=detectRemoteType(url); if(type==='gdrive'){const id=extractGdriveId(url);if(id) return gdT(id);} return url; }
+function defaultName(id,type) { if(!id) return 'photo.jpg'; return `photo_${type==='yandex'?'yd_':'gd_'}${id.substring(0,8)}.jpg`; }
 
 async function loadSingleRemotePhoto(viewUrl, customName) {
-  const type   = detectRemoteType(viewUrl);
-  const gdId   = type === 'gdrive' ? extractGdriveId(viewUrl) : null;
-  const ydId   = type === 'yandex' ? extractYandexId(viewUrl) : null;
-  const anyId  = gdId || ydId;
-  const name   = customName || defaultNameFromId(anyId, type);
-  showToast(`⏳ Загружаем: ${name}`, 'info', 5000);
-  Progress.start(`Загружаем ${name}…`);
-  const displayUrl = getDisplayUrl(viewUrl), thumbUrl = getThumbUrl(viewUrl);
-  const placeholderIdx = photos.length;
-  addPhoto({ name, size:null, displayUrl:null, thumbUrl:null, lat:null, lon:null,
-             bearing:null, altitude:null, date:'', isRemote:true, remoteViewUrl:viewUrl,
-             gdId, yandexId:ydId, experimentData:null, _loading:true });
+  const type=detectRemoteType(viewUrl);
+  const gdId=type==='gdrive'?extractGdriveId(viewUrl):null;
+  const ydId=type==='yandex'?extractYandexId(viewUrl):null;
+  const name=customName||defaultName(gdId||ydId,type);
+  showToast(`⏳ Загружаем: ${name}`,'info',5000); Progress.start(`Загружаем ${name}…`);
+  const placeholderIdx=photos.length;
+  addPhoto({ name,size:null,displayUrl:null,thumbUrl:null,lat:null,lon:null,bearing:null,altitude:null,date:'',isRemote:true,remoteViewUrl:viewUrl,gdId,yandexId:ydId,experimentData:null,_loading:true,sourceType:type });
   updateStats(); renderList(); updateShareButton(); updateTimelineData();
 
-  let blob = null;
+  let blob=null;
   try {
-    if (type === 'yandex') blob = await fetchYandexBlob(viewUrl);
-    else {
-      const directUrl = await getDirectUrlForFetch(viewUrl);
-      const resp = await fetchTimeout(directUrl, 20000);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      blob = await resp.blob();
-    }
-  } catch (err) {
-    console.warn('[ekcelo] fetch error:', err.message, viewUrl);
+    if (type==='yandex') blob=await fetchYandexBlob(viewUrl);
+    else { const r=await fetchTimeout(await getDirectUrlForFetch(viewUrl),20000); if(!r.ok) throw new Error(`HTTP ${r.status}`); blob=await r.blob(); }
+  } catch(err) {
     Progress.fail();
-    let hint = '';
-    if (type === 'yandex') hint = YANDEX_PROXY ? `Убедитесь, что файл открыт «Для всех» на Яндекс.Диске.` : `Задеплойте worker.js → вставьте URL в YANDEX_PROXY.`;
-    else if (type === 'gdrive') hint = `Убедитесь, что файл доступен по ссылке без авторизации.`;
-    else hint = err.message;
-    showToast(`⚠️ ${hint}`, 'error', 10000);
-    const ph = photos[placeholderIdx];
-    if (ph) { ph._loading = false; ph.displayUrl = displayUrl; ph.thumbUrl = thumbUrl; }
-    remotePhotos.push({ originalUrl: viewUrl, name });
-    updateStats(); renderList(); updateShareButton(); updateTimelineData(); return;
+    const hint=type==='yandex'?(YANDEX_PROXY?'Файл должен быть открыт «Для всех».':'Настройте YANDEX_PROXY.'):type==='gdrive'?'Файл должен быть доступен по ссылке.':err.message;
+    showToast(`⚠️ ${hint}`,'error',10000);
+    const ph=photos[placeholderIdx]; if(ph) { ph._loading=false; ph.displayUrl=getDisplayUrl(viewUrl); ph.thumbUrl=getThumbUrl(viewUrl); }
+    remotePhotos.push({ originalUrl:viewUrl,name }); updateStats(); renderList(); updateShareButton(); updateTimelineData(); return;
   }
 
-  const blobUrl = URL.createObjectURL(blob);
-  let lat = null, lon = null, bearing = null, altitude = null, date = '', gppData = null;
+  const blobUrl=URL.createObjectURL(blob);
+  let lat=null,lon=null,bearing=null,altitude=null,date='',gppData=null;
   try {
-    const e = await exifr.parse(blob, { gps:true,tiff:true,exif:true,translateValues:true });
+    const e=await exifr.parse(blob,{gps:true,tiff:true,exif:true,translateValues:true});
     if (e) {
-      lat = e.latitude ?? e.GPSLatitude ?? null;
-      lon = e.longitude ?? e.GPSLongitude ?? null;
-      const r = e.GPSImgDirection ?? e.ImgDirection ?? e.GPSDestBearing ?? null;
-      bearing = r !== null ? parseFloat(r) : null;
-      altitude = e.GPSAltitude ?? null;
-      date = e.DateTimeOriginal ?? e.DateTime ?? '';
-      gppData = parseGPPUserComment(e);
+      lat=e.latitude??e.GPSLatitude??null; lon=e.longitude??e.GPSLongitude??null;
+      const r=e.GPSImgDirection??e.ImgDirection??e.GPSDestBearing??null;
+      bearing=r!==null?parseFloat(r):null; altitude=e.GPSAltitude??null;
+      date=e.DateTimeOriginal??e.DateTime??''; gppData=parseGPPUserComment(e);
     }
-  } catch (err) { console.warn('[ekcelo] EXIF parse error:', err); }
+  } catch(err) { console.warn('[ekcelo] EXIF',err); }
 
-  const ph = photos[placeholderIdx];
+  const ph=photos[placeholderIdx];
   if (ph) {
-    ph._loading = false; ph.size = blob.size; ph.displayUrl = blobUrl; ph.thumbUrl = blobUrl;
-    ph.lat = lat; ph.lon = lon; ph.bearing = bearing; ph.altitude = altitude; ph.date = date;
-    ph.dateObj = date ? parsePhotoDate(date) : undefined;
-    ph.originalBlob = blob; ph.experimentData = gppData || null;
-    if (lat !== null && lon !== null) addMarker(ph, placeholderIdx);
+    ph._loading=false; ph.size=blob.size; ph.displayUrl=blobUrl; ph.thumbUrl=blobUrl;
+    ph.lat=lat; ph.lon=lon; ph.bearing=bearing; ph.altitude=altitude; ph.date=date;
+    ph.dateObj=date?parsePhotoDate(date):undefined; ph.originalBlob=blob; ph.experimentData=gppData||null;
+    if (lat!==null&&lon!==null) addMarker(ph, placeholderIdx);
   }
-  Progress.finish();
-  remotePhotos.push({ originalUrl: viewUrl, name });
+  Progress.finish(); remotePhotos.push({ originalUrl:viewUrl,name });
   updateStats(); renderList(); updateShareButton(); updateTimelineData();
-  showToast(`✅ Добавлено: ${name}${lat !== null ? '' : ' (без GPS)'}`, 'success');
+  showToast(`✅ ${name}${lat!==null?'':' (без GPS)'}`, 'success');
 
-  if (deeplinkPhotoLoaded && photos.length > 0) {
-    const idx = photos.length - 1, p = photos[idx];
-    if (p.lat !== null && p.lon !== null) { map.setView([p.lat, p.lon], 16, { animate: true }); openLightbox(idx, L.latLng(p.lat, p.lon)); }
-    else openLightbox(idx, null);
-    deeplinkPhotoLoaded = false;
+  if (deeplinkPhotoLoaded&&photos.length>0) {
+    const idx=photos.length-1, p=photos[idx];
+    if (p.lat!==null) { map.setView([p.lat,p.lon],16,{animate:true}); openLightbox(idx,L.latLng(p.lat,p.lon)); }
+    else openLightbox(idx,null);
+    deeplinkPhotoLoaded=false;
   }
 }
 
 async function loadPhotosFromListFile(listFileUrl) {
-  showToast('📋 Загружаем список фотографий…', 'info', 5000);
-  let text = '';
+  showToast('📋 Загружаем список…','info',5000);
+  let text='';
   try {
-    const type = detectRemoteType(listFileUrl);
-    let blob;
-    if (type === 'yandex') blob = await fetchYandexBlob(listFileUrl);
-    else {
-      const directUrl = await getDirectUrlForFetch(listFileUrl);
-      const resp = await fetchTimeout(directUrl, 15000);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      blob = await resp.blob();
-    }
-    text = await blob.text();
-  } catch (err) { showToast(`❌ Не удалось загрузить файл списка: ${err.message}`, 'error', 8000); return; }
-
-  let entries = [];
+    const type=detectRemoteType(listFileUrl);
+    let blob; if(type==='yandex') blob=await fetchYandexBlob(listFileUrl); else { const r=await fetchTimeout(await getDirectUrlForFetch(listFileUrl),15000); if(!r.ok) throw new Error(`HTTP ${r.status}`); blob=await r.blob(); }
+    text=await blob.text();
+  } catch(err) { showToast(`❌ ${err.message}`,'error',8000); return; }
+  let entries=[];
   try {
-    const parsed = JSON.parse(text.trim());
-    if (Array.isArray(parsed)) {
-      entries = parsed.map(item =>
-        typeof item === 'string' ? { url: item.trim(), name: '' }
-          : { url: (item.url || '').trim(), name: (item.name || '').trim() }
-      ).filter(e => e.url);
-    }
-  } catch(_) {
-    entries = text.split('\n').map(line => line.trim()).filter(line => line.startsWith('http')).map(url => ({ url, name: '' }));
-  }
-  if (!entries.length) { showToast('⚠️ Файл списка пуст или не содержит ссылок', 'warn', 6000); return; }
-  showToast(`📂 Загружаем ${entries.length} фото из списка…`, 'info', 8000);
-  deeplinkPhotoLoaded = true;
-  for (const entry of entries) await loadSingleRemotePhoto(entry.url, entry.name);
+    const parsed=JSON.parse(text.trim());
+    if (Array.isArray(parsed)) entries=parsed.map(item=>typeof item==='string'?{url:item.trim(),name:''}:{url:(item.url||'').trim(),name:(item.name||'').trim()}).filter(e=>e.url);
+  } catch(_) { entries=text.split('\n').map(l=>l.trim()).filter(l=>l.startsWith('http')).map(url=>({url,name:''})); }
+  if (!entries.length) { showToast('⚠️ Список пуст','warn',6000); return; }
+  showToast(`📂 Загружаем ${entries.length} фото…`,'info',8000); deeplinkPhotoLoaded=true;
+  for (const entry of entries) await loadSingleRemotePhoto(entry.url,entry.name);
   fitMapToPhotos();
 }
 
 async function loadPhotosFromUrl() {
-  const params = new URLSearchParams(window.location.search);
-  const photolistUrl = params.get('photolist');
-  if (photolistUrl) { await loadPhotosFromListFile(photolistUrl); return; }
-  const singlePhotoUrl = params.get('photo');
-  if (singlePhotoUrl) {
-    const customName = params.get('name') || '';
-    deeplinkPhotoLoaded = true;
-    showToast(`📂 Загружаем фото по deeplink...`, 'info', 4000);
-    await loadSingleRemotePhoto(singlePhotoUrl, customName); return;
-  }
-  const photos_list = [];
-  for (const [key, value] of params.entries()) {
-    const m = key.match(/^photo(\d+)$/);
-    if (!m) continue;
-    const n = parseInt(m[1], 10);
-    photos_list.push({ n, url: value, name: params.get(`name${n}`) || '' });
-  }
-  if (!photos_list.length) return;
-  photos_list.sort((a, b) => a.n - b.n);
-  const base = window.location.origin + window.location.pathname;
-  showToast(`📂 Загружаем ${photos_list.length} фото по deeplink...`, 'info', 6000);
-  for (const item of photos_list) {
-    const testUrl = `${base}?photo${item.n}=${encodeURIComponent(item.url)}${item.name ? `&name${item.n}=${encodeURIComponent(item.name)}` : ''}`;
-    if (testUrl.length > 2000) { showToast(`⚠️ Загружено ${photos_list.indexOf(item)} из ${photos_list.length} фото (URL слишком длинный)`, 'warn', 5000); break; }
-    await loadSingleRemotePhoto(item.url, item.name);
+  const params=new URLSearchParams(window.location.search);
+  const photolistUrl=params.get('photolist'); if (photolistUrl) { await loadPhotosFromListFile(photolistUrl); return; }
+  const singlePhotoUrl=params.get('photo');
+  if (singlePhotoUrl) { deeplinkPhotoLoaded=true; showToast('📂 Загружаем по deeplink…','info',4000); await loadSingleRemotePhoto(singlePhotoUrl,params.get('name')||''); return; }
+  const plist=[]; for (const [k,v] of params.entries()) { const m=k.match(/^photo(\d+)$/); if(m) plist.push({n:parseInt(m[1]),url:v,name:params.get(`name${m[1]}`)||''}); }
+  if (!plist.length) return;
+  plist.sort((a,b)=>a.n-b.n); showToast(`📂 Загружаем ${plist.length} фото…`,'info',6000);
+  const base=window.location.origin+window.location.pathname;
+  for (const item of plist) {
+    if (`${base}?photo${item.n}=${encodeURIComponent(item.url)}`.length>2000) { showToast('⚠️ URL слишком длинный','warn',5000); break; }
+    await loadSingleRemotePhoto(item.url,item.name);
   }
   fitMapToPhotos();
 }
 
 function updateShareButton() {
-  const show = remotePhotos.length > 0 ? 'inline-block' : 'none';
-  document.getElementById('share-btn').style.display = show;
-  document.getElementById('share-list-btn').style.display = show;
+  const s=remotePhotos.length>0?'inline-block':'none';
+  document.getElementById('share-btn').style.display=s; document.getElementById('share-list-btn').style.display=s;
 }
-
 function getInviteUrlFromPhotos() {
-  for (const p of photos) {
-    const url = p.experimentData?.experiment?.invite_url;
-    if (url) { try { new URL(url); return url; } catch(_) {} }
-  }
-  return null;
+  for (const p of photos) { const url=p.experimentData?.experiment?.invite_url; if(url){ try { new URL(url); return url; } catch(_){} } } return null;
 }
 function updateInviteButton() {
-  const url = getInviteUrlFromPhotos();
-  const btn = document.getElementById('invite-btn'); if (!btn) return;
-  if (url) { btn.href = url; btn.style.display = 'flex'; } else { btn.style.display = 'none'; }
+  const url=getInviteUrlFromPhotos(); const btn=document.getElementById('invite-btn'); if(!btn) return;
+  if (url) { btn.href=url; btn.style.display='flex'; } else { btn.style.display='none'; }
 }
-
 function copyShareLink() {
-  const base = window.location.origin + window.location.pathname;
-  const MAX_LEN = 2000, params = new URLSearchParams();
-  let count = 0;
+  const base=window.location.origin+window.location.pathname; const MAX=2000;
+  const params=new URLSearchParams(); let count=0;
   for (const photo of remotePhotos) {
-    count++;
-    const test = new URLSearchParams(params);
-    test.set(`photo${count}`, photo.originalUrl);
-    if (photo.name) test.set(`name${count}`, photo.name);
-    if (`${base}?${test}`.length > MAX_LEN) {
-      showToast(`⚠️ Вошли ${count-1} из ${remotePhotos.length} фото (URL слишком длинный)`, 'warn', 5000);
-      count--; break;
-    }
-    params.set(`photo${count}`, photo.originalUrl);
-    if (photo.name) params.set(`name${count}`, photo.name);
+    count++; const test=new URLSearchParams(params); test.set(`photo${count}`,photo.originalUrl); if(photo.name) test.set(`name${count}`,photo.name);
+    if (`${base}?${test}`.length>MAX) { showToast(`⚠️ Вошли ${count-1} из ${remotePhotos.length}`,'warn',5000); count--; break; }
+    params.set(`photo${count}`,photo.originalUrl); if(photo.name) params.set(`name${count}`,photo.name);
   }
-  if (!count) { showToast('Нет remote-фото для шаринга', 'warn'); return; }
-  const shareUrl = `${base}?${params}`;
-  navigator.clipboard.writeText(shareUrl).then(() => showToast('📋 Ссылка скопирована!', 'success'))
-    .catch(() => { const ta = document.createElement('textarea'); ta.value = shareUrl; ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); showToast('📋 Ссылка скопирована!', 'success'); });
+  if (!count) { showToast('Нет remote-фото','warn'); return; }
+  const shareUrl=`${base}?${params}`;
+  navigator.clipboard.writeText(shareUrl).then(()=>showToast('📋 Ссылка скопирована!','success')).catch(()=>{ const ta=document.createElement('textarea'); ta.value=shareUrl; ta.style.cssText='position:fixed;opacity:0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); showToast('📋 Скопировано!','success'); });
 }
-
 function copyShareLinkMd() {
-  if (!remotePhotos.length) { showToast('Нет remote-фото для шаринга', 'warn'); return; }
-  const json = JSON.stringify(remotePhotos.map(p => ({ url: p.originalUrl, name: p.name })), null, 2);
-  navigator.clipboard.writeText(json).then(() => showToast('📋 JSON-список скопирован!', 'success', 8000))
-    .catch(() => { const ta = document.createElement('textarea'); ta.value = json; ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); showToast('📋 JSON-список скопирован!', 'success', 8000); });
+  if (!remotePhotos.length) { showToast('Нет remote-фото','warn'); return; }
+  const json=JSON.stringify(remotePhotos.map(p=>({url:p.originalUrl,name:p.name})),null,2);
+  navigator.clipboard.writeText(json).then(()=>showToast('📋 JSON скопирован!','success',8000)).catch(()=>{ const ta=document.createElement('textarea'); ta.value=json; ta.style.cssText='position:fixed;opacity:0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); showToast('📋 Скопировано!','success',8000); });
 }
 
 async function queryNSPDAtPoint() {
-  if (!window.lastClickedPoint) { showToast('Сначала кликните по карте', 'warn'); return; }
-  const e = { latlng: window.lastClickedPoint };
-  showToast('🔍 Запрос к НСПД...', 'info', 4000);
-  const results = new Set();
+  if (!window.lastClickedPoint) { showToast('Кликните по карте','warn'); return; }
+  const e={latlng:window.lastClickedPoint}; showToast('🔍 Запрос к НСПД...','info',4000);
+  const results=new Set();
   try {
-    const promises = NSPD_IDS.map(async id => {
-      const latlng = e.latlng;
-      const R = 20037508.34;
-      const cx = latlng.lng * R / 180;
-      const cy = Math.log(Math.tan((90 + latlng.lat) * Math.PI / 360)) * R / Math.PI;
-      const buffer = 120;
-      const bbox = `${cx-buffer},${cy-buffer},${cx+buffer},${cy+buffer}`;
-      const url = `https://nspd.gov.ru/api/aeggis/v3/${id}/wms?`+new URLSearchParams({SERVICE:'WMS',VERSION:'1.3.0',REQUEST:'GetFeatureInfo',LAYERS:String(id),QUERY_LAYERS:String(id),INFO_FORMAT:'text/html',FEATURE_COUNT:'20',X:'128',Y:'128',WIDTH:'256',HEIGHT:'256',CRS:'EPSG:3857',BBOX:bbox,STYLES:''});
-      const res = await fetch(url); if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const text = await res.text();
-      (text.match(/\b(\d{2}:\d{2,3}:\d{6,10}:\d{1,6})\b/g) || []).forEach(n => results.add(n.trim()));
+    const promises=NSPD_IDS.map(async id => {
+      const R=20037508.34, latlng=e.latlng;
+      const cx=latlng.lng*R/180, cy=Math.log(Math.tan((90+latlng.lat)*Math.PI/360))*R/Math.PI;
+      const buffer=120, bbox=`${cx-buffer},${cy-buffer},${cx+buffer},${cy+buffer}`;
+      const url=`https://nspd.gov.ru/api/aeggis/v3/${id}/wms?`+new URLSearchParams({SERVICE:'WMS',VERSION:'1.3.0',REQUEST:'GetFeatureInfo',LAYERS:String(id),QUERY_LAYERS:String(id),INFO_FORMAT:'text/html',FEATURE_COUNT:'20',X:'128',Y:'128',WIDTH:'256',HEIGHT:'256',CRS:'EPSG:3857',BBOX:bbox,STYLES:''});
+      const res=await fetch(url); if(!res.ok) return; const text=await res.text();
+      (text.match(/\b(\d{2}:\d{2,3}:\d{6,10}:\d{1,6})\b/g)||[]).forEach(n=>results.add(n.trim()));
     });
     await Promise.allSettled(promises);
   } catch(err) { console.warn(err); }
-  const cadList = Array.from(results).sort(), count = cadList.length;
-  let html = `<b>📍 Координаты</b><br><code style="background:#f0f0f0;padding:4px 8px;border-radius:4px">${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}</code><br><br>`;
-  if (count === 0) html += `<span style="color:#555">Участков не найдено</span>`;
-  else {
-    html += `<b>🏠 Найдено участков: ${count}</b><br>`;
-    html += cadList.map(cad => `• <span style="color:#d32f2f;font-weight:700">${cad}</span> <a href="https://nspd.gov.ru/map?thematic=Default&zoom=17.5&selectedCard=${encodeURIComponent(cad)}" target="_blank" style="color:#1976d2">→ открыть в НСПД</a><br>`).join('');
-  }
-  L.popup({ maxWidth: 300 }).setLatLng(e.latlng).setContent(`<div style="font-family:system-ui;line-height:1.45;font-size:13.5px">${html}</div>`).openOn(map);
-  showToast(count > 0 ? `Найдено ${count} участок(-ов)` : 'Участков не найдено', count > 0 ? 'success' : 'warn');
+  const cadList=Array.from(results).sort(), count=cadList.length;
+  let html=`<b>📍 Координаты</b><br><code style="background:#f0f0f0;padding:4px 8px;border-radius:4px">${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}</code><br><br>`;
+  if (!count) html+=`<span style="color:#555">Участков не найдено</span>`;
+  else { html+=`<b>🏠 Найдено: ${count}</b><br>`; html+=cadList.map(cad=>`• <span style="color:#d32f2f;font-weight:700">${cad}</span> <a href="https://nspd.gov.ru/map?thematic=Default&zoom=17.5&selectedCard=${encodeURIComponent(cad)}" target="_blank" style="color:#1976d2">→ открыть</a><br>`).join(''); }
+  L.popup({ maxWidth:300 }).setLatLng(e.latlng).setContent(`<div style="font-family:system-ui;line-height:1.45;font-size:13.5px">${html}</div>`).openOn(map);
+  showToast(count>0?`Найдено ${count} участок(-ов)`:'Участков не найдено', count>0?'success':'warn');
 }
 
-window.addEventListener('load', () => {
-  updateShareButton();
-  loadPhotosFromUrl();
-  initTimeline();
-});
+window.addEventListener('load', () => { updateShareButton(); loadPhotosFromUrl(); initTimeline(); });
 
 // ═════════════════════════════════════════════════════════════════════════════
 // РУЧНОЙ GPS
 // ═════════════════════════════════════════════════════════════════════════════
-let manualGPSActive = false, manualModePhotoIndex = null, manualInputMode = 'map';
-let tempLat = null, tempLon = null, tempBearing = 0, tempMarker = null;
+let manualGPSActive=false, manualModePhotoIndex=null, manualInputMode='map';
+let tempLat=null, tempLon=null, tempBearing=0, tempMarker=null;
 
 function enterManualGPSMode(idx) {
-  const p = photos[idx]; if (!p) return;
-  if (p.lat !== null && p.lon !== null && p.bearing !== null && p.bearing !== 0) return;
+  const p=photos[idx]; if (!p) return;
   if (manualGPSActive) exitManualGPSMode(true);
-  manualGPSActive = true; manualModePhotoIndex = idx;
-  tempLat = null; tempLon = null; tempBearing = 0;
-  if (p.lat !== null && p.lon !== null) { tempLat = p.lat; tempLon = p.lon; }
-  if (p.bearing !== null && !isNaN(p.bearing)) tempBearing = Math.round(p.bearing);
-  renderList();
-  setGPSInputMode('map');
-  const panel = document.getElementById('manual-gps-panel');
-  if (panel) { panel.classList.add('visible'); panel.style.zIndex = '750'; }
-  document.getElementById('mgps-title').textContent = `📍 Ручной GPS — ${p.name}`;
-  const coordsEl = document.getElementById('mgps-coords-display');
-  if (tempLat !== null && tempLon !== null) {
-    coordsEl.textContent = `${tempLat.toFixed(6)}, ${tempLon.toFixed(6)}`; coordsEl.classList.add('set');
-    document.getElementById('mgps-bearing-wrap').style.display = 'block';
-    document.getElementById('mgps-save-btn').disabled = false;
+  manualGPSActive=true; manualModePhotoIndex=idx;
+  tempLat=null; tempLon=null; tempBearing=0;
+  if (p.lat!==null&&p.lon!==null) { tempLat=p.lat; tempLon=p.lon; }
+  if (p.bearing!==null&&!isNaN(p.bearing)) tempBearing=Math.round(p.bearing);
+  renderList(); setGPSInputMode('map');
+  const panel=document.getElementById('manual-gps-panel');
+  if (panel) { panel.classList.add('visible'); panel.style.zIndex='800'; }
+  document.getElementById('mgps-title').textContent=`📍 Ручной GPS — ${p.name}`;
+  const coordsEl=document.getElementById('mgps-coords-display');
+  if (tempLat!==null&&tempLon!==null) {
+    coordsEl.textContent=`${tempLat.toFixed(6)}, ${tempLon.toFixed(6)}`; coordsEl.classList.add('set');
+    document.getElementById('mgps-bearing-wrap').style.display='block';
+    document.getElementById('mgps-save-btn').disabled=false;
   } else {
-    coordsEl.textContent = '— координаты не выбраны —'; coordsEl.classList.remove('set');
-    document.getElementById('mgps-bearing-wrap').style.display = 'none';
-    document.getElementById('mgps-save-btn').disabled = true;
+    coordsEl.textContent='— координаты не выбраны —'; coordsEl.classList.remove('set');
+    document.getElementById('mgps-bearing-wrap').style.display='none';
+    document.getElementById('mgps-save-btn').disabled=true;
   }
-  document.getElementById('mgps-bearing').value = tempBearing;
-  document.getElementById('mgps-bearing-val').textContent = tempBearing + '°';
-  showToast('📍 Кликните на карте для установки точки съёмки', 'info', 5000);
+  document.getElementById('mgps-bearing').value=tempBearing;
+  document.getElementById('mgps-bearing-val').textContent=tempBearing+'°';
+  showToast('📍 Кликните на карте или перетащите маркер','info',5000);
 }
 
 function setGPSInputMode(mode) {
-  manualInputMode = mode;
-  const mapBtn = document.getElementById('mgps-btn-map'), textBtn = document.getElementById('mgps-btn-text');
-  const textWrap = document.getElementById('mgps-coord-input-wrap');
-  const hintOverlay = document.getElementById('gps-hint-overlay');
-  const mapWrap = document.getElementById('map-wrap');
-  if (mode === 'map') {
+  manualInputMode=mode;
+  const mapBtn=document.getElementById('mgps-btn-map'), textBtn=document.getElementById('mgps-btn-text');
+  const textWrap=document.getElementById('mgps-coord-input-wrap');
+  const hintOverlay=document.getElementById('gps-hint-overlay');
+  const mapWrap=document.getElementById('map-wrap');
+  if (mode==='map') {
     mapBtn.classList.add('active'); textBtn.classList.remove('active');
-    textWrap.style.display = 'none'; hintOverlay.classList.add('visible'); mapWrap.classList.add('gps-picking');
+    textWrap.style.display='none'; hintOverlay.classList.add('visible'); mapWrap.classList.add('gps-picking');
   } else {
     textBtn.classList.add('active'); mapBtn.classList.remove('active');
-    textWrap.style.display = 'block'; hintOverlay.classList.remove('visible'); mapWrap.classList.remove('gps-picking');
+    textWrap.style.display='block'; hintOverlay.classList.remove('visible'); mapWrap.classList.remove('gps-picking');
     document.getElementById('mgps-coord-field').focus();
   }
 }
 
-function exitManualGPSMode(silent = false) {
-  manualGPSActive = false; manualModePhotoIndex = null; tempLat = null; tempLon = null; tempBearing = 0;
-  if (tempMarker) { map.removeLayer(tempMarker); tempMarker = null; }
-  const panel = document.getElementById('manual-gps-panel'); if (panel) panel.classList.remove('visible');
+function exitManualGPSMode(silent=false) {
+  manualGPSActive=false; manualModePhotoIndex=null; tempLat=null; tempLon=null; tempBearing=0;
+  if (tempMarker) { map.removeLayer(tempMarker); tempMarker=null; }
+  document.getElementById('manual-gps-panel').classList.remove('visible');
   document.getElementById('gps-hint-overlay').classList.remove('visible');
   document.getElementById('map-wrap').classList.remove('gps-picking');
+  // Remove lightbox semi-transparency
+  document.getElementById('lb-card').classList.remove('gps-active');
   renderList();
   if (!silent) showToast('Режим GPS отменён');
+  // Refresh lightbox if it was open
+  if (activeIdx!==null) {
+    const p=photos[activeIdx];
+    const ll=p.lat!==null?L.latLng(p.lat,p.lon):null;
+    openLightbox(activeIdx, ll);
+  }
 }
 
 function handleMapClickForGPS(e) {
-  tempLat = e.latlng.lat; tempLon = e.latlng.lng;
+  tempLat=e.latlng.lat; tempLon=e.latlng.lng;
   updateTempMarker(); onCoordsSet();
 }
 
 function applyCoordInput() {
-  const raw = document.getElementById('mgps-coord-field').value.trim();
-  const result = parseCoordInput(raw);
-  if (!result) { showToast('❌ Не удалось разобрать координаты. Пример: 47.373533, 39.899542', 'error'); return; }
-  tempLat = result.lat; tempLon = result.lon;
+  const raw=document.getElementById('mgps-coord-field').value.trim();
+  const result=parseCoordInput(raw);
+  if (!result) { showToast('❌ Не удалось разобрать координаты','error'); return; }
+  tempLat=result.lat; tempLon=result.lon;
   updateTempMarker();
-  map.setView([tempLat, tempLon], Math.max(map.getZoom(), 14), { animate: true });
+  map.setView([tempLat,tempLon], Math.max(map.getZoom(),14), { animate:true });
   onCoordsSet();
 }
 
 function parseCoordInput(str) {
-  str = str.trim().replace(/\s+/g, ' ');
-  const dec = str.match(/^(-?[\d.]+)[,\s]+(-?[\d.]+)$/);
-  if (dec) { const lat = parseFloat(dec[1]), lon = parseFloat(dec[2]); if (!isNaN(lat) && !isNaN(lon)) return { lat, lon }; }
-  const DMS = /(\d+)[°]\s*(\d+)['''`]\s*([\d.]+)["""″'']\s*([СсNn]|[ЮюSs])\s+(\d+)[°]\s*(\d+)['''`]\s*([\d.]+)["""″'']\s*([ВвEe]|[ЗзWw])/;
-  const m = str.match(DMS);
+  str=str.trim().replace(/\s+/g,' ');
+  const dec=str.match(/^(-?[\d.]+)[,\s]+(-?[\d.]+)$/);
+  if (dec) { const lat=parseFloat(dec[1]),lon=parseFloat(dec[2]); if(!isNaN(lat)&&!isNaN(lon)) return {lat,lon}; }
+  const DMS=/(\d+)[°]\s*(\d+)['''`]\s*([\d.]+)["""″'']\s*([СсNn]|[ЮюSs])\s+(\d+)[°]\s*(\d+)['''`]\s*([\d.]+)["""″'']\s*([ВвEe]|[ЗзWw])/;
+  const m=str.match(DMS);
   if (m) {
-    const dms = (d, min, sec) => parseInt(d) + parseInt(min)/60 + parseFloat(sec)/3600;
-    let lat = dms(m[1], m[2], m[3]), lon = dms(m[5], m[6], m[7]);
-    if (/[ЮюSs]/.test(m[4])) lat = -lat;
-    if (/[ЗзWw]/.test(m[8])) lon = -lon;
-    return { lat, lon };
+    const dms=(d,min,sec)=>parseInt(d)+parseInt(min)/60+parseFloat(sec)/3600;
+    let lat=dms(m[1],m[2],m[3]),lon=dms(m[5],m[6],m[7]);
+    if (/[ЮюSs]/.test(m[4])) lat=-lat; if (/[ЗзWw]/.test(m[8])) lon=-lon;
+    return {lat,lon};
   }
   return null;
 }
 
 function onCoordsSet() {
-  const coordsEl = document.getElementById('mgps-coords-display');
-  coordsEl.textContent = `${tempLat.toFixed(6)}, ${tempLon.toFixed(6)}`; coordsEl.classList.add('set');
-  document.getElementById('mgps-bearing-wrap').style.display = 'block';
-  document.getElementById('mgps-save-btn').disabled = false;
+  const coordsEl=document.getElementById('mgps-coords-display');
+  coordsEl.textContent=`${tempLat.toFixed(6)}, ${tempLon.toFixed(6)}`; coordsEl.classList.add('set');
+  document.getElementById('mgps-bearing-wrap').style.display='block';
+  document.getElementById('mgps-save-btn').disabled=false;
   document.getElementById('gps-hint-overlay').classList.remove('visible');
   document.getElementById('map-wrap').classList.remove('gps-picking');
-  showToast(`📍 ${tempLat.toFixed(5)}, ${tempLon.toFixed(5)}`, 'success', 2000);
+  showToast(`📍 ${tempLat.toFixed(5)}, ${tempLon.toFixed(5)}`,'success',2000);
 }
 
-// ─── Temp marker — headlight beam (blue/accent2), hit area 20px ──────────────
-function fovSvgAccent(bearing, R) {
-  if (bearing === null || isNaN(bearing)) return '';
-  const cx = R, cy = R, S = R * 2;
-  const rad = a => a * Math.PI / 180;
-  const b = bearing - 90;
-  const oL = rad(b-65), oR = rad(b+65);
-  const ox1 = cx+R*Math.cos(oL), oy1 = cy+R*Math.sin(oL);
-  const ox2 = cx+R*Math.cos(oR), oy2 = cy+R*Math.sin(oR);
-  const iL = rad(b-22), iR = rad(b+22);
-  const ix1 = cx+R*Math.cos(iL), iy1 = cy+R*Math.sin(iL);
-  const ix2 = cx+R*Math.cos(iR), iy2 = cy+R*Math.sin(iR);
-  const nx = cx+R*.55*Math.cos(rad(b)), ny = cy+R*.55*Math.sin(rad(b));
-  return `<svg width="${S}" height="${S}" viewBox="0 0 ${S} ${S}" `
-    + `style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;overflow:visible">`
-    + `<path d="M${cx},${cy} L${ox1},${oy1} A${R},${R} 0 0,1 ${ox2},${oy2} Z" fill="rgba(71,200,255,0.04)" stroke="none"/>`
-    + `<path d="M${cx},${cy} L${ix1},${iy1} A${R},${R} 0 0,1 ${ix2},${iy2} Z" `
-    + `fill="rgba(71,200,255,0.08)" stroke="rgba(71,200,255,0.22)" stroke-width="0.8" stroke-linejoin="round"/>`
-    + `<line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="rgba(71,200,255,0.60)" stroke-width="1.3" stroke-linecap="round"/>`
-    + `</svg>`;
-}
-
+// P7: draggable temp marker
 function updateTempMarker() {
   if (tempMarker) map.removeLayer(tempMarker);
-  if (tempLat === null) return;
-  const bearing = tempBearing, hb = bearing !== null;
-  const S = 100, HIT = 20;
+  if (tempLat===null) return;
+  const bearing=tempBearing, hb=bearing!==null;
+  const S=100, HIT=20;
   let html;
   if (hb) {
-    html = `<div style="width:${HIT}px;height:${HIT}px;position:relative;overflow:visible">`
-      + `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:${S}px;height:${S}px;pointer-events:none">`
-      + fovSvgAccent(bearing, S / 2)
-      + `</div><div class="marker-dot temp"></div></div>`;
+    html=`<div style="width:${HIT}px;height:${HIT}px;position:relative;overflow:visible">`
+      +`<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:${S}px;height:${S}px;pointer-events:none">`
+      +fovSvgAccent(bearing,S/2)+`</div><div class="marker-dot temp"></div></div>`;
   } else {
-    html = `<div style="width:${HIT}px;height:${HIT}px;position:relative"><div class="marker-dot temp"></div></div>`;
+    html=`<div style="width:${HIT}px;height:${HIT}px;position:relative"><div class="marker-dot temp"></div></div>`;
   }
-  const icon = L.divIcon({ html, className:'', iconSize:[HIT,HIT], iconAnchor:[HIT/2,HIT/2] });
-  tempMarker = L.marker([tempLat, tempLon], { icon, zIndexOffset:1000 }).addTo(map);
+  const icon=L.divIcon({ html, className:'', iconSize:[HIT,HIT], iconAnchor:[HIT/2,HIT/2] });
+  tempMarker=L.marker([tempLat,tempLon], { icon, zIndexOffset:1000, draggable:true }).addTo(map);
+  // P7: draggable marker updates coordinates
+  tempMarker.on('dragend', function(e) {
+    tempLat=e.target.getLatLng().lat; tempLon=e.target.getLatLng().lng;
+    onCoordsSet();
+    updateTempMarker(); // redraw with updated position
+  });
 }
 
 function onBearingSlider(val) {
-  tempBearing = parseInt(val, 10);
-  document.getElementById('mgps-bearing-val').textContent = tempBearing + '°';
-  if (tempLat !== null) updateTempMarker();
+  tempBearing=parseInt(val,10);
+  document.getElementById('mgps-bearing-val').textContent=tempBearing+'°';
+  if (tempLat!==null) updateTempMarker();
 }
-
 document.getElementById('mgps-bearing').addEventListener('wheel', function(e) {
   e.preventDefault();
-  const delta = e.deltaY < 0 ? 1 : -1;
-  const newVal = ((parseInt(this.value, 10) + delta + 360) % 360);
-  this.value = newVal; onBearingSlider(newVal);
-}, { passive: false });
+  const newVal=((parseInt(this.value,10)+(e.deltaY<0?1:-1)+360)%360);
+  this.value=newVal; onBearingSlider(newVal);
+}, { passive:false });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// EXIF WRITE — preserves DateTimeOriginal; system file date = now (browser limit)
-// Supports local files AND remote files (downloads blob, modifies, offers download)
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── EXIF WRITE ───────────────────────────────────────────────────────────────
 function decimalToDMSForPiexif(decimal, axis) {
-  const ref = axis === 'lat' ? (decimal >= 0 ? 'N' : 'S') : (decimal >= 0 ? 'E' : 'W');
-  const abs = Math.abs(decimal);
-  const deg = Math.floor(abs);
-  const minF = (abs - deg) * 60, min = Math.floor(minF);
-  const secInt = Math.round((minF - min) * 6000);
+  const ref=axis==='lat'?(decimal>=0?'N':'S'):(decimal>=0?'E':'W');
+  const abs=Math.abs(decimal), deg=Math.floor(abs);
+  const minF=(abs-deg)*60, min=Math.floor(minF);
+  const secInt=Math.round((minF-min)*6000);
   return [[[deg,1],[min,1],[secInt,100]], ref];
 }
-
 function blobToDataUrl(blob) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = e => resolve(e.target.result);
-    r.onerror = () => reject(new Error('FileReader error'));
-    r.readAsDataURL(blob);
-  });
+  return new Promise((resolve,reject) => { const r=new FileReader(); r.onload=e=>resolve(e.target.result); r.onerror=()=>reject(new Error('FileReader error')); r.readAsDataURL(blob); });
 }
 function dataUrlToBlob(dataUrl) {
-  const [meta, b64] = dataUrl.split(',');
-  const mime = (meta.match(/:(.*?);/) || [])[1] || 'image/jpeg';
-  const bin = atob(b64), arr = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-  return new Blob([arr], { type: mime });
+  const [meta,b64]=dataUrl.split(',');
+  const mime=(meta.match(/:(.*?);/)||[])[1]||'image/jpeg';
+  const bin=atob(b64), arr=new Uint8Array(bin.length);
+  for (let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+  return new Blob([arr],{type:mime});
 }
 
 async function writeEXIFWithGPS() {
-  if (tempLat === null || tempLon === null) { showToast('❌ Сначала укажите координаты', 'error'); return; }
-  const idx = manualModePhotoIndex, p = photos[idx]; if (!p) return;
-  document.getElementById('mgps-save-btn').disabled = true;
-  showToast('⏳ Записываем EXIF…', 'info', 8000);
+  if (tempLat===null||tempLon===null) { showToast('❌ Сначала укажите координаты','error'); return; }
+  const idx=manualModePhotoIndex, p=photos[idx]; if (!p) return;
+  document.getElementById('mgps-save-btn').disabled=true;
+  showToast('⏳ Записываем EXIF…','info',8000);
 
-  let blob = null;
+  let blob=null;
   try {
-    if (p.file) blob = p.file;
-    else if (p.originalBlob) blob = p.originalBlob;
+    if (p.file) blob=p.file;
+    else if (p.originalBlob) blob=p.originalBlob;
     else if (p.remoteViewUrl) {
-      showToast('⏳ Скачиваем оригинал для записи EXIF…', 'info', 8000);
-      const rtype = detectRemoteType(p.remoteViewUrl);
-      if (rtype === 'yandex') blob = await fetchYandexBlob(p.remoteViewUrl);
-      else {
-        const resp = await fetchTimeout(await getDirectUrlForFetch(p.remoteViewUrl), 20000);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        blob = await resp.blob();
-      }
-    } else throw new Error('Нет источника для записи EXIF');
-  } catch (err) {
-    showToast(`❌ Не удалось получить файл: ${err.message}`, 'error', 6000);
-    document.getElementById('mgps-save-btn').disabled = false; return;
-  }
+      showToast('⏳ Скачиваем оригинал…','info',8000);
+      const rtype=detectRemoteType(p.remoteViewUrl);
+      if (rtype==='yandex') blob=await fetchYandexBlob(p.remoteViewUrl);
+      else { const resp=await fetchTimeout(await getDirectUrlForFetch(p.remoteViewUrl),20000); if(!resp.ok) throw new Error(`HTTP ${resp.status}`); blob=await resp.blob(); }
+    } else throw new Error('Нет источника');
+  } catch(err) { showToast(`❌ ${err.message}`,'error',6000); document.getElementById('mgps-save-btn').disabled=false; return; }
 
   let dataUrl;
-  try { dataUrl = await blobToDataUrl(blob); }
-  catch (err) { showToast('❌ Ошибка чтения файла', 'error'); return; }
+  try { dataUrl=await blobToDataUrl(blob); } catch(err) { showToast('❌ Ошибка чтения файла','error'); return; }
 
-  // Load existing EXIF (preserves DateTimeOriginal and all other tags)
-  let exifObj = { '0th':{}, 'Exif':{}, 'GPS':{}, '1st':{} };
-  try { exifObj = piexif.load(dataUrl); } catch(e) {}
-  if (!exifObj['GPS']) exifObj['GPS'] = {};
+  // Load existing EXIF → preserve ALL tags including DateTimeOriginal
+  let exifObj={ '0th':{}, 'Exif':{}, 'GPS':{}, '1st':{} };
+  try { exifObj=piexif.load(dataUrl); } catch(e) {}
+  if (!exifObj['GPS']) exifObj['GPS']={};
 
-  // Write only GPS fields — all date/time EXIF tags are preserved as-is
-  const [latDMS, latRef] = decimalToDMSForPiexif(tempLat, 'lat');
-  const [lonDMS, lonRef] = decimalToDMSForPiexif(tempLon, 'lon');
-  exifObj['GPS'][piexif.GPSIFD.GPSLatitude]        = latDMS;
-  exifObj['GPS'][piexif.GPSIFD.GPSLatitudeRef]     = latRef;
-  exifObj['GPS'][piexif.GPSIFD.GPSLongitude]       = lonDMS;
-  exifObj['GPS'][piexif.GPSIFD.GPSLongitudeRef]    = lonRef;
-  exifObj['GPS'][piexif.GPSIFD.GPSImgDirection]    = [Math.round(tempBearing * 100), 100];
-  exifObj['GPS'][piexif.GPSIFD.GPSImgDirectionRef] = 'T';
+  const [latDMS,latRef]=decimalToDMSForPiexif(tempLat,'lat');
+  const [lonDMS,lonRef]=decimalToDMSForPiexif(tempLon,'lon');
+  exifObj['GPS'][piexif.GPSIFD.GPSLatitude]=latDMS;
+  exifObj['GPS'][piexif.GPSIFD.GPSLatitudeRef]=latRef;
+  exifObj['GPS'][piexif.GPSIFD.GPSLongitude]=lonDMS;
+  exifObj['GPS'][piexif.GPSIFD.GPSLongitudeRef]=lonRef;
+  exifObj['GPS'][piexif.GPSIFD.GPSImgDirection]=[Math.round(tempBearing*100),100];
+  exifObj['GPS'][piexif.GPSIFD.GPSImgDirectionRef]='T';
+
+  // Also update loc.path in UserComment GPP block
+  const ASCII_PFX=new Uint8Array([0x41,0x53,0x43,0x49,0x49,0x00,0x00,0x00]);
+  let gpp={ app:'gpp', v:2 };
+  try {
+    const existRaw=exifObj['Exif']?.[piexif.ExifIFD.UserComment];
+    if (existRaw) {
+      let payload=existRaw instanceof Uint8Array?existRaw:new Uint8Array(existRaw);
+      if (payload.length>=8&&[...payload.slice(0,8)].every((b,i)=>b===ASCII_PFX[i])) payload=payload.slice(8);
+      const existing=JSON.parse(new TextDecoder().decode(payload).replace(/\0/g,'').trim());
+      if (existing&&existing.app==='gpp') gpp={ ...existing, v:Math.max(existing.v||1,2) };
+    }
+  } catch(_) {}
+  if (p.locPath) gpp.loc={ path:p.locPath, source:p.sourceType||'local' };
+  const gppText=JSON.stringify(gpp,null,null);
+  const gppPayload=new Uint8Array(8+new TextEncoder().encode(gppText).length);
+  gppPayload.set(ASCII_PFX,0); gppPayload.set(new TextEncoder().encode(gppText),8);
+  if (!exifObj['Exif']) exifObj['Exif']={};
+  exifObj['Exif'][piexif.ExifIFD.UserComment]=gppPayload;
 
   let newDataUrl;
-  try {
-    const exifBytes = piexif.dump(exifObj);
-    newDataUrl = piexif.insert(exifBytes, dataUrl);
-  } catch (err) {
-    showToast(`❌ Ошибка записи EXIF: ${err.message}`, 'error', 6000);
-    document.getElementById('mgps-save-btn').disabled = false; return;
-  }
+  try { const exifBytes=piexif.dump(exifObj); newDataUrl=piexif.insert(exifBytes,dataUrl); }
+  catch(err) { showToast(`❌ Ошибка EXIF: ${err.message}`,'error',6000); document.getElementById('mgps-save-btn').disabled=false; return; }
 
-  const a = document.createElement('a');
-  a.href = newDataUrl; a.download = p.name; a.click();
+  const a=document.createElement('a'); a.href=newDataUrl; a.download=p.name; a.click();
 
-  const newBlob = dataUrlToBlob(newDataUrl);
-  const newBlobUrl = URL.createObjectURL(newBlob);
-  if (!p.isRemote && p.displayUrl) URL.revokeObjectURL(p.displayUrl);
-  p.lat = tempLat; p.lon = tempLon;
-  p.bearing = tempBearing === 0 ? null : tempBearing;
-  p.displayUrl = newBlobUrl; p.thumbUrl = newBlobUrl; p.originalBlob = newBlob;
-  if (p.marker) map.removeLayer(p.marker); p.marker = null;
-  addMarker(p, idx); rebuildMarkerListeners();
+  const newBlob=dataUrlToBlob(newDataUrl); const newBlobUrl=URL.createObjectURL(newBlob);
+  if (!p.isRemote&&p.displayUrl) URL.revokeObjectURL(p.displayUrl);
+  p.lat=tempLat; p.lon=tempLon; p.bearing=tempBearing===0?null:tempBearing;
+  p.displayUrl=newBlobUrl; p.thumbUrl=newBlobUrl; p.originalBlob=newBlob;
+  if (p.marker) map.removeLayer(p.marker); p.marker=null;
+  addMarker(p,idx); rebuildMarkerListeners();
   updateStats(); renderList(); fitMapToPhotos();
   exitManualGPSMode(true);
-  showToast('✅ EXIF записан, файл скачан! Дата съёмки сохранена.', 'success', 4000);
+  showToast('✅ EXIF записан! Дата съёмки сохранена.','success',4000);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
 // TIMELINE
 // ═════════════════════════════════════════════════════════════════════════════
-let filterStart = null, filterEnd = null, minDateGlobal = null, maxDateGlobal = null;
-let datedPhotosGlobal = [], timelineMode = 'full';
+let filterStart=null, filterEnd=null, minDateGlobal=null, maxDateGlobal=null;
+let datedPhotosGlobal=[], timelineMode='full';
 
 function parsePhotoDate(dateInput) {
   if (!dateInput) return null;
   if (dateInput instanceof Date) return new Date(dateInput);
-  const str = String(dateInput);
-  const match = str.match(/(\d{4})[:\-](\d{2})[:\-](\d{2})[T\s](\d{2})[:\-](\d{2})[:\-](\d{2})/);
-  if (match) { const [_, y, mo, d, h, mi, s] = match; return new Date(+y, +mo-1, +d, +h, +mi, +s); }
+  const str=String(dateInput);
+  const match=str.match(/(\d{4})[:\-](\d{2})[:\-](\d{2})[T\s](\d{2})[:\-](\d{2})[:\-](\d{2})/);
+  if (match) { const [_,y,mo,d,h,mi,s]=match; return new Date(+y,+mo-1,+d,+h,+mi,+s); }
   return null;
 }
 
 function parseGPPUserComment(exif) {
-  if (!exif || !exif.UserComment) return null;
-  let raw = exif.UserComment;
-  if (typeof raw === 'string') raw = new TextEncoder().encode(raw);
-  const prefixASCII = new Uint8Array([0x41,0x53,0x43,0x49,0x49,0x00,0x00,0x00]);
+  if (!exif||!exif.UserComment) return null;
+  let raw=exif.UserComment;
+  if (typeof raw==='string') raw=new TextEncoder().encode(raw);
+  const pfx=new Uint8Array([0x41,0x53,0x43,0x49,0x49,0x00,0x00,0x00]);
   let jsonBytes;
-  if (raw.length >= 8 && raw.slice(0,8).every((byte,i) => byte === prefixASCII[i])) jsonBytes = raw.slice(8);
-  else jsonBytes = raw;
+  if (raw.length>=8&&raw.slice(0,8).every((b,i)=>b===pfx[i])) jsonBytes=raw.slice(8); else jsonBytes=raw;
   try {
-    const jsonStr = new TextDecoder('utf-8').decode(jsonBytes).replace(/\0/g,'').trim();
-    const data = JSON.parse(jsonStr);
-    if (data.app !== 'gpp' || !data.exp) return null;
-    return { version: data.v || 1, experiment: data.exp, photoMeta: data.photo || {} };
-  } catch(e) { console.warn('GPP UserComment parse error', e); return null; }
+    const jsonStr=new TextDecoder('utf-8').decode(jsonBytes).replace(/\0/g,'').trim();
+    const data=JSON.parse(jsonStr);
+    if (data.app!=='gpp'||!data.exp) return null;
+    return { version:data.v||1, experiment:data.exp, photoMeta:data.photo||{} };
+  } catch(e) { console.warn('GPP parse error',e); return null; }
 }
 
 function isPhotoInRange(p) {
-  if (!p.dateObj || !filterStart || !filterEnd) return true;
-  return p.dateObj.getTime() >= filterStart.getTime() && p.dateObj.getTime() <= filterEnd.getTime();
+  if (!p.dateObj||!filterStart||!filterEnd) return true;
+  return p.dateObj.getTime()>=filterStart.getTime()&&p.dateObj.getTime()<=filterEnd.getTime();
 }
-
 function updateMarkerOpacities() {
-  photos.forEach(p => {
-    if (p.marker && typeof p.marker.setOpacity === 'function') p.marker.setOpacity(isPhotoInRange(p) ? 1 : 0.25);
-  });
+  photos.forEach(p => { if(p.marker&&typeof p.marker.setOpacity==='function') p.marker.setOpacity(isPhotoInRange(p)?1:0.25); });
 }
 
 function updateTimelineData() {
-  datedPhotosGlobal = photos.filter(p => p.dateObj instanceof Date).sort((a,b) => a.dateObj.getTime() - b.dateObj.getTime());
+  datedPhotosGlobal=photos.filter(p=>p.dateObj instanceof Date).sort((a,b)=>a.dateObj.getTime()-b.dateObj.getTime());
   if (!datedPhotosGlobal.length) { document.getElementById('timeline').classList.remove('visible'); return; }
-  minDateGlobal = datedPhotosGlobal[0].dateObj;
-  maxDateGlobal = datedPhotosGlobal[datedPhotosGlobal.length-1].dateObj;
-  filterStart = new Date(minDateGlobal.getTime());
-  filterEnd   = new Date(maxDateGlobal.getTime());
+  minDateGlobal=datedPhotosGlobal[0].dateObj; maxDateGlobal=datedPhotosGlobal[datedPhotosGlobal.length-1].dateObj;
+  filterStart=new Date(minDateGlobal.getTime()); filterEnd=new Date(maxDateGlobal.getTime());
   document.getElementById('timeline').classList.add('visible');
   renderTimeline();
 }
 
 function formatDateShort(d) {
   if (!d) return '';
-  const pad = n => String(n).padStart(2,'0');
+  const pad=n=>String(n).padStart(2,'0');
   return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${String(d.getFullYear()).slice(2)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function renderTimeline() {
-  if (!minDateGlobal || !maxDateGlobal) return;
-  const fullDuration = maxDateGlobal.getTime() - minDateGlobal.getTime();
-  const track = document.getElementById('timeline-track');
-  track.querySelectorAll('.timeline-dot').forEach(d => d.remove());
+  if (!minDateGlobal||!maxDateGlobal) return;
+  const fullDuration=maxDateGlobal.getTime()-minDateGlobal.getTime();
+  const track=document.getElementById('timeline-track');
+  track.querySelectorAll('.timeline-dot').forEach(d=>d.remove());
 
   datedPhotosGlobal.forEach(p => {
-    let perc = 0;
-    if (timelineMode === 'full') perc = ((p.dateObj.getTime() - minDateGlobal.getTime()) / fullDuration) * 100;
-    else {
-      const selDur = filterEnd.getTime() - filterStart.getTime();
-      if (selDur > 0) perc = ((p.dateObj.getTime() - filterStart.getTime()) / selDur) * 100;
-    }
-    const dot = document.createElement('div');
-    dot.className = 'timeline-dot'; dot.style.left = `${Math.max(2, Math.min(98, perc))}%`;
-    dot.title = formatDate(p.dateObj);
+    let perc=0;
+    if (timelineMode==='full') perc=((p.dateObj.getTime()-minDateGlobal.getTime())/fullDuration)*100;
+    else { const selDur=filterEnd.getTime()-filterStart.getTime(); if(selDur>0) perc=((p.dateObj.getTime()-filterStart.getTime())/selDur)*100; }
+    const dot=document.createElement('div');
+    dot.className='timeline-dot';
+    dot.style.left=`${Math.max(2,Math.min(98,perc))}%`;
+    dot.title=formatDate(p.dateObj);
     if (isPhotoInRange(p)) dot.classList.add('in-range');
+    // P4: folder filter highlight (green)
+    if (selectedFolderPath && isPhotoInSelectedFolder(p)) dot.classList.add('folder-match');
     track.appendChild(dot);
   });
 
-  let startPerc = 0, endPerc = 100;
-  if (timelineMode === 'full') {
-    startPerc = ((filterStart.getTime() - minDateGlobal.getTime()) / fullDuration) * 100;
-    endPerc   = ((filterEnd.getTime()   - minDateGlobal.getTime()) / fullDuration) * 100;
+  let startPerc=0, endPerc=100;
+  if (timelineMode==='full') {
+    startPerc=((filterStart.getTime()-minDateGlobal.getTime())/fullDuration)*100;
+    endPerc=((filterEnd.getTime()-minDateGlobal.getTime())/fullDuration)*100;
   }
-  startPerc = Math.max(0, Math.min(100, startPerc));
-  endPerc   = Math.max(startPerc, Math.min(100, endPerc));
-  document.getElementById('handle-start').style.left = `${startPerc}%`;
-  document.getElementById('handle-end').style.left   = `${endPerc}%`;
+  startPerc=Math.max(0,Math.min(100,startPerc)); endPerc=Math.max(startPerc,Math.min(100,endPerc));
+  document.getElementById('handle-start').style.left=`${startPerc}%`;
+  document.getElementById('handle-end').style.left=`${endPerc}%`;
   updateSelectedBar();
-  document.getElementById('min-date-label').textContent = formatDateShort(minDateGlobal);
-  document.getElementById('max-date-label').textContent = formatDateShort(maxDateGlobal);
-  document.getElementById('range-display').innerHTML = `<b>${formatDateShort(filterStart)}</b> — <b>${formatDateShort(filterEnd)}</b>`;
-  const selectedHours = (filterEnd.getTime() - filterStart.getTime()) / (1000*60*60);
-  const fineEl = document.getElementById('time-fine-controls');
-  if (selectedHours < 48 && selectedHours > 0) {
-    fineEl.style.display = 'flex';
-    document.getElementById('start-time-input').value = `${String(filterStart.getHours()).padStart(2,'0')}:${String(filterStart.getMinutes()).padStart(2,'0')}`;
-    document.getElementById('end-time-input').value   = `${String(filterEnd.getHours()).padStart(2,'0')}:${String(filterEnd.getMinutes()).padStart(2,'0')}`;
-  } else { fineEl.style.display = 'none'; }
+  document.getElementById('min-date-label').textContent=formatDateShort(minDateGlobal);
+  document.getElementById('max-date-label').textContent=formatDateShort(maxDateGlobal);
+  document.getElementById('range-display').innerHTML=`<b>${formatDateShort(filterStart)}</b> — <b>${formatDateShort(filterEnd)}</b>`;
+  const selHours=(filterEnd.getTime()-filterStart.getTime())/(1000*60*60);
+  const fineEl=document.getElementById('time-fine-controls');
+  if (selHours<48&&selHours>0) {
+    fineEl.style.display='flex';
+    document.getElementById('start-time-input').value=`${String(filterStart.getHours()).padStart(2,'0')}:${String(filterStart.getMinutes()).padStart(2,'0')}`;
+    document.getElementById('end-time-input').value=`${String(filterEnd.getHours()).padStart(2,'0')}:${String(filterEnd.getMinutes()).padStart(2,'0')}`;
+  } else { fineEl.style.display='none'; }
 }
 
 function updateSelectedBar() {
-  const bar = document.getElementById('selected-bar');
-  const s = parseFloat(document.getElementById('handle-start').style.left) || 0;
-  const e = parseFloat(document.getElementById('handle-end').style.left) || 100;
-  bar.style.left = `${s}%`; bar.style.width = `${e - s}%`;
+  const bar=document.getElementById('selected-bar');
+  const s=parseFloat(document.getElementById('handle-start').style.left)||0;
+  const e=parseFloat(document.getElementById('handle-end').style.left)||100;
+  bar.style.left=`${s}%`; bar.style.width=`${e-s}%`;
 }
 
 function highlightTimelineDot(photo) {
-  document.querySelectorAll('.timeline-dot').forEach(dot => dot.classList.remove('active-dot'));
-  if (!photo || !photo.dateObj) return;
-  const duration = maxDateGlobal.getTime() - minDateGlobal.getTime(); if (duration <= 0) return;
-  let perc = 0;
-  if (timelineMode === 'full') perc = ((photo.dateObj.getTime() - minDateGlobal.getTime()) / duration) * 100;
-  else { const selDur = filterEnd.getTime() - filterStart.getTime(); if (selDur > 0) perc = ((photo.dateObj.getTime() - filterStart.getTime()) / selDur) * 100; }
-  let closestDot = null, minDiff = Infinity;
+  document.querySelectorAll('.timeline-dot').forEach(dot=>dot.classList.remove('active-dot'));
+  if (!photo||!photo.dateObj) return;
+  const duration=maxDateGlobal.getTime()-minDateGlobal.getTime(); if(duration<=0) return;
+  let perc=0;
+  if (timelineMode==='full') perc=((photo.dateObj.getTime()-minDateGlobal.getTime())/duration)*100;
+  else { const selDur=filterEnd.getTime()-filterStart.getTime(); if(selDur>0) perc=((photo.dateObj.getTime()-filterStart.getTime())/selDur)*100; }
+  let closestDot=null, minDiff=Infinity;
   document.querySelectorAll('.timeline-dot').forEach(dot => {
-    const diff = Math.abs(parseFloat(dot.style.left) - perc);
-    if (diff < minDiff) { minDiff = diff; closestDot = dot; }
+    const diff=Math.abs(parseFloat(dot.style.left)-perc); if(diff<minDiff) { minDiff=diff; closestDot=dot; }
   });
   if (closestDot) closestDot.classList.add('active-dot');
 }
 
 function initTimeline() {
-  const track = document.getElementById('timeline-track');
-  const startH = document.getElementById('handle-start'), endH = document.getElementById('handle-end');
-  let dragging = null;
+  const track=document.getElementById('timeline-track');
+  const startH=document.getElementById('handle-start'), endH=document.getElementById('handle-end');
+  let dragging=null;
 
   document.querySelectorAll('.timeline-mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const newMode = btn.dataset.mode;
-      if (newMode === 'full' && timelineMode === 'zoom') {
-        const cS = filterStart ? filterStart.getTime() : minDateGlobal.getTime();
-        const cE = filterEnd   ? filterEnd.getTime()   : maxDateGlobal.getTime();
-        filterStart = new Date(minDateGlobal.getTime()); filterEnd = new Date(maxDateGlobal.getTime());
-        if (cS > filterStart.getTime() && cE < filterEnd.getTime()) { filterStart = new Date(cS); filterEnd = new Date(cE); }
+      const newMode=btn.dataset.mode;
+      if (newMode==='full'&&timelineMode==='zoom') {
+        const cS=filterStart?filterStart.getTime():minDateGlobal.getTime();
+        const cE=filterEnd?filterEnd.getTime():maxDateGlobal.getTime();
+        filterStart=new Date(minDateGlobal.getTime()); filterEnd=new Date(maxDateGlobal.getTime());
+        if (cS>filterStart.getTime()&&cE<filterEnd.getTime()) { filterStart=new Date(cS); filterEnd=new Date(cE); }
       }
-      timelineMode = newMode;
-      document.querySelectorAll('.timeline-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === timelineMode));
+      timelineMode=newMode;
+      document.querySelectorAll('.timeline-mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode===timelineMode));
       renderTimeline(); applyTimeFilter();
     });
   });
 
-  function startDrag(e, type) { e.preventDefault(); dragging = type; document.addEventListener('mousemove', doDrag); document.addEventListener('mouseup', stopDrag); }
+  function startDrag(e,type) { e.preventDefault(); dragging=type; document.addEventListener('mousemove',doDrag); document.addEventListener('mouseup',stopDrag); }
   function doDrag(e) {
     if (!dragging) return;
-    const rect = track.getBoundingClientRect();
-    let perc = ((e.clientX - rect.left) / rect.width) * 100;
-    perc = Math.max(-60, Math.min(160, perc));
-    if (dragging === 'start') { let endP = parseFloat(endH.style.left)||100; if (perc>endP) perc=endP; startH.style.left=`${perc}%`; }
-    else { let startP = parseFloat(startH.style.left)||0; if (perc<startP) perc=startP; endH.style.left=`${perc}%`; }
+    const rect=track.getBoundingClientRect(); let perc=((e.clientX-rect.left)/rect.width)*100;
+    perc=Math.max(-60,Math.min(160,perc));
+    if (dragging==='start') { let ep=parseFloat(endH.style.left)||100; if(perc>ep) perc=ep; startH.style.left=`${perc}%`; }
+    else { let sp=parseFloat(startH.style.left)||0; if(perc<sp) perc=sp; endH.style.left=`${perc}%`; }
     updateSelectedBar();
   }
   function stopDrag() {
     if (!dragging) return;
-    document.removeEventListener('mousemove', doDrag); document.removeEventListener('mouseup', stopDrag);
-    let startPerc = parseFloat(startH.style.left)||0, endPerc = parseFloat(endH.style.left)||100;
-    if (timelineMode === 'full') {
-      const fullDuration = maxDateGlobal.getTime() - minDateGlobal.getTime(), base = minDateGlobal.getTime();
-      filterStart = new Date(base + (Math.max(0,startPerc)/100) * fullDuration);
-      filterEnd   = new Date(base + (Math.min(100,endPerc)/100) * fullDuration);
+    document.removeEventListener('mousemove',doDrag); document.removeEventListener('mouseup',stopDrag);
+    let sp=parseFloat(startH.style.left)||0, ep=parseFloat(endH.style.left)||100;
+    if (timelineMode==='full') {
+      const fd=maxDateGlobal.getTime()-minDateGlobal.getTime(), base=minDateGlobal.getTime();
+      filterStart=new Date(base+(Math.max(0,sp)/100)*fd); filterEnd=new Date(base+(Math.min(100,ep)/100)*fd);
     } else {
-      let currentDuration = filterEnd.getTime() - filterStart.getTime(); if (currentDuration<=0) currentDuration=3600000;
-      const base = filterStart.getTime();
-      if (startPerc<0) { const extend=(Math.abs(startPerc)/45)*currentDuration*1.3; filterStart=new Date(base-extend); }
-      if (endPerc>100) { const extend=((endPerc-100)/45)*currentDuration*1.3; filterEnd=new Date(base+currentDuration+extend); }
-      currentDuration = filterEnd.getTime()-filterStart.getTime();
-      filterStart = new Date(base+(Math.max(0,startPerc)/100)*currentDuration);
-      filterEnd   = new Date(base+(Math.min(100,endPerc)/100)*currentDuration);
+      let cd=filterEnd.getTime()-filterStart.getTime(); if(cd<=0) cd=3600000;
+      const base=filterStart.getTime();
+      if (sp<0) { const ext=(Math.abs(sp)/45)*cd*1.3; filterStart=new Date(base-ext); }
+      if (ep>100) { const ext=((ep-100)/45)*cd*1.3; filterEnd=new Date(base+cd+ext); }
+      cd=filterEnd.getTime()-filterStart.getTime();
+      filterStart=new Date(base+(Math.max(0,sp)/100)*cd); filterEnd=new Date(base+(Math.min(100,ep)/100)*cd);
     }
-    if (filterStart > filterEnd) [filterStart, filterEnd] = [filterEnd, filterStart];
-    renderTimeline(); applyTimeFilter(); dragging = null;
+    if (filterStart>filterEnd) [filterStart,filterEnd]=[filterEnd,filterStart];
+    renderTimeline(); applyTimeFilter(); dragging=null;
   }
 
-  startH.addEventListener('mousedown', e => startDrag(e, 'start'));
-  endH.addEventListener('mousedown', e => startDrag(e, 'end'));
+  startH.addEventListener('mousedown', e=>startDrag(e,'start'));
+  endH.addEventListener('mousedown',   e=>startDrag(e,'end'));
 
   track.addEventListener('click', e => {
     if (dragging) return;
-    const rect = track.getBoundingClientRect(), perc = ((e.clientX-rect.left)/rect.width)*100;
-    let closestPhoto = null, minDiff = Infinity;
+    const rect=track.getBoundingClientRect(), perc=((e.clientX-rect.left)/rect.width)*100;
+    let closestPhoto=null, minDiff=Infinity;
     datedPhotosGlobal.forEach(p => {
-      let photoPerc = 0;
-      if (timelineMode==='full') photoPerc = ((p.dateObj.getTime()-minDateGlobal.getTime())/(maxDateGlobal.getTime()-minDateGlobal.getTime()))*100;
-      else { const selDur=filterEnd.getTime()-filterStart.getTime(); if (selDur>0) photoPerc=((p.dateObj.getTime()-filterStart.getTime())/selDur)*100; }
-      const diff = Math.abs(photoPerc-perc);
-      if (diff < minDiff) { minDiff = diff; closestPhoto = p; }
+      let pp=0;
+      if (timelineMode==='full') pp=((p.dateObj.getTime()-minDateGlobal.getTime())/(maxDateGlobal.getTime()-minDateGlobal.getTime()))*100;
+      else { const sd=filterEnd.getTime()-filterStart.getTime(); if(sd>0) pp=((p.dateObj.getTime()-filterStart.getTime())/sd)*100; }
+      const diff=Math.abs(pp-perc); if(diff<minDiff) { minDiff=diff; closestPhoto=p; }
     });
     if (closestPhoto) {
-      const idx = photos.findIndex(photo => photo === closestPhoto);
-      if (idx !== -1) {
-        if (closestPhoto.lat !== null) map.setView([closestPhoto.lat, closestPhoto.lon], Math.max(map.getZoom(),19), { animate:true });
-        openLightbox(idx, closestPhoto.lat ? L.latLng(closestPhoto.lat, closestPhoto.lon) : null);
+      const idx=photos.findIndex(ph=>ph===closestPhoto);
+      if (idx!==-1) {
+        if (closestPhoto.lat!==null) map.setView([closestPhoto.lat,closestPhoto.lon],Math.max(map.getZoom(),19),{animate:true});
+        openLightbox(idx, closestPhoto.lat?L.latLng(closestPhoto.lat,closestPhoto.lon):null);
         highlightTimelineDot(closestPhoto);
       }
     }
@@ -1995,19 +2123,19 @@ function initTimeline() {
 }
 
 function updateTimeFromInputs() {
-  if (!filterStart || !filterEnd) return;
-  const startInput = document.getElementById('start-time-input'), endInput = document.getElementById('end-time-input');
-  if (startInput.value) { const [h,m]=startInput.value.split(':').map(Number); filterStart.setHours(h,m,0,0); }
-  if (endInput.value)   { const [h,m]=endInput.value.split(':').map(Number);   filterEnd.setHours(h,m,0,0); }
-  if (filterEnd < filterStart) [filterStart, filterEnd] = [filterEnd, filterStart];
+  if (!filterStart||!filterEnd) return;
+  const si=document.getElementById('start-time-input'), ei=document.getElementById('end-time-input');
+  if (si.value) { const [h,m]=si.value.split(':').map(Number); filterStart.setHours(h,m,0,0); }
+  if (ei.value) { const [h,m]=ei.value.split(':').map(Number); filterEnd.setHours(h,m,0,0); }
+  if (filterEnd<filterStart) [filterStart,filterEnd]=[filterEnd,filterStart];
   renderTimeline(); applyTimeFilter();
 }
 
 function resetTimelineFilter() {
-  if (!minDateGlobal || !maxDateGlobal) return;
-  timelineMode = 'full';
-  document.querySelectorAll('.timeline-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode==='full'));
-  filterStart = new Date(minDateGlobal.getTime()); filterEnd = new Date(maxDateGlobal.getTime());
+  if (!minDateGlobal||!maxDateGlobal) return;
+  timelineMode='full';
+  document.querySelectorAll('.timeline-mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode==='full'));
+  filterStart=new Date(minDateGlobal.getTime()); filterEnd=new Date(maxDateGlobal.getTime());
   renderTimeline(); applyTimeFilter();
 }
 

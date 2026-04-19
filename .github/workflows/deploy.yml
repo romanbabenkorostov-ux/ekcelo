@@ -1,0 +1,42 @@
+# .github/workflows/deploy.yml
+#
+# EkceloFoto — деплой index.html на GitHub Pages
+# Роль: ТОЛЬКО публикация веб-интерфейса.
+# Обработка фото и SQLite — исключительно локально на Win10 через watchdog_exif.py
+
+name: Deploy ekcelo to Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "worker.js"
+      - "_config.yml"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: "."
+      - id: deploy
+        uses: actions/deploy-pages@v4
+      - run: echo "Сайт опубликован → ${{ steps.deploy.outputs.page_url }}"

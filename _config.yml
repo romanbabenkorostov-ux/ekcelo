@@ -1,1 +1,9 @@
-theme: minima
+# Jekyll config для GitHub Pages
+# Отключаем обработку Jekyll — публикуем файлы как есть
+plugins: []
+exclude:
+  - "scripts/"
+  - "*.bat"
+  - "schema.sql"
+  - "README*.md"
+  - ".github/"
