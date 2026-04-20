@@ -1366,21 +1366,27 @@ function resetTimelineFilter(){
 
 // ═══ CADASTRAL SEARCH ══════════════════════════════════════════════
 //
-// Search strategy (cascading fallbacks):
-//   1. PKK5 API (pkk.rosreestr.ru) via Cloudflare proxy
-//   2. NSPD WFS (nspd.gov.ru) via proxy
-//   3. corsproxy.io + PKK5
-//   4. NSPD WFS direct (no proxy)
+// Стратегия поиска (параллельные попытки):
+//   A. PKK5 (pkk.rosreestr.ru) via CF proxy — путь без кодирования ':'
+//   B. NSPD WFS (nspd.gov.ru) — OGC XML FILTER (MapServer не поддерживает CQL)
+//   C. NSPD text search API — /api/search?text=cadNum
+//   D. Прямой запрос из браузера (без прокси) — для каждого из вышеперечисленных
 //
-// Types: 1=ЗУ  5=ОКС
-// NSPD layer IDs: 36049/36329=ЗУ  36048/36328=ОКС
+// Ключевые исправления:
+//   1. encodeURIComponent убран из пути — PKK5 требует сырые двоеточия
+//   2. OGC XML FILTER вместо CQL_FILTER для MapServer WFS
+//   3. Promise.any() — параллельные запросы ЗУ и ОКС одновременно
+//   4. Таймаут 7s вместо 12s; статус по каждому шагу
 
 const CAD_STYLES={
   zu: {color:'rgba(160,32,240,0.85)',fillColor:'rgba(160,32,240,0.08)',weight:2},
   oks:{color:'rgba(0,180,50,0.85)', fillColor:'rgba(0,180,50,0.08)', weight:2},
 };
+// NSPD WFS layer IDs (MapServer): 36049/36329=ЗУ  36048/36328=ОКС
 const NSPD_ZU_IDS  = [36049,36329];
 const NSPD_OKS_IDS = [36048,36328];
+// Possible cadastral number field names across NSPD layers
+const CAD_FIELDS   = ['cad_num','KAD_NUM','CAD_NUM','kadnum','cadastral_number'];
 let pendingCadResult=null;
 let cadHoveredFeatures=[];
 
@@ -1389,6 +1395,9 @@ function onCadInputChange(){
   document.getElementById('cad-status').textContent='';
 }
 
+// ── status helper ──────────────────────────────────────────────────
+function _cadStatus(msg){document.getElementById('cad-status').textContent=msg;}
+
 async function doSearchCadastral(){
   const raw=document.getElementById('cad-input').value.trim();
   const cadNum=raw.replace(/\s+/g,'').toUpperCase();
@@ -1396,49 +1405,94 @@ async function doSearchCadastral(){
   const btn=document.getElementById('cad-go-btn');
   btn.disabled=true;
   document.getElementById('cad-save-btn').style.display='none';
-  document.getElementById('cad-status').textContent='\u23f3 Поиск\u2026';
+  _cadStatus('\u23f3 Запрос PKK5\u2026');
   setProgress(10);
 
   let result=null;
 
-  // Pass 1: PKK5 via updated Cloudflare proxy (now allows pkk.rosreestr.ru)
-  if(!result) result=await _tryPKK(cadNum,1,'zu',proxyUrl);
-  if(!result) result=await _tryPKK(cadNum,5,'oks',proxyUrl);
+  // ── ШАГ 1: PKK5 (ЗУ + ОКС) параллельно через proxy ──────────────
+  // PKK5 требует сырые двоеточия в URL-пути (не %3A)
+  result = await _anyOf([
+    _tryPKK(cadNum,1,'zu',proxyUrl),
+    _tryPKK(cadNum,5,'oks',proxyUrl),
+  ]);
 
-  // Pass 2: NSPD WFS via proxy
-  if(!result){setProgress(35);result=await _tryNSPD(cadNum,NSPD_ZU_IDS,'zu',u=>proxyUrl(u));}
-  if(!result) result=await _tryNSPD(cadNum,NSPD_OKS_IDS,'oks',u=>proxyUrl(u));
-
-  // Pass 3: PKK5 via corsproxy.io (free public CORS proxy)
+  // ── ШАГ 2: PKK5 напрямую из браузера ─────────────────────────────
   if(!result){
-    setProgress(60);
-    const cors=u=>`https://corsproxy.io/?url=${encodeURIComponent(u)}`;
-    if(!result) result=await _tryPKK(cadNum,1,'zu',cors);
-    if(!result) result=await _tryPKK(cadNum,5,'oks',cors);
+    _cadStatus('\u23f3 PKK5 прямой запрос\u2026');
+    setProgress(30);
+    result = await _anyOf([
+      _tryPKK(cadNum,1,'zu',u=>u),
+      _tryPKK(cadNum,5,'oks',u=>u),
+    ]);
   }
 
-  // Pass 4: NSPD WFS direct (NSPD tiles already load without proxy)
+  // ── ШАГ 3: NSPD WFS через proxy (OGC XML FILTER) ─────────────────
   if(!result){
+    _cadStatus('\u23f3 NSPD WFS через прокси\u2026');
+    setProgress(50);
+    result = await _anyOf([
+      _tryNSPD(cadNum,NSPD_ZU_IDS,'zu',proxyUrl),
+      _tryNSPD(cadNum,NSPD_OKS_IDS,'oks',proxyUrl),
+    ]);
+  }
+
+  // ── ШАГ 4: NSPD WFS напрямую (тайлы уже работают без прокси) ─────
+  if(!result){
+    _cadStatus('\u23f3 NSPD WFS прямой\u2026');
+    setProgress(65);
+    result = await _anyOf([
+      _tryNSPD(cadNum,NSPD_ZU_IDS,'zu',u=>u),
+      _tryNSPD(cadNum,NSPD_OKS_IDS,'oks',u=>u),
+    ]);
+  }
+
+  // ── ШАГ 5: NSPD text search ───────────────────────────────────────
+  if(!result){
+    _cadStatus('\u23f3 NSPD поиск\u2026');
     setProgress(80);
-    if(!result) result=await _tryNSPD(cadNum,NSPD_ZU_IDS,'zu',u=>u);
-    if(!result) result=await _tryNSPD(cadNum,NSPD_OKS_IDS,'oks',u=>u);
+    result = await _anyOf([
+      _tryNSPDSearch(cadNum,proxyUrl),
+      _tryNSPDSearch(cadNum,u=>u),
+    ]);
+  }
+
+  // ── ШАГ 6: PKK5 через corsproxy.io ───────────────────────────────
+  if(!result){
+    _cadStatus('\u23f3 Резервный прокси\u2026');
+    setProgress(90);
+    const cors=u=>`https://corsproxy.io/?url=${encodeURIComponent(u)}`;
+    result = await _anyOf([
+      _tryPKK(cadNum,1,'zu',cors),
+      _tryPKK(cadNum,5,'oks',cors),
+    ]);
   }
 
   setProgress(0);
   btn.disabled=false;
 
   if(!result){
-    document.getElementById('cad-status').textContent='\u274c Не найдено';
-    showToast(`\u274c ${cadNum} \u2014 не найдено`,'error',4000);
+    _cadStatus('\u274c Не найдено');
+    showToast(`\u274c ${cadNum} \u2014 не найдено`,'error',5000);
     return;
   }
   _applyCadResult(result);
 }
 
+// Promise.any polyfill-safe: resolve with first non-null, or null if all null/reject
+async function _anyOf(promises){
+  const results=await Promise.allSettled(promises);
+  for(const r of results){if(r.status==='fulfilled'&&r.value)return r.value;}
+  return null;
+}
+
+// ── PKK5 ─────────────────────────────────────────────────────────
+// FIX: cadNum используется как есть в пути — PKK5 не принимает %3A
 async function _tryPKK(cadNum,typeId,typeName,mkUrl){
-  const url=`https://pkk.rosreestr.ru/api/features/${typeId}/${encodeURIComponent(cadNum)}`;
+  // Сырые двоеточия — НЕ используем encodeURIComponent для пути
+  const url=`https://pkk.rosreestr.ru/api/features/${typeId}/${cadNum}`;
   try{
-    const res=await fetchTimeout(mkUrl(url),12000);
+    const res=await fetchTimeout(mkUrl(url),7000);
     if(!res.ok)return null;
     const data=await res.json();
     if(!data.feature?.geometry)return null;
@@ -1462,35 +1516,83 @@ function _pkkLines(type,a){
   return L;
 }
 
+// ── NSPD WFS с OGC XML FILTER (MapServer не поддерживает CQL) ─────
+// Пробуем все варианты имени поля кадастрового номера
 async function _tryNSPD(cadNum,layerIds,typeName,mkUrl){
-  const cql=encodeURIComponent(`cad_num='${cadNum}'`);
+  const escapedNum=cadNum.replace(/'/g,"\\'");
   for(const id of layerIds){
-    const url=`https://nspd.gov.ru/api/aeggis/v3/${id}/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=ms:layer_${id}&CQL_FILTER=${cql}&outputFormat=application/json&SRSNAME=EPSG:4326&count=1`;
+    for(const field of CAD_FIELDS){
+      // OGC WFS 2.0 XML filter — работает с MapServer
+      const xmlFilter=`<fes:Filter xmlns:fes="http://www.opengis.net/fes/2.0"><fes:PropertyIsEqualTo><fes:ValueReference>${field}</fes:ValueReference><fes:Literal>${escapedNum}</fes:Literal></fes:PropertyIsEqualTo></fes:Filter>`;
+      const url=`https://nspd.gov.ru/api/aeggis/v3/${id}/wfs?`+
+        `SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature`+
+        `&TYPENAMES=ms:layer_${id}`+
+        `&FILTER=${encodeURIComponent(xmlFilter)}`+
+        `&outputFormat=application/json&SRSNAME=EPSG:4326&count=1`;
+      try{
+        const res=await fetchTimeout(mkUrl(url),7000);
+        if(!res.ok)continue;
+        const fc=await res.json();
+        const feat=fc.features?.[0];
+        if(!feat?.geometry)continue;
+        const p=feat.properties||{};
+        const attrs={
+          area_value:    p.area_value??p.area??p.AREA??null,
+          area_type:     p.area_type??p.areatype??1,
+          area_unit:     p.area_unit??'кв.м',
+          category_type: p.category_type??p.category??p.cat??null,
+          util_by_doc:   p.util_by_doc??p.use??p.vri??p.purpose_by_doc??null,
+          name:          p.name??p.obj_name??null,
+          purpose_name:  p.purpose_name??p.purpose??p.designation??null,
+          year_built:    p.year_built??p.build_year??p.year??null,
+        };
+        return{cadNum,type:typeName,geom:feat.geometry,attrs,lines:_pkkLines(typeName,attrs),src:'nspd-wfs'};
+      }catch(_){}
+    }
+  }
+  return null;
+}
+
+// ── NSPD text search API ────────────────────────────────────────────
+async function _tryNSPDSearch(cadNum,mkUrl){
+  const endpoints=[
+    `https://nspd.gov.ru/api/search?text=${encodeURIComponent(cadNum)}&limit=5`,
+    `https://nspd.gov.ru/api/features/search?query=${encodeURIComponent(cadNum)}&limit=5`,
+  ];
+  for(const url of endpoints){
     try{
-      const res=await fetchTimeout(mkUrl(url),12000);
+      const res=await fetchTimeout(mkUrl(url),7000);
       if(!res.ok)continue;
-      const fc=await res.json();
-      const feat=fc.features?.[0];
-      if(!feat?.geometry)continue;
-      const p=feat.properties||{};
-      const attrs={
-        area_value: p.area_value??p.area??p.AREA??null,
-        area_type:  p.area_type??p.areatype??1,
-        area_unit:  p.area_unit??'кв.м',
-        category_type: p.category_type??p.category??p.cat??null,
-        util_by_doc:   p.util_by_doc??p.use??p.vri??p.purpose_by_doc??null,
-        name:          p.name??p.obj_name??null,
-        purpose_name:  p.purpose_name??p.purpose??p.designation??null,
-        year_built:    p.year_built??p.build_year??p.year??null,
-      };
-      return{cadNum,type:typeName,geom:feat.geometry,attrs,lines:_pkkLines(typeName,attrs),src:'nspd'};
+      const data=await res.json();
+      // Try various response shapes
+      const items=data.items??data.features??data.result??data.results??[];
+      for(const item of items){
+        const geom=item.geometry??item.geom??null;
+        if(!geom)continue;
+        const p=item.properties??item.attributes??item.attrs??item??{};
+        // Determine type from data
+        const isOks=!!(p.name||p.purpose_name||p.purpose||item.type===2||item.type===5);
+        const typeName=isOks?'oks':'zu';
+        const attrs={
+          area_value:    p.area_value??p.area??null,
+          area_type:     p.area_type??1,
+          area_unit:     p.area_unit??'кв.м',
+          category_type: p.category_type??p.category??null,
+          util_by_doc:   p.util_by_doc??p.use??p.vri??null,
+          name:          p.name??p.obj_name??null,
+          purpose_name:  p.purpose_name??p.purpose??null,
+          year_built:    p.year_built??p.build_year??null,
+        };
+        return{cadNum,type:typeName,geom,attrs,lines:_pkkLines(typeName,attrs),src:'nspd-search'};
+      }
     }catch(_){}
   }
   return null;
 }
 
+// ── Render result ────────────────────────────────────────────────────
 function _applyCadResult(result){
-  const{cadNum,type,geom,attrs,lines}=result;
+  const{cadNum,type,geom,attrs,lines,src}=result;
   const layer=_makeCadLayer(geom,type,true);
   if(!layer)return;
   _attachCadEvents(layer,cadNum,type,lines);
@@ -1499,8 +1601,8 @@ function _applyCadResult(result){
   pendingCadResult=result;
   document.getElementById('cad-save-btn').style.display='flex';
   const label=type==='zu'?'Земельный участок':'ОКС';
-  const area=attrs.area_value?` \u00b7 ${attrs.area_value} ${attrs.area_unit||'кв.м'}`:'';
-  document.getElementById('cad-status').textContent=`\u2705 ${label}${area}`;
+  const area=attrs.area_value?` \u00b7 ${attrs.area_value} ${attrs.area_unit||'\u043a\u0432.\u043c'}`:'';
+  _cadStatus(`\u2705 ${label}${area}`);
   showToast(`\u2705 ${cadNum}: ${label}`,'success',3000);
 }
 
@@ -1539,7 +1641,7 @@ function _showCadTip(ev){
   const sorted=[...cadHoveredFeatures].sort((a,b)=>a.priority-b.priority);
   wrap.innerHTML=sorted.map(f=>{
     const cls=f.type==='zu'?'cad-tip-zu':f.type==='oks'?'cad-tip-oks':'cad-tip-kml';
-    const lbl=f.type==='zu'?'Земельный участок':f.type==='oks'?'ОКС':'Объект';
+    const lbl=f.type==='zu'?'\u0417\u0435\u043c\u0435\u043b\u044c\u043d\u044b\u0439 \u0443\u0447\u0430\u0441\u0442\u043e\u043a':f.type==='oks'?'\u041e\u041a\u0421':'\u041e\u0431\u044a\u0435\u043a\u0442';
     const rows=(f.lines||[]).map(([k,v])=>`<div class="cad-tip-row"><span class="cad-tip-key">${esc(k)}:</span><span class="cad-tip-val">${esc(String(v))}</span></div>`).join('');
     return`<div class="cad-tip-section ${cls}"><div class="cad-tip-title">${lbl} \u00b7 ${esc(f.cadNum||'')}</div>${rows}</div>`;
   }).join('');
@@ -1557,7 +1659,7 @@ function _showCadTip(ev){
 function _hideCadTip(){document.getElementById('cad-tooltip').classList.remove('visible');}
 
 function _cadPopup(lat,lng,type,cadNum,lines){
-  const label=type==='zu'?'Земельный участок':'ОКС';
+  const label=type==='zu'?'\u0417\u0435\u043c\u0435\u043b\u044c\u043d\u044b\u0439 \u0443\u0447\u0430\u0441\u0442\u043e\u043a':'\u041e\u041a\u0421';
   const color=type==='zu'?'#d070ff':'#40e080';
   let h=`<div style="font-family:system-ui;line-height:1.6;font-size:13px"><b style="color:${color}">\u{1f4cd} ${label}</b><br>`;
   h+=`<code style="background:#f0f0f0;padding:2px 6px;border-radius:3px;font-size:11px">${esc(cadNum)}</code>`;
@@ -1567,15 +1669,16 @@ function _cadPopup(lat,lng,type,cadNum,lines){
   return h;
 }
 
+// ── KML save ────────────────────────────────────────────────────────
 function _cadToKML(cadNum,type,geom,lines){
   const bABGR=type==='zu'?'ff00007f':'ff007f00';
   const fABGR=type==='zu'?'cc00007f':'cc007f00';
   const sid=`cad_${type}_${cadNum.replace(/:/g,'_')}`;
   const desc=lines.map(([k,v])=>`${k}: ${v}`).join('; ');
   let cs='';
-  if(geom.type==='Polygon')      cs=geom.coordinates[0].map(([lo,la])=>`${lo},${la},0`).join(' ');
-  else if(geom.type==='MultiPolygon')cs=geom.coordinates[0][0].map(([lo,la])=>`${lo},${la},0`).join(' ');
-  else if(geom.type==='Point')   cs=`${geom.coordinates[0]},${geom.coordinates[1]},0`;
+  if(geom.type==='Polygon')           cs=geom.coordinates[0].map(([lo,la])=>`${lo},${la},0`).join(' ');
+  else if(geom.type==='MultiPolygon') cs=geom.coordinates[0][0].map(([lo,la])=>`${lo},${la},0`).join(' ');
+  else if(geom.type==='Point')        cs=`${geom.coordinates[0]},${geom.coordinates[1]},0`;
   const gkml=geom.type==='Point'
     ?`<Point><coordinates>${cs}</coordinates></Point>`
     :`<Polygon><outerBoundaryIs><LinearRing><coordinates>${cs}</coordinates></LinearRing></outerBoundaryIs></Polygon>`;
@@ -1586,7 +1689,7 @@ function _cadToKML(cadNum,type,geom,lines){
 }
 
 function savePendingCadastralToKML(){
-  if(!pendingCadResult){showToast('Нет данных для записи','warn',2000);return;}
+  if(!pendingCadResult){showToast('\u041d\u0435\u0442 \u0434\u0430\u043d\u043d\u044b\u0445 \u0434\u043b\u044f \u0437\u0430\u043f\u0438\u0441\u0438','warn',2000);return;}
   const{cadNum,type,geom,attrs,lines}=pendingCadResult;
   const parts=_cadToKML(cadNum,type,geom,lines);
   const targetIdx=kmlLayers.findIndex(l=>l.visible);
@@ -1598,7 +1701,7 @@ function savePendingCadastralToKML(){
     const lyr=_makeCadLayer(geom,type,true);
     if(lyr){_attachCadEvents(lyr,cadNum,type,lines);lyr.addTo(tgt.layerGroup);}
     renderKMLDropdown();
-    showToast(`\u2705 Записано в \u00ab${tgt.docName||tgt.filename}\u00bb`,'success',3000);
+    showToast(`\u2705 \u0417\u0430\u043f\u0438\u0441\u0430\u043d\u043e \u0432 \u00ab${tgt.docName||tgt.filename}\u00bb`,'success',3000);
   }else{
     const lg=L.layerGroup().addTo(map);
     const entry={filename:'\u041a\u0430\u0434\u0430\u0441\u0442\u0440.kml',docName:'\u041a\u0430\u0434\u0430\u0441\u0442\u0440',layerGroup:lg,visible:true,placemarkCount:1,cadPlacemarks:[{cadNum,type,geom,lines,parts}]};
