@@ -302,6 +302,41 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .viewer-info-item{display:flex;align-items:center;gap:6px}
 .viewer-info-icon{font-size:15px;opacity:.8}
 
+/* CADASTRAL SEARCH PANEL (top of sidebar) */
+#cad-panel{flex-shrink:0;border-bottom:1px solid var(--border);padding:8px 10px 7px;background:rgba(128,0,200,.04)}
+#cad-label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-family:'JetBrains Mono',monospace;margin-bottom:5px}
+#cad-row{display:flex;gap:5px;align-items:center}
+#cad-input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;padding:5px 8px;outline:none}
+#cad-input:focus{border-color:#a020f0}
+#cad-input::placeholder{color:var(--muted)}
+#cad-go-btn{background:rgba(160,32,240,.25);border:1px solid rgba(160,32,240,.5);border-radius:var(--r);color:#d070ff;font-family:'JetBrains Mono',monospace;font-size:13px;padding:4px 10px;cursor:pointer;flex-shrink:0;transition:all .15s;font-weight:700}
+#cad-go-btn:hover{background:rgba(160,32,240,.4)}
+#cad-go-btn:disabled{opacity:.35;cursor:not-allowed}
+#cad-save-btn{display:none;align-items:center;justify-content:center;width:28px;height:28px;background:rgba(232,255,71,.1);border:1px solid rgba(232,255,71,.35);border-radius:var(--r);color:var(--accent);cursor:pointer;transition:all .15s;flex-shrink:0;padding:0}
+#cad-save-btn:hover{background:rgba(232,255,71,.25)}
+#cad-save-btn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#cad-status{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);margin-top:5px;min-height:12px;line-height:1.4}
+/* Folder tree at bottom of sidebar */
+#folder-tree-panel{flex-shrink:0;border-top:1px solid var(--border);display:none;order:99}
+#folder-tree-panel.visible{display:block}
+
+/* CADASTRAL FLOATING TOOLTIP */
+#cad-tooltip{display:none;position:absolute;z-index:3000;pointer-events:none;max-width:280px;min-width:170px;font-family:'JetBrains Mono',monospace;font-size:11px}
+#cad-tooltip.visible{display:block}
+.cad-tip-section{padding:6px 9px;line-height:1.5}
+.cad-tip-section+.cad-tip-section{border-top:1px solid rgba(255,255,255,.08)}
+.cad-tip-zu{background:#1a0b26;border-left:3px solid #a020f0}
+.cad-tip-oks{background:#0b1a0b;border-left:3px solid #00c040}
+.cad-tip-kml{background:#0d1117;border-left:3px solid var(--accent2)}
+.cad-tip-title{font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px}
+.cad-tip-zu .cad-tip-title{color:#d070ff}
+.cad-tip-oks .cad-tip-title{color:#40e080}
+.cad-tip-kml .cad-tip-title{color:var(--accent2)}
+.cad-tip-row{display:flex;gap:5px;font-size:10px}
+.cad-tip-key{color:var(--muted);white-space:nowrap}
+.cad-tip-val{color:var(--text);word-break:break-word}
+#cad-tooltip-wrap{background:rgba(13,15,20,.93);border:1px solid var(--border);border-radius:7px;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.7)}
+
 ::-webkit-scrollbar{width:6px}
 ::-webkit-scrollbar-track{background:#0a0c10}
 ::-webkit-scrollbar-thumb{background:#2a3247;border-radius:3px}
@@ -372,7 +407,31 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     <div id="gd-status"></div>
   </div>
 
-  <!-- FOLDER TREE -->
+  <!-- CADASTRAL SEARCH (top of sidebar) -->
+  <div id="cad-panel">
+    <div id="cad-label">🔍 Поиск по кадастровому номеру</div>
+    <div id="cad-row">
+      <input type="text" id="cad-input" placeholder="47:14:1203001:1" autocomplete="off"
+        onkeydown="if(event.key==='Enter')doSearchCadastral()"
+        oninput="onCadInputChange()"/>
+      <button id="cad-go-btn" onclick="doSearchCadastral()" title="Найти и отобразить">→</button>
+      <button id="cad-save-btn" onclick="savePendingCadastralToKML()" title="Записать в KML">
+        <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      </button>
+    </div>
+    <div id="cad-status"></div>
+  </div>
+
+  <!-- Active folder filter banner -->
+  <div id="folder-filter-banner">
+    <span style="color:var(--muted);font-size:9px">📂</span>
+    <span id="folder-filter-name"></span>
+    <button id="folder-filter-reset" onclick="clearFolderFilter()">× сбросить</button>
+  </div>
+
+  <div id="photo-list"></div>
+
+  <!-- FOLDER TREE (bottom of sidebar) -->
   <div id="folder-tree-panel">
     <div class="ftree-header" onclick="toggleFolderTreeOpen()">
       <div class="ftree-title">
@@ -385,21 +444,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     </div>
     <div id="folder-tree-content"></div>
   </div>
-
-  <!-- Active folder filter banner -->
-  <div id="folder-filter-banner">
-    <span style="color:var(--muted);font-size:9px">📂</span>
-    <span id="folder-filter-name"></span>
-    <button id="folder-filter-reset" onclick="clearFolderFilter()">× сбросить</button>
-  </div>
-
-  <div id="photo-list"></div>
 </aside>
 
 <div id="map-wrap">
   <div id="map"></div>
   <div id="map-hint"><div class="hint-icon">🗺️</div><div class="hint-text">Загрузите JPG с GPS-метками<br/>— точки появятся на карте</div></div>
   <div id="gps-hint-overlay">📍 Кликните по карте — или перетащите маркер</div>
+  <!-- Cadastral floating tooltip -->
+  <div id="cad-tooltip"><div id="cad-tooltip-wrap"></div></div>
 
   <div id="manual-gps-panel">
     <div id="mgps-title">📍 Ручной GPS</div>
@@ -873,7 +925,7 @@ function renderKMLOnMap(parsed){
 }
 
 async function loadKMLFromFile(file,displayName){
-  try{const text=await file.text();const parsed=parseKML(text,displayName||file.name);const lg=renderKMLOnMap(parsed);lg.addTo(map);kmlLayers.push({filename:displayName||file.name,docName:parsed.docName,layerGroup:lg,visible:true,placemarkCount:parsed.placemarks.length});updateKMLButton();showToast(`🗺 KML: ${parsed.docName} (${parsed.placemarks.length} obj)`,'success',3000);}
+  try{const text=await file.text();const parsed=parseKML(text,displayName||file.name);const lg=renderKMLOnMap(parsed);lg.addTo(map);kmlLayers.push({filename:displayName||file.name,docName:parsed.docName,layerGroup:lg,visible:true,placemarkCount:parsed.placemarks.length,parsedData:parsed,cadPlacemarks:[]});updateKMLButton();showToast(`🗺 KML: ${parsed.docName} (${parsed.placemarks.length} obj)`,'success',3000);}
   catch(e){showToast(`❌ KML: ${e.message}`,'error',5000);}
 }
 
@@ -1311,6 +1363,200 @@ function resetTimelineFilter(){
   timelineMode='full';
   document.querySelectorAll('.timeline-mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode==='full'));
   clearFolderFilter();  // also reset folder filter
+}
+
+// ═══ CADASTRAL SEARCH ══════════════════════════════════════════════
+// PKK API: type 1=ЗУ (land plot), 5=ОКС (building/structure)
+// Geometry from PKK is WGS84 [lon,lat] — convert to Leaflet [lat,lon]
+const CAD_STYLES={
+  zu: {color:'rgba(160,32,240,0.85)',fillColor:'rgba(160,32,240,0.08)',weight:2},
+  oks:{color:'rgba(0,180,50,0.85)', fillColor:'rgba(0,180,50,0.08)', weight:2},
+};
+let pendingCadResult=null;  // last fetched: {cadNum,type,geom,attrs,lines}
+let cadHoveredFeatures=[];  // [{priority,cadNum,type,lines}] for tooltip
+
+function onCadInputChange(){
+  document.getElementById('cad-save-btn').style.display='none';
+  document.getElementById('cad-status').textContent='';
+}
+
+async function doSearchCadastral(){
+  const raw=document.getElementById('cad-input').value.trim();
+  const cadNum=raw.replace(/\s+/g,'').toUpperCase();
+  if(!cadNum){showToast('Введите кадастровый номер','warn',2000);return;}
+  const btn=document.getElementById('cad-go-btn');
+  btn.disabled=true;
+  document.getElementById('cad-save-btn').style.display='none';
+  document.getElementById('cad-status').textContent='⏳ Поиск…';
+  setProgress(10);
+  let found=false;
+  for(const[typeId,typeName]of[[1,'zu'],[5,'oks']]){
+    try{
+      const apiUrl=`https://pkk.rosreestr.ru/api/features/${typeId}/${encodeURIComponent(cadNum)}`;
+      const res=await fetchTimeout(proxyUrl(apiUrl),14000);
+      if(!res.ok)continue;
+      const data=await res.json();
+      if(data.feature?.geometry){renderCadFeature(data.feature,typeName,cadNum);found=true;break;}
+    }catch(e){}
+    setProgress(50);
+  }
+  setProgress(0);
+  btn.disabled=false;
+  if(!found){document.getElementById('cad-status').textContent='❌ Не найдено';showToast(`❌ ${cadNum}: не найдено`,'error',4000);}
+}
+
+function pkkGeomToLeaflet(geom){
+  if(!geom)return null;
+  const conv=ring=>ring.map(([lon,lat])=>[lat,lon]);
+  if(geom.type==='Polygon')     return geom.coordinates.map(conv);
+  if(geom.type==='MultiPolygon')return geom.coordinates.map(p=>p.map(conv));
+  if(geom.type==='Point')       return[[geom.coordinates[1],geom.coordinates[0]]];
+  return null;
+}
+
+function buildCadLines(type,cadNum,attrs){
+  const lines=[];
+  if(type==='zu'){
+    if(attrs.area_value)  lines.push([attrs.area_type===2?'Площадь уточн.':'Площадь', attrs.area_value+' '+(attrs.area_unit||'кв.м')]);
+    if(attrs.category_type)lines.push(['Категория',attrs.category_type]);
+    if(attrs.util_by_doc)  lines.push(['ВРИ',attrs.util_by_doc]);
+  }else{
+    if(attrs.area_value)   lines.push(['Площадь общая',attrs.area_value+' '+(attrs.area_unit||'кв.м')]);
+    if(attrs.name)         lines.push(['Наименование',attrs.name]);
+    if(attrs.purpose_name) lines.push(['Назначение',attrs.purpose_name]);
+    if(attrs.year_built)   lines.push(['Завершение стр.',attrs.year_built]);
+  }
+  return lines;
+}
+
+function makeCadLeafletLayer(geom,type,interactive){
+  const s=CAD_STYLES[type];
+  const ll=pkkGeomToLeaflet(geom);
+  if(!ll)return null;
+  if(geom.type==='Polygon')
+    return L.polygon(ll,{color:s.color,weight:s.weight,fillColor:s.fillColor,fillOpacity:1,interactive:!!interactive});
+  if(geom.type==='MultiPolygon')
+    return L.polygon(ll.flat(),{color:s.color,weight:s.weight,fillColor:s.fillColor,fillOpacity:1,interactive:!!interactive});
+  if(geom.type==='Point')
+    return L.circleMarker(ll[0],{radius:8,color:s.color,fillColor:s.fillColor,fillOpacity:0.9,weight:s.weight,interactive:!!interactive});
+  return null;
+}
+
+function attachCadLayerEvents(layer,cadNum,type,lines){
+  const fi={priority:type==='zu'?3:2,cadNum,type,lines};
+  layer.on('mouseover',e=>{cadHoveredFeatures=cadHoveredFeatures.filter(f=>f.cadNum!==cadNum);cadHoveredFeatures.push(fi);showCadTooltip(e.originalEvent);});
+  layer.on('mousemove',e=>showCadTooltip(e.originalEvent));
+  layer.on('mouseout', ()=>{cadHoveredFeatures=cadHoveredFeatures.filter(f=>f.cadNum!==cadNum);if(!cadHoveredFeatures.length)hideCadTooltip();});
+  layer.on('click',   e=>{L.DomEvent.stopPropagation(e);window.lastClickedPoint=e.latlng;const lat=e.latlng.lat.toFixed(6),lng=e.latlng.lng.toFixed(6);L.popup({maxWidth:340}).setLatLng(e.latlng).setContent(buildCadPopup(lat,lng,type,cadNum,lines)).openOn(map);});
+}
+
+function renderCadFeature(feature,type,cadNum){
+  const geom=feature.geometry,attrs=feature.attrs||{};
+  const lines=buildCadLines(type,cadNum,attrs);
+  const layer=makeCadLeafletLayer(geom,type,true);
+  if(!layer)return;
+  attachCadLayerEvents(layer,cadNum,type,lines);
+  layer.addTo(map);
+  try{map.fitBounds(layer.getBounds(),{padding:[40,40],maxZoom:18});}catch(_){}
+  pendingCadResult={cadNum,type,geom,attrs,lines};
+  document.getElementById('cad-save-btn').style.display='flex';
+  const label=type==='zu'?'Земельный участок':'ОКС';
+  const area=attrs.area_value?` · ${attrs.area_value} ${attrs.area_unit||'кв.м'}`:'';
+  document.getElementById('cad-status').textContent=`✅ ${label}${area}`;
+  showToast(`✅ ${cadNum}: ${label}`,'success',3000);
+}
+
+// ── TOOLTIP ─────────────────────────────────────────────────────
+function showCadTooltip(ev){
+  const tt=document.getElementById('cad-tooltip');
+  const wrap=document.getElementById('cad-tooltip-wrap');
+  if(!cadHoveredFeatures.length){hideCadTooltip();return;}
+  // Render sections: sorted top=KML(1) → ОКС(2) → ЗУ(3)
+  const sorted=[...cadHoveredFeatures].sort((a,b)=>a.priority-b.priority);
+  wrap.innerHTML=sorted.map(f=>{
+    const cls=f.type==='zu'?'cad-tip-zu':f.type==='oks'?'cad-tip-oks':'cad-tip-kml';
+    const lbl=f.type==='zu'?'Земельный участок':f.type==='oks'?'ОКС':'Объект';
+    const rows=f.lines.map(([k,v])=>`<div class="cad-tip-row"><span class="cad-tip-key">${esc(k)}:</span><span class="cad-tip-val">${esc(String(v))}</span></div>`).join('');
+    return`<div class="cad-tip-section ${cls}"><div class="cad-tip-title">${lbl} · ${esc(f.cadNum||'')}</div>${rows}</div>`;
+  }).join('');
+  // Position offset 38px (~1cm at 96dpi) from cursor
+  if(ev&&ev.clientX!==undefined){
+    const mw=document.getElementById('map-wrap');
+    const rect=mw.getBoundingClientRect();
+    const mx=ev.clientX-rect.left,my=ev.clientY-rect.top;
+    const W=mw.offsetWidth,H=mw.offsetHeight;
+    const tw=260,th=tt.offsetHeight||120,off=38;
+    let left=mx+off,top=my+off;
+    if(left+tw>W-8)left=mx-tw-off;
+    if(top+th>H-8)top=my-th-off;
+    tt.style.left=Math.max(4,left)+'px';
+    tt.style.top=Math.max(4,top)+'px';
+  }
+  tt.classList.add('visible');
+}
+function hideCadTooltip(){document.getElementById('cad-tooltip').classList.remove('visible');}
+
+function buildCadPopup(lat,lng,type,cadNum,lines){
+  const label=type==='zu'?'Земельный участок':'ОКС';
+  const color=type==='zu'?'#d070ff':'#40e080';
+  let h=`<div style="font-family:system-ui;line-height:1.6;font-size:13px">`;
+  h+=`<b style="color:${color}">📍 ${label}</b><br>`;
+  h+=`<code style="background:#f0f0f0;padding:2px 6px;border-radius:3px;font-size:11px">${esc(cadNum)}</code>`;
+  h+=`<br><span style="color:#666;font-size:11px">${lat}, ${lng}</span>`;
+  if(lines.length){h+='<hr style="border:none;border-top:1px solid #ddd;margin:7px 0"/>';h+=lines.map(([k,v])=>`<div><b style="color:#555;font-size:11px">${esc(k)}: </b><span>${esc(String(v))}</span></div>`).join('');}
+  h+=`<br><button onclick="queryNSPDAtPoint()" style="background:#ff9500;color:#fff;border:none;padding:5px 12px;border-radius:4px;cursor:pointer;font-weight:700;width:100%;margin-top:4px">📍 Кадастровый запрос</button></div>`;
+  return h;
+}
+
+// ── KML APPEND & SAVE ───────────────────────────────────────────
+function cadFeatureToKMLParts(cadNum,type,geom,lines){
+  const borderABGR=type==='zu'?'ff00007f':'ff007f00';   // purple / green, full opacity border
+  const fillABGR =type==='zu'?'cc00007f':'cc007f00';    // ~80% opacity fill
+  const styleId=`cad_${type}_${cadNum.replace(/:/g,'_')}`;
+  const desc=lines.map(([k,v])=>`${k}: ${v}`).join('; ');
+  let coordStr='';
+  if(geom.type==='Polygon')     coordStr=geom.coordinates[0].map(([lo,la])=>`${lo},${la},0`).join(' ');
+  else if(geom.type==='MultiPolygon')coordStr=geom.coordinates[0][0].map(([lo,la])=>`${lo},${la},0`).join(' ');
+  else if(geom.type==='Point')  coordStr=`${geom.coordinates[0]},${geom.coordinates[1]},0`;
+  const geomKML=geom.type==='Point'
+    ?`<Point><coordinates>${coordStr}</coordinates></Point>`
+    :`<Polygon><outerBoundaryIs><LinearRing><coordinates>${coordStr}</coordinates></LinearRing></outerBoundaryIs></Polygon>`;
+  return{
+    style:`<Style id="${styleId}"><LineStyle><color>${borderABGR}</color><width>2</width></LineStyle><PolyStyle><color>${fillABGR}</color><fill>1</fill><outline>1</outline></PolyStyle></Style>`,
+    placemark:`<Placemark><n><![CDATA[${cadNum}]]></n><description><![CDATA[${desc}]]></description><styleUrl>#${styleId}</styleUrl>${geomKML}</Placemark>`
+  };
+}
+
+function savePendingCadastralToKML(){
+  if(!pendingCadResult){showToast('Нет данных для записи','warn',2000);return;}
+  const{cadNum,type,geom,attrs,lines}=pendingCadResult;
+  const parts=cadFeatureToKMLParts(cadNum,type,geom,lines);
+  // Append to first visible KML layer OR create one
+  const targetIdx=kmlLayers.findIndex(l=>l.visible);
+  if(targetIdx>=0){
+    const target=kmlLayers[targetIdx];
+    if(!target.cadPlacemarks)target.cadPlacemarks=[];
+    target.cadPlacemarks.push({cadNum,type,geom,lines,parts});
+    target.placemarkCount=(target.placemarkCount||0)+1;
+    const layer=makeCadLeafletLayer(geom,type,true);
+    if(layer){attachCadLayerEvents(layer,cadNum,type,lines);layer.addTo(target.layerGroup);}
+    renderKMLDropdown();
+    showToast(`✅ Записано в «${target.docName||target.filename}»`,'success',3000);
+  }else{
+    const lg=L.layerGroup().addTo(map);
+    const entry={filename:'Кадастр.kml',docName:'Кадастр',layerGroup:lg,visible:true,placemarkCount:1,cadPlacemarks:[{cadNum,type,geom,lines,parts}]};
+    const layer=makeCadLeafletLayer(geom,type,true);
+    if(layer){attachCadLayerEvents(layer,cadNum,type,lines);layer.addTo(lg);}
+    kmlLayers.push(entry);
+    updateKMLButton();
+    showToast('✅ Создан новый слой «Кадастр»','success',3000);
+  }
+  // Download KML file for this object
+  const xml=`<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document>\n${parts.style}\n${parts.placemark}\n</Document></kml>`;
+  const blob=new Blob([xml],{type:'application/vnd.google-earth.kml+xml'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`${cadNum.replace(/:/g,'_')}.kml`;a.click();
+  pendingCadResult=null;
+  document.getElementById('cad-save-btn').style.display='none';
 }
 </script>
 </body>
