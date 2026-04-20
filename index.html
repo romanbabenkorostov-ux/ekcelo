@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.8</title>
+<title>EkceloFoto v2.9</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -19,6 +19,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #header{grid-column:1/-1;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 16px;z-index:1000}
 #logo{font-size:18px;font-weight:800;letter-spacing:-.5px;color:var(--accent);white-space:nowrap}
 #logo span{color:var(--text)}
+#logo small{font-size:9px;font-weight:400;color:var(--muted);font-family:'JetBrains Mono',monospace;letter-spacing:0;margin-left:2px;vertical-align:middle}
 #invite-btn{display:none;align-items:center;gap:7px;background:var(--accent2);color:#0d0f14;border:none;border-radius:var(--r);padding:7px 14px;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;cursor:pointer;text-decoration:none;white-space:nowrap}
 .upload-wrap{position:relative;flex-shrink:0}
 #upload-btn{display:flex;align-items:center;gap:7px;background:var(--accent);color:#0d0f14;border:none;border-radius:var(--r);padding:7px 14px;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap}
@@ -197,7 +198,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #lb-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;width:320px;box-shadow:0 20px 60px rgba(0,0,0,.8);animation:pop-in .2s cubic-bezier(.34,1.56,.64,1) both;transition:opacity .22s ease}
 #lb-card.gps-active{opacity:.22;pointer-events:none}
 @keyframes pop-in{from{transform:scale(.88) translateY(8px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}
-#lb-filename-bar{padding:9px 10px 5px;display:flex;align-items:center;gap:5px;border-bottom:1px solid rgba(255,255,255,.05)}
+#lb-filename-bar{padding:9px 10px 5px;display:flex;align-items:center;gap:5px;border-bottom:1px solid rgba(255,255,255,.05);cursor:move;user-select:none}
 #lb-filename-text{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--accent);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #lb-copy-name-btn{flex-shrink:0;background:transparent;border:none;color:var(--muted);cursor:pointer;padding:2px;border-radius:3px;line-height:1;transition:color .12s}
 #lb-copy-name-btn:hover{color:var(--accent)}
@@ -289,18 +290,31 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .timeline-labels{display:flex;justify-content:space-between;margin-top:3px;font-size:9px;color:var(--muted);font-family:'JetBrains Mono',monospace}
 
 /* FULLSCREEN VIEWER */
-#viewer{display:none;position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:9999;align-items:center;justify-content:center}
+#viewer{display:none;position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:9999;align-items:center;justify-content:center;overflow:hidden}
 #viewer.open{display:flex}
-#viewer img{max-width:90vw;max-height:86vh;object-fit:contain;border-radius:4px}
-#viewer-close{position:fixed;top:20px;right:24px;font-size:28px;color:#fff;cursor:pointer;opacity:.7;background:none;border:none;line-height:1}
+/* Item 4: overflow+cursor for pan/zoom */
+#viewer-img-wrap{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;width:90vw;height:86vh;cursor:zoom-in}
+#viewer-img-wrap.zoomed{cursor:grab}
+#viewer-img-wrap.grabbing{cursor:grabbing}
+#viewer img{max-width:100%;max-height:100%;object-fit:contain;border-radius:4px;transform-origin:center;user-select:none;pointer-events:none;transition:transform .15s ease}
+#viewer img.no-transition{transition:none!important}
+/* Zoom controls */
+#viewer-zoom-bar{position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:10003;display:flex;align-items:center;gap:6px;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:5px 10px}
+.vz-btn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:5px;width:28px;height:28px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .12s;flex-shrink:0}
+.vz-btn:hover{background:rgba(255,255,255,.28)}
+#viewer-zoom-val{font-family:'JetBrains Mono',monospace;font-size:11px;color:rgba(255,255,255,.7);min-width:42px;text-align:center}
+#viewer-close{position:fixed;top:20px;right:24px;font-size:28px;color:#fff;cursor:pointer;opacity:.7;background:none;border:none;line-height:1;z-index:10004}
 #viewer-close:hover{opacity:1}
 #viewer-prev,#viewer-next{position:fixed;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.1);border:none;color:#fff;font-size:32px;cursor:pointer;padding:16px 20px;border-radius:8px;opacity:.7;transition:opacity .15s;z-index:10001;line-height:1;user-select:none}
 #viewer-prev{left:20px}
 #viewer-next{right:20px}
 #viewer-prev:hover,#viewer-next:hover{opacity:1;background:rgba(255,255,255,.22)}
-#viewer-info-bar{position:fixed;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.85));padding:20px 24px 14px;display:flex;align-items:flex-end;justify-content:center;gap:28px;pointer-events:none;z-index:10002;font-family:'JetBrains Mono',monospace;font-size:13px;color:rgba(255,255,255,.9)}
+/* Item 2: GPS action buttons in info bar */
+#viewer-info-bar{position:fixed;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.85));padding:16px 24px 14px;display:flex;align-items:flex-end;justify-content:center;gap:22px;pointer-events:none;z-index:10002;font-family:'JetBrains Mono',monospace;font-size:13px;color:rgba(255,255,255,.9);flex-wrap:wrap}
 .viewer-info-item{display:flex;align-items:center;gap:6px}
 .viewer-info-icon{font-size:15px;opacity:.8}
+.viewer-gps-btn{pointer-events:all;display:inline-flex;align-items:center;gap:6px;background:rgba(160,32,240,.25);border:1px solid rgba(160,32,240,.6);border-radius:6px;color:#d070ff;font-family:'JetBrains Mono',monospace;font-size:11px;padding:5px 12px;cursor:pointer;transition:background .12s}
+.viewer-gps-btn:hover{background:rgba(160,32,240,.45)}
 
 /* CADASTRAL SEARCH PANEL (top of sidebar) */
 #cad-panel{flex-shrink:0;border-bottom:1px solid var(--border);padding:8px 10px 7px;background:rgba(128,0,200,.04)}
@@ -347,7 +361,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -545,8 +559,18 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <!-- FULLSCREEN VIEWER -->
 <div id="viewer">
   <button id="viewer-close" onclick="closeViewer()">&#215;</button>
+  <!-- Item 4: zoom controls -->
+  <div id="viewer-zoom-bar">
+    <button class="vz-btn" onclick="viewerZoomOut()" title="Уменьшить">&#8722;</button>
+    <span id="viewer-zoom-val">100%</span>
+    <button class="vz-btn" onclick="viewerZoomIn()" title="Увеличить">&#43;</button>
+    <button class="vz-btn" onclick="viewerZoomReset()" title="Сбросить">&#8634;</button>
+  </div>
   <button id="viewer-prev" onclick="viewerNav(-1)">&#8592;</button>
-  <img id="viewer-img" src="" alt=""/>
+  <!-- Item 4: image wrapped for pan/zoom -->
+  <div id="viewer-img-wrap">
+    <img id="viewer-img" src="" alt="" draggable="false"/>
+  </div>
   <button id="viewer-next" onclick="viewerNav(1)">&#8594;</button>
   <div id="viewer-info-bar"></div>
 </div>
@@ -1064,7 +1088,7 @@ const ICON={
 
 async function openLightbox(idx,latlng){
   const p=photos[idx];if(!p)return;
-  activeIdx=idx;lbLL=latlng;lbScale=1;
+  activeIdx=idx;lbLL=latlng;lbScale=1;lbManualPos=false; // reset drag on new photo
   document.querySelectorAll('.photo-item').forEach(el=>el.classList.remove('active'));
   const item=document.querySelector(`.photo-item[data-idx="${idx}"]`);
   if(item){item.classList.add('active');item.scrollIntoView({block:'nearest'});}
@@ -1110,6 +1134,7 @@ function enterGPSFromLightbox(){
 }
 
 function posLightbox(latlng,fast=false){
+  if(lbManualPos)return; // user has dragged it — don't auto-reposition
   const lb=document.getElementById('lightbox'),card=document.getElementById('lb-card'),mw=document.getElementById('map-wrap');
   const cw=card.offsetWidth||320,ch=card.offsetHeight||400,W=mw.offsetWidth,H=mw.offsetHeight,gap=16;
   let left,top;
@@ -1119,7 +1144,42 @@ function posLightbox(latlng,fast=false){
   else{lb.style.left=left+'px';lb.style.top=top+'px';}
 }
 
-function closeLightbox(){document.getElementById('lightbox').classList.remove('visible');document.getElementById('lb-card').classList.remove('gps-active');document.querySelectorAll('.photo-item').forEach(el=>el.classList.remove('active'));clearActiveMarker();activeIdx=null;}
+// Item 3: draggable lightbox via filename bar ─────────────────────
+let lbManualPos=false; // set when user drags, prevents map auto-reposition
+(function initLightboxDrag(){
+  let dragging=false, startX=0, startY=0, origL=0, origT=0;
+  const handle=()=>document.getElementById('lb-filename-bar');
+  const lb=()=>document.getElementById('lightbox');
+
+  document.addEventListener('mousedown',e=>{
+    const h=handle(); if(!h||!h.contains(e.target)||e.target.closest('button'))return;
+    if(!lb().classList.contains('visible'))return;
+    dragging=true;
+    startX=e.clientX; startY=e.clientY;
+    const mw=document.getElementById('map-wrap').getBoundingClientRect();
+    origL=parseInt(lb().style.left||'0')-mw.left;
+    origT=parseInt(lb().style.top||'0')-mw.top;
+    lb().classList.add('no-transition');
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!dragging)return;
+    const dx=e.clientX-startX, dy=e.clientY-startY;
+    const mw=document.getElementById('map-wrap');
+    const card=document.getElementById('lb-card');
+    const W=mw.offsetWidth, H=mw.offsetHeight;
+    const cw=card.offsetWidth||320, ch=card.offsetHeight||400;
+    const newL=Math.max(0,Math.min(W-cw, origL+dx));
+    const newT=Math.max(0,Math.min(H-ch, origT+dy));
+    lb().style.left=newL+'px'; lb().style.top=newT+'px';
+    lbManualPos=true;
+  });
+  document.addEventListener('mouseup',()=>{
+    if(dragging){dragging=false;lb().classList.remove('no-transition');}
+  });
+})();
+
+function closeLightbox(){document.getElementById('lightbox').classList.remove('visible');document.getElementById('lb-card').classList.remove('gps-active');document.querySelectorAll('.photo-item').forEach(el=>el.classList.remove('active'));clearActiveMarker();activeIdx=null;lbManualPos=false;}
 
 // Sorted navigation order: all photos by shooting date (fallback: file mtime)
 function getSortedNavOrder(){
@@ -1143,33 +1203,117 @@ function lbZoomReset(){lbScale=1;applyLbZoom();}
 document.getElementById('lb-img-wrap').addEventListener('wheel',e=>{e.preventDefault();e.deltaY<0?lbZoomIn():lbZoomOut();},{passive:false});
 document.getElementById('lb-img-wrap').addEventListener('click',()=>openViewer());
 
+// ── Viewer zoom/pan state (Item 4) ────────────────────────────────
+let viewerScale=1, viewerOffX=0, viewerOffY=0, viewerDragging=false, _vdx=0, _vdy=0;
+
+function _applyVT(animate=true){
+  const img=document.getElementById('viewer-img');
+  if(!animate)img.classList.add('no-transition');
+  img.style.transform=`translate(${viewerOffX}px,${viewerOffY}px) scale(${viewerScale})`;
+  document.getElementById('viewer-zoom-val').textContent=Math.round(viewerScale*100)+'%';
+  document.getElementById('viewer-img-wrap').classList.toggle('zoomed',viewerScale>1);
+  if(!animate)requestAnimationFrame(()=>img.classList.remove('no-transition'));
+}
+function viewerZoomIn()   { viewerScale=Math.min(8,viewerScale*1.35); _applyVT(); }
+function viewerZoomOut()  { viewerScale=Math.max(.25,viewerScale/1.35); if(viewerScale<=1){viewerOffX=0;viewerOffY=0;} _applyVT(); }
+function viewerZoomReset(){ viewerScale=1; viewerOffX=0; viewerOffY=0; _applyVT(); }
+
+(function initViewerInteraction(){
+  const vEl=()=>document.getElementById('viewer');
+  // Wheel zoom
+  document.addEventListener('wheel',e=>{
+    if(!vEl().classList.contains('open'))return;
+    e.preventDefault();
+    viewerScale=Math.max(.25,Math.min(8,viewerScale*(e.deltaY<0?1.15:1/1.15)));
+    if(viewerScale<=1){viewerOffX=0;viewerOffY=0;}
+    _applyVT(false);
+  },{passive:false,capture:true});
+  // Drag pan
+  document.addEventListener('mousedown',e=>{
+    if(!vEl().classList.contains('open'))return;
+    if(e.target.closest('button'))return;
+    if(viewerScale<=1)return;
+    viewerDragging=true;_vdx=e.clientX-viewerOffX;_vdy=e.clientY-viewerOffY;
+    document.getElementById('viewer-img-wrap').classList.add('grabbing');
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!viewerDragging)return;
+    viewerOffX=e.clientX-_vdx;viewerOffY=e.clientY-_vdy;
+    _applyVT(false);
+  });
+  document.addEventListener('mouseup',()=>{
+    if(viewerDragging){viewerDragging=false;document.getElementById('viewer-img-wrap').classList.remove('grabbing');}
+  });
+  // Double-click: zoom in or reset
+  document.addEventListener('dblclick',e=>{
+    if(!vEl().classList.contains('open'))return;
+    if(e.target.closest('button'))return;
+    if(viewerScale>=2){viewerZoomReset();return;}
+    viewerScale=Math.min(8,viewerScale*2.5);
+    const r=vEl().getBoundingClientRect();
+    viewerOffX=(r.width/2-e.clientX)*(viewerScale-1)*0.5;
+    viewerOffY=(r.height/2-e.clientY)*(viewerScale-1)*0.5;
+    _applyVT();
+  });
+})();
+
+// Item 2: info bar with GPS action buttons when no coords/bearing
 function updateViewerInfoBar(p){
-  const bar=document.getElementById('viewer-info-bar');if(!p){bar.innerHTML='';return;}
+  const bar=document.getElementById('viewer-info-bar');
+  if(!p){bar.innerHTML='';return;}
   const items=[];
   if(p.name)items.push(`<div class="viewer-info-item"><span class="viewer-info-icon">📷</span>${esc(p.name)}</div>`);
-  if(p.lat!=null)items.push(`<div class="viewer-info-item"><span class="viewer-info-icon">📍</span>${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}</div>`);
-  if(p.bearing!=null&&!isNaN(p.bearing)&&p.bearing!==0)items.push(`<div class="viewer-info-item"><span class="viewer-info-icon">↗</span>${p.bearing.toFixed(1)}°</div>`);
+  // Coordinates: show value or action button
+  if(p.lat!=null)
+    items.push(`<div class="viewer-info-item"><span class="viewer-info-icon">📍</span>${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}</div>`);
+  else
+    items.push(`<button class="viewer-gps-btn" onclick="viewerSetGPS()">📍 Установить координаты</button>`);
+  // Bearing: show value or action button
+  if(p.bearing!=null&&!isNaN(p.bearing)&&p.bearing!==0)
+    items.push(`<div class="viewer-info-item"><span class="viewer-info-icon">↗</span>${p.bearing.toFixed(1)}°</div>`);
+  else
+    items.push(`<button class="viewer-gps-btn" onclick="viewerSetGPS()">↗ Установить азимут</button>`);
   const ds=p.date?formatDate(p.date):(p.file?.lastModified?formatDate(new Date(p.file.lastModified)):'');
   if(ds)items.push(`<div class="viewer-info-item"><span class="viewer-info-icon">📅</span>${ds}</div>`);
   if(p.locPath)items.push(`<div class="viewer-info-item"><span class="viewer-info-icon">📁</span>${esc(p.locPath)}</div>`);
   bar.innerHTML=items.join('');
 }
 
-function openViewer(){const p=activeIdx!=null?photos[activeIdx]:null;if(!p)return;document.getElementById('viewer-img').src=p.displayUrl||p.thumbUrl||'';document.getElementById('viewer').classList.add('open');updateViewerInfoBar(p);}
-function closeViewer(){document.getElementById('viewer').classList.remove('open');document.getElementById('viewer-info-bar').innerHTML='';if(activeIdx!=null){const p=photos[activeIdx];openLightbox(activeIdx,p.lat!=null?L.latLng(p.lat,p.lon):null);}}
+// Close viewer and enter GPS mode (item 2)
+function viewerSetGPS(){
+  closeViewer();
+  // Small delay so lightbox opens first
+  setTimeout(()=>enterGPSFromLightbox(), 80);
+}
+
+function openViewer(){
+  const p=activeIdx!=null?photos[activeIdx]:null;if(!p)return;
+  viewerScale=1;viewerOffX=0;viewerOffY=0;
+  document.getElementById('viewer-img').src=p.displayUrl||p.thumbUrl||'';
+  _applyVT(false);
+  document.getElementById('viewer').classList.add('open');
+  updateViewerInfoBar(p);
+}
+
+function closeViewer(){
+  document.getElementById('viewer').classList.remove('open');
+  document.getElementById('viewer-info-bar').innerHTML='';
+  viewerScale=1;viewerOffX=0;viewerOffY=0;
+  if(activeIdx!=null){const p=photos[activeIdx];openLightbox(activeIdx,p.lat!=null?L.latLng(p.lat,p.lon):null);}
+}
+
 async function viewerNav(dir){
   if(document.getElementById('auto-save-cb').checked&&manualGPSActive&&tempLat!==null)await writeEXIFWithGPS();
   const order=getSortedNavOrder();if(!order.length)return;
-  const pos=order.indexOf(activeIdx);
-  const next=order[(pos+dir+order.length)%order.length];
-  activeIdx=next;
-  const p=photos[next];
+  const next=order[(order.indexOf(activeIdx)+dir+order.length)%order.length];
+  activeIdx=next;const p=photos[next];
+  viewerScale=1;viewerOffX=0;viewerOffY=0;
   document.getElementById('viewer-img').src=p.displayUrl||p.thumbUrl||'';
+  _applyVT(false);
   setActiveMarker(next);
   document.querySelectorAll('.photo-item').forEach(el=>el.classList.remove('active'));
   document.querySelector(`.photo-item[data-idx="${next}"]`)?.classList.add('active');
   updateViewerInfoBar(p);
-  // Pan map to photo if it has coords
   if(p.lat!=null)map.setView([p.lat,p.lon],Math.max(map.getZoom(),19),{animate:true});
 }
 
