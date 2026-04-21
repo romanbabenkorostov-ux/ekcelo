@@ -248,9 +248,22 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .kml-layer-item:hover .kml-layer-del{opacity:1}
 .kml-layer-del:hover{color:var(--danger)}
 #kml-dropdown hr{border:none;border-top:1px solid var(--border);margin:3px 0}
-#cadastre-btn{position:absolute;top:12px;right:112px;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 11px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);cursor:pointer;transition:all .15s}
+/* ZOOM INDICATOR (top-left, semi-transparent) */
+#zoom-indicator{position:absolute;top:50px;left:10px;z-index:600;background:rgba(22,26,36,.72);border:1px solid rgba(255,255,255,.1);border-radius:5px;padding:3px 7px;font-family:'JetBrains Mono',monospace;font-size:11px;color:rgba(232,255,71,.8);pointer-events:none;letter-spacing:.5px;backdrop-filter:blur(4px)}
+
+#cadastre-btn{position:absolute;top:12px;right:112px;z-index:601;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 11px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);cursor:pointer;transition:all .15s}
 #cadastre-btn:hover,#cadastre-btn.active{border-color:#ff9500;color:#ff9500}
 #cadastre-btn.active{background:rgba(255,149,0,.12)}
+/* Cadastre layer dropdown */
+#cadastre-dropdown{display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--surface);border:1px solid rgba(255,149,0,.4);border-radius:var(--r);box-shadow:0 8px 28px rgba(0,0,0,.7);min-width:220px;padding:6px 0;z-index:3000;animation:pop-in .15s ease both}
+#cadastre-dropdown.open{display:block}
+.cad-group{padding:5px 12px 4px;font-size:9px;color:rgba(255,149,0,.6);text-transform:uppercase;letter-spacing:.5px;font-family:'JetBrains Mono',monospace;border-top:1px solid var(--border);margin-top:2px}
+.cad-group:first-child{border-top:none;margin-top:0}
+.cad-layer-item{display:flex;align-items:center;gap:8px;padding:5px 12px;cursor:pointer;transition:background .1s;font-family:'JetBrains Mono',monospace;font-size:11px}
+.cad-layer-item:hover{background:rgba(255,255,255,.06)}
+.cad-layer-item input[type=checkbox]{accent-color:#ff9500;cursor:pointer;width:13px;height:13px;flex-shrink:0}
+.cad-layer-label{flex:1;color:var(--text)}
+#cad-wrap{position:absolute;top:12px;right:112px;z-index:601}
 #layer-btn{position:absolute;top:12px;right:12px;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 11px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);cursor:pointer;transition:all .15s}
 #layer-btn:hover{border-color:var(--accent2);color:var(--accent2)}
 #cadastre-opacity{position:absolute;top:46px;right:112px;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:5px 9px;display:none;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted)}
@@ -517,19 +530,31 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     </div>
   </div>
 
+  <!-- Zoom indicator -->
+  <div id="zoom-indicator">z</div>
+
   <button id="fit-btn"      onclick="fitMapToPhotos()">⊟ По фото</button>
   <div id="kml-wrap">
     <button id="kml-btn" onclick="toggleKMLMenu()">🗺 KML ▾</button>
     <div id="kml-dropdown"></div>
   </div>
-  <button id="cadastre-btn" onclick="toggleCadastre()">□ Кадастр</button>
+  <!-- Cadastre: button + layer dropdown -->
+  <div id="cad-wrap">
+    <button id="cadastre-btn" onclick="toggleCadastreMenu(event)">□ Кадастр ▾</button>
+    <div id="cadastre-dropdown">
+      <div class="cad-group">Слои</div>
+      <label class="cad-layer-item"><input type="checkbox" id="cad-cb-zu"    checked onchange="onCadLayerChange()"/><span class="cad-layer-label">Земельные участки</span></label>
+      <label class="cad-layer-item"><input type="checkbox" id="cad-cb-oks"   checked onchange="onCadLayerChange()"/><span class="cad-layer-label">ОКС</span></label>
+      <label class="cad-layer-item"><input type="checkbox" id="cad-cb-other" onchange="onCadLayerChange()"/><span class="cad-layer-label">Прочие границы</span></label>
+      <div class="cad-group">Прозрачность</div>
+      <div style="display:flex;align-items:center;gap:7px;padding:4px 12px 6px;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted)">
+        <input type="range" min="10" max="100" value="70" id="cadastre-range" style="width:90px;accent-color:#ff9500" oninput="setCadastreOpacity(this.value)"/>
+        <span id="cadastre-pct">70%</span>
+      </div>
+    </div>
+  </div>
   <button id="layer-btn"    onclick="toggleLayer()">🛰 Спутник</button>
   <div id="progress-bar" style="width:0"></div>
-  <div id="cadastre-opacity">
-    <span>Кадастр</span>
-    <input type="range" min="10" max="100" value="70" id="cadastre-range" oninput="setCadastreOpacity(this.value)"/>
-    <span id="cadastre-pct">70%</span>
-  </div>
   <div id="cadastre-cache-info" title="Нажмите для очистки" onclick="clearCadastreCache()"></div>
 
   <div id="timeline">
@@ -605,18 +630,299 @@ const TILES={
 TILES.osm.addTo(map);
 let currentLayer='osm';
 
-const NSPD_IDS=[36329,36328,36049,36048,36071];
-let cadastreLayers=[],cadastreActive=false;
-
-function toggleCadastre(){
-  const btn=document.getElementById('cadastre-btn'),opP=document.getElementById('cadastre-opacity');
-  if(!cadastreActive){
-    if(!cadastreLayers.length){const op=document.getElementById('cadastre-range').value/100;cadastreLayers=NSPD_IDS.map(id=>L.tileLayer.wms(`https://nspd.gov.ru/api/aeggis/v2/${id}/wms`,{service:'WMS',version:'1.3.0',format:'image/png',transparent:true,styles:'',authkey:'0',tileSize:256,attribution:'© НСПД',zIndex:450,keepBuffer:4,updateWhenIdle:false,updateWhenZooming:false,layers:String(id),opacity:op}));}
-    cadastreLayers.forEach(l=>l.addTo(map));cadastreActive=true;btn.classList.add('active');opP.classList.add('visible');
-    if(map.getZoom()<13)showToast('Кадастр виден с zoom ≥ 13');setTimeout(updateCadastreCacheInfo,4000);
-  }else{cadastreLayers.forEach(l=>map.removeLayer(l));cadastreActive=false;btn.classList.remove('active');opP.classList.remove('visible');}
+// ── ZOOM INDICATOR ─────────────────────────────────────────────────
+function updateZoomIndicator(){
+  document.getElementById('zoom-indicator').textContent='z'+map.getZoom();
 }
-function setCadastreOpacity(val){document.getElementById('cadastre-pct').textContent=val+'%';cadastreLayers.forEach(l=>l.setOpacity(val/100));}
+map.on('zoom zoomend', updateZoomIndicator);
+updateZoomIndicator();
+
+// ── CADASTRE LAYER GROUPS ─────────────────────────────────────────
+// Each group has WMS layer IDs; active = loaded on map
+const NSPD_GROUPS = {
+  zu:    { ids:[36329,36049], label:'ЗУ',  layers:[] },
+  oks:   { ids:[36328,36048], label:'ОКС', layers:[] },
+  other: { ids:[36071],       label:'Пр',  layers:[] },
+};
+let cadastreActive = false;
+
+function _buildGroupLayers(groupKey){
+  const g = NSPD_GROUPS[groupKey];
+  if (g.layers.length) return;
+  const op = parseFloat(document.getElementById('cadastre-range').value)/100;
+  g.layers = g.ids.map(id => L.tileLayer.wms(
+    `https://nspd.gov.ru/api/aeggis/v2/${id}/wms`,
+    {service:'WMS',version:'1.3.0',format:'image/png',transparent:true,styles:'',
+     authkey:'0',tileSize:256,attribution:'© НСПД',zIndex:450,
+     keepBuffer:4,updateWhenIdle:false,updateWhenZooming:false,layers:String(id),opacity:op}
+  ));
+}
+
+function _getActiveIds(){
+  const ids = [];
+  if (document.getElementById('cad-cb-zu')?.checked)    NSPD_GROUPS.zu.ids.forEach(id=>ids.push(id));
+  if (document.getElementById('cad-cb-oks')?.checked)   NSPD_GROUPS.oks.ids.forEach(id=>ids.push(id));
+  if (document.getElementById('cad-cb-other')?.checked) NSPD_GROUPS.other.ids.forEach(id=>ids.push(id));
+  return ids;
+}
+
+function toggleCadastreMenu(e){
+  e && e.stopPropagation();
+  const dd = document.getElementById('cadastre-dropdown');
+  dd.classList.toggle('open');
+  if (!cadastreActive && dd.classList.contains('open')){
+    // First open: auto-activate default layers
+    _applyCadastreLayers();
+  }
+}
+document.addEventListener('click', e=>{
+  if(!e.target.closest('#cad-wrap')) document.getElementById('cadastre-dropdown').classList.remove('open');
+});
+
+function onCadLayerChange(){
+  if (cadastreActive) _applyCadastreLayers();
+}
+
+function _applyCadastreLayers(){
+  // Remove all existing
+  Object.values(NSPD_GROUPS).forEach(g=>g.layers.forEach(l=>{ try{map.removeLayer(l);}catch(_){} }));
+  // Add selected
+  const cbZu    = document.getElementById('cad-cb-zu')?.checked;
+  const cbOks   = document.getElementById('cad-cb-oks')?.checked;
+  const cbOther = document.getElementById('cad-cb-other')?.checked;
+  if (cbZu)    { _buildGroupLayers('zu');    NSPD_GROUPS.zu.layers.forEach(l=>l.addTo(map)); }
+  if (cbOks)   { _buildGroupLayers('oks');   NSPD_GROUPS.oks.layers.forEach(l=>l.addTo(map)); }
+  if (cbOther) { _buildGroupLayers('other'); NSPD_GROUPS.other.layers.forEach(l=>l.addTo(map)); }
+
+  const anyActive = cbZu || cbOks || cbOther;
+  cadastreActive = anyActive;
+  document.getElementById('cadastre-btn').classList.toggle('active', anyActive);
+  if (anyActive && map.getZoom()<13) showToast('Кадастр виден с zoom ≥ 13');
+  setTimeout(updateCadastreCacheInfo, 4000);
+}
+
+// Legacy toggleCadastre() referenced elsewhere
+function toggleCadastre(){ toggleCadastreMenu(); }
+
+function setCadastreOpacity(val){
+  document.getElementById('cadastre-pct').textContent = val+'%';
+  const op = val/100;
+  Object.values(NSPD_GROUPS).forEach(g=>g.layers.forEach(l=>l.setOpacity(op)));
+}
+
+// ── ENHANCED queryNSPDAtPoint (tile-based contour extraction) ──────
+//
+// When cadastre tiles are active and user clicks the map, WMS GetFeatureInfo
+// (text/html) extracts cadastral numbers — this already works with Russian IP.
+//
+// NEW: Also request INFO_FORMAT=application/vnd.ogc.gml — MapServer standard
+// that returns actual polygon geometry. If geometry is returned, we store it
+// and show a "💾 Сохранить контур" button in the popup.
+//
+// Note: both text/html and GML GetFeatureInfo require Russian IP (same WAF as tiles).
+// Tiles load because Leaflet makes direct browser requests; GetFeatureInfo does too.
+
+// Store pending GML geometries found at last clicked point
+window._pendingContours = [];
+
+async function queryNSPDAtPoint(){
+  if(!window.lastClickedPoint) return;
+  const ll = window.lastClickedPoint;
+  const R = 20037508.34;
+  const cx = ll.lng*R/180;
+  const cy = Math.log(Math.tan((90+ll.lat)*Math.PI/360))*R/Math.PI;
+  const buf = 80;
+  const bbox = `${cx-buf},${cy-buf},${cx+buf},${cy+buf}`;
+
+  // Active layer IDs
+  const activeIds = _getActiveIds();
+  if (!activeIds.length) {
+    showToast('Включите слой кадастра (кнопка «Кадастр»)','warn',3000); return;
+  }
+
+  window._pendingContours = [];
+  const cadResults  = new Set();   // from text/html
+  const gmlResults  = [];          // [{cadNum, geom, type, props}]
+
+  await Promise.allSettled(activeIds.map(async id=>{
+    const baseParams = {
+      SERVICE:'WMS', VERSION:'1.3.0', REQUEST:'GetFeatureInfo',
+      LAYERS:String(id), QUERY_LAYERS:String(id),
+      FEATURE_COUNT:'5', X:'128', Y:'128',
+      WIDTH:'256', HEIGHT:'256', CRS:'EPSG:3857', BBOX:bbox, STYLES:'',
+    };
+
+    // Request 1: text/html — extract cadastral numbers (proven to work from RU IP)
+    try{
+      const u1 = `https://nspd.gov.ru/api/aeggis/v2/${id}/wms?`+new URLSearchParams({...baseParams, INFO_FORMAT:'text/html'});
+      const r1 = await fetch(u1);
+      if(r1.ok){
+        const txt = await r1.text();
+        (txt.match(/\b(\d{2}:\d{2,3}:\d{6,10}:\d{1,6})\b/g)||[]).forEach(n=>cadResults.add(n.trim()));
+      }
+    }catch(_){}
+
+    // Request 2: GML — extract geometry (standard MapServer feature, works if text/html works)
+    try{
+      const u2 = `https://nspd.gov.ru/api/aeggis/v2/${id}/wms?`+new URLSearchParams({...baseParams, INFO_FORMAT:'application/vnd.ogc.gml'});
+      const r2 = await fetch(u2);
+      if(r2.ok){
+        const gmlText = await r2.text();
+        const parsed = _parseGMLResponse(gmlText, id);
+        gmlResults.push(...parsed);
+      }
+    }catch(_){}
+  }));
+
+  const cadList = Array.from(cadResults).sort();
+  window._pendingContours = gmlResults;
+
+  // Build popup HTML
+  const lat = ll.lat.toFixed(6), lng = ll.lng.toFixed(6);
+  let html = `<div style="font-family:system-ui;line-height:1.5;font-size:13px">`;
+  html += `<b>📍</b> <code style="background:#f0f0f0;padding:2px 6px;border-radius:3px">${lat}, ${lng}</code><br><br>`;
+
+  if (!cadList.length && !gmlResults.length){
+    html += '<span style="color:#555">Участков не найдено</span>';
+  } else {
+    cadList.forEach(c=>{
+      const gmlItem = gmlResults.find(g=>g.cadNum===c);
+      html += `• <b style="color:#d32f2f">${c}</b> `;
+      html += `<a href="https://nspd.gov.ru/map?thematic=Default&zoom=17.5&selectedCard=${encodeURIComponent(c)}" target="_blank" style="color:#1976d2">↗</a>`;
+      if(gmlItem){
+        const idx = gmlResults.indexOf(gmlItem);
+        html += ` <button onclick="saveContourToKML(${idx})" style="background:rgba(160,32,240,.2);border:1px solid rgba(160,32,240,.5);color:#d070ff;border-radius:4px;padding:1px 7px;cursor:pointer;font-size:11px;margin-left:4px">💾 KML</button>`;
+      }
+      html += '<br>';
+    });
+    // Geometries without parsed cad_num
+    gmlResults.filter(g=>!g.cadNum||!cadList.includes(g.cadNum)).forEach((g,i)=>{
+      const idx = gmlResults.indexOf(g);
+      html += `• <i style="color:#888">геометрия ${i+1}</i> <button onclick="saveContourToKML(${idx})" style="background:rgba(160,32,240,.2);border:1px solid rgba(160,32,240,.5);color:#d070ff;border-radius:4px;padding:1px 7px;cursor:pointer;font-size:11px">💾 KML</button><br>`;
+    });
+  }
+  html += '</div>';
+  L.popup({maxWidth:340}).setLatLng(ll).setContent(html).openOn(map);
+  setTimeout(updateCadastreCacheInfo, 2000);
+}
+
+// Parse MapServer GML GetFeatureInfo response
+// Supports GML 2 (<gml:coordinates>) and GML 3 (<gml:posList>)
+function _parseGMLResponse(gmlText, layerId){
+  if(!gmlText||gmlText.trim().length<20)return[];
+  try{
+    const doc = new DOMParser().parseFromString(gmlText,'text/xml');
+    if(doc.querySelector('parsererror'))return[];
+    const results=[];
+    // Each feature is a child element of the layer element
+    // MapServer wraps in <layer_36049_feature> or similar
+    const features = doc.querySelectorAll('[localname*="feature"],[localname*="Feature"]') ||
+                     doc.querySelectorAll('*');
+    // Try to find any polygon coordinates
+    const geom = _extractGMLGeom(doc);
+    if(!geom)return[];
+    // Extract cadastral number and properties
+    const cadNum = _gmlProp(doc,['cad_num','CAD_NUM','KAD_NUM']) || '';
+    const props = {
+      area:     _gmlProp(doc,['area_value','area','AREA']),
+      category: _gmlProp(doc,['category_type','category','cat']),
+      vri:      _gmlProp(doc,['util_by_doc','use','vri']),
+      name:     _gmlProp(doc,['name','obj_name']),
+    };
+    const isOks = !!(props.name && !props.category);
+    results.push({cadNum, geom, type:isOks?'oks':'zu', props, layerId});
+    return results;
+  }catch(_){return[];}
+}
+
+function _extractGMLGeom(doc){
+  // GML2: <gml:coordinates>x,y x,y ...</gml:coordinates>
+  const coordEl = doc.querySelector('coordinates');
+  if(coordEl){
+    const pairs = coordEl.textContent.trim().split(/[\s]+/);
+    const coords = pairs.map(p=>{const[x,y]=p.split(',').map(Number);return _toWGS84pair([x,y]);}).filter(c=>!isNaN(c[0]));
+    if(coords.length>2)return{type:'Polygon',coordinates:[coords]};
+  }
+  // GML3: <gml:posList>x y x y ...</gml:posList>
+  const posEl = doc.querySelector('posList');
+  if(posEl){
+    const nums=posEl.textContent.trim().split(/\s+/).map(Number);
+    const coords=[];
+    for(let i=0;i<nums.length-1;i+=2)coords.push(_toWGS84pair([nums[i],nums[i+1]]));
+    if(coords.length>2)return{type:'Polygon',coordinates:[coords]};
+  }
+  // GML3: <gml:pos> for point
+  const posEl2=doc.querySelector('pos');
+  if(posEl2){const[x,y]=posEl2.textContent.trim().split(/\s+/).map(Number);if(!isNaN(x))return{type:'Point',coordinates:_toWGS84pair([x,y])};}
+  return null;
+}
+
+function _gmlProp(doc,names){
+  for(const n of names){
+    const el=doc.querySelector(n);
+    if(el&&el.textContent.trim())return el.textContent.trim();
+    // case-insensitive search
+    const all=doc.querySelectorAll('*');
+    for(const e of all){if(e.localName&&e.localName.toLowerCase()===n.toLowerCase()&&e.textContent.trim())return e.textContent.trim();}
+  }
+  return null;
+}
+
+// Save contour to KML + ask user for cadastral number
+function saveContourToKML(idx){
+  const item = window._pendingContours?.[idx];
+  if(!item){showToast('Данные контура не найдены','error',3000);return;}
+
+  const defaultNum = item.cadNum || '';
+  const cadNum = prompt('Кадастровый номер объекта:', defaultNum);
+  if(cadNum===null)return; // user cancelled
+  const finalNum = (cadNum||defaultNum||'неизвестно').trim();
+
+  const type = item.type||'zu';
+  const geom = item.geom;
+  const p = item.props||{};
+  const lines = type==='zu'
+    ? [p.area&&['Площадь',p.area],p.category&&['Категория',p.category],p.vri&&['ВРИ',p.vri]].filter(Boolean)
+    : [p.area&&['Площадь общая',p.area],p.name&&['Наименование',p.name]].filter(Boolean);
+
+  // Render on map
+  const style = CAD_STYLES[type];
+  const ll = pkkGeomToLeaflet(geom);
+  if(ll){
+    const opts={color:style.color,weight:style.weight,fillColor:style.fillColor,fillOpacity:1,interactive:true};
+    let layer;
+    if(geom.type==='Polygon')      layer=L.polygon(ll,opts);
+    else if(geom.type==='MultiPolygon')layer=L.polygon(ll.flat(),opts);
+    else if(geom.type==='Point')   layer=L.circleMarker(ll[0],{radius:8,...opts,fillOpacity:.9});
+    if(layer){
+      _attachCadEvents(layer,finalNum,type,lines);
+      layer.addTo(map);
+      try{map.fitBounds(layer.getBounds(),{padding:[40,40],maxZoom:18});}catch(_){}
+    }
+  }
+
+  // Save to KML layer
+  const parts = _cadToKML(finalNum,type,geom,lines);
+  const targetIdx = kmlLayers.findIndex(l=>l.visible);
+  if(targetIdx>=0){
+    const tgt=kmlLayers[targetIdx];
+    if(!tgt.cadPlacemarks)tgt.cadPlacemarks=[];
+    tgt.cadPlacemarks.push({cadNum:finalNum,type,geom,lines,parts});
+    tgt.placemarkCount=(tgt.placemarkCount||0)+1;
+    renderKMLDropdown();
+    showToast(`✅ Контур «${finalNum}» записан в «${tgt.docName||tgt.filename}»`,'success',3000);
+  }else{
+    const lg=L.layerGroup().addTo(map);
+    const entry={filename:'Контуры.kml',docName:'Контуры',layerGroup:lg,visible:true,placemarkCount:1,cadPlacemarks:[{cadNum:finalNum,type,geom,lines,parts}]};
+    kmlLayers.push(entry);updateKMLButton();
+    showToast(`✅ Создан слой «Контуры» — ${finalNum}`,'success',3000);
+  }
+  // Download KML
+  const xml=`<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document>\n${parts.style}\n${parts.placemark}\n</Document></kml>`;
+  const blob=new Blob([xml],{type:'application/vnd.google-earth.kml+xml'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`${finalNum.replace(/:/g,'_')}.kml`;a.click();
+  map.closePopup();
+}
 function toggleLayer(){const btn=document.getElementById('layer-btn');if(currentLayer==='osm'){map.removeLayer(TILES.osm);TILES.sat.addTo(map);currentLayer='sat';btn.textContent='🗺 OSM';}else{map.removeLayer(TILES.sat);TILES.osm.addTo(map);currentLayer='osm';btn.textContent='🛰 Спутник';}}
 
 map.on('click',function(e){
@@ -1345,7 +1651,6 @@ async function loadSingleRemotePhoto(viewUrl,customName){const type=detectRemote
 function updateShareButton(){document.getElementById('share-btn').style.display=remotePhotos.length?'':'none';}
 function copyShareLink(){const base=window.location.origin+window.location.pathname;const params=new URLSearchParams();remotePhotos.slice(0,10).forEach((p,i)=>{params.set(`photo${i+1}`,p.originalUrl);if(p.name)params.set(`name${i+1}`,p.name);});navigator.clipboard.writeText(`${base}?${params}`).then(()=>showToast('📋 Скопировано!','success')).catch(()=>showToast('Ошибка','error'));}
 async function loadPhotosFromUrl(){const params=new URLSearchParams(window.location.search);const su=params.get('photo');if(su){await loadSingleRemotePhoto(su,params.get('name')||'');fitMapToPhotos();return;}const plist=[];for(const[k,v]of params.entries()){const m=k.match(/^photo(\d+)$/);if(m)plist.push({n:+m[1],url:v,name:params.get(`name${m[1]}`)||''});}if(plist.length){plist.sort((a,b)=>a.n-b.n);for(const p of plist)await loadSingleRemotePhoto(p.url,p.name);fitMapToPhotos();}}
-async function queryNSPDAtPoint(){if(!window.lastClickedPoint)return;const results=new Set();await Promise.allSettled(NSPD_IDS.map(async id=>{const R=20037508.34,ll=window.lastClickedPoint;const cx=ll.lng*R/180,cy=Math.log(Math.tan((90+ll.lat)*Math.PI/360))*R/Math.PI;const buf=120,bbox=`${cx-buf},${cy-buf},${cx+buf},${cy+buf}`;const url=`https://nspd.gov.ru/api/aeggis/v3/${id}/wms?`+new URLSearchParams({SERVICE:'WMS',VERSION:'1.3.0',REQUEST:'GetFeatureInfo',LAYERS:String(id),QUERY_LAYERS:String(id),INFO_FORMAT:'text/html',FEATURE_COUNT:'20',X:'128',Y:'128',WIDTH:'256',HEIGHT:'256',CRS:'EPSG:3857',BBOX:bbox,STYLES:''});const res=await fetch(url);if(!res.ok)return;const text=await res.text();(text.match(/\b(\d{2}:\d{2,3}:\d{6,10}:\d{1,6})\b/g)||[]).forEach(n=>results.add(n.trim()));}));const cadList=Array.from(results).sort();let html=`<div style="font-family:system-ui;line-height:1.5;font-size:13px"><b>📍</b> <code style="background:#f0f0f0;padding:2px 6px;border-radius:3px">${window.lastClickedPoint.lat.toFixed(6)}, ${window.lastClickedPoint.lng.toFixed(6)}</code><br><br>`;if(!cadList.length)html+='<span style="color:#555">Участков не найдено</span>';else html+=cadList.map(c=>`• <b style="color:#d32f2f">${c}</b> <a href="https://nspd.gov.ru/map?thematic=Default&zoom=17.5&selectedCard=${encodeURIComponent(c)}" target="_blank" style="color:#1976d2">→</a><br>`).join('');html+='</div>';L.popup({maxWidth:320}).setLatLng(window.lastClickedPoint).setContent(html).openOn(map);setTimeout(updateCadastreCacheInfo,2000);}
 window.addEventListener('load',()=>{updateShareButton();loadPhotosFromUrl();initTimeline();});
 
 // ═══ MANUAL GPS ════════════════════════════════════════════════════
