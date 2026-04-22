@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.2</title>
+<title>EkceloFoto v2.9.3</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -390,7 +390,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.2</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.3</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -666,20 +666,24 @@ const NSPD_GROUPS = {
 };
 let cadastreActive = false;
 
-function _buildGroupLayers(groupKey){
+// Robust layer management: build once, toggle with add/remove only.
+// Never clear g.layers once built — stale object refs break tiles.
+function _ensureGroupBuilt(groupKey){
   const g = NSPD_GROUPS[groupKey];
-  if (g.layers.length) return;
-  const op = parseFloat(document.getElementById('cadastre-range').value)/100;
+  if (g.layers.length) return;   // already built
+  const op = parseFloat(document.getElementById('cadastre-range').value || '70') / 100;
   g.layers = g.ids.map(id => L.tileLayer.wms(
     `https://nspd.gov.ru/api/aeggis/v2/${id}/wms`,
     { service:'WMS', version:'1.3.0', format:'image/png', transparent:true,
       styles:'', authkey:'0', tileSize:256, attribution:'© НСПД', zIndex:450,
       keepBuffer:4, updateWhenIdle:false, updateWhenZooming:false,
       layers:String(id), opacity:op,
-      minZoom:16, maxNativeZoom:19, maxZoom:22,  // only request tiles at z16-z19
+      minZoom:16, maxNativeZoom:19, maxZoom:22,
     }
   ));
 }
+// Keep track of which groups are currently on the map
+const _groupOnMap = {};  // groupKey → boolean
 
 function _getActiveIds(){
   const ids = [];
@@ -693,34 +697,37 @@ function toggleCadastreMenu(e){
   e && e.stopPropagation();
   const dd = document.getElementById('cadastre-dropdown');
   dd.classList.toggle('open');
-  if (!cadastreActive && dd.classList.contains('open')) _applyCadastreLayers();
+  // If opening for the first time, activate default checked groups
+  if (dd.classList.contains('open') && !cadastreActive) _applyCadastreLayers();
 }
 document.addEventListener('click', e=>{
   if(!e.target.closest('#cad-wrap')) document.getElementById('cadastre-dropdown').classList.remove('open');
 });
-function onCadLayerChange(){ if(cadastreActive) _applyCadastreLayers(); }
+function onCadLayerChange(){ _applyCadastreLayers(); }
 
 function _applyCadastreLayers(){
-  // Remove all layers first (individually, catch errors)
-  Object.values(NSPD_GROUPS).forEach(g=>{
-    g.layers.forEach(l=>{ try{ map.removeLayer(l); }catch(_){} });
-  });
-  // Re-add only checked groups (each individually, so one failure doesn't break others)
   let anyActive = false;
   Object.entries(NSPD_GROUPS).forEach(([key, g])=>{
     const cb = document.getElementById(g.cbId);
-    if(!cb?.checked) return;
-    try {
-      _buildGroupLayers(key);
-      g.layers.forEach(l=>{ try{ l.addTo(map); }catch(_){} });
-      anyActive = true;
-    } catch(err) {
-      console.warn('[cadastre] layer group failed:', key, err);
+    const wantOn = !!(cb?.checked);
+    const isOn   = !!_groupOnMap[key];
+    if (wantOn && !isOn){
+      // Build if needed, then add
+      try {
+        _ensureGroupBuilt(key);
+        g.layers.forEach(l=>l.addTo(map));
+        _groupOnMap[key] = true;
+      } catch(err){ console.warn('[cadastre] add failed:', key, err); }
+    } else if (!wantOn && isOn){
+      // Remove from map but keep the layer objects
+      g.layers.forEach(l=>{ try{ map.removeLayer(l); }catch(_){} });
+      _groupOnMap[key] = false;
     }
+    if (_groupOnMap[key]) anyActive = true;
   });
   cadastreActive = anyActive;
   document.getElementById('cadastre-btn').classList.toggle('active', anyActive);
-  if(anyActive && map.getZoom()<13) showToast('Кадастр виден с zoom ≥ 16');
+  if(anyActive && map.getZoom() < 13) showToast('Кадастр виден с zoom ≥ 16');
   setTimeout(updateCadastreCacheInfo, 4000);
 }
 function toggleCadastre(){ toggleCadastreMenu(); }
@@ -729,6 +736,9 @@ function setCadastreOpacity(val){
   const op = val/100;
   Object.values(NSPD_GROUPS).forEach(g=>g.layers.forEach(l=>l.setOpacity(op)));
 }
+
+// Legacy: rebuild if needed (used by setCadastreOpacity slider)
+function _buildGroupLayers(k){ _ensureGroupBuilt(k); }
 
 // ── COORDINATE HELPERS ─────────────────────────────────────────────
 // Precise WebMercator ↔ tile coordinate math (validated by Python test)
@@ -1044,13 +1054,22 @@ function saveContourKMLFromTile(idx){
   if(cadNum===null) return;
 
   const ti = item.tileInfo;
-  // Build bbox polygon from tile bounds (WGS84)
-  const lat1 = Math.atan(Math.sinh(Math.PI*(1 - 2*ti.tileY/Math.pow(2,18))))*180/Math.PI;
-  const lat2 = Math.atan(Math.sinh(Math.PI*(1 - 2*(ti.tileY+1)/Math.pow(2,18))))*180/Math.PI;
-  const lon1 = ti.bboxMinX / _R * 180;
-  const lon2 = ti.bboxMaxX / _R * 180;
-  const geom = {type:'Polygon',coordinates:[
-    [[lon1,lat1],[lon2,lat1],[lon2,lat2],[lon1,lat2],[lon1,lat1]]
+  // FIX: Use stored EPSG:3857 bbox values to compute WGS84 lat/lon.
+  // Previous code hardcoded Math.pow(2,18) which gave wrong lat when map zoom ≠ 18.
+  // e.g. at z=17: tileY=47441 with 2^18=262144 → lat=74.65°N (Arctic!) instead of 44.43°N.
+  const Re = 6378137.0;
+  const lat_s = Math.atan(Math.sinh(ti.bboxMinY / Re)) * 180 / Math.PI;  // south edge
+  const lat_n = Math.atan(Math.sinh(ti.bboxMaxY / Re)) * 180 / Math.PI;  // north edge
+  const lon_w = ti.bboxMinX / _R * 180;  // west edge
+  const lon_e = ti.bboxMaxX / _R * 180;  // east edge
+
+  // Sanity check (should be within Earth bounds)
+  if (Math.abs(lat_s) > 85 || Math.abs(lat_n) > 85 || Math.abs(lon_w) > 180 || Math.abs(lon_e) > 180){
+    showToast('❌ Ошибка расчёта координат тайла','error',3000); return;
+  }
+
+  const geom = {type:'Polygon', coordinates:[
+    [[lon_w,lat_s],[lon_e,lat_s],[lon_e,lat_n],[lon_w,lat_n],[lon_w,lat_s]]
   ]};
 
   showToast('⚠ Сохраняется контур тайла (~150×150м), не объекта','warn',5000);
@@ -1070,11 +1089,21 @@ function _renderAndSaveKML(finalNum, type, geom, lines){
     if(layer){
       _attachCadEvents(layer,finalNum,type,lines);
       layer.addTo(map);
-      try{map.fitBounds(layer.getBounds(),{padding:[40,40],maxZoom:18});}catch(_){}
+      // Guard: only fitBounds if polygon is near the current map view.
+      // Wrong coordinates (e.g. from buggy tile calc) could pan map to wrong continent.
+      try{
+        const bounds = layer.getBounds();
+        const pc = bounds.getCenter();
+        const mc = map.getCenter();
+        const dist = Math.abs(pc.lat - mc.lat) + Math.abs(pc.lng - mc.lng);
+        if(dist < 8){ map.fitBounds(bounds,{padding:[40,40],maxZoom:18}); }
+        else{ showToast('⚠ Контур за пределами текущего вида','warn',3000); }
+      }catch(_){}
     }
   }
   // Append to KML layer + download
   const parts = _cadToKML(finalNum,type==='str'?'oks':type,geom,lines);
+  if(!parts){ showToast('❌ Координаты контура некорректны — KML не сохранён','error',5000); return; }
   const targetIdx = kmlLayers.findIndex(l=>l.visible);
   if(targetIdx>=0){
     const tgt=kmlLayers[targetIdx];
@@ -1391,11 +1420,24 @@ function kmlColorToCss(c,dr='100,149,237',da=1){
   const h=c.padStart(8,'f');
   return`rgba(${parseInt(h.slice(6,8),16)},${parseInt(h.slice(4,6),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(0,2),16)/255})`;
 }
+// Extract only alpha (0..1) from KML ABGR color string
+function kmlAlpha(c){ if(!c||c.length<2)return 1; return parseInt(c.padStart(8,'f').slice(0,2),16)/255; }
 
 function parseKML(xmlText,filename){
   const doc=new DOMParser().parseFromString(xmlText,'text/xml');
   const styles={};
-  doc.querySelectorAll('Style').forEach(s=>{const id=s.getAttribute('id');if(!id)return;styles['#'+id]={lineColor:kmlColorToCss(s.querySelector('LineStyle color')?.textContent||''),lineWidth:parseFloat(s.querySelector('LineStyle width')?.textContent||'2'),fillColor:kmlColorToCss(s.querySelector('PolyStyle color')?.textContent||''),hasFill:s.querySelector('PolyStyle fill')?.textContent!=='0'};});
+  doc.querySelectorAll('Style').forEach(s=>{
+    const id=s.getAttribute('id');if(!id)return;
+    const fillColor_raw = s.querySelector('PolyStyle color')?.textContent||'';
+    styles['#'+id]={
+      lineColor:  kmlColorToCss(s.querySelector('LineStyle color')?.textContent||''),
+      lineWidth:  parseFloat(s.querySelector('LineStyle width')?.textContent||'2'),
+      fillColor:  kmlColorToCss(fillColor_raw),
+      // Store fill opacity from alpha channel of the KML fill color (NOT hardcoded 1)
+      fillOpacity: s.querySelector('PolyStyle fill')?.textContent==='0' ? 0 : kmlAlpha(fillColor_raw),
+      hasFill:    s.querySelector('PolyStyle fill')?.textContent!=='0',
+    };
+  });
   const docEl=doc.querySelector('Document');
   const docName=docEl?.querySelector(':scope > n')?.textContent?.trim()||docEl?.querySelector(':scope > name')?.textContent?.trim()||filename.replace(/\.kml$/i,'');
   const placemarks=[];
@@ -1403,7 +1445,7 @@ function parseKML(xmlText,filename){
     const name=(pm.querySelector(':scope > n')?.textContent||pm.querySelector(':scope > name')?.textContent||'').trim();
     const desc=(pm.querySelector(':scope > description')?.textContent||'').trim();
     const styleUrl=pm.querySelector('styleUrl')?.textContent?.trim()||'';
-    const style=styles[styleUrl]||{lineColor:'rgba(71,200,255,0.9)',lineWidth:2,fillColor:'rgba(71,200,255,0.12)',hasFill:true};
+    const style=styles[styleUrl]||{lineColor:'rgba(71,200,255,0.9)',lineWidth:2,fillColor:'rgba(71,200,255,0.12)',fillOpacity:0.12,hasFill:true};
     const pc=txt=>txt.trim().split(/\s+/).map(pair=>{const p=pair.split(',');return[parseFloat(p[1]),parseFloat(p[0])];}).filter(c=>!isNaN(c[0])&&!isNaN(c[1]));
     const pCoord=pm.querySelector('Point coordinates');
     if(pCoord){const p=pCoord.textContent.trim().split(',');const lat=parseFloat(p[1]),lon=parseFloat(p[0]);if(!isNaN(lat))placemarks.push({type:'Point',name,desc,style,coords:[lat,lon]});}
@@ -1419,7 +1461,8 @@ function renderKMLOnMap(parsed){
   const lg=L.layerGroup();
   parsed.placemarks.forEach(pm=>{
     let layer;
-    if(pm.type==='Polygon')layer=L.polygon(pm.coords,{color:pm.style.lineColor,weight:pm.style.lineWidth,fillColor:pm.style.fillColor,fillOpacity:pm.style.hasFill?1:0});
+    // FIX: use pm.style.fillOpacity (actual alpha from KML) instead of hardcoded 1
+    if(pm.type==='Polygon')layer=L.polygon(pm.coords,{color:pm.style.lineColor,weight:pm.style.lineWidth,fillColor:pm.style.fillColor,fillOpacity:pm.style.fillOpacity??0.1});
     else if(pm.type==='LineString')layer=L.polyline(pm.coords,{color:pm.style.lineColor,weight:pm.style.lineWidth});
     else if(pm.type==='Point')layer=L.circleMarker(pm.coords,{radius:7,color:pm.style.lineColor,fillColor:pm.style.lineColor,fillOpacity:.85,weight:2});
     if(layer){
@@ -2312,21 +2355,39 @@ function _cadPopup(lat, lng, type, cadNum, lines) {
 }
 
 // ── KML save ────────────────────────────────────────────────────────
+// Generates standard-compliant KML (compatible with Yandex Map Constructor import).
+// Uses <name> (standard) not Yandex-specific <n>.
+// Fill color: ABGR format; alpha cc=80%, border ff=100%.
+// ЗУ = purple (7f007f), ОКС = dark green (007f00).
 function _cadToKML(cadNum, type, geom, lines) {
-  const bABGR = type === 'zu' ? 'ff00007f' : 'ff007f00';
-  const fABGR = type === 'zu' ? 'cc00007f' : 'cc007f00';
-  const sid   = `cad_${type}_${cadNum.replace(/:/g, '_')}`;
-  const desc  = lines.map(([k,v]) => `${k}: ${v}`).join('; ');
+  // Validate geometry coordinates (sanity check: must be near Earth surface)
+  const coordsSafe = (coords) => coords.every(([lo,la])=>
+    Math.abs(lo)<=180 && Math.abs(la)<=90 && la>=-85 && la<=85
+  );
   let cs = '';
-  if (geom.type==='Polygon')           cs=geom.coordinates[0].map(([lo,la])=>`${lo},${la},0`).join(' ');
-  else if (geom.type==='MultiPolygon') cs=geom.coordinates[0][0].map(([lo,la])=>`${lo},${la},0`).join(' ');
-  else if (geom.type==='Point')        cs=`${geom.coordinates[0]},${geom.coordinates[1]},0`;
-  const gkml = geom.type==='Point'
+  if (geom.type==='Polygon'){
+    if (!coordsSafe(geom.coordinates[0])) return null;
+    cs = geom.coordinates[0].map(([lo,la])=>`${lo},${la},0`).join(' ');
+  } else if (geom.type==='MultiPolygon'){
+    if (!coordsSafe(geom.coordinates[0][0])) return null;
+    cs = geom.coordinates[0][0].map(([lo,la])=>`${lo},${la},0`).join(' ');
+  } else if (geom.type==='Point'){
+    const [lo,la] = geom.coordinates;
+    if (Math.abs(lo)>180||Math.abs(la)>90) return null;
+    cs = `${lo},${la},0`;
+  } else { return null; }
+
+  const bABGR = type==='zu' ? 'ff7f007f' : 'ff007f00';   // border: opaque purple / green
+  const fABGR = type==='zu' ? '337f007f' : '33007f00';   // fill: 20% opacity (0x33=51 ≈ 20%)
+  const sid   = `cad_${type}_${cadNum.replace(/:/g,'_')}`;
+  const desc  = lines.map(([k,v])=>`${k}: ${v}`).join('; ');
+  const gkml  = geom.type==='Point'
     ? `<Point><coordinates>${cs}</coordinates></Point>`
     : `<Polygon><outerBoundaryIs><LinearRing><coordinates>${cs}</coordinates></LinearRing></outerBoundaryIs></Polygon>`;
   return {
+    // Standard <name> (not Yandex-specific <n>) for cross-app compatibility
     style:     `<Style id="${sid}"><LineStyle><color>${bABGR}</color><width>2</width></LineStyle><PolyStyle><color>${fABGR}</color><fill>1</fill><outline>1</outline></PolyStyle></Style>`,
-    placemark: `<Placemark><n><![CDATA[${cadNum}]]></n><description><![CDATA[${desc}]]></description><styleUrl>#${sid}</styleUrl>${gkml}</Placemark>`,
+    placemark: `<Placemark><name><![CDATA[${cadNum}]]></name><description><![CDATA[${desc}]]></description><styleUrl>#${sid}</styleUrl>${gkml}</Placemark>`,
   };
 }
 
@@ -2334,6 +2395,7 @@ function savePendingCadastralToKML() {
   if (!pendingCadResult) { showToast('Нет данных для записи', 'warn', 2000); return; }
   const { cadNum, type, geom, attrs, lines } = pendingCadResult;
   const parts = _cadToKML(cadNum, type, geom, lines);
+  if(!parts){ showToast('❌ Некорректные координаты — KML не сохранён','error',5000); return; }
   const targetIdx = kmlLayers.findIndex(l => l.visible);
   if (targetIdx >= 0) {
     const tgt = kmlLayers[targetIdx];
