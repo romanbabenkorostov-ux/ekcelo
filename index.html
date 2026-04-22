@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.1</title>
+<title>EkceloFoto v2.9.2</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -16,14 +16,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #app{display:grid;grid-template-rows:52px 1fr;grid-template-columns:310px 1fr;height:100vh}
 
 /* HEADER */
-#header{grid-column:1/-1;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 16px;z-index:1000}
+#header{grid-column:1/-1;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 16px;z-index:9000;position:relative}
 #logo{font-size:18px;font-weight:800;letter-spacing:-.5px;color:var(--accent);white-space:nowrap}
 #logo span{color:var(--text)}
 #logo small{font-size:9px;font-weight:400;color:var(--muted);font-family:'JetBrains Mono',monospace;letter-spacing:0;margin-left:2px;vertical-align:middle}
 #invite-btn{display:none;align-items:center;gap:7px;background:var(--accent2);color:#0d0f14;border:none;border-radius:var(--r);padding:7px 14px;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;cursor:pointer;text-decoration:none;white-space:nowrap}
 .upload-wrap{position:relative;flex-shrink:0}
 #upload-btn{display:flex;align-items:center;gap:7px;background:var(--accent);color:#0d0f14;border:none;border-radius:var(--r);padding:7px 14px;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap}
-#upload-menu{display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:3000;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:0 8px 32px rgba(0,0,0,.7);min-width:235px;padding:4px 0;animation:pop-in .15s ease both}
+#upload-menu{display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:9100;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:0 8px 32px rgba(0,0,0,.7);min-width:235px;padding:4px 0;animation:pop-in .15s ease both}
 #upload-menu.open{display:block}
 #upload-menu button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:transparent;border:none;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;padding:9px 14px;cursor:pointer;transition:background .1s}
 #upload-menu button:hover{background:rgba(255,255,255,.07)}
@@ -390,7 +390,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.1</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.2</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -559,8 +559,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     <button id="cadastre-btn" onclick="toggleCadastreMenu(event)">□ Кадастр ▾</button>
     <div id="cadastre-dropdown">
       <div class="cad-group">Слои кадастра</div>
-      <label class="cad-layer-item"><input type="checkbox" id="cad-cb-zu"    onchange="onCadLayerChange()"/><span class="cad-layer-label">Земельные участки</span></label>
-      <label class="cad-layer-item"><input type="checkbox" id="cad-cb-oks"   checked onchange="onCadLayerChange()"/><span class="cad-layer-label">ОКС</span></label>
+      <label class="cad-layer-item"><input type="checkbox" id="cad-cb-oks"   checked onchange="onCadLayerChange()"/><span class="cad-layer-label">ОКС (здания)</span></label>
       <label class="cad-layer-item"><input type="checkbox" id="cad-cb-str"   checked onchange="onCadLayerChange()"/><span class="cad-layer-label">Сооружения</span></label>
       <label class="cad-layer-item"><input type="checkbox" id="cad-cb-kv"    onchange="onCadLayerChange()"/><span class="cad-layer-label">Кад.кварталы</span></label>
       <div class="cad-group">Прозрачность</div>
@@ -647,7 +646,7 @@ const TILES={
 TILES.osm.addTo(map);
 let currentLayer='osm';
 
-// ── ZOOM INDICATOR ─────────────────────────────────────────────────
+// ── ZOOM INDICATOR ────────────────────────────────────────────────
 function updateZoomIndicator(){
   document.getElementById('zoom-indicator').textContent='z'+map.getZoom();
 }
@@ -655,19 +654,16 @@ map.on('zoom zoomend', updateZoomIndicator);
 updateZoomIndicator();
 
 // ── CADASTRE LAYER GROUPS ─────────────────────────────────────────
-// Layer IDs confirmed by NSPD tile rendering (observed by user):
+// IDs confirmed by tile rendering (observed by user on Russian IP):
 //   36329, 36049 = ОКС (объекты капитального строительства — здания)
 //   36328, 36048 = Сооружения
 //   36071        = Кадастровые кварталы
-//   36041, 36040 = Земельные участки (best-guess; confirmed when ZU tiles render)
+// Земельные участки IDs are UNCONFIRMED — omitted to prevent tile breakage.
 const NSPD_GROUPS = {
-  zu:  { ids:[36041,36040],   label:'ЗУ',  layers:[], cbId:'cad-cb-zu'  },
-  oks: { ids:[36329,36049],   label:'ОКС', layers:[], cbId:'cad-cb-oks' },
-  str: { ids:[36328,36048],   label:'Соор',layers:[], cbId:'cad-cb-str' },
-  kv:  { ids:[36071],         label:'Кв',  layers:[], cbId:'cad-cb-kv'  },
+  oks: { ids:[36329,36049], label:'ОКС',         layers:[], cbId:'cad-cb-oks' },
+  str: { ids:[36328,36048], label:'Сооружения',  layers:[], cbId:'cad-cb-str' },
+  kv:  { ids:[36071],       label:'Кварталы',    layers:[], cbId:'cad-cb-kv'  },
 };
-// All active IDs for GetFeatureInfo / WFS
-const _allNSPDIds = () => Object.values(NSPD_GROUPS).flatMap(g=>g.ids);
 let cadastreActive = false;
 
 function _buildGroupLayers(groupKey){
@@ -676,9 +672,12 @@ function _buildGroupLayers(groupKey){
   const op = parseFloat(document.getElementById('cadastre-range').value)/100;
   g.layers = g.ids.map(id => L.tileLayer.wms(
     `https://nspd.gov.ru/api/aeggis/v2/${id}/wms`,
-    {service:'WMS',version:'1.3.0',format:'image/png',transparent:true,styles:'',
-     authkey:'0',tileSize:256,attribution:'© НСПД',zIndex:450,
-     keepBuffer:4,updateWhenIdle:false,updateWhenZooming:false,layers:String(id),opacity:op}
+    { service:'WMS', version:'1.3.0', format:'image/png', transparent:true,
+      styles:'', authkey:'0', tileSize:256, attribution:'© НСПД', zIndex:450,
+      keepBuffer:4, updateWhenIdle:false, updateWhenZooming:false,
+      layers:String(id), opacity:op,
+      minZoom:16, maxNativeZoom:19, maxZoom:22,  // only request tiles at z16-z19
+    }
   ));
 }
 
@@ -699,197 +698,368 @@ function toggleCadastreMenu(e){
 document.addEventListener('click', e=>{
   if(!e.target.closest('#cad-wrap')) document.getElementById('cadastre-dropdown').classList.remove('open');
 });
-
 function onCadLayerChange(){ if(cadastreActive) _applyCadastreLayers(); }
 
 function _applyCadastreLayers(){
-  Object.values(NSPD_GROUPS).forEach(g=>g.layers.forEach(l=>{ try{map.removeLayer(l);}catch(_){} }));
+  // Remove all layers first (individually, catch errors)
+  Object.values(NSPD_GROUPS).forEach(g=>{
+    g.layers.forEach(l=>{ try{ map.removeLayer(l); }catch(_){} });
+  });
+  // Re-add only checked groups (each individually, so one failure doesn't break others)
   let anyActive = false;
-  Object.entries(NSPD_GROUPS).forEach(([key,g])=>{
-    if(document.getElementById(g.cbId)?.checked){
-      _buildGroupLayers(key); g.layers.forEach(l=>l.addTo(map)); anyActive=true;
+  Object.entries(NSPD_GROUPS).forEach(([key, g])=>{
+    const cb = document.getElementById(g.cbId);
+    if(!cb?.checked) return;
+    try {
+      _buildGroupLayers(key);
+      g.layers.forEach(l=>{ try{ l.addTo(map); }catch(_){} });
+      anyActive = true;
+    } catch(err) {
+      console.warn('[cadastre] layer group failed:', key, err);
     }
   });
   cadastreActive = anyActive;
   document.getElementById('cadastre-btn').classList.toggle('active', anyActive);
-  if(anyActive && map.getZoom()<13) showToast('Кадастр виден с zoom ≥ 13');
+  if(anyActive && map.getZoom()<13) showToast('Кадастр виден с zoom ≥ 16');
   setTimeout(updateCadastreCacheInfo, 4000);
 }
-
 function toggleCadastre(){ toggleCadastreMenu(); }
-
 function setCadastreOpacity(val){
   document.getElementById('cadastre-pct').textContent = val+'%';
   const op = val/100;
   Object.values(NSPD_GROUPS).forEach(g=>g.layers.forEach(l=>l.setOpacity(op)));
 }
 
-// ── ENHANCED queryNSPDAtPoint — WFS BBOX for contour extraction ────
+// ── COORDINATE HELPERS ─────────────────────────────────────────────
+// Precise WebMercator ↔ tile coordinate math (validated by Python test)
+const _R  = 20037508.342789244;   // half-circumference in EPSG:3857
+const _Re = 6378137.0;            // Earth radius for Mercator Y
+
+// lat/lon (WGS84 degrees) → EPSG:3857 metres
+function _toMerc(lat, lon){
+  const cx = lon * _R / 180;
+  const cy = _Re * Math.log(Math.tan(Math.PI/4 + lat * Math.PI/360));
+  return { cx, cy };
+}
+
+// Calculate tile (tileX, tileY), pixel (pixelX, pixelY) and tile BBOX at zoom z
+function _tileInfo(lat, lon, z){
+  const n  = Math.pow(2, z);
+  const xf = (lon + 180) / 360 * n;
+  const lat_rad = lat * Math.PI / 180;
+  const yf = (1 - Math.log(Math.tan(lat_rad) + 1/Math.cos(lat_rad)) / Math.PI) / 2 * n;
+  const tileX  = Math.floor(xf), tileY = Math.floor(yf);
+  const pixelX = Math.floor((xf - tileX) * 256);
+  const pixelY = Math.floor((yf - tileY) * 256);
+  // Tile BBOX in EPSG:3857
+  const bboxMinX = tileX / n * 2 * _R - _R;
+  const bboxMaxX = (tileX + 1) / n * 2 * _R - _R;
+  const latTop = Math.atan(Math.sinh(Math.PI * (1 - 2 * tileY / n))) * 180 / Math.PI;
+  const latBot = Math.atan(Math.sinh(Math.PI * (1 - 2 * (tileY + 1) / n))) * 180 / Math.PI;
+  const bboxMaxY = _Re * Math.log(Math.tan(Math.PI/4 + latTop * Math.PI/360));
+  const bboxMinY = _Re * Math.log(Math.tan(Math.PI/4 + latBot * Math.PI/360));
+  const tileBbox = `${bboxMinX.toFixed(2)},${bboxMinY.toFixed(2)},${bboxMaxX.toFixed(2)},${bboxMaxY.toFixed(2)}`;
+  return { tileX, tileY, pixelX, pixelY, tileBbox, bboxMinX, bboxMinY, bboxMaxX, bboxMaxY };
+}
+
+// ── CANVAS PIXEL CHECK ─────────────────────────────────────────────
+// Load the cadastre WMS tile at the click point, render to canvas,
+// check if the pixel at the click location is colored (non-transparent).
+// Returns: 'feature' | 'empty' | 'error'
+async function _checkTilePixel(lat, lon, layerId, z){
+  const info = _tileInfo(lat, lon, z);
+  const tileUrl = `https://nspd.gov.ru/api/aeggis/v2/${layerId}/wms?`+
+    `SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${layerId}`+
+    `&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&FORMAT=image/png&TRANSPARENT=true&STYLES=`+
+    `&BBOX=${info.tileBbox}`;
+  try {
+    const res = await fetch(tileUrl, {headers:{'Referer':'https://nspd.gov.ru/'}});
+    if(!res.ok) return 'error';
+    const blob = await res.blob();
+    const img = await createImageBitmap(blob);
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 256;
+    const ctx2d = canvas.getContext('2d');
+    ctx2d.drawImage(img, 0, 0);
+    const px = ctx2d.getImageData(info.pixelX, info.pixelY, 1, 1).data;
+    // Check alpha channel; cadastre features have alpha > 10
+    return px[3] > 10 ? 'feature' : 'empty';
+  } catch(e) { return 'error'; }
+}
+
+// ── QUERY NSPDATPOINT ─────────────────────────────────────────────
+// Strategy:
+//   A. WMS GetFeatureInfo (tile-based pixel coords, text/html + GML)
+//   B. WFS GetFeature (BBOX in EPSG:3857, then WGS84)
+//   C. Canvas pixel check → confirms feature presence from tile
+//      (works even if GFI is blocked, at least gives visual confirmation)
 //
-// Key insight (v36 bug fix):
-//   GetFeatureInfo text/html works from RU IP but returned "Участков не найдено"
-//   because pixel-based lookup is sensitive to exact click position.
-//
-//   NEW APPROACH: WFS GetFeature with BBOX filter around click point.
-//   This is more robust — returns ALL features within ±100m bounding box.
-//   Returns GeoJSON directly (no GML parsing needed).
-//
-// Mental test with user's coords 44.428628, 34.102904 (Russian IP):
-//   EPSG:3857: cx≈3796671, cy≈5532103
-//   BBOX with 100m buffer: 3796571,5532003,3796771,5532203
-//   WFS returns polygon of building at that location ✓
-//
-// Both v2 and v3 endpoints are tried; v3 is preferred for WFS.
+// Mental test for OKS at 44.429344, 34.105269 at z18:
+//   tile=(155906,94884) pixel=(178,133)
+//   tileBbox=3796474,5532053,3796627,5532206
+//   GetFeatureInfo hit: MapServer checks if tile pixel 178,133 intersects OKS polygon ✓
 
 window._pendingContours = [];
 
 async function queryNSPDAtPoint(){
   if(!window.lastClickedPoint) return;
-  const ll = window.lastClickedPoint;
-  const R  = 20037508.34;
-  const cx = ll.lng * R / 180;
-  const cy = Math.log(Math.tan((90 + ll.lat) * Math.PI / 360)) * R / Math.PI;
-  // 100-metre buffer in EPSG:3857 (roughly correct at mid-latitudes)
-  const buf  = 100;
-  const bbox = `${cx-buf},${cy-buf},${cx+buf},${cy+buf}`;
+  const lat = window.lastClickedPoint.lat, lon = window.lastClickedPoint.lng;
+
+  // Use current map zoom, clamped to the cadastre tile range
+  const z = Math.max(16, Math.min(19, Math.round(map.getZoom())));
 
   const activeIds = _getActiveIds();
-  if (!activeIds.length){
+  if(!activeIds.length){
     showToast('Включите слои кадастра (кнопка «Кадастр ▾»)', 'warn', 3000); return;
   }
 
+  const info = _tileInfo(lat, lon, z);
+  // WGS84 BBOX ±200m (approx)
+  const dLat = 200 / 111000;
+  const dLon = 200 / (111000 * Math.cos(lat * Math.PI / 180));
+  const wgs84Bbox = `${lon-dLon},${lat-dLat},${lon+dLon},${lat+dLat}`;
+
   window._pendingContours = [];
   const cadNums = new Set();
-  const geoItems = [];   // {cadNum, geom, type, props}
+  const geoItems = [];
 
+  // Run all layer queries concurrently
   await Promise.allSettled(activeIds.map(async id => {
-    const typeOf = id => Object.entries(NSPD_GROUPS).find(([,g])=>g.ids.includes(id))?.[0]||'zu';
-    const typeName = typeOf(id);
+    const typeName = Object.entries(NSPD_GROUPS)
+      .find(([,g])=>g.ids.includes(id))?.[0]||'oks';
+    const gfiBase = { SERVICE:'WMS', VERSION:'1.3.0', REQUEST:'GetFeatureInfo',
+      LAYERS:String(id), QUERY_LAYERS:String(id),
+      FEATURE_COUNT:'5', X:String(info.pixelX), Y:String(info.pixelY),
+      WIDTH:'256', HEIGHT:'256', CRS:'EPSG:3857', BBOX:info.tileBbox, STYLES:'' };
+    const hdrs = { Referer:'https://nspd.gov.ru/' };
 
-    // ── Approach A: WFS GetFeature with BBOX — returns GeoJSON geometry ──
-    // This is the primary method for getting actual polygon contours.
-    // MapServer on nspd.gov.ru supports this (standard WFS 2.0 operation).
-    for(const ver of ['v3','v2']){
-      try{
-        const url = `https://nspd.gov.ru/api/aeggis/${ver}/${id}/wfs?`+
-          `SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature`+
-          `&TYPENAMES=ms:layer_${id}`+
-          `&BBOX=${bbox},EPSG:3857`+      // pass CRS with BBOX
-          `&outputFormat=application/json`+
-          `&SRSNAME=EPSG:4326`+           // response in WGS84
-          `&count=3`;
-        const res = await fetch(url, {headers:{'Accept':'application/json','Referer':'https://nspd.gov.ru/'}});
-        if(!res.ok) continue;
-        const fc = await res.json();
-        if(!fc.features?.length) continue;
-        fc.features.forEach(feat=>{
-          if(!feat.geometry) return;
-          const p = feat.properties||{};
-          const cad = _findCadNum(p)||'';
-          if(cad) cadNums.add(cad);
-          // Geometry is already WGS84 (SRSNAME=EPSG:4326) — no conversion needed
-          geoItems.push({cadNum:cad, geom:feat.geometry, type:typeName, props:p});
-        });
-        break;  // got data from this endpoint version, skip v2
-      }catch(_){}
-    }
-
-    // ── Approach B: WMS GetFeatureInfo text/html — fallback for cadnum ──
-    // Returns cad numbers even if geometry was already retrieved above.
-    try{
-      const gfiParams = new URLSearchParams({
-        SERVICE:'WMS',VERSION:'1.3.0',REQUEST:'GetFeatureInfo',
-        LAYERS:String(id),QUERY_LAYERS:String(id),
-        INFO_FORMAT:'text/html',FEATURE_COUNT:'5',
-        X:'128',Y:'128',WIDTH:'256',HEIGHT:'256',
-        CRS:'EPSG:3857',BBOX:bbox,STYLES:'',
-      });
-      const res = await fetch(`https://nspd.gov.ru/api/aeggis/v2/${id}/wms?${gfiParams}`,
-        {headers:{'Referer':'https://nspd.gov.ru/'}});
+    // A1: GetFeatureInfo text/html — primary for cad numbers
+    try {
+      const res = await fetch(
+        `https://nspd.gov.ru/api/aeggis/v2/${id}/wms?`+new URLSearchParams({...gfiBase, INFO_FORMAT:'text/html'}),
+        {headers:hdrs});
       if(res.ok){
         const txt = await res.text();
-        (txt.match(/\b(\d{2}:\d{2,3}:\d{6,10}:\d{1,6})\b/g)||[]).forEach(n=>cadNums.add(n.trim()));
+        (txt.match(/(\d{2}:\d{2,3}:\d{6,10}:\d{1,6})/g)||[]).forEach(c=>cadNums.add(c.trim()));
       }
-    }catch(_){}
+    } catch(_){}
+
+    // A2: GetFeatureInfo GML — for polygon geometry (standard MapServer)
+    for(const fmt of ['application/vnd.ogc.gml','application/vnd.ogc.gml/3.1.1','text/xml']){
+      try {
+        const res = await fetch(
+          `https://nspd.gov.ru/api/aeggis/v2/${id}/wms?`+new URLSearchParams({...gfiBase, INFO_FORMAT:fmt}),
+          {headers:hdrs});
+        if(!res.ok) continue;
+        const gmlText = await res.text();
+        // Must contain geometry tags to be useful
+        if(!gmlText.includes('<') || (!gmlText.includes('osList') && !gmlText.includes('oordinates'))) continue;
+        const parsed = _parseGMLResponse(gmlText, id);
+        if(parsed.length){ geoItems.push(...parsed.map(p=>({...p,type:typeName}))); break; }
+      } catch(_){}
+    }
+
+    // B: WFS GetFeature — try both coord systems and both API versions
+    const wfsQueries = [
+      // EPSG:3857 BBOX (tile-based)
+      `SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=ms:layer_${id}&BBOX=${info.tileBbox},EPSG:3857&outputFormat=application/json&SRSNAME=EPSG:4326&count=3`,
+      // WGS84 BBOX
+      `SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=ms:layer_${id}&BBOX=${wgs84Bbox}&outputFormat=application/json&SRSNAME=EPSG:4326&count=3`,
+      // Without namespace prefix
+      `SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=layer_${id}&BBOX=${info.tileBbox},EPSG:3857&outputFormat=application/json&SRSNAME=EPSG:4326&count=3`,
+    ];
+    for(const qs of wfsQueries){
+      let done = false;
+      for(const ver of ['v3','v2']){
+        try {
+          const res = await fetch(`https://nspd.gov.ru/api/aeggis/${ver}/${id}/wfs?${qs}`,{headers:hdrs});
+          if(!res.ok) continue;
+          const fc = await res.json();
+          if(!fc.features?.length) continue;
+          fc.features.forEach(feat=>{
+            if(!feat.geometry) return;
+            const p = feat.properties||{};
+            const cad = _findCadNum(p)||'';
+            if(cad) cadNums.add(cad);
+            geoItems.push({cadNum:cad, geom:feat.geometry, type:typeName, props:p});
+          });
+          done = true; break;
+        } catch(_){}
+      }
+      if(done) break;
+    }
+
+    // C: Canvas pixel check — at minimum confirm feature is visible in tile
+    if(cadNums.size===0 && geoItems.length===0){
+      const pixelResult = await _checkTilePixel(lat, lon, id, z);
+      if(pixelResult==='feature'){
+        // There IS a feature here (tile pixel is colored) but GFI/WFS didn't return data.
+        // Record as a visual-only hit so user gets some feedback.
+        geoItems.push({
+          cadNum:'', geom:null, type:typeName, props:{},
+          visualHit:true, layerId:id,
+          tileInfo:info,
+        });
+      }
+    }
   }));
 
-  window._pendingContours = geoItems;
+  window._pendingContours = geoItems.filter(g=>g.geom||g.visualHit);
   const cadList = Array.from(cadNums).sort();
-  const lat = ll.lat.toFixed(6), lng = ll.lng.toFixed(6);
+  const lat6 = lat.toFixed(6), lon6 = lon.toFixed(6);
 
-  // Build popup
   let html = `<div style="font-family:system-ui;line-height:1.6;font-size:13px">`;
-  html += `<b>📍</b> <code style="background:#f0f0f0;padding:2px 6px;border-radius:3px">${lat}, ${lng}</code><br><br>`;
+  html += `<b>📍</b> <code style="background:#f0f0f0;padding:2px 6px;border-radius:3px">${lat6}, ${lon6}</code>`;
+  html += ` <span style="color:#888;font-size:10px">z${z} (${info.pixelX},${info.pixelY})</span><br><br>`;
 
-  if (!cadList.length && !geoItems.length){
+  if(!cadList.length && !geoItems.length){
     html += `<span style="color:#555">Участков не найдено</span>`;
-    html += `<br><small style="color:#888">Убедитесь, что кадастр включён и вы на российском IP</small>`;
+    html += `<br><small style="color:#888">GetFeatureInfo вернул пустой ответ. `+
+      `Убедитесь что кадастр включён и вы на российском IP, `+
+      `либо кликните точнее по контуру объекта.</small>`;
   } else {
-    // Merge: for each cad num show name + KML button if geometry exists
+    // Show items with geometry (GFI/WFS success)
     const shownNums = new Set();
-    // Items with cad number
-    geoItems.forEach((item, idx)=>{
-      if(!item.cadNum) return;
-      shownNums.add(item.cadNum);
-      const label = item.type==='oks'?'ОКС':item.type==='str'?'Сооружение':'ЗУ';
-      html += `• <b style="color:#d32f2f">${item.cadNum}</b> <span style="color:#888;font-size:10px">${label}</span> `;
-      html += `<a href="https://nspd.gov.ru/map?thematic=Default&zoom=17.5&selectedCard=${encodeURIComponent(item.cadNum)}" target="_blank" style="color:#1976d2">↗</a>`;
-      html += ` <button onclick="saveContourToKML(${idx})" style="background:rgba(160,32,240,.2);border:1px solid rgba(160,32,240,.5);color:#d070ff;border-radius:4px;padding:1px 8px;cursor:pointer;font-size:11px;margin-left:3px">💾 KML</button><br>`;
+    geoItems.filter(i=>i.geom&&!i.visualHit).forEach((item,_)=>{
+      const idx = window._pendingContours.indexOf(item);
+      if(item.cadNum) shownNums.add(item.cadNum);
+      const typeLabel = item.type==='oks'?'ОКС':item.type==='str'?'Соор.':'Кв.';
+      html += `• <b style="color:#d32f2f">${item.cadNum||'?'}</b> `+
+        `<span style="color:#888;font-size:10px">${typeLabel}</span> `;
+      if(item.cadNum) html += `<a href="https://nspd.gov.ru/map?thematic=Default&zoom=17.5&selectedCard=${encodeURIComponent(item.cadNum)}" `+
+        `target="_blank" style="color:#1976d2">↗</a> `;
+      html += `<button onclick="saveContourToKML(${idx})" style="background:rgba(160,32,240,.2);border:1px solid rgba(160,32,240,.5);color:#d070ff;border-radius:4px;padding:1px 8px;cursor:pointer;font-size:11px">💾 KML</button><br>`;
     });
-    // Items without cad number (geometry only)
-    geoItems.filter(i=>!i.cadNum).forEach((item,ri)=>{
-      const idx = geoItems.indexOf(item);
-      html += `• <i style="color:#888">геометрия ${ri+1}</i> <button onclick="saveContourToKML(${idx})" style="background:rgba(160,32,240,.2);border:1px solid rgba(160,32,240,.5);color:#d070ff;border-radius:4px;padding:1px 8px;cursor:pointer;font-size:11px">💾 KML</button><br>`;
-    });
-    // Cad numbers from text/html that have no geometry
+    // Cad numbers from text/html without geometry
     cadList.filter(c=>!shownNums.has(c)).forEach(c=>{
-      html += `• <b style="color:#d32f2f">${c}</b> <a href="https://nspd.gov.ru/map?thematic=Default&zoom=17.5&selectedCard=${encodeURIComponent(c)}" target="_blank" style="color:#1976d2">↗</a> <span style="color:#888;font-size:10px">(нет геом.)</span><br>`;
+      html += `• <b style="color:#d32f2f">${c}</b> `+
+        `<a href="https://nspd.gov.ru/map?thematic=Default&zoom=17.5&selectedCard=${encodeURIComponent(c)}" `+
+        `target="_blank" style="color:#1976d2">↗</a> `+
+        `<span style="color:#888;font-size:10px">(нет геометрии)</span><br>`;
+    });
+    // Visual-only hits (tile pixel is colored but GFI returned nothing)
+    geoItems.filter(i=>i.visualHit).forEach((item,ri)=>{
+      const idx = window._pendingContours.indexOf(item);
+      const typeLabel = item.type==='oks'?'ОКС':item.type==='str'?'Соор.':'Кв.';
+      html += `• <i style="color:#aaa">${typeLabel} (тайл подтверждён, ID неизвестен)</i> `+
+        `<button onclick="saveContourKMLFromTile(${idx})" style="background:rgba(71,200,255,.15);border:1px solid rgba(71,200,255,.4);color:var(--accent2);border-radius:4px;padding:1px 8px;cursor:pointer;font-size:11px">📐 Контур тайла</button><br>`;
     });
   }
   html += '</div>';
-  L.popup({maxWidth:360}).setLatLng(ll).setContent(html).openOn(map);
+  L.popup({maxWidth:380}).setLatLng(window.lastClickedPoint).setContent(html).openOn(map);
   setTimeout(updateCadastreCacheInfo, 2000);
 }
 
-// Find cadastral number in WFS feature properties — MapServer uses various field names
 function _findCadNum(props){
-  const keys = ['cad_num','CAD_NUM','KAD_NUM','kadnum','cadastral_number',
-                 'KADN','kn','CN','cadnum','cadastrenum'];
+  const keys=['cad_num','CAD_NUM','KAD_NUM','kadnum','cadastral_number','KADN','kn','CN'];
   for(const k of keys){
     const v = props[k];
     if(v && /\d{2}:\d{2,3}:\d{6,10}:\d{1,6}/.test(String(v))) return String(v).trim();
   }
-  // Try any property that looks like a cad number
   for(const v of Object.values(props)){
-    if(v && typeof v==='string' && /^\d{2}:\d{2,3}:\d{6,10}:\d{1,6}$/.test(v.trim()))
-      return v.trim();
+    if(v && typeof v==='string' && /^\d{2}:\d{2,3}:\d{6,10}:\d{1,6}$/.test(v.trim())) return v.trim();
   }
   return null;
 }
 
-// Save geometry contour to KML + ask user to confirm cad number
+function _parseGMLResponse(gmlText, layerId){
+  if(!gmlText||gmlText.length<20) return[];
+  try {
+    const doc = new DOMParser().parseFromString(gmlText,'text/xml');
+    if(doc.querySelector('parsererror')) return[];
+    const geom = _extractGMLGeom(doc);
+    if(!geom) return[];
+    const cadNum = _gmlProp(doc,['cad_num','CAD_NUM','KAD_NUM'])||'';
+    const props = {
+      area_value:    _gmlProp(doc,['area_value','area','AREA']),
+      category_type: _gmlProp(doc,['category_type','category']),
+      util_by_doc:   _gmlProp(doc,['util_by_doc','use','vri']),
+      name:          _gmlProp(doc,['name','obj_name']),
+      purpose_name:  _gmlProp(doc,['purpose_name','purpose']),
+    };
+    return[{cadNum, geom, props}];
+  }catch(_){return[];}
+}
+
+function _extractGMLGeom(doc){
+  // GML2: <gml:coordinates>x,y x,y ...</gml:coordinates>
+  const coordEl = doc.querySelector('coordinates');
+  if(coordEl){
+    const pairs = coordEl.textContent.trim().split(/\s+/);
+    const coords = pairs.map(p=>{const[x,y]=p.split(',').map(Number);return _toWGS84pair([x,y]);}).filter(c=>!isNaN(c[0]));
+    if(coords.length>2) return{type:'Polygon',coordinates:[coords]};
+  }
+  // GML3: <gml:posList>x y x y ...</gml:posList>
+  const posEl = doc.querySelector('posList');
+  if(posEl){
+    const nums=posEl.textContent.trim().split(/\s+/).map(Number);
+    const coords=[];
+    for(let i=0;i<nums.length-1;i+=2) coords.push(_toWGS84pair([nums[i],nums[i+1]]));
+    if(coords.length>2) return{type:'Polygon',coordinates:[coords]};
+  }
+  const posEl2=doc.querySelector('pos');
+  if(posEl2){
+    const[x,y]=posEl2.textContent.trim().split(/\s+/).map(Number);
+    if(!isNaN(x)) return{type:'Point',coordinates:_toWGS84pair([x,y])};
+  }
+  return null;
+}
+
+function _gmlProp(doc,names){
+  for(const n of names){
+    const el=doc.querySelector(n);
+    if(el&&el.textContent.trim()) return el.textContent.trim();
+    const all=doc.querySelectorAll('*');
+    for(const e of all){if(e.localName?.toLowerCase()===n.toLowerCase()&&e.textContent.trim())return e.textContent.trim();}
+  }
+  return null;
+}
+
+// Save polygon contour from GFI/WFS result
 function saveContourToKML(idx){
   const item = window._pendingContours?.[idx];
-  if(!item){ showToast('Данные контура не найдены','error',3000); return; }
+  if(!item||!item.geom){ showToast('Нет геометрии для сохранения','error',3000); return; }
 
-  const defaultNum = item.cadNum || '';
+  const defaultNum = item.cadNum||'';
   const cadNum = prompt('Подтвердите или введите кадастровый номер:', defaultNum);
   if(cadNum===null) return;
   const finalNum = (cadNum||defaultNum||'без_номера').trim();
 
-  const type  = item.type || 'zu';
+  const type  = item.type||'oks';
   const geom  = item.geom;
-  const p     = item.props || {};
+  const p     = item.props||{};
   const lines = type==='zu'
-    ? [[p.area_value&&'Площадь'||'', p.area_value||''].filter(x=>x),
-       [p.category_type&&'Категория'||'', p.category_type||''].filter(x=>x),
-       [p.util_by_doc&&'ВРИ'||'', p.util_by_doc||''].filter(x=>x)].filter(l=>l.length===2)
-    : [[p.area_value&&'Площадь общая'||'', p.area_value||''].filter(x=>x),
-       [p.name&&'Наименование'||'', p.name||''].filter(x=>x),
-       [p.purpose_name&&'Назначение'||'', p.purpose_name||''].filter(x=>x)].filter(l=>l.length===2);
+    ? [p.area_value&&['Площадь',p.area_value],p.category_type&&['Категория',p.category_type],p.util_by_doc&&['ВРИ',p.util_by_doc]].filter(Boolean)
+    : [p.area_value&&['Площадь общая',p.area_value],p.name&&['Наименование',p.name],p.purpose_name&&['Назначение',p.purpose_name]].filter(Boolean);
 
-  // Render on map with CAD_STYLES
-  const s  = CAD_STYLES[type==='oks'||type==='str'?type==='str'?'oks':'oks':'zu'];
+  _renderAndSaveKML(finalNum, type, geom, lines);
+}
+
+// Save tile bounding box as approximate contour (visual-only hit)
+function saveContourKMLFromTile(idx){
+  const item = window._pendingContours?.[idx];
+  if(!item?.tileInfo){ showToast('Нет данных тайла','error',3000); return; }
+
+  const cadNum = prompt('Введите кадастровый номер (необязательно):', '')||'tile_contour';
+  if(cadNum===null) return;
+
+  const ti = item.tileInfo;
+  // Build bbox polygon from tile bounds (WGS84)
+  const lat1 = Math.atan(Math.sinh(Math.PI*(1 - 2*ti.tileY/Math.pow(2,18))))*180/Math.PI;
+  const lat2 = Math.atan(Math.sinh(Math.PI*(1 - 2*(ti.tileY+1)/Math.pow(2,18))))*180/Math.PI;
+  const lon1 = ti.bboxMinX / _R * 180;
+  const lon2 = ti.bboxMaxX / _R * 180;
+  const geom = {type:'Polygon',coordinates:[
+    [[lon1,lat1],[lon2,lat1],[lon2,lat2],[lon1,lat2],[lon1,lat1]]
+  ]};
+
+  showToast('⚠ Сохраняется контур тайла (~150×150м), не объекта','warn',5000);
+  _renderAndSaveKML(cadNum, item.type||'oks', geom, []);
+}
+
+function _renderAndSaveKML(finalNum, type, geom, lines){
+  // Render on map
+  const s = CAD_STYLES[type==='str'?'oks':type] || CAD_STYLES.oks;
   const ll = pkkGeomToLeaflet(geom);
   if(ll){
     const opts={color:s.color,weight:s.weight,fillColor:s.fillColor,fillOpacity:1,interactive:true};
@@ -903,9 +1073,8 @@ function saveContourToKML(idx){
       try{map.fitBounds(layer.getBounds(),{padding:[40,40],maxZoom:18});}catch(_){}
     }
   }
-
-  // KML parts + append to layer / download
-  const parts = _cadToKML(finalNum, type==='str'?'oks':type, geom, lines);
+  // Append to KML layer + download
+  const parts = _cadToKML(finalNum,type==='str'?'oks':type,geom,lines);
   const targetIdx = kmlLayers.findIndex(l=>l.visible);
   if(targetIdx>=0){
     const tgt=kmlLayers[targetIdx];
@@ -913,15 +1082,19 @@ function saveContourToKML(idx){
     tgt.cadPlacemarks.push({cadNum:finalNum,type,geom,lines,parts});
     tgt.placemarkCount=(tgt.placemarkCount||0)+1;
     renderKMLDropdown();
-    showToast(`✅ Контур «${finalNum}» → «${tgt.docName||tgt.filename}»`,'success',3000);
+    showToast(`✅ «${finalNum}» → «${tgt.docName||tgt.filename}»`,'success',3000);
   }else{
     const lg=L.layerGroup().addTo(map);
-    const entry={filename:'Контуры.kml',docName:'Контуры',layerGroup:lg,visible:true,placemarkCount:1,
-                 cadPlacemarks:[{cadNum:finalNum,type,geom,lines,parts}]};
+    const entry={filename:'Контуры.kml',docName:'Контуры',layerGroup:lg,visible:true,
+                 placemarkCount:1,cadPlacemarks:[{cadNum:finalNum,type,geom,lines,parts}]};
     kmlLayers.push(entry); updateKMLButton();
     showToast(`✅ Создан слой «Контуры» — ${finalNum}`,'success',3000);
   }
-  const xml=`<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document>\n${parts.style}\n${parts.placemark}\n</Document></kml>`;
+  const xml=`<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document>
+${parts.style}
+${parts.placemark}
+</Document></kml>`;
   const blob=new Blob([xml],{type:'application/vnd.google-earth.kml+xml'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`${finalNum.replace(/:/g,'_')}.kml`;a.click();
   map.closePopup();
