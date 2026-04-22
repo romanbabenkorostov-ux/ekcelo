@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.4</title>
+<title>EkceloFoto v2.9.5</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -284,6 +284,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .cad-layer-label{flex:1;color:var(--text)}
 #layer-btn{position:absolute;top:12px;right:12px;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 11px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);cursor:pointer;transition:all .15s}
 #layer-btn:hover{border-color:var(--accent2);color:var(--accent2)}
+#map{transition:background .25s ease}
 #cadastre-opacity{display:none}
 #cadastre-cache-info{position:absolute;top:80px;right:110px;z-index:600;display:none;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:3px 8px;cursor:pointer}
 #cadastre-cache-info.visible{display:block}
@@ -390,7 +391,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.4</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.5</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -569,7 +570,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
       </div>
     </div>
   </div>
-  <button id="layer-btn"    onclick="toggleLayer()">🛰 Спутник</button>
+  <button id="layer-btn" onclick="toggleLayer()" title="Переключить на спутниковый снимок">🛰 Спутник</button>
   <div id="progress-bar" style="width:0"></div>
   <div id="cadastre-cache-info" title="Нажмите для очистки" onclick="clearCadastreCache()"></div>
 
@@ -641,10 +642,17 @@ map.attributionControl.setPrefix(false);
 L.control.scale({imperial:false,metric:true,position:'bottomleft'}).addTo(map);
 const TILES={
   osm:L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:22,maxNativeZoom:19}),
-  sat:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri',maxZoom:22,maxNativeZoom:19})
+  sat:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri',maxZoom:22,maxNativeZoom:19}),
+  // White background: 1×1 white PNG tile — no imagery, just clean background for contour parsing
+  white:L.tileLayer('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==',{attribution:'',maxZoom:22,opacity:0})
 };
 TILES.osm.addTo(map);
 let currentLayer='osm';
+
+// Apply white-bg CSS when in white mode
+function _setMapBg(white){
+  document.getElementById('map').style.background = white ? '#ffffff' : '';
+}
 
 // ── ZOOM INDICATOR ────────────────────────────────────────────────
 function updateZoomIndicator(){
@@ -1266,7 +1274,31 @@ ${parts.placemark}
 }
 
 
-function toggleLayer(){const btn=document.getElementById('layer-btn');if(currentLayer==='osm'){map.removeLayer(TILES.osm);TILES.sat.addTo(map);currentLayer='sat';btn.textContent='🗺 OSM';}else{map.removeLayer(TILES.sat);TILES.osm.addTo(map);currentLayer='osm';btn.textContent='🛰 Спутник';}}
+function toggleLayer(){
+  const btn=document.getElementById('layer-btn');
+  if(currentLayer==='osm'){
+    map.removeLayer(TILES.osm);
+    TILES.sat.addTo(map);
+    currentLayer='sat';
+    btn.textContent='⬜ Белый';
+    btn.title='Переключить на белый фон';
+    btn.style.cssText='';
+  } else if(currentLayer==='sat'){
+    map.removeLayer(TILES.sat);
+    _setMapBg(true);
+    currentLayer='white';
+    btn.textContent='🗺 OSM';
+    btn.title='Переключить на схему OSM';
+    btn.style.cssText='border-color:#aaa;color:#888';
+  } else {
+    _setMapBg(false);
+    TILES.osm.addTo(map);
+    currentLayer='osm';
+    btn.textContent='🛰 Спутник';
+    btn.title='Переключить на спутниковый снимок';
+    btn.style.cssText='';
+  }
+}
 
 map.on('click',function(e){
   if(manualGPSActive){handleMapClickForGPS(e);return;}
