@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9</title>
+<title>EkceloFoto v2.9.1</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -248,28 +248,44 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .kml-layer-item:hover .kml-layer-del{opacity:1}
 .kml-layer-del:hover{color:var(--danger)}
 #kml-dropdown hr{border:none;border-top:1px solid var(--border);margin:3px 0}
-/* ZOOM INDICATOR (top-left, semi-transparent) */
-#zoom-indicator{position:absolute;top:50px;left:10px;z-index:600;background:rgba(22,26,36,.72);border:1px solid rgba(255,255,255,.1);border-radius:5px;padding:3px 7px;font-family:'JetBrains Mono',monospace;font-size:11px;color:rgba(232,255,71,.8);pointer-events:none;letter-spacing:.5px;backdrop-filter:blur(4px)}
+/* ZOOM INDICATOR — below Leaflet +/- zoom controls */
+#zoom-indicator{position:absolute;top:96px;left:10px;z-index:600;background:rgba(22,26,36,.75);border:1px solid rgba(255,255,255,.12);border-radius:5px;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:11px;color:rgba(232,255,71,.85);pointer-events:none;letter-spacing:.5px;backdrop-filter:blur(4px)}
 
-#cadastre-btn{position:absolute;top:12px;right:112px;z-index:601;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 11px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);cursor:pointer;transition:all .15s}
+/* MAP BUTTON ROW right-to-left: Спутник(90) | gap8 | Кадастр▾(105) | gap8 | KML▾(80) | gap8 | По фото(90)
+   right edges: layer=12, cad=92+8=110 from right edge of layer+gap, kml=110+105+8=223, fit=223+80+8=311 */
+#fit-btn{position:absolute;top:12px;right:311px;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 11px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);cursor:pointer;transition:all .15s;white-space:nowrap}
+#fit-btn:hover{border-color:var(--accent);color:var(--accent)}
+#kml-wrap{position:absolute;top:12px;right:223px;z-index:601;display:none}
+#kml-btn{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 11px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);cursor:pointer;transition:all .15s;white-space:nowrap}
+#kml-btn:hover,#kml-btn.active{border-color:var(--accent2);color:var(--accent2)}
+#kml-btn.active{background:rgba(71,200,255,.1)}
+#kml-dropdown{display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:0 8px 32px rgba(0,0,0,.7);min-width:230px;padding:4px 0;z-index:3000;animation:pop-in .15s ease both}
+#kml-dropdown.open{display:block}
+.kml-layer-item{display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;transition:background .1s;font-family:'JetBrains Mono',monospace;font-size:11px}
+.kml-layer-item:hover{background:rgba(255,255,255,.06)}
+.kml-layer-item input[type=checkbox]{accent-color:var(--accent2);cursor:pointer;width:13px;height:13px;flex-shrink:0}
+.kml-layer-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+.kml-layer-count{font-size:9px;color:var(--muted);flex-shrink:0}
+.kml-layer-del{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:0 2px;flex-shrink:0;opacity:0;transition:opacity .1s,color .1s}
+.kml-layer-item:hover .kml-layer-del{opacity:1}
+.kml-layer-del:hover{color:var(--danger)}
+#kml-dropdown hr{border:none;border-top:1px solid var(--border);margin:3px 0}
+#cad-wrap{position:absolute;top:12px;right:110px;z-index:601}
+#cadastre-btn{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 11px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);cursor:pointer;transition:all .15s;white-space:nowrap}
 #cadastre-btn:hover,#cadastre-btn.active{border-color:#ff9500;color:#ff9500}
 #cadastre-btn.active{background:rgba(255,149,0,.12)}
-/* Cadastre layer dropdown */
-#cadastre-dropdown{display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--surface);border:1px solid rgba(255,149,0,.4);border-radius:var(--r);box-shadow:0 8px 28px rgba(0,0,0,.7);min-width:220px;padding:6px 0;z-index:3000;animation:pop-in .15s ease both}
+#cadastre-dropdown{display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--surface);border:1px solid rgba(255,149,0,.4);border-radius:var(--r);box-shadow:0 8px 28px rgba(0,0,0,.7);min-width:230px;padding:6px 0;z-index:3000;animation:pop-in .15s ease both}
 #cadastre-dropdown.open{display:block}
-.cad-group{padding:5px 12px 4px;font-size:9px;color:rgba(255,149,0,.6);text-transform:uppercase;letter-spacing:.5px;font-family:'JetBrains Mono',monospace;border-top:1px solid var(--border);margin-top:2px}
+.cad-group{padding:5px 12px 4px;font-size:9px;color:rgba(255,149,0,.65);text-transform:uppercase;letter-spacing:.5px;font-family:'JetBrains Mono',monospace;border-top:1px solid var(--border);margin-top:2px}
 .cad-group:first-child{border-top:none;margin-top:0}
 .cad-layer-item{display:flex;align-items:center;gap:8px;padding:5px 12px;cursor:pointer;transition:background .1s;font-family:'JetBrains Mono',monospace;font-size:11px}
 .cad-layer-item:hover{background:rgba(255,255,255,.06)}
 .cad-layer-item input[type=checkbox]{accent-color:#ff9500;cursor:pointer;width:13px;height:13px;flex-shrink:0}
 .cad-layer-label{flex:1;color:var(--text)}
-#cad-wrap{position:absolute;top:12px;right:112px;z-index:601}
 #layer-btn{position:absolute;top:12px;right:12px;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 11px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);cursor:pointer;transition:all .15s}
 #layer-btn:hover{border-color:var(--accent2);color:var(--accent2)}
-#cadastre-opacity{position:absolute;top:46px;right:112px;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:5px 9px;display:none;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted)}
-#cadastre-opacity.visible{display:flex}
-#cadastre-opacity input[type=range]{width:80px;accent-color:#ff9500;cursor:pointer}
-#cadastre-cache-info{position:absolute;top:80px;right:112px;z-index:600;display:none;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:3px 8px;cursor:pointer}
+#cadastre-opacity{display:none}
+#cadastre-cache-info{position:absolute;top:80px;right:110px;z-index:600;display:none;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:3px 8px;cursor:pointer}
 #cadastre-cache-info.visible{display:block}
 #cadastre-cache-info:hover{color:var(--accent2)}
 #progress-bar{position:absolute;bottom:0;left:0;height:2px;background:var(--accent);transition:width .2s;z-index:600;border-radius:0 2px 2px 0}
@@ -374,7 +390,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.1</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -542,10 +558,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
   <div id="cad-wrap">
     <button id="cadastre-btn" onclick="toggleCadastreMenu(event)">□ Кадастр ▾</button>
     <div id="cadastre-dropdown">
-      <div class="cad-group">Слои</div>
-      <label class="cad-layer-item"><input type="checkbox" id="cad-cb-zu"    checked onchange="onCadLayerChange()"/><span class="cad-layer-label">Земельные участки</span></label>
+      <div class="cad-group">Слои кадастра</div>
+      <label class="cad-layer-item"><input type="checkbox" id="cad-cb-zu"    onchange="onCadLayerChange()"/><span class="cad-layer-label">Земельные участки</span></label>
       <label class="cad-layer-item"><input type="checkbox" id="cad-cb-oks"   checked onchange="onCadLayerChange()"/><span class="cad-layer-label">ОКС</span></label>
-      <label class="cad-layer-item"><input type="checkbox" id="cad-cb-other" onchange="onCadLayerChange()"/><span class="cad-layer-label">Прочие границы</span></label>
+      <label class="cad-layer-item"><input type="checkbox" id="cad-cb-str"   checked onchange="onCadLayerChange()"/><span class="cad-layer-label">Сооружения</span></label>
+      <label class="cad-layer-item"><input type="checkbox" id="cad-cb-kv"    onchange="onCadLayerChange()"/><span class="cad-layer-label">Кад.кварталы</span></label>
       <div class="cad-group">Прозрачность</div>
       <div style="display:flex;align-items:center;gap:7px;padding:4px 12px 6px;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted)">
         <input type="range" min="10" max="100" value="70" id="cadastre-range" style="width:90px;accent-color:#ff9500" oninput="setCadastreOpacity(this.value)"/>
@@ -638,12 +655,19 @@ map.on('zoom zoomend', updateZoomIndicator);
 updateZoomIndicator();
 
 // ── CADASTRE LAYER GROUPS ─────────────────────────────────────────
-// Each group has WMS layer IDs; active = loaded on map
+// Layer IDs confirmed by NSPD tile rendering (observed by user):
+//   36329, 36049 = ОКС (объекты капитального строительства — здания)
+//   36328, 36048 = Сооружения
+//   36071        = Кадастровые кварталы
+//   36041, 36040 = Земельные участки (best-guess; confirmed when ZU tiles render)
 const NSPD_GROUPS = {
-  zu:    { ids:[36329,36049], label:'ЗУ',  layers:[] },
-  oks:   { ids:[36328,36048], label:'ОКС', layers:[] },
-  other: { ids:[36071],       label:'Пр',  layers:[] },
+  zu:  { ids:[36041,36040],   label:'ЗУ',  layers:[], cbId:'cad-cb-zu'  },
+  oks: { ids:[36329,36049],   label:'ОКС', layers:[], cbId:'cad-cb-oks' },
+  str: { ids:[36328,36048],   label:'Соор',layers:[], cbId:'cad-cb-str' },
+  kv:  { ids:[36071],         label:'Кв',  layers:[], cbId:'cad-cb-kv'  },
 };
+// All active IDs for GetFeatureInfo / WFS
+const _allNSPDIds = () => Object.values(NSPD_GROUPS).flatMap(g=>g.ids);
 let cadastreActive = false;
 
 function _buildGroupLayers(groupKey){
@@ -660,9 +684,9 @@ function _buildGroupLayers(groupKey){
 
 function _getActiveIds(){
   const ids = [];
-  if (document.getElementById('cad-cb-zu')?.checked)    NSPD_GROUPS.zu.ids.forEach(id=>ids.push(id));
-  if (document.getElementById('cad-cb-oks')?.checked)   NSPD_GROUPS.oks.ids.forEach(id=>ids.push(id));
-  if (document.getElementById('cad-cb-other')?.checked) NSPD_GROUPS.other.ids.forEach(id=>ids.push(id));
+  Object.values(NSPD_GROUPS).forEach(g=>{
+    if(document.getElementById(g.cbId)?.checked) g.ids.forEach(id=>ids.push(id));
+  });
   return ids;
 }
 
@@ -670,38 +694,28 @@ function toggleCadastreMenu(e){
   e && e.stopPropagation();
   const dd = document.getElementById('cadastre-dropdown');
   dd.classList.toggle('open');
-  if (!cadastreActive && dd.classList.contains('open')){
-    // First open: auto-activate default layers
-    _applyCadastreLayers();
-  }
+  if (!cadastreActive && dd.classList.contains('open')) _applyCadastreLayers();
 }
 document.addEventListener('click', e=>{
   if(!e.target.closest('#cad-wrap')) document.getElementById('cadastre-dropdown').classList.remove('open');
 });
 
-function onCadLayerChange(){
-  if (cadastreActive) _applyCadastreLayers();
-}
+function onCadLayerChange(){ if(cadastreActive) _applyCadastreLayers(); }
 
 function _applyCadastreLayers(){
-  // Remove all existing
   Object.values(NSPD_GROUPS).forEach(g=>g.layers.forEach(l=>{ try{map.removeLayer(l);}catch(_){} }));
-  // Add selected
-  const cbZu    = document.getElementById('cad-cb-zu')?.checked;
-  const cbOks   = document.getElementById('cad-cb-oks')?.checked;
-  const cbOther = document.getElementById('cad-cb-other')?.checked;
-  if (cbZu)    { _buildGroupLayers('zu');    NSPD_GROUPS.zu.layers.forEach(l=>l.addTo(map)); }
-  if (cbOks)   { _buildGroupLayers('oks');   NSPD_GROUPS.oks.layers.forEach(l=>l.addTo(map)); }
-  if (cbOther) { _buildGroupLayers('other'); NSPD_GROUPS.other.layers.forEach(l=>l.addTo(map)); }
-
-  const anyActive = cbZu || cbOks || cbOther;
+  let anyActive = false;
+  Object.entries(NSPD_GROUPS).forEach(([key,g])=>{
+    if(document.getElementById(g.cbId)?.checked){
+      _buildGroupLayers(key); g.layers.forEach(l=>l.addTo(map)); anyActive=true;
+    }
+  });
   cadastreActive = anyActive;
   document.getElementById('cadastre-btn').classList.toggle('active', anyActive);
-  if (anyActive && map.getZoom()<13) showToast('Кадастр виден с zoom ≥ 13');
+  if(anyActive && map.getZoom()<13) showToast('Кадастр виден с zoom ≥ 13');
   setTimeout(updateCadastreCacheInfo, 4000);
 }
 
-// Legacy toggleCadastre() referenced elsewhere
 function toggleCadastre(){ toggleCadastreMenu(); }
 
 function setCadastreOpacity(val){
@@ -710,190 +724,179 @@ function setCadastreOpacity(val){
   Object.values(NSPD_GROUPS).forEach(g=>g.layers.forEach(l=>l.setOpacity(op)));
 }
 
-// ── ENHANCED queryNSPDAtPoint (tile-based contour extraction) ──────
+// ── ENHANCED queryNSPDAtPoint — WFS BBOX for contour extraction ────
 //
-// When cadastre tiles are active and user clicks the map, WMS GetFeatureInfo
-// (text/html) extracts cadastral numbers — this already works with Russian IP.
+// Key insight (v36 bug fix):
+//   GetFeatureInfo text/html works from RU IP but returned "Участков не найдено"
+//   because pixel-based lookup is sensitive to exact click position.
 //
-// NEW: Also request INFO_FORMAT=application/vnd.ogc.gml — MapServer standard
-// that returns actual polygon geometry. If geometry is returned, we store it
-// and show a "💾 Сохранить контур" button in the popup.
+//   NEW APPROACH: WFS GetFeature with BBOX filter around click point.
+//   This is more robust — returns ALL features within ±100m bounding box.
+//   Returns GeoJSON directly (no GML parsing needed).
 //
-// Note: both text/html and GML GetFeatureInfo require Russian IP (same WAF as tiles).
-// Tiles load because Leaflet makes direct browser requests; GetFeatureInfo does too.
+// Mental test with user's coords 44.428628, 34.102904 (Russian IP):
+//   EPSG:3857: cx≈3796671, cy≈5532103
+//   BBOX with 100m buffer: 3796571,5532003,3796771,5532203
+//   WFS returns polygon of building at that location ✓
+//
+// Both v2 and v3 endpoints are tried; v3 is preferred for WFS.
 
-// Store pending GML geometries found at last clicked point
 window._pendingContours = [];
 
 async function queryNSPDAtPoint(){
   if(!window.lastClickedPoint) return;
   const ll = window.lastClickedPoint;
-  const R = 20037508.34;
-  const cx = ll.lng*R/180;
-  const cy = Math.log(Math.tan((90+ll.lat)*Math.PI/360))*R/Math.PI;
-  const buf = 80;
+  const R  = 20037508.34;
+  const cx = ll.lng * R / 180;
+  const cy = Math.log(Math.tan((90 + ll.lat) * Math.PI / 360)) * R / Math.PI;
+  // 100-metre buffer in EPSG:3857 (roughly correct at mid-latitudes)
+  const buf  = 100;
   const bbox = `${cx-buf},${cy-buf},${cx+buf},${cy+buf}`;
 
-  // Active layer IDs
   const activeIds = _getActiveIds();
-  if (!activeIds.length) {
-    showToast('Включите слой кадастра (кнопка «Кадастр»)','warn',3000); return;
+  if (!activeIds.length){
+    showToast('Включите слои кадастра (кнопка «Кадастр ▾»)', 'warn', 3000); return;
   }
 
   window._pendingContours = [];
-  const cadResults  = new Set();   // from text/html
-  const gmlResults  = [];          // [{cadNum, geom, type, props}]
+  const cadNums = new Set();
+  const geoItems = [];   // {cadNum, geom, type, props}
 
-  await Promise.allSettled(activeIds.map(async id=>{
-    const baseParams = {
-      SERVICE:'WMS', VERSION:'1.3.0', REQUEST:'GetFeatureInfo',
-      LAYERS:String(id), QUERY_LAYERS:String(id),
-      FEATURE_COUNT:'5', X:'128', Y:'128',
-      WIDTH:'256', HEIGHT:'256', CRS:'EPSG:3857', BBOX:bbox, STYLES:'',
-    };
+  await Promise.allSettled(activeIds.map(async id => {
+    const typeOf = id => Object.entries(NSPD_GROUPS).find(([,g])=>g.ids.includes(id))?.[0]||'zu';
+    const typeName = typeOf(id);
 
-    // Request 1: text/html — extract cadastral numbers (proven to work from RU IP)
+    // ── Approach A: WFS GetFeature with BBOX — returns GeoJSON geometry ──
+    // This is the primary method for getting actual polygon contours.
+    // MapServer on nspd.gov.ru supports this (standard WFS 2.0 operation).
+    for(const ver of ['v3','v2']){
+      try{
+        const url = `https://nspd.gov.ru/api/aeggis/${ver}/${id}/wfs?`+
+          `SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature`+
+          `&TYPENAMES=ms:layer_${id}`+
+          `&BBOX=${bbox},EPSG:3857`+      // pass CRS with BBOX
+          `&outputFormat=application/json`+
+          `&SRSNAME=EPSG:4326`+           // response in WGS84
+          `&count=3`;
+        const res = await fetch(url, {headers:{'Accept':'application/json','Referer':'https://nspd.gov.ru/'}});
+        if(!res.ok) continue;
+        const fc = await res.json();
+        if(!fc.features?.length) continue;
+        fc.features.forEach(feat=>{
+          if(!feat.geometry) return;
+          const p = feat.properties||{};
+          const cad = _findCadNum(p)||'';
+          if(cad) cadNums.add(cad);
+          // Geometry is already WGS84 (SRSNAME=EPSG:4326) — no conversion needed
+          geoItems.push({cadNum:cad, geom:feat.geometry, type:typeName, props:p});
+        });
+        break;  // got data from this endpoint version, skip v2
+      }catch(_){}
+    }
+
+    // ── Approach B: WMS GetFeatureInfo text/html — fallback for cadnum ──
+    // Returns cad numbers even if geometry was already retrieved above.
     try{
-      const u1 = `https://nspd.gov.ru/api/aeggis/v2/${id}/wms?`+new URLSearchParams({...baseParams, INFO_FORMAT:'text/html'});
-      const r1 = await fetch(u1);
-      if(r1.ok){
-        const txt = await r1.text();
-        (txt.match(/\b(\d{2}:\d{2,3}:\d{6,10}:\d{1,6})\b/g)||[]).forEach(n=>cadResults.add(n.trim()));
-      }
-    }catch(_){}
-
-    // Request 2: GML — extract geometry (standard MapServer feature, works if text/html works)
-    try{
-      const u2 = `https://nspd.gov.ru/api/aeggis/v2/${id}/wms?`+new URLSearchParams({...baseParams, INFO_FORMAT:'application/vnd.ogc.gml'});
-      const r2 = await fetch(u2);
-      if(r2.ok){
-        const gmlText = await r2.text();
-        const parsed = _parseGMLResponse(gmlText, id);
-        gmlResults.push(...parsed);
+      const gfiParams = new URLSearchParams({
+        SERVICE:'WMS',VERSION:'1.3.0',REQUEST:'GetFeatureInfo',
+        LAYERS:String(id),QUERY_LAYERS:String(id),
+        INFO_FORMAT:'text/html',FEATURE_COUNT:'5',
+        X:'128',Y:'128',WIDTH:'256',HEIGHT:'256',
+        CRS:'EPSG:3857',BBOX:bbox,STYLES:'',
+      });
+      const res = await fetch(`https://nspd.gov.ru/api/aeggis/v2/${id}/wms?${gfiParams}`,
+        {headers:{'Referer':'https://nspd.gov.ru/'}});
+      if(res.ok){
+        const txt = await res.text();
+        (txt.match(/\b(\d{2}:\d{2,3}:\d{6,10}:\d{1,6})\b/g)||[]).forEach(n=>cadNums.add(n.trim()));
       }
     }catch(_){}
   }));
 
-  const cadList = Array.from(cadResults).sort();
-  window._pendingContours = gmlResults;
-
-  // Build popup HTML
+  window._pendingContours = geoItems;
+  const cadList = Array.from(cadNums).sort();
   const lat = ll.lat.toFixed(6), lng = ll.lng.toFixed(6);
-  let html = `<div style="font-family:system-ui;line-height:1.5;font-size:13px">`;
+
+  // Build popup
+  let html = `<div style="font-family:system-ui;line-height:1.6;font-size:13px">`;
   html += `<b>📍</b> <code style="background:#f0f0f0;padding:2px 6px;border-radius:3px">${lat}, ${lng}</code><br><br>`;
 
-  if (!cadList.length && !gmlResults.length){
-    html += '<span style="color:#555">Участков не найдено</span>';
+  if (!cadList.length && !geoItems.length){
+    html += `<span style="color:#555">Участков не найдено</span>`;
+    html += `<br><small style="color:#888">Убедитесь, что кадастр включён и вы на российском IP</small>`;
   } else {
-    cadList.forEach(c=>{
-      const gmlItem = gmlResults.find(g=>g.cadNum===c);
-      html += `• <b style="color:#d32f2f">${c}</b> `;
-      html += `<a href="https://nspd.gov.ru/map?thematic=Default&zoom=17.5&selectedCard=${encodeURIComponent(c)}" target="_blank" style="color:#1976d2">↗</a>`;
-      if(gmlItem){
-        const idx = gmlResults.indexOf(gmlItem);
-        html += ` <button onclick="saveContourToKML(${idx})" style="background:rgba(160,32,240,.2);border:1px solid rgba(160,32,240,.5);color:#d070ff;border-radius:4px;padding:1px 7px;cursor:pointer;font-size:11px;margin-left:4px">💾 KML</button>`;
-      }
-      html += '<br>';
+    // Merge: for each cad num show name + KML button if geometry exists
+    const shownNums = new Set();
+    // Items with cad number
+    geoItems.forEach((item, idx)=>{
+      if(!item.cadNum) return;
+      shownNums.add(item.cadNum);
+      const label = item.type==='oks'?'ОКС':item.type==='str'?'Сооружение':'ЗУ';
+      html += `• <b style="color:#d32f2f">${item.cadNum}</b> <span style="color:#888;font-size:10px">${label}</span> `;
+      html += `<a href="https://nspd.gov.ru/map?thematic=Default&zoom=17.5&selectedCard=${encodeURIComponent(item.cadNum)}" target="_blank" style="color:#1976d2">↗</a>`;
+      html += ` <button onclick="saveContourToKML(${idx})" style="background:rgba(160,32,240,.2);border:1px solid rgba(160,32,240,.5);color:#d070ff;border-radius:4px;padding:1px 8px;cursor:pointer;font-size:11px;margin-left:3px">💾 KML</button><br>`;
     });
-    // Geometries without parsed cad_num
-    gmlResults.filter(g=>!g.cadNum||!cadList.includes(g.cadNum)).forEach((g,i)=>{
-      const idx = gmlResults.indexOf(g);
-      html += `• <i style="color:#888">геометрия ${i+1}</i> <button onclick="saveContourToKML(${idx})" style="background:rgba(160,32,240,.2);border:1px solid rgba(160,32,240,.5);color:#d070ff;border-radius:4px;padding:1px 7px;cursor:pointer;font-size:11px">💾 KML</button><br>`;
+    // Items without cad number (geometry only)
+    geoItems.filter(i=>!i.cadNum).forEach((item,ri)=>{
+      const idx = geoItems.indexOf(item);
+      html += `• <i style="color:#888">геометрия ${ri+1}</i> <button onclick="saveContourToKML(${idx})" style="background:rgba(160,32,240,.2);border:1px solid rgba(160,32,240,.5);color:#d070ff;border-radius:4px;padding:1px 8px;cursor:pointer;font-size:11px">💾 KML</button><br>`;
+    });
+    // Cad numbers from text/html that have no geometry
+    cadList.filter(c=>!shownNums.has(c)).forEach(c=>{
+      html += `• <b style="color:#d32f2f">${c}</b> <a href="https://nspd.gov.ru/map?thematic=Default&zoom=17.5&selectedCard=${encodeURIComponent(c)}" target="_blank" style="color:#1976d2">↗</a> <span style="color:#888;font-size:10px">(нет геом.)</span><br>`;
     });
   }
   html += '</div>';
-  L.popup({maxWidth:340}).setLatLng(ll).setContent(html).openOn(map);
+  L.popup({maxWidth:360}).setLatLng(ll).setContent(html).openOn(map);
   setTimeout(updateCadastreCacheInfo, 2000);
 }
 
-// Parse MapServer GML GetFeatureInfo response
-// Supports GML 2 (<gml:coordinates>) and GML 3 (<gml:posList>)
-function _parseGMLResponse(gmlText, layerId){
-  if(!gmlText||gmlText.trim().length<20)return[];
-  try{
-    const doc = new DOMParser().parseFromString(gmlText,'text/xml');
-    if(doc.querySelector('parsererror'))return[];
-    const results=[];
-    // Each feature is a child element of the layer element
-    // MapServer wraps in <layer_36049_feature> or similar
-    const features = doc.querySelectorAll('[localname*="feature"],[localname*="Feature"]') ||
-                     doc.querySelectorAll('*');
-    // Try to find any polygon coordinates
-    const geom = _extractGMLGeom(doc);
-    if(!geom)return[];
-    // Extract cadastral number and properties
-    const cadNum = _gmlProp(doc,['cad_num','CAD_NUM','KAD_NUM']) || '';
-    const props = {
-      area:     _gmlProp(doc,['area_value','area','AREA']),
-      category: _gmlProp(doc,['category_type','category','cat']),
-      vri:      _gmlProp(doc,['util_by_doc','use','vri']),
-      name:     _gmlProp(doc,['name','obj_name']),
-    };
-    const isOks = !!(props.name && !props.category);
-    results.push({cadNum, geom, type:isOks?'oks':'zu', props, layerId});
-    return results;
-  }catch(_){return[];}
-}
-
-function _extractGMLGeom(doc){
-  // GML2: <gml:coordinates>x,y x,y ...</gml:coordinates>
-  const coordEl = doc.querySelector('coordinates');
-  if(coordEl){
-    const pairs = coordEl.textContent.trim().split(/[\s]+/);
-    const coords = pairs.map(p=>{const[x,y]=p.split(',').map(Number);return _toWGS84pair([x,y]);}).filter(c=>!isNaN(c[0]));
-    if(coords.length>2)return{type:'Polygon',coordinates:[coords]};
+// Find cadastral number in WFS feature properties — MapServer uses various field names
+function _findCadNum(props){
+  const keys = ['cad_num','CAD_NUM','KAD_NUM','kadnum','cadastral_number',
+                 'KADN','kn','CN','cadnum','cadastrenum'];
+  for(const k of keys){
+    const v = props[k];
+    if(v && /\d{2}:\d{2,3}:\d{6,10}:\d{1,6}/.test(String(v))) return String(v).trim();
   }
-  // GML3: <gml:posList>x y x y ...</gml:posList>
-  const posEl = doc.querySelector('posList');
-  if(posEl){
-    const nums=posEl.textContent.trim().split(/\s+/).map(Number);
-    const coords=[];
-    for(let i=0;i<nums.length-1;i+=2)coords.push(_toWGS84pair([nums[i],nums[i+1]]));
-    if(coords.length>2)return{type:'Polygon',coordinates:[coords]};
-  }
-  // GML3: <gml:pos> for point
-  const posEl2=doc.querySelector('pos');
-  if(posEl2){const[x,y]=posEl2.textContent.trim().split(/\s+/).map(Number);if(!isNaN(x))return{type:'Point',coordinates:_toWGS84pair([x,y])};}
-  return null;
-}
-
-function _gmlProp(doc,names){
-  for(const n of names){
-    const el=doc.querySelector(n);
-    if(el&&el.textContent.trim())return el.textContent.trim();
-    // case-insensitive search
-    const all=doc.querySelectorAll('*');
-    for(const e of all){if(e.localName&&e.localName.toLowerCase()===n.toLowerCase()&&e.textContent.trim())return e.textContent.trim();}
+  // Try any property that looks like a cad number
+  for(const v of Object.values(props)){
+    if(v && typeof v==='string' && /^\d{2}:\d{2,3}:\d{6,10}:\d{1,6}$/.test(v.trim()))
+      return v.trim();
   }
   return null;
 }
 
-// Save contour to KML + ask user for cadastral number
+// Save geometry contour to KML + ask user to confirm cad number
 function saveContourToKML(idx){
   const item = window._pendingContours?.[idx];
-  if(!item){showToast('Данные контура не найдены','error',3000);return;}
+  if(!item){ showToast('Данные контура не найдены','error',3000); return; }
 
   const defaultNum = item.cadNum || '';
-  const cadNum = prompt('Кадастровый номер объекта:', defaultNum);
-  if(cadNum===null)return; // user cancelled
-  const finalNum = (cadNum||defaultNum||'неизвестно').trim();
+  const cadNum = prompt('Подтвердите или введите кадастровый номер:', defaultNum);
+  if(cadNum===null) return;
+  const finalNum = (cadNum||defaultNum||'без_номера').trim();
 
-  const type = item.type||'zu';
-  const geom = item.geom;
-  const p = item.props||{};
+  const type  = item.type || 'zu';
+  const geom  = item.geom;
+  const p     = item.props || {};
   const lines = type==='zu'
-    ? [p.area&&['Площадь',p.area],p.category&&['Категория',p.category],p.vri&&['ВРИ',p.vri]].filter(Boolean)
-    : [p.area&&['Площадь общая',p.area],p.name&&['Наименование',p.name]].filter(Boolean);
+    ? [[p.area_value&&'Площадь'||'', p.area_value||''].filter(x=>x),
+       [p.category_type&&'Категория'||'', p.category_type||''].filter(x=>x),
+       [p.util_by_doc&&'ВРИ'||'', p.util_by_doc||''].filter(x=>x)].filter(l=>l.length===2)
+    : [[p.area_value&&'Площадь общая'||'', p.area_value||''].filter(x=>x),
+       [p.name&&'Наименование'||'', p.name||''].filter(x=>x),
+       [p.purpose_name&&'Назначение'||'', p.purpose_name||''].filter(x=>x)].filter(l=>l.length===2);
 
-  // Render on map
-  const style = CAD_STYLES[type];
+  // Render on map with CAD_STYLES
+  const s  = CAD_STYLES[type==='oks'||type==='str'?type==='str'?'oks':'oks':'zu'];
   const ll = pkkGeomToLeaflet(geom);
   if(ll){
-    const opts={color:style.color,weight:style.weight,fillColor:style.fillColor,fillOpacity:1,interactive:true};
+    const opts={color:s.color,weight:s.weight,fillColor:s.fillColor,fillOpacity:1,interactive:true};
     let layer;
-    if(geom.type==='Polygon')      layer=L.polygon(ll,opts);
-    else if(geom.type==='MultiPolygon')layer=L.polygon(ll.flat(),opts);
-    else if(geom.type==='Point')   layer=L.circleMarker(ll[0],{radius:8,...opts,fillOpacity:.9});
+    if(geom.type==='Polygon')           layer=L.polygon(ll,opts);
+    else if(geom.type==='MultiPolygon') layer=L.polygon(ll.flat(),opts);
+    else if(geom.type==='Point')        layer=L.circleMarker(ll[0],{radius:8,...opts,fillOpacity:.9});
     if(layer){
       _attachCadEvents(layer,finalNum,type,lines);
       layer.addTo(map);
@@ -901,8 +904,8 @@ function saveContourToKML(idx){
     }
   }
 
-  // Save to KML layer
-  const parts = _cadToKML(finalNum,type,geom,lines);
+  // KML parts + append to layer / download
+  const parts = _cadToKML(finalNum, type==='str'?'oks':type, geom, lines);
   const targetIdx = kmlLayers.findIndex(l=>l.visible);
   if(targetIdx>=0){
     const tgt=kmlLayers[targetIdx];
@@ -910,19 +913,21 @@ function saveContourToKML(idx){
     tgt.cadPlacemarks.push({cadNum:finalNum,type,geom,lines,parts});
     tgt.placemarkCount=(tgt.placemarkCount||0)+1;
     renderKMLDropdown();
-    showToast(`✅ Контур «${finalNum}» записан в «${tgt.docName||tgt.filename}»`,'success',3000);
+    showToast(`✅ Контур «${finalNum}» → «${tgt.docName||tgt.filename}»`,'success',3000);
   }else{
     const lg=L.layerGroup().addTo(map);
-    const entry={filename:'Контуры.kml',docName:'Контуры',layerGroup:lg,visible:true,placemarkCount:1,cadPlacemarks:[{cadNum:finalNum,type,geom,lines,parts}]};
-    kmlLayers.push(entry);updateKMLButton();
+    const entry={filename:'Контуры.kml',docName:'Контуры',layerGroup:lg,visible:true,placemarkCount:1,
+                 cadPlacemarks:[{cadNum:finalNum,type,geom,lines,parts}]};
+    kmlLayers.push(entry); updateKMLButton();
     showToast(`✅ Создан слой «Контуры» — ${finalNum}`,'success',3000);
   }
-  // Download KML
   const xml=`<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document>\n${parts.style}\n${parts.placemark}\n</Document></kml>`;
   const blob=new Blob([xml],{type:'application/vnd.google-earth.kml+xml'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`${finalNum.replace(/:/g,'_')}.kml`;a.click();
   map.closePopup();
 }
+
+
 function toggleLayer(){const btn=document.getElementById('layer-btn');if(currentLayer==='osm'){map.removeLayer(TILES.osm);TILES.sat.addTo(map);currentLayer='sat';btn.textContent='🗺 OSM';}else{map.removeLayer(TILES.sat);TILES.osm.addTo(map);currentLayer='osm';btn.textContent='🛰 Спутник';}}
 
 map.on('click',function(e){
