@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.8</title>
+<title>EkceloFoto v2.9.9</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -418,7 +418,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.8</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.9</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -718,20 +718,30 @@ const TILES={
 TILES.osm.addTo(map);
 let currentLayer='osm';
 
-// Apply / restore white background for contour parsing mode
-// Uses cssText with !important via setAttribute to override dark theme
+// Apply / restore white background for contour parsing mode.
+// Restoration trick: setting `transparent !important` first, then removing inline
+// style on the next frame, lets the CSS rule (`.leaflet-container { background: #0d1117 }`)
+// take over cleanly. Plain removeProperty leaves a frame of "no inline style yet, CSS not
+// yet applied" → user sees a flash of body color. The two-step kills the flash.
 function _setMapBg(white){
   const mapEl = document.getElementById('map');
   mapEl.classList.toggle('bg-white-mode', white);
-  // Also force Leaflet container and all panes
   const all = [mapEl,
-    ...mapEl.querySelectorAll('.leaflet-container,.leaflet-map-pane,.leaflet-pane,.leaflet-tile-pane,.leaflet-overlay-pane')
+    ...mapEl.querySelectorAll(
+      '.leaflet-container,.leaflet-map-pane,.leaflet-pane,'+
+      '.leaflet-tile-pane,.leaflet-overlay-pane,.leaflet-shadow-pane'
+    )
   ];
-  all.forEach(el=>{
-    if(!el) return;
-    if(white){ el.style.setProperty('background', '#ffffff', 'important'); }
-    else      { el.style.removeProperty('background'); }
-  });
+  if(white){
+    all.forEach(el=>el.style.setProperty('background', '#ffffff', 'important'));
+  } else {
+    // Step 1: explicit transparent (no flash of stale white during repaint)
+    all.forEach(el=>el.style.setProperty('background', 'transparent', 'important'));
+    // Step 2: next frame, drop inline style → CSS rule for #map / .leaflet-container takes over
+    requestAnimationFrame(()=>{
+      all.forEach(el=>el.style.removeProperty('background'));
+    });
+  }
 }
 
 // ── ZOOM INDICATOR ────────────────────────────────────────────────
@@ -1119,11 +1129,6 @@ function saveContourToKML(idx){
   const item = window._pendingContours?.[idx];
   if(!item||!item.geom){ showToast('Нет геометрии для сохранения','error',3000); return; }
 
-  const defaultNum = item.cadNum||'';
-  const cadNum = prompt('Подтвердите или введите кадастровый номер:', defaultNum);
-  if(cadNum===null) return;
-  const finalNum = (cadNum||defaultNum||'без_номера').trim();
-
   const type  = item.type||'oks';
   const geom  = item.geom;
   const p     = item.props||{};
@@ -1131,52 +1136,48 @@ function saveContourToKML(idx){
     ? [p.area_value&&['Площадь',p.area_value],p.category_type&&['Категория',p.category_type],p.util_by_doc&&['ВРИ',p.util_by_doc]].filter(Boolean)
     : [p.area_value&&['Площадь общая',p.area_value],p.name&&['Наименование',p.name],p.purpose_name&&['Назначение',p.purpose_name]].filter(Boolean);
 
-  _renderAndSaveKML(finalNum, type, geom, lines);
+  // Pre-fill the dialog's description with cadastre attributes (площадь / категория / ВРИ etc.)
+  const prefillDesc = lines.map(([k,v])=>`${k}: ${v}`).join('; ');
+  showKMLSaveDialog(geom, type, item.cadNum||'', prefillDesc);
 }
 
-// Save tile bounding box as approximate contour (visual-only hit)
 // ── CONTOUR EXTRACTION FROM CADASTRE TILE ─────────────────────────
 //
-// Algorithm (radial sector sampling — v2.9.8):
+// Algorithm v46 — Moore-Neighbor boundary tracing + Ramer-Douglas-Peucker:
 //
-//   Problem with previous approaches:
-//     • Angle-sort: fails for non-star-shaped (concave) regions
-//     • Moore tracing: designed for 1-px thin boundaries; fails on thick (rasterised) fills
+//   Why this replaces the v45 radial-sector approach:
+//     • Radial 64/128 sectors collapse corners on elongated buildings (e.g. 60×20 px):
+//       the long axis fills 30+ short-radius sectors, the short axis only ~4, and after
+//       collinear removal the polygon points sit on edge midpoints, not real corners.
+//     • Boundary tracing follows the actual outline → corner positions are preserved.
+//     • Concave / L-shaped buildings (very common for industrial/villa complexes) are
+//       handled correctly — radial methods only cover star-shaped regions.
+//     • Mental walk-through, target zone Crimea 44.4292°N 34.1039°E (Сосновая роща), z18:
+//         a 12×8 px rectangle (вилла Аврора) → flood-fill ~96 px,
+//         Moore trace → ~36 boundary pixels in CW order,
+//         RDP eps=1.2 → 4 points = 4 actual corners. ✓
+//         An L-shaped building 30×30 px outer / 18×18 px notch → ~80 boundary pixels,
+//         RDP → 6 points (the 6 real corners of the L). ✓
 //
-//   Correct approach — RADIAL SECTOR SAMPLING:
-//   1. Fetch tile with TRANSPARENT=true → canvas → RGBA array
-//   2. BFS flood-fill from click pixel (alpha > THRESH=25)
-//      Guard: nFill < 8 (noise) or nFill > 60000 (background)
-//   3. Collect boundary pixels (filled + ≥1 transparent 4-neighbor)
-//   4. Compute centroid of filled region
-//   5. Divide the 360° circle into N_SECTORS=64 angular buckets from centroid
-//      For each bucket → keep the FARTHEST boundary pixel from centroid
-//      → naturally produces up to 64 ordered points, NO explicit sort needed
-//      → guaranteed to produce a non-self-intersecting (star-shaped) polygon
-//      → a rectangle gives exactly 4 sectors with extreme points = the 4 corners
-//   6. Collinear removal walk:
-//      From base A: skip point B if all points A..B lie on line A→next within eps=1.5px
-//      → removes all edge midpoints, keeps corners only
-//   7. Final subsample to ≤40 if still dense
-//   8. Pixel (px,py) → WGS84:
-//        lon = (tileX + px/256) / 2^z × 360 − 180
-//        lat = atan(sinh(π × (1 − 2×(tileY+py/256)/2^z))) × 180/π
-//   9. Close polygon → return GeoJSON Polygon
+//   Pipeline:
+//   1. Fetch WMS tile (TRANSPARENT=true) → canvas → RGBA → alpha mask (THRESH=25).
+//   2. BFS flood-fill 4-connected from click pixel (guards: nFill∈[8, 60000]).
+//   3. Pick start = topmost-leftmost filled pixel of the component (always on the
+//      OUTER boundary, never on a hole — this keeps us on the exterior ring).
+//   4. Moore-Neighbor tracing, 8-connected, clockwise; stop when we revisit start
+//      (Jacob-style "have-returned" flag with contour.length>4 fallback).
+//   5. Closed-polygon RDP: split contour at the point furthest from start, run RDP
+//      (eps=1.2 px) on each half, merge → faithful corner-preserving simplification.
+//   6. Hard cap MAX_PT=60 via uniform subsample if still dense.
+//   7. Pixel → WGS84 (Web Mercator inverse) using ti.z (the actual tile z, NOT
+//      hard-coded). Close ring with ring[0].
 //
-//  Mental test (44.431728, 34.099363) at z18:
-//    Building is a ~30×40px purple rectangle on the tile.
-//    BFS from click pixel collects ~1200 filled pixels.
-//    Centroid at ~(center of rectangle).
-//    64 sectors → ~32 non-empty (rect has 4 edge segments).
-//    Collinear removal → ~4-8 corner points. ✓
+// Save tile bounding box as approximate contour (visual-only hit)
 
-// Entry: save map state → white bg → parse → restore
+// Entry: save map state → white bg → parse → restore → open KML save dialog
 async function saveContourKMLFromTile(idx){
   const item = window._pendingContours?.[idx];
   if(!item?.tileInfo){ showToast('Нет данных тайла','error',3000); return; }
-
-  const cadNum = prompt('Введите кадастровый номер (необязательно):', '')||'tile_contour';
-  if(cadNum===null) return;
 
   // Save and switch to white background for cleaner visual context
   const prevLayer = currentLayer;
@@ -1194,7 +1195,7 @@ async function saveContourKMLFromTile(idx){
     console.warn('[contour]', e);
     showToast('❌ ' + (e.message||'Ошибка извлечения контура'), 'error', 5000);
   } finally {
-    // Always restore map state
+    // Always restore map state — happens BEFORE dialog opens, so user sees normal map
     _setMapBg(false);
     if(prevLayer==='osm')  TILES.osm.addTo(map);
     else if(prevLayer==='sat') TILES.sat.addTo(map);
@@ -1205,15 +1206,16 @@ async function saveContourKMLFromTile(idx){
   }
 
   if(!geom){ showToast('⚠ Объект не найден — кликните точнее внутри закрашенного контура','warn',5000); return; }
-  _renderAndSaveKML(cadNum, item.type||'oks', geom, []);
+  // Open save dialog instead of directly calling _renderAndSaveKML.
+  // No prompt() — cadNum is typed into the dialog (or pre-filled from item.cadNum if WFS knew it).
+  showKMLSaveDialog(geom, item.type||'oks', item.cadNum||'', '');
 }
 
 async function _extractTileContour(ti, layerId){
-  const W          = 256;
-  const THRESH     = 25;    // alpha threshold: cadastre fill vs transparent background
-  const N_SECTORS  = 64;    // angular buckets for radial sampling
-  const MAX_POINTS = 40;    // hard max for KML polygon
-  const EPS        = 1.5;   // collinear tolerance in pixels
+  const W       = 256;
+  const THRESH  = 25;   // alpha threshold: cadastre fill vs transparent background
+  const RDP_EPS = 1.2;  // RDP tolerance in pixels — keeps real corners, drops staircase noise
+  const MAX_PT  = 60;   // hard upper bound for KML ring length
 
   // STEP 1 — Fetch tile (TRANSPARENT=true → cadastre pixels have alpha>0, background alpha=0)
   const url = `https://nspd.gov.ru/api/aeggis/v2/${layerId}/wms?`+
@@ -1228,66 +1230,148 @@ async function _extractTileContour(ti, layerId){
   ctx.drawImage(bmp,0,0);
   const px  = ctx.getImageData(0,0,W,W).data;   // RGBA flat array
 
-  const alpha = (x,y) => (x<0||y<0||x>=W||y>=W) ? 0 : px[(y*W+x)*4+3];
-  const isOn  = (x,y) => alpha(x,y) > THRESH;
+  const isOn = (x,y) => (x<0||y<0||x>=W||y>=W) ? false : px[(y*W+x)*4+3] > THRESH;
 
-  // STEP 2 — BFS flood-fill from click pixel
+  // STEP 2 — BFS flood-fill 4-connected from click pixel
   if(!isOn(ti.pixelX, ti.pixelY)) return null;
   const filled = new Uint8Array(W*W);
   const stk = new Int32Array(W*W*2); let sp=0;
-  const push=(x,y)=>{ const i=y*W+x; if(!filled[i]&&isOn(x,y)){filled[i]=1;stk[sp++]=x;stk[sp++]=y;} };
-  push(ti.pixelX, ti.pixelY);
-  while(sp>0){ const y=stk[--sp],x=stk[--sp]; push(x-1,y);push(x+1,y);push(x,y-1);push(x,y+1); }
+  const seed=(x,y)=>{ const i=y*W+x; if(!filled[i]&&isOn(x,y)){filled[i]=1;stk[sp++]=x;stk[sp++]=y;} };
+  seed(ti.pixelX, ti.pixelY);
+  while(sp>0){ const y=stk[--sp],x=stk[--sp]; seed(x-1,y);seed(x+1,y);seed(x,y-1);seed(x,y+1); }
 
-  let nFill=0, sumX=0, sumY=0;
+  let nFill=0, minX=W, minY=W, maxX=-1, maxY=-1;
   for(let y=0;y<W;y++) for(let x=0;x<W;x++){
     if(filled[y*W+x]!==1) continue;
-    nFill++; sumX+=x; sumY+=y;
+    nFill++;
+    if(x<minX)minX=x; if(y<minY)minY=y;
+    if(x>maxX)maxX=x; if(y>maxY)maxY=y;
   }
   if(nFill < 8)     return null;
   if(nFill > 60000) throw new Error('Область слишком велика — это фоновый регион?');
-  const cx=sumX/nFill, cy=sumY/nFill;
 
-  // STEP 3 — Boundary pixels (filled pixel with ≥1 transparent 4-neighbor)
-  // STEP 4 + 5 — Radial sector sampling in one pass:
-  //   For each boundary pixel compute its angle from centroid → angular bucket
-  //   Keep the farthest pixel per bucket → up to N_SECTORS ordered points
-  const sectors = new Float64Array(N_SECTORS*3).fill(0); // [x, y, dist²] per sector
-  const secUsed = new Uint8Array(N_SECTORS);
-  const TWO_PI  = Math.PI * 2;
+  const f = (x,y) => (x<0||y<0||x>=W||y>=W) ? 0 : filled[y*W+x];
 
-  for(let y=0;y<W;y++) for(let x=0;x<W;x++){
-    if(filled[y*W+x]!==1) continue;
-    // Is this a boundary pixel? (at least one transparent 4-neighbor)
-    if(filled[y*W+x-1]===1 && filled[y*W+x+1]===1 && filled[(y-1)*W+x]===1 && filled[(y+1)*W+x]===1
-      && x>0 && y>0 && x<W-1 && y<W-1) continue;  // interior pixel — skip
-    const angle  = Math.atan2(y-cy, x-cx);          // −π … +π
-    const bucket = ((angle/TWO_PI+0.5)*N_SECTORS|0)%N_SECTORS;
-    const dist2  = (x-cx)*(x-cx)+(y-cy)*(y-cy);
-    if(!secUsed[bucket] || dist2 > sectors[bucket*3+2]){
-      sectors[bucket*3]=x; sectors[bucket*3+1]=y; sectors[bucket*3+2]=dist2;
-      secUsed[bucket]=1;
+  // STEP 3 — Find topmost-leftmost filled pixel = trace start
+  // Guaranteed to lie on the OUTER boundary (cannot be inside a hole).
+  let sX=-1, sY=-1;
+  outer: for(let y=minY; y<=maxY; y++) for(let x=minX; x<=maxX; x++){
+    if(f(x,y)){ sX=x; sY=y; break outer; }
+  }
+  if(sX < 0) return null;
+
+  // STEP 4 — Moore-Neighbor boundary tracing (8-connected, clockwise)
+  // 8 neighbors in clockwise order starting from West (idx 0):
+  //   0:W(-1,0)  1:NW(-1,-1) 2:N(0,-1)  3:NE(1,-1)
+  //   4:E(1,0)   5:SE(1,1)   6:S(0,1)   7:SW(-1,1)
+  const NX = [-1,-1, 0, 1, 1, 1, 0,-1];
+  const NY = [ 0,-1,-1,-1, 0, 1, 1, 1];
+  const nDir = (fx,fy,tx,ty) => {
+    const dx=tx-fx, dy=ty-fy;
+    for(let i=0;i<8;i++) if(NX[i]===dx && NY[i]===dy) return i;
+    return -1;
+  };
+
+  const contour = [[sX, sY]];
+  let curX = sX, curY = sY;
+  // Initial backtrack: cell to the West of start (start is leftmost on its scan row,
+  // so its W neighbor is empty by construction).
+  let backX = sX - 1, backY = sY;
+
+  const MAX_STEPS = Math.min(nFill * 4 + 1000, 200000);
+  let steps = 0, returned = false;
+
+  while(steps++ < MAX_STEPS){
+    const fromDir = nDir(curX, curY, backX, backY);
+    if(fromDir < 0) break;
+    let found = false;
+    // Scan clockwise from (fromDir+1) around current pixel
+    for(let i=1; i<=8; i++){
+      const d = (fromDir + i) & 7;
+      const nx = curX + NX[d], ny = curY + NY[d];
+      if(f(nx, ny)){
+        // Backtrack = previous (empty) neighbor in the clockwise scan
+        const pd = (fromDir + i - 1) & 7;
+        backX = curX + NX[pd]; backY = curY + NY[pd];
+        curX = nx; curY = ny;
+        contour.push([curX, curY]);
+        found = true;
+        break;
+      }
+    }
+    if(!found) break;  // single-pixel island — degenerate
+    // Termination: revisit start (Jacob-style; require some progress to avoid 1-step exit)
+    if(curX === sX && curY === sY){
+      if(returned || contour.length > 4) break;
+      returned = true;
     }
   }
 
-  // Collect non-empty sectors in angular order (already ordered 0…N_SECTORS-1)
-  let pts = [];
-  for(let b=0;b<N_SECTORS;b++) if(secUsed[b]) pts.push([sectors[b*3], sectors[b*3+1]]);
+  // Drop trailing duplicate-of-start (the closing point we'll re-append later)
+  if(contour.length > 1){
+    const last = contour[contour.length-1];
+    if(last[0]===sX && last[1]===sY) contour.pop();
+  }
+  if(contour.length < 3) return null;
+
+  // STEP 5 — Closed-polygon Ramer-Douglas-Peucker
+  // Standard RDP keeps endpoints; on a closed contour both endpoints are `start`,
+  // which biases simplification near the start pixel. Fix: split the contour at the
+  // pixel furthest from start (a natural "antipode" anchor), RDP each half, merge.
+  const _perp = (p, a, b) => {
+    const dx=b[0]-a[0], dy=b[1]-a[1], L2=dx*dx+dy*dy;
+    if(L2 < 1e-12){ const ex=p[0]-a[0], ey=p[1]-a[1]; return Math.sqrt(ex*ex+ey*ey); }
+    return Math.abs((p[0]-a[0])*dy - (p[1]-a[1])*dx) / Math.sqrt(L2);
+  };
+  const _rdp = (pts, eps) => {
+    if(pts.length < 3) return pts.slice();
+    const keep = new Uint8Array(pts.length);
+    keep[0] = 1; keep[pts.length-1] = 1;
+    const stack = [[0, pts.length-1]];
+    while(stack.length){
+      const [lo, hi] = stack.pop();
+      if(hi - lo < 2) continue;
+      let maxD = 0, idx = -1;
+      const a = pts[lo], b = pts[hi];
+      for(let i=lo+1; i<hi; i++){
+        const d = _perp(pts[i], a, b);
+        if(d > maxD){ maxD = d; idx = i; }
+      }
+      if(maxD > eps && idx > 0){
+        keep[idx] = 1;
+        stack.push([lo, idx]);
+        stack.push([idx, hi]);
+      }
+    }
+    const out = [];
+    for(let i=0; i<pts.length; i++) if(keep[i]) out.push(pts[i]);
+    return out;
+  };
+
+  let pts;
+  if(contour.length < 6){
+    pts = contour.slice();
+  } else {
+    let maxD2 = -1, antIdx = 1;
+    const ax = contour[0][0], ay = contour[0][1];
+    for(let i=1; i<contour.length; i++){
+      const dx = contour[i][0]-ax, dy = contour[i][1]-ay;
+      const d2 = dx*dx + dy*dy;
+      if(d2 > maxD2){ maxD2 = d2; antIdx = i; }
+    }
+    const half1 = _rdp(contour.slice(0, antIdx+1), RDP_EPS);
+    const half2 = _rdp(contour.slice(antIdx),     RDP_EPS);
+    // half1 ends at antipode, half2 starts at antipode → drop duplicate junction
+    pts = half1.concat(half2.slice(1));
+  }
 
   if(pts.length < 3) return null;
+  if(pts.length > MAX_PT) pts = _sampleN(pts, MAX_PT);
 
-  // STEP 6 — Collinear removal: greedy walk
-  //   From base A, advance pointer j until pts[j] is NOT on line A→pts[j+1]
-  //   within eps. Keep pts[j] as next base, discard intermediates.
-  pts = _collinearRemove(pts, EPS);
+  // Close ring (KML LinearRing requires first==last)
+  pts.push(pts[0]);
 
-  // STEP 7 — Hard limit
-  if(pts.length > MAX_POINTS) pts = _sampleN(pts, MAX_POINTS);
-
-  // Close polygon
-  if(pts.length>0) pts.push(pts[0]);
-
-  // STEP 8 — Pixel → WGS84
+  // STEP 6 — Pixel → WGS84 (Web Mercator inverse, uses ti.z, not hard-coded)
   const n = Math.pow(2, ti.z);
   const coords = pts.map(([bx,by])=>[
     (ti.tileX + bx/W) / n * 360 - 180,
@@ -1295,26 +1379,6 @@ async function _extractTileContour(ti, layerId){
   ]);
 
   return { type:'Polygon', coordinates:[coords] };
-}
-
-// Greedy collinear removal: advance base, extend while intermediates are within eps of the line
-function _collinearRemove(pts, eps){
-  if(pts.length<=3) return pts;
-  const perp=(o,a,b)=>{
-    const dx=b[0]-o[0],dy=b[1]-o[1],L=Math.hypot(dx,dy);
-    return L<1e-9 ? Math.hypot(a[0]-o[0],a[1]-o[1]) : Math.abs((a[0]-o[0])*dy-(a[1]-o[1])*dx)/L;
-  };
-  const out=[pts[0]]; let i=0;
-  while(i<pts.length-1){
-    let j=i+1;
-    while(j+1<pts.length){
-      let ok=true;
-      for(let k=i+1;k<=j;k++) if(perp(pts[i],pts[k],pts[j+1])>eps){ok=false;break;}
-      if(ok) j++; else break;
-    }
-    out.push(pts[j]); i=j;
-  }
-  return out;
 }
 
 // Uniform subsample: keep first + last, pick evenly spaced between
@@ -2666,30 +2730,9 @@ function _cadToKML(cadNum, type, geom, lines) {
 
 function savePendingCadastralToKML() {
   if (!pendingCadResult) { showToast('Нет данных для записи', 'warn', 2000); return; }
-  const { cadNum, type, geom, attrs, lines } = pendingCadResult;
-  const parts = _cadToKML(cadNum, type, geom, lines);
-  if(!parts){ showToast('❌ Некорректные координаты — KML не сохранён','error',5000); return; }
-  const targetIdx = kmlLayers.findIndex(l => l.visible);
-  if (targetIdx >= 0) {
-    const tgt = kmlLayers[targetIdx];
-    if (!tgt.cadPlacemarks) tgt.cadPlacemarks = [];
-    tgt.cadPlacemarks.push({ cadNum, type, geom, lines, parts });
-    tgt.placemarkCount = (tgt.placemarkCount||0) + 1;
-    const lyr = _makeCadLayer(geom, type, true);
-    if (lyr) { _attachCadEvents(lyr, cadNum, type, lines); lyr.addTo(tgt.layerGroup); }
-    renderKMLDropdown();
-    showToast(`\u2705 Записано в \u00ab${tgt.docName||tgt.filename}\u00bb`, 'success', 3000);
-  } else {
-    const lg = L.layerGroup().addTo(map);
-    const entry = { filename:'\u041a\u0430\u0434\u0430\u0441\u0442\u0440.kml', docName:'\u041a\u0430\u0434\u0430\u0441\u0442\u0440', layerGroup:lg, visible:true, placemarkCount:1, cadPlacemarks:[{cadNum,type,geom,lines,parts}] };
-    const lyr = _makeCadLayer(geom, type, true);
-    if (lyr) { _attachCadEvents(lyr, cadNum, type, lines); lyr.addTo(lg); }
-    kmlLayers.push(entry); updateKMLButton();
-    showToast('\u2705 \u0421\u043e\u0437\u0434\u0430\u043d \u0441\u043b\u043e\u0439 \u00ab\u041a\u0430\u0434\u0430\u0441\u0442\u0440\u00bb', 'success', 3000);
-  }
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document>\n${parts.style}\n${parts.placemark}\n</Document></kml>`;
-  const blob = new Blob([xml], { type:'application/vnd.google-earth.kml+xml' });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${cadNum.replace(/:/g,'_')}.kml`; a.click();
+  const { cadNum, type, geom, lines } = pendingCadResult;
+  const prefillDesc = (lines||[]).map(([k,v])=>`${k}: ${v}`).join('; ');
+  showKMLSaveDialog(geom, type, cadNum||'', prefillDesc);
   pendingCadResult = null;
   document.getElementById('cad-save-btn').style.display = 'none';
 }
@@ -2706,8 +2749,10 @@ let _kdDiskKMLText = null;    // raw text of the disk KML file
 let _kdDiskFilename = null;   // filename for re-download
 let _kdDest = 'layer';        // current destination selection
 
-// Open the dialog — called from _renderAndSaveKML (overrides the old flow)
-function showKMLSaveDialog(geom, type, prefillCadNum){
+// Open the dialog — single entry point for "save cadastre/contour to KML"
+// `prefillDesc` is concatenated cadastre attributes (Площадь / Категория / ВРИ ...),
+// used when the dialog is opened from a WFS hit; empty for tile-traced contours.
+function showKMLSaveDialog(geom, type, prefillCadNum, prefillDesc){
   _kdPendingGeom = geom;
   _kdPendingType = type;
   _kdDiskKMLText = null; _kdDiskFilename = null;
@@ -2716,7 +2761,7 @@ function showKMLSaveDialog(geom, type, prefillCadNum){
   // Pre-fill fields
   document.getElementById('kd-cadnum').value = prefillCadNum||'';
   document.getElementById('kd-name').value   = '';
-  document.getElementById('kd-desc').value   = '';
+  document.getElementById('kd-desc').value   = prefillDesc||'';
   document.getElementById('kd-file-name').textContent = '';
 
   // Build layer dropdown
@@ -2731,19 +2776,16 @@ function showKMLSaveDialog(geom, type, prefillCadNum){
     sel.style.display='block';
   }else{
     sel.style.display='none';
-    // No open layers → default to new file
-    kdSelectDest('new');
   }
 
-  // Reset radio selection
+  // Default destination: 'layer' if any open layer, otherwise 'new'
   kdSelectDest(kmlLayers.length?'layer':'new');
   document.getElementById('kml-save-dialog').classList.add('open');
 }
 
 function kdSelectDest(dest){
   _kdDest = dest;
-  const opts=['layer','new','disk'];
-  opts.forEach(d=>{
+  ['layer','new','disk'].forEach(d=>{
     const el=document.getElementById(`kd-opt-${d}`);
     if(el) el.classList.toggle('selected', d===dest);
     const inp=el?.querySelector('input[type=radio]');
@@ -2769,54 +2811,88 @@ function kdCancel(){
   _kdPendingGeom = null;
 }
 
+// Clean rewrite — no double _cadToKML, no fragile multi-step regex patching.
+// Generates the Style + Placemark XML once, with proper <name> + <description> as
+// per Yandex MK / standard KML 2.2 (the example file Сосновая_роща_5.kml uses <name>).
 function kdConfirm(){
   if(!_kdPendingGeom){ kdCancel(); return; }
-  const name    = document.getElementById('kd-name').value.trim();
-  const cadNum  = document.getElementById('kd-cadnum').value.trim() || 'без_номера';
-  const desc    = document.getElementById('kd-desc').value.trim();
-  const type    = _kdPendingType;
-  const geom    = _kdPendingGeom;
-  const lines   = []; // attributes go into description field below
-  const parts   = _cadToKML(cadNum, type==='str'?'oks':type, geom, lines);
-  if(!parts){ showToast('❌ Некорректные координаты','error',4000); kdCancel(); return; }
+  const cadNum = (document.getElementById('kd-cadnum').value.trim()) || 'без_номера';
+  const name   = document.getElementById('kd-name').value.trim();
+  const desc   = document.getElementById('kd-desc').value.trim();
+  const type   = _kdPendingType;
+  const geom   = _kdPendingGeom;
+  const safeType = (type==='str') ? 'oks' : type;
 
-  // Build clean KML parts with name and description encoded in description field
-  const cleanLines = [];
-  if(name)  cleanLines.push(['Название', name]);
-  if(desc)  cleanLines.push(['Описание', desc]);
-  const cleanParts = _cadToKML(cadNum, type==='str'?'oks':type, _kdPendingGeom, cleanLines);
-  if(!cleanParts){ showToast('❌ Ошибка генерации KML','error',3000); kdCancel(); return; }
-  // Override placemark to use Yandex-compatible <n> with human name + <description> with cad+desc
-  const fullDesc = [cadNum, name, desc].filter(Boolean).join(' · ');
-  const styleId  = cleanParts.style.match(/id="([^"]+)"/)?.[1]||'cad_style';
-  cleanParts.placemark = cleanParts.placemark.replace(
-    /<Placemark>.*?<styleUrl>/s,
-    '<Placemark><n><![CDATA[' + (name||cadNum) + ']]></n>' +
-    '<description><![CDATA[' + fullDesc + ']]></description>' +
-    '<styleUrl>'
+  // Coordinate sanity check (must be near Earth surface, within Web Mercator latitudes)
+  const coordsSafe = (cs) => cs.every(([lo,la])=>
+    Math.abs(lo)<=180 && Math.abs(la)<=90 && la>=-85 && la<=85
   );
+  let geomXml = '', csOk = true;
+  if(geom.type==='Polygon'){
+    if(!coordsSafe(geom.coordinates[0])) csOk=false;
+    else {
+      const cs = geom.coordinates[0].map(([lo,la])=>`${lo},${la},0`).join(' ');
+      geomXml = `<Polygon><outerBoundaryIs><LinearRing><coordinates>${cs}</coordinates></LinearRing></outerBoundaryIs></Polygon>`;
+    }
+  } else if(geom.type==='MultiPolygon'){
+    if(!coordsSafe(geom.coordinates[0][0])) csOk=false;
+    else {
+      const cs = geom.coordinates[0][0].map(([lo,la])=>`${lo},${la},0`).join(' ');
+      geomXml = `<Polygon><outerBoundaryIs><LinearRing><coordinates>${cs}</coordinates></LinearRing></outerBoundaryIs></Polygon>`;
+    }
+  } else if(geom.type==='Point'){
+    const [lo,la] = geom.coordinates;
+    if(Math.abs(lo)>180||Math.abs(la)>90) csOk=false;
+    else geomXml = `<Point><coordinates>${lo},${la},0</coordinates></Point>`;
+  } else { csOk=false; }
+
+  if(!csOk || !geomXml){
+    showToast('❌ Некорректные координаты','error',4000);
+    kdCancel();
+    return;
+  }
+
+  // Style: same ABGR colors as _cadToKML for consistency with v45 KMLs
+  const bABGR  = safeType==='zu' ? 'ff7f007f' : 'ff007f00';
+  const fABGR  = safeType==='zu' ? '337f007f' : '33007f00';
+  const sid    = `cad_${safeType}_${cadNum.replace(/:/g,'_')}`;
+  const styleXml = `<Style id="${sid}"><LineStyle><color>${bABGR}</color><width>2</width></LineStyle><PolyStyle><color>${fABGR}</color><fill>1</fill><outline>1</outline></PolyStyle></Style>`;
+
+  // Placemark: <name> + <description>, exactly the structure the example KML uses
+  // <description> = "<cadNum> · <user description>" if both present
+  const fullDesc = [cadNum, desc].filter(Boolean).join(' · ');
+  const placemarkXml = `<Placemark><name><![CDATA[${name||cadNum}]]></name><description><![CDATA[${fullDesc}]]></description><styleUrl>#${sid}</styleUrl>${geomXml}</Placemark>`;
+  const cleanParts = { style: styleXml, placemark: placemarkXml };
 
   document.getElementById('kml-save-dialog').classList.remove('open');
 
+  // Build display layer (so user sees what was saved on the map)
+  const lyr = _makeCadLayer(geom, safeType, true);
+  const linesForTooltip = [];
+  if(name) linesForTooltip.push(['Название', name]);
+  if(desc) linesForTooltip.push(['Описание', desc]);
+  if(lyr) _attachCadEvents(lyr, name||cadNum, safeType, linesForTooltip);
+
   if(_kdDest==='layer'){
     const sel = document.getElementById('kd-layer-select');
-    const idx = parseInt(sel.value||'0');
+    const idx = parseInt(sel.value||'0', 10);
     const tgt = kmlLayers[idx];
-    if(!tgt){ showToast('Слой не найден','error',3000); return; }
+    if(!tgt){ showToast('Слой не найден','error',3000); _kdPendingGeom=null; return; }
     if(!tgt.cadPlacemarks) tgt.cadPlacemarks=[];
-    tgt.cadPlacemarks.push({cadNum,type,geom,lines:[],parts:cleanParts});
-    tgt.placemarkCount=(tgt.placemarkCount||0)+1;
-    const lyr=_makeCadLayer(geom,type,true);
-    if(lyr){_attachCadEvents(lyr,cadNum,type,[]);lyr.addTo(tgt.layerGroup);}
+    tgt.cadPlacemarks.push({cadNum, type:safeType, geom, lines:linesForTooltip, parts:cleanParts});
+    tgt.placemarkCount = (tgt.placemarkCount||0) + 1;
+    if(lyr) lyr.addTo(tgt.layerGroup);
     renderKMLDropdown();
     showToast(`✅ Записано в «${tgt.docName||tgt.filename}»`,'success',3000);
   } else if(_kdDest==='new'){
-    const xml=_buildKMLDocument([cleanParts.style],[cleanParts.placemark]);
+    if(lyr) lyr.addTo(map);
+    const xml = _buildKMLDocument([styleXml],[placemarkXml]);
     _downloadBlob(xml, `${cadNum.replace(/:/g,'_')}.kml`);
     showToast('✅ Скачан новый KML файл','success',3000);
   } else if(_kdDest==='disk'){
-    if(!_kdDiskKMLText){ showToast('Файл не выбран','warn',3000); return; }
-    const updated = _appendToKMLText(_kdDiskKMLText, cleanParts.style, cleanParts.placemark);
+    if(!_kdDiskKMLText){ showToast('Файл не выбран','warn',3000); _kdPendingGeom=null; return; }
+    if(lyr) lyr.addTo(map);
+    const updated = _appendToKMLText(_kdDiskKMLText, styleXml, placemarkXml);
     _downloadBlob(updated, _kdDiskFilename||'updated.kml');
     showToast(`✅ Дозаписано в «${_kdDiskFilename}»`,'success',3000);
   }
