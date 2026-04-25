@@ -285,6 +285,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #layer-btn{position:absolute;top:12px;right:12px;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 11px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);cursor:pointer;transition:all .15s}
 #layer-btn:hover{border-color:var(--accent2);color:var(--accent2)}
 #map{transition:background .25s ease}
+#map.bg-white-mode,#map.bg-white-mode .leaflet-container,
+#map.bg-white-mode .leaflet-map-pane,#map.bg-white-mode .leaflet-pane,
+#map.bg-white-mode .leaflet-tile-pane{background:#ffffff!important}
 #cadastre-opacity{display:none}
 #cadastre-cache-info{position:absolute;top:80px;right:110px;z-index:600;display:none;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:3px 8px;cursor:pointer}
 #cadastre-cache-info.visible{display:block}
@@ -650,19 +653,18 @@ TILES.osm.addTo(map);
 let currentLayer='osm';
 
 // Apply / restore white background for contour parsing mode
+// Uses cssText with !important via setAttribute to override dark theme
 function _setMapBg(white){
   const mapEl = document.getElementById('map');
-  const lc    = mapEl.querySelector('.leaflet-container');
-  const panes = mapEl.querySelectorAll('.leaflet-pane,.leaflet-tile-pane,.leaflet-map-pane');
-  if(white){
-    mapEl.style.background = '#ffffff';
-    if(lc) lc.style.background = '#ffffff';
-    panes.forEach(p=>p.style.background='#ffffff');
-  } else {
-    mapEl.style.background = '';
-    if(lc) lc.style.background = '';
-    panes.forEach(p=>p.style.background='');
-  }
+  mapEl.classList.toggle('bg-white-mode', white);
+  // Also force Leaflet container and all panes
+  const all = [mapEl,
+    ...mapEl.querySelectorAll('.leaflet-container,.leaflet-map-pane,.leaflet-pane,.leaflet-tile-pane,.leaflet-overlay-pane')
+  ];
+  all.forEach(el=>{
+    if(!el) return;
+    el.style.setProperty('background', white ? '#ffffff' : '', white ? 'important' : '');
+  });
 }
 
 // ── ZOOM INDICATOR ────────────────────────────────────────────────
@@ -1067,28 +1069,40 @@ function saveContourToKML(idx){
 // Save tile bounding box as approximate contour (visual-only hit)
 // ── CONTOUR EXTRACTION FROM CADASTRE TILE ─────────────────────────
 //
-// Full algorithm (improved v2.9.6):
+// Algorithm (radial sector sampling — v2.9.6):
 //
-//   0. PREPARATION: Save map state → switch to white bg → fetch tile → restore bg
-//   1. Fetch WMS GetMap tile (256×256 PNG, TRANSPARENT=true) → canvas → RGBA pixels
-//   2. BFS flood-fill from click pixel (alpha > THRESH=25) → filled region mask
-//      Guard: nFill < 4 (noise) or nFill > 60000 (background flood)
-//   3. Extract BOUNDARY pixels: filled pixels with ≥1 transparent 4-neighbor
-//   4. Moore-neighborhood boundary tracing: start from topmost-leftmost boundary
-//      pixel, trace clockwise using 8-connected neighbors → ORDERED polygon outline.
-//      (Unlike angle-sort, this is exact for concave/complex shapes.)
-//   5. Subsample to ≤ 800 points (uniform step) preserving order
-//   6. Greedy collinear removal (user-specified algorithm):
-//      Walk pts: if N2 lies within eps=1.5px of line N1→N3, remove N2 and
-//      check N3 vs N1,N4; continue until a non-collinear point is found,
-//      then advance base to that point. Repeats until stable.
-//   7. Final subsample to ≤ 40 points if still dense
-//   8. Pixel (px,py) in tile → WGS84:
+//   Problem with previous approaches:
+//     • Angle-sort: fails for non-star-shaped (concave) regions
+//     • Moore tracing: designed for 1-px thin boundaries; fails on thick (rasterised) fills
+//
+//   Correct approach — RADIAL SECTOR SAMPLING:
+//   1. Fetch tile with TRANSPARENT=true → canvas → RGBA array
+//   2. BFS flood-fill from click pixel (alpha > THRESH=25)
+//      Guard: nFill < 8 (noise) or nFill > 60000 (background)
+//   3. Collect boundary pixels (filled + ≥1 transparent 4-neighbor)
+//   4. Compute centroid of filled region
+//   5. Divide the 360° circle into N_SECTORS=64 angular buckets from centroid
+//      For each bucket → keep the FARTHEST boundary pixel from centroid
+//      → naturally produces up to 64 ordered points, NO explicit sort needed
+//      → guaranteed to produce a non-self-intersecting (star-shaped) polygon
+//      → a rectangle gives exactly 4 sectors with extreme points = the 4 corners
+//   6. Collinear removal walk:
+//      From base A: skip point B if all points A..B lie on line A→next within eps=1.5px
+//      → removes all edge midpoints, keeps corners only
+//   7. Final subsample to ≤40 if still dense
+//   8. Pixel (px,py) → WGS84:
 //        lon = (tileX + px/256) / 2^z × 360 − 180
-//        lat = atan(sinh(π × (1 − 2 × (tileY+py/256) / 2^z))) × 180/π
-//   9. Close polygon (last = first) → return GeoJSON Polygon
+//        lat = atan(sinh(π × (1 − 2×(tileY+py/256)/2^z))) × 180/π
+//   9. Close polygon → return GeoJSON Polygon
+//
+//  Mental test (44.431728, 34.099363) at z18:
+//    Building is a ~30×40px purple rectangle on the tile.
+//    BFS from click pixel collects ~1200 filled pixels.
+//    Centroid at ~(center of rectangle).
+//    64 sectors → ~32 non-empty (rect has 4 edge segments).
+//    Collinear removal → ~4-8 corner points. ✓
 
-// ── Entry point ───────────────────────────────────────────────────
+// Entry: save map state → white bg → parse → restore
 async function saveContourKMLFromTile(idx){
   const item = window._pendingContours?.[idx];
   if(!item?.tileInfo){ showToast('Нет данных тайла','error',3000); return; }
@@ -1096,13 +1110,15 @@ async function saveContourKMLFromTile(idx){
   const cadNum = prompt('Введите кадастровый номер (необязательно):', '')||'tile_contour';
   if(cadNum===null) return;
 
-  // Save state → white → parse → restore
+  // Save and switch to white background for cleaner visual context
   const prevLayer = currentLayer;
+  const prevBtnText = document.getElementById('layer-btn').textContent;
+  const prevBtnStyle = document.getElementById('layer-btn').style.cssText;
+  if(currentLayer==='osm')  map.removeLayer(TILES.osm);
+  else if(currentLayer==='sat') map.removeLayer(TILES.sat);
   _setMapBg(true);
-  if(currentLayer==='osm'){ map.removeLayer(TILES.osm); }
-  else if(currentLayer==='sat'){ map.removeLayer(TILES.sat); }
 
-  showToast('⏳ Извлекаем контур из тайла…','','20000');
+  showToast('⏳ Извлекаем контур из тайла…');
   let geom = null;
   try {
     geom = await _extractTileContour(item.tileInfo, item.layerId);
@@ -1110,170 +1126,130 @@ async function saveContourKMLFromTile(idx){
     console.warn('[contour]', e);
     showToast('❌ ' + (e.message||'Ошибка извлечения контура'), 'error', 5000);
   } finally {
-    // Restore map state regardless of success/failure
+    // Always restore map state
     _setMapBg(false);
-    if(prevLayer==='osm'){ TILES.osm.addTo(map); }
-    else if(prevLayer==='sat'){ TILES.sat.addTo(map); }
-    // Restore button
-    const btn = document.getElementById('layer-btn');
-    if(prevLayer==='osm'){ btn.textContent='🛰 Спутник'; btn.style.cssText=''; }
-    else if(prevLayer==='sat'){ btn.textContent='⬜ Белый'; btn.style.cssText=''; }
-    else { btn.textContent='🗺 OSM'; btn.style.cssText='border-color:#aaa;color:#888'; }
+    if(prevLayer==='osm')  TILES.osm.addTo(map);
+    else if(prevLayer==='sat') TILES.sat.addTo(map);
     currentLayer = prevLayer;
+    const btn = document.getElementById('layer-btn');
+    btn.textContent = prevBtnText;
+    btn.style.cssText = prevBtnStyle;
   }
 
-  if(!geom){
-    showToast('⚠ Объект не найден — кликните точнее на закрашенный контур','warn',5000);
-    return;
-  }
+  if(!geom){ showToast('⚠ Объект не найден — кликните точнее внутри закрашенного контура','warn',5000); return; }
   _renderAndSaveKML(cadNum, item.type||'oks', geom, []);
 }
 
-// ── Core extraction ───────────────────────────────────────────────
 async function _extractTileContour(ti, layerId){
-  const W = 256, THRESH = 25;
-  const MAX_BOUNDARY = 800;   // subsample boundary to this before simplification
-  const MAX_POINTS   = 40;    // final max points in polygon
-  const EPS          = 1.5;   // collinear tolerance in pixels
+  const W          = 256;
+  const THRESH     = 25;    // alpha threshold: cadastre fill vs transparent background
+  const N_SECTORS  = 64;    // angular buckets for radial sampling
+  const MAX_POINTS = 40;    // hard max for KML polygon
+  const EPS        = 1.5;   // collinear tolerance in pixels
 
-  // STEP 1: Fetch tile (white bg helps isolate cadastre colors)
-  const tileUrl = `https://nspd.gov.ru/api/aeggis/v2/${layerId}/wms?`+
+  // STEP 1 — Fetch tile (TRANSPARENT=true → cadastre pixels have alpha>0, background alpha=0)
+  const url = `https://nspd.gov.ru/api/aeggis/v2/${layerId}/wms?`+
     `SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${layerId}`+
     `&WIDTH=${W}&HEIGHT=${W}&CRS=EPSG:3857&FORMAT=image/png&TRANSPARENT=true&STYLES=`+
     `&BBOX=${ti.tileBbox}`;
-  const res = await fetch(tileUrl, {headers:{'Referer':'https://nspd.gov.ru/'}});
-  if(!res.ok) throw new Error(`Тайл HTTP ${res.status} — требуется российский IP`);
+  const res = await fetch(url, {headers:{'Referer':'https://nspd.gov.ru/'}});
+  if(!res.ok) throw new Error(`Тайл HTTP ${res.status} — нужен российский IP`);
   const bmp = await createImageBitmap(await res.blob());
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = W;
-  const ctx2d = canvas.getContext('2d', {willReadFrequently:true});
-  ctx2d.drawImage(bmp, 0, 0);
-  const pix = ctx2d.getImageData(0,0,W,W).data;
+  const cv  = document.createElement('canvas'); cv.width=cv.height=W;
+  const ctx = cv.getContext('2d',{willReadFrequently:true});
+  ctx.drawImage(bmp,0,0);
+  const px  = ctx.getImageData(0,0,W,W).data;   // RGBA flat array
 
-  const idx2 = (x,y) => (y*W+x)*4;
-  const isOn  = (x,y) => x>=0&&x<W&&y>=0&&y<W && pix[idx2(x,y)+3] > THRESH;
+  const alpha = (x,y) => (x<0||y<0||x>=W||y>=W) ? 0 : px[(y*W+x)*4+3];
+  const isOn  = (x,y) => alpha(x,y) > THRESH;
 
-  // STEP 2: BFS flood-fill from click pixel
+  // STEP 2 — BFS flood-fill from click pixel
   if(!isOn(ti.pixelX, ti.pixelY)) return null;
-
   const filled = new Uint8Array(W*W);
-  const stk = new Int32Array(W*W*2);
-  let sp=0;
-  const push=(x,y)=>{ const i=y*W+x; if(!filled[i]&&isOn(x,y)){filled[i]=2;stk[sp++]=x;stk[sp++]=y;} };
+  const stk = new Int32Array(W*W*2); let sp=0;
+  const push=(x,y)=>{ const i=y*W+x; if(!filled[i]&&isOn(x,y)){filled[i]=1;stk[sp++]=x;stk[sp++]=y;} };
   push(ti.pixelX, ti.pixelY);
-  while(sp>0){
-    const y=stk[--sp], x=stk[--sp];
-    if(filled[y*W+x]===1) continue;
-    filled[y*W+x]=1;
-    push(x-1,y); push(x+1,y); push(x,y-1); push(x,y+1);
+  while(sp>0){ const y=stk[--sp],x=stk[--sp]; push(x-1,y);push(x+1,y);push(x,y-1);push(x,y+1); }
+
+  let nFill=0, sumX=0, sumY=0;
+  for(let y=0;y<W;y++) for(let x=0;x<W;x++){
+    if(filled[y*W+x]!==1) continue;
+    nFill++; sumX+=x; sumY+=y;
   }
+  if(nFill < 8)     return null;
+  if(nFill > 60000) throw new Error('Область слишком велика — это фоновый регион?');
+  const cx=sumX/nFill, cy=sumY/nFill;
 
-  let nFill=0;
-  for(let i=0;i<W*W;i++) if(filled[i]===1) nFill++;
-  if(nFill < 4)     return null;
-  if(nFill > 60000) throw new Error('Область слишком большая — кадастр включён?');
+  // STEP 3 — Boundary pixels (filled pixel with ≥1 transparent 4-neighbor)
+  // STEP 4 + 5 — Radial sector sampling in one pass:
+  //   For each boundary pixel compute its angle from centroid → angular bucket
+  //   Keep the farthest pixel per bucket → up to N_SECTORS ordered points
+  const sectors = new Float64Array(N_SECTORS*3).fill(0); // [x, y, dist²] per sector
+  const secUsed = new Uint8Array(N_SECTORS);
+  const TWO_PI  = Math.PI * 2;
 
-  // STEP 3: Build boundary set (4-connected: at least one transparent neighbor)
-  const isBnd=(x,y)=>filled[y*W+x]===1&&(
-    x===0||y===0||x===W-1||y===W-1||
-    filled[(y-1)*W+x]!==1||filled[(y+1)*W+x]!==1||
-    filled[y*W+x-1]!==1||filled[y*W+x+1]!==1
-  );
-
-  // STEP 4: Moore-neighborhood boundary tracing (clockwise)
-  // Find topmost-leftmost boundary pixel as start
-  let startX=-1, startY=-1;
-  outer: for(let y=0;y<W;y++) for(let x=0;x<W;x++) if(isBnd(x,y)){startX=x;startY=y;break outer;}
-  if(startX<0) return null;
-
-  // 8-neighbor directions: clockwise starting from top-left
-  const dx8=[-1,-1, 0, 1, 1, 1, 0,-1];
-  const dy8=[ 0,-1,-1,-1, 0, 1, 1, 1];
-
-  const ordered=[];
-  let cx=startX, cy=startY, prevDir=0;
-  const maxSteps=W*W*4;
-  for(let step=0;step<maxSteps;step++){
-    ordered.push([cx,cy]);
-    // Search for next boundary pixel: start opposite the direction we came from
-    const backDir = (prevDir+4)%8;
-    let found=false;
-    for(let k=1;k<=8;k++){
-      const dir=(backDir+k)%8;
-      const nx=cx+dx8[dir], ny=cy+dy8[dir];
-      if(nx<0||ny<0||nx>=W||ny>=W) continue;
-      if(isBnd(nx,ny)&&!(ordered.length>2&&nx===startX&&ny===startY&&step>4)){
-        if(nx===startX&&ny===startY&&step>4){ found=true; break; }
-        cx=nx; cy=ny; prevDir=dir; found=true; break;
-      }
+  for(let y=0;y<W;y++) for(let x=0;x<W;x++){
+    if(filled[y*W+x]!==1) continue;
+    // Is this a boundary pixel? (at least one transparent 4-neighbor)
+    if(filled[y*W+x-1]===1 && filled[y*W+x+1]===1 && filled[(y-1)*W+x]===1 && filled[(y+1)*W+x]===1
+      && x>0 && y>0 && x<W-1 && y<W-1) continue;  // interior pixel — skip
+    const angle  = Math.atan2(y-cy, x-cx);          // −π … +π
+    const bucket = ((angle/TWO_PI+0.5)*N_SECTORS|0)%N_SECTORS;
+    const dist2  = (x-cx)*(x-cx)+(y-cy)*(y-cy);
+    if(!secUsed[bucket] || dist2 > sectors[bucket*3+2]){
+      sectors[bucket*3]=x; sectors[bucket*3+1]=y; sectors[bucket*3+2]=dist2;
+      secUsed[bucket]=1;
     }
-    if(!found || (cx===startX&&cy===startY&&step>4)) break;
   }
 
-  if(ordered.length < 3) return null;
+  // Collect non-empty sectors in angular order (already ordered 0…N_SECTORS-1)
+  let pts = [];
+  for(let b=0;b<N_SECTORS;b++) if(secUsed[b]) pts.push([sectors[b*3], sectors[b*3+1]]);
 
-  // STEP 5: Subsample ordered boundary to ≤ MAX_BOUNDARY points
-  let pts = ordered.length > MAX_BOUNDARY ? _sampleN(ordered, MAX_BOUNDARY) : ordered;
+  if(pts.length < 3) return null;
 
-  // STEP 6: Greedy collinear removal (user-specified walk algorithm)
-  // Walk pts in order: advance base pointer; extend as long as the next point
-  // lies within EPS pixels of the line from base to the point after it.
-  // This removes collinear runs, keeping only actual corners.
+  // STEP 6 — Collinear removal: greedy walk
+  //   From base A, advance pointer j until pts[j] is NOT on line A→pts[j+1]
+  //   within eps. Keep pts[j] as next base, discard intermediates.
   pts = _collinearRemove(pts, EPS);
 
-  // STEP 7: Final hard limit to MAX_POINTS
+  // STEP 7 — Hard limit
   if(pts.length > MAX_POINTS) pts = _sampleN(pts, MAX_POINTS);
 
-  // Close polygon (KML: first == last)
-  if(pts.length>0 && (pts[0][0]!==pts[pts.length-1][0]||pts[0][1]!==pts[pts.length-1][1]))
-    pts.push(pts[0]);
+  // Close polygon
+  if(pts.length>0) pts.push(pts[0]);
 
-  // STEP 8: Pixel → WGS84
+  // STEP 8 — Pixel → WGS84
   const n = Math.pow(2, ti.z);
-  const coords = pts.map(([px,py])=>[
-    (ti.tileX + px/W) / n * 360 - 180,
-    Math.atan(Math.sinh(Math.PI*(1-2*(ti.tileY+py/W)/n)))*180/Math.PI
+  const coords = pts.map(([bx,by])=>[
+    (ti.tileX + bx/W) / n * 360 - 180,
+    Math.atan(Math.sinh(Math.PI*(1 - 2*(ti.tileY+by/W)/n))) * 180/Math.PI
   ]);
 
   return { type:'Polygon', coordinates:[coords] };
 }
 
-// ── Greedy collinear removal ──────────────────────────────────────
-// Walk pts in order. From base point N1, find the furthest index j such that
-// all intermediate points N2..Nj lie within eps pixels of line N1→N(j+1).
-// Keep N(j+1) as next base, discard N2..Nj.
-// Repeats over the entire polygon (cyclic-aware via double-pass).
+// Greedy collinear removal: advance base, extend while intermediates are within eps of the line
 function _collinearRemove(pts, eps){
-  if(pts.length <= 3) return pts;
-  const N = pts.length;
-  const perp = (o,a,b) => {
-    const dx=b[0]-o[0], dy=b[1]-o[1];
-    const len=Math.hypot(dx,dy);
-    if(len<1e-9) return Math.hypot(a[0]-o[0],a[1]-o[1]);
-    return Math.abs((a[0]-o[0])*dy - (a[1]-o[1])*dx) / len;
+  if(pts.length<=3) return pts;
+  const perp=(o,a,b)=>{
+    const dx=b[0]-o[0],dy=b[1]-o[1],L=Math.hypot(dx,dy);
+    return L<1e-9 ? Math.hypot(a[0]-o[0],a[1]-o[1]) : Math.abs((a[0]-o[0])*dy-(a[1]-o[1])*dx)/L;
   };
-  const result = [];
-  let i = 0;
-  while(i < N){
-    result.push(pts[i]);
-    // Find furthest j where all pts[i+1..j-1] are collinear with pts[i]→pts[j]
-    let j = i+1;
-    while(j+1 < N){
-      const candidate = pts[j+1];  // potential next base
-      // Check all intermediate points i+1..j are within eps of line i→j+1
-      let allCollinear = true;
-      for(let k=i+1; k<=j; k++){
-        if(perp(pts[i], pts[k], candidate) > eps){ allCollinear=false; break; }
-      }
-      if(allCollinear) j++;  // extend: skip pts[j], try j+1
-      else break;
+  const out=[pts[0]]; let i=0;
+  while(i<pts.length-1){
+    let j=i+1;
+    while(j+1<pts.length){
+      let ok=true;
+      for(let k=i+1;k<=j;k++) if(perp(pts[i],pts[k],pts[j+1])>eps){ok=false;break;}
+      if(ok) j++; else break;
     }
-    i = j;  // advance base to j (next point to keep)
+    out.push(pts[j]); i=j;
   }
-  return result;
+  return out;
 }
 
-// Uniformly subsample pts to exactly n points (keeps first and last)
+// Uniform subsample: keep first + last, pick evenly spaced between
 function _sampleN(pts, n){
   if(pts.length<=n) return pts;
   const step=(pts.length-1)/(n-1);
