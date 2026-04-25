@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.9</title>
+<title>EkceloFoto v3.0.0</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -402,7 +402,20 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .kd-dest-opt.selected{border-color:var(--accent);background:rgba(232,255,71,.08)}
 .kd-dest-opt input[type=radio]{accent-color:var(--accent);cursor:pointer;margin:0;flex-shrink:0}
 .kd-dest-label{flex:1;color:var(--text)}
-#kd-layer-select{margin-top:5px;width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;padding:5px 8px;outline:none}
+/* Custom dropdown — replaces native <select> which can fail to expand inside z-index 10500 modal */
+.kd-dropdown{position:relative;margin-top:5px;width:100%}
+.kd-dd-btn{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;padding:6px 10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;outline:none;transition:border-color .15s}
+.kd-dd-btn:hover{border-color:var(--accent2)}
+.kd-dropdown.open .kd-dd-btn{border-color:var(--accent)}
+.kd-dd-arrow{opacity:.6;transition:transform .15s;font-size:10px}
+.kd-dropdown.open .kd-dd-arrow{transform:rotate(180deg)}
+.kd-dd-menu{display:none;position:absolute;top:calc(100% + 2px);left:0;right:0;background:#0d0f14;border:1px solid var(--accent);border-radius:var(--r);max-height:180px;overflow-y:auto;z-index:10510;box-shadow:0 6px 18px rgba(0,0,0,0.5)}
+.kd-dropdown.open .kd-dd-menu{display:block}
+.kd-dd-item{padding:7px 10px;cursor:pointer;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;border-bottom:1px solid rgba(255,255,255,0.05);transition:background .1s}
+.kd-dd-item:last-child{border-bottom:none}
+.kd-dd-item:hover{background:rgba(255,149,0,0.15)}
+.kd-dd-item.selected{background:rgba(255,149,0,0.25);color:var(--accent)}
+.kd-dd-empty{padding:10px;color:var(--muted);font-size:10px;font-style:italic;text-align:center}
 #kd-file-btn{margin-top:5px;background:rgba(255,255,255,.07);border:1px solid var(--border);border-radius:var(--r);color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:10px;padding:5px 10px;cursor:pointer;transition:all .12s}
 #kd-file-btn:hover{border-color:var(--accent2);color:var(--accent2)}
 #kd-file-name{font-size:9px;color:var(--muted);margin-top:3px;min-height:12px}
@@ -410,6 +423,19 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .kd-btn{border-radius:var(--r);padding:7px 16px;font-family:'JetBrains Mono',monospace;font-size:11px;cursor:pointer;transition:all .15s;border:1px solid var(--border);background:var(--surface);color:var(--text)}
 .kd-btn:hover{border-color:var(--accent2)}
 .kd-btn.primary{background:var(--accent);border-color:var(--accent);color:#000;font-weight:700}
+/* Manual contour editor toolbar — fixed bottom-of-map bar */
+#contour-edit-bar{display:none;position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:10400;background:rgba(13,15,20,0.96);border:1px solid var(--accent2);border-radius:8px;padding:9px 14px;gap:10px;align-items:center;font-family:'JetBrains Mono',monospace;font-size:11px;color:#fff;box-shadow:0 6px 18px rgba(0,0,0,0.5);backdrop-filter:blur(6px);max-width:calc(100vw - 24px);flex-wrap:wrap;justify-content:center}
+#contour-edit-bar.visible{display:flex}
+#contour-edit-bar button{border:none;border-radius:5px;padding:6px 12px;font-weight:700;cursor:pointer;font-family:inherit;font-size:11px}
+#contour-edit-finish{background:var(--accent);color:#0d0f14}
+#contour-edit-finish:hover{filter:brightness(1.1)}
+#contour-edit-revert{background:#444;color:#fff}
+#contour-edit-cancel{background:transparent;color:#aaa;border:1px solid #555 !important}
+.edit-vertex{cursor:move !important}
+.edit-midpoint{cursor:crosshair !important}
+.leaflet-popup.edit-ctx-popup .leaflet-popup-content-wrapper{background:#0d0f14;border:1px solid var(--accent2);padding:6px}
+.leaflet-popup.edit-ctx-popup .leaflet-popup-content{margin:4px 6px;color:#fff}
+.leaflet-popup.edit-ctx-popup .leaflet-popup-tip{background:#0d0f14}
 .kd-btn.primary:hover{background:#f0ff00}
 </style>
 </head>
@@ -418,7 +444,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.9</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v3.0.0</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -646,7 +672,15 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
         <input type="radio" name="kd-dest" value="layer" checked/>
         <span class="kd-dest-label">В открытый KML-слой</span>
       </label>
-      <select id="kd-layer-select"></select>
+      <!-- Custom dropdown — native <select> can fail to expand inside modals on some browsers.
+           Click the button to toggle the menu; clicking an item selects + closes it. -->
+      <div class="kd-dropdown" id="kd-layer-select">
+        <button type="button" class="kd-dd-btn" id="kd-dd-btn" onclick="kdToggleDropdown(event)">
+          <span id="kd-dd-current">— нет открытых KML-слоёв —</span>
+          <span class="kd-dd-arrow">▾</span>
+        </button>
+        <div class="kd-dd-menu" id="kd-dd-menu"></div>
+      </div>
       <label class="kd-dest-opt" id="kd-opt-new" onclick="kdSelectDest('new')">
         <input type="radio" name="kd-dest" value="new"/>
         <span class="kd-dest-label">Создать новый файл</span>
@@ -1206,64 +1240,102 @@ async function saveContourKMLFromTile(idx){
   }
 
   if(!geom){ showToast('⚠ Объект не найден — кликните точнее внутри закрашенного контура','warn',5000); return; }
-  // Open save dialog instead of directly calling _renderAndSaveKML.
-  // No prompt() — cadNum is typed into the dialog (or pre-filled from item.cadNum if WFS knew it).
-  showKMLSaveDialog(geom, item.type||'oks', item.cadNum||'', '');
+  // Open the manual editor before saving — user can drag/add/delete points to clean
+  // up neighbour-capture artefacts (touching buildings) or sub-pixel noise from
+  // antialiased tile edges. "Завершить" inside the editor opens the save dialog.
+  startContourEditor(geom, item.type||'oks', item.cadNum||'', '');
 }
 
 async function _extractTileContour(ti, layerId){
-  const W       = 256;
-  const THRESH  = 25;   // alpha threshold: cadastre fill vs transparent background
-  const RDP_EPS = 1.2;  // RDP tolerance in pixels — keeps real corners, drops staircase noise
-  const MAX_PT  = 60;   // hard upper bound for KML ring length
+  const TS      = 256;        // single tile dimension
+  const GRID    = 3;          // 3×3 stitch around the click tile
+  const W       = TS * GRID;  // 768 — full canvas
+  const H       = TS * GRID;
+  const THRESH  = 25;
+  const RDP_EPS = 1.2;
+  const MAX_PT  = 60;
+  const Z_MAX   = 19;         // cadastre's maxNativeZoom — clip extraction zoom here
 
-  // STEP 1 — Fetch tile (TRANSPARENT=true → cadastre pixels have alpha>0, background alpha=0)
+  // ── Cap zoom at 19 even if user clicked at z21+ ──
+  // At z21 a single 256-tile covers ~18m of geography → almost any building straddles
+  // tile borders and the polygon trace follows the seam. Force extraction at z≤19
+  // (≈75m per tile, so a 3×3 stitch covers ~225m — fits any normal cadastre object).
+  let tileX, tileY, pixelX, pixelY, Z;
+  if(ti.z <= Z_MAX){
+    Z = ti.z; tileX = ti.tileX; tileY = ti.tileY;
+    pixelX = ti.pixelX; pixelY = ti.pixelY;
+  } else {
+    // Reconstruct click lat/lon from original tileInfo, then recompute at Z_MAX
+    const n0  = Math.pow(2, ti.z);
+    const lon = (ti.tileX + ti.pixelX/TS) / n0 * 360 - 180;
+    const lat = Math.atan(Math.sinh(Math.PI*(1 - 2*(ti.tileY + ti.pixelY/TS)/n0))) * 180/Math.PI;
+    Z = Z_MAX;
+    const n  = Math.pow(2, Z);
+    const xf = (lon + 180) / 360 * n;
+    const lat_rad = lat * Math.PI / 180;
+    const yf = (1 - Math.log(Math.tan(lat_rad) + 1/Math.cos(lat_rad)) / Math.PI) / 2 * n;
+    tileX  = Math.floor(xf); tileY = Math.floor(yf);
+    pixelX = Math.floor((xf - tileX) * TS);
+    pixelY = Math.floor((yf - tileY) * TS);
+  }
+
+  // ── 3×3 BBOX in EPSG:3857 (single WMS request → no inter-tile seams) ──
+  const minTileX = tileX - 1, minTileY = tileY - 1;
+  const n = Math.pow(2, Z);
+  const bboxMinX = minTileX           / n * 2 * _R - _R;
+  const bboxMaxX = (minTileX + GRID)  / n * 2 * _R - _R;
+  const latTop   = Math.atan(Math.sinh(Math.PI * (1 - 2 *  minTileY          / n))) * 180/Math.PI;
+  const latBot   = Math.atan(Math.sinh(Math.PI * (1 - 2 * (minTileY + GRID)  / n))) * 180/Math.PI;
+  const bboxMaxY = _Re * Math.log(Math.tan(Math.PI/4 + latTop * Math.PI/360));
+  const bboxMinY = _Re * Math.log(Math.tan(Math.PI/4 + latBot * Math.PI/360));
+  const bbox = `${bboxMinX.toFixed(2)},${bboxMinY.toFixed(2)},${bboxMaxX.toFixed(2)},${bboxMaxY.toFixed(2)}`;
+
   const url = `https://nspd.gov.ru/api/aeggis/v2/${layerId}/wms?`+
     `SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${layerId}`+
-    `&WIDTH=${W}&HEIGHT=${W}&CRS=EPSG:3857&FORMAT=image/png&TRANSPARENT=true&STYLES=`+
-    `&BBOX=${ti.tileBbox}`;
+    `&WIDTH=${W}&HEIGHT=${H}&CRS=EPSG:3857&FORMAT=image/png&TRANSPARENT=true&STYLES=`+
+    `&BBOX=${bbox}`;
   const res = await fetch(url, {headers:{'Referer':'https://nspd.gov.ru/'}});
   if(!res.ok) throw new Error(`Тайл HTTP ${res.status} — нужен российский IP`);
   const bmp = await createImageBitmap(await res.blob());
-  const cv  = document.createElement('canvas'); cv.width=cv.height=W;
+  const cv  = document.createElement('canvas'); cv.width=W; cv.height=H;
   const ctx = cv.getContext('2d',{willReadFrequently:true});
   ctx.drawImage(bmp,0,0);
-  const px  = ctx.getImageData(0,0,W,W).data;   // RGBA flat array
+  const px  = ctx.getImageData(0,0,W,H).data;
 
-  const isOn = (x,y) => (x<0||y<0||x>=W||y>=W) ? false : px[(y*W+x)*4+3] > THRESH;
+  const isOn = (x,y) => (x<0||y<0||x>=W||y>=H) ? false : px[(y*W+x)*4+3] > THRESH;
 
-  // STEP 2 — BFS flood-fill 4-connected from click pixel
-  if(!isOn(ti.pixelX, ti.pixelY)) return null;
-  const filled = new Uint8Array(W*W);
-  const stk = new Int32Array(W*W*2); let sp=0;
+  // Click pixel = center tile of the 3×3 stitch (offset by one tile width)
+  const clickX = TS + pixelX, clickY = TS + pixelY;
+  if(!isOn(clickX, clickY)) return null;
+
+  // ── BFS flood-fill ──
+  const filled = new Uint8Array(W*H);
+  const stk = new Int32Array(W*H*2); let sp=0;
   const seed=(x,y)=>{ const i=y*W+x; if(!filled[i]&&isOn(x,y)){filled[i]=1;stk[sp++]=x;stk[sp++]=y;} };
-  seed(ti.pixelX, ti.pixelY);
+  seed(clickX, clickY);
   while(sp>0){ const y=stk[--sp],x=stk[--sp]; seed(x-1,y);seed(x+1,y);seed(x,y-1);seed(x,y+1); }
 
-  let nFill=0, minX=W, minY=W, maxX=-1, maxY=-1;
-  for(let y=0;y<W;y++) for(let x=0;x<W;x++){
+  let nFill=0, minX=W, minY=H, maxX=-1, maxY=-1;
+  const MAX_FILL = Math.floor(W*H*0.8);  // 80% of canvas → "user clicked the background fill"
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
     if(filled[y*W+x]!==1) continue;
     nFill++;
     if(x<minX)minX=x; if(y<minY)minY=y;
     if(x>maxX)maxX=x; if(y>maxY)maxY=y;
   }
-  if(nFill < 8)     return null;
-  if(nFill > 60000) throw new Error('Область слишком велика — это фоновый регион?');
+  if(nFill < 8)        return null;
+  if(nFill > MAX_FILL) throw new Error('Область слишком велика — это фоновый регион?');
 
-  const f = (x,y) => (x<0||y<0||x>=W||y>=W) ? 0 : filled[y*W+x];
+  const f = (x,y) => (x<0||y<0||x>=W||y>=H) ? 0 : filled[y*W+x];
 
-  // STEP 3 — Find topmost-leftmost filled pixel = trace start
-  // Guaranteed to lie on the OUTER boundary (cannot be inside a hole).
+  // ── Topmost-leftmost = trace start (always on outer boundary) ──
   let sX=-1, sY=-1;
   outer: for(let y=minY; y<=maxY; y++) for(let x=minX; x<=maxX; x++){
     if(f(x,y)){ sX=x; sY=y; break outer; }
   }
   if(sX < 0) return null;
 
-  // STEP 4 — Moore-Neighbor boundary tracing (8-connected, clockwise)
-  // 8 neighbors in clockwise order starting from West (idx 0):
-  //   0:W(-1,0)  1:NW(-1,-1) 2:N(0,-1)  3:NE(1,-1)
-  //   4:E(1,0)   5:SE(1,1)   6:S(0,1)   7:SW(-1,1)
+  // ── Moore-Neighbor boundary tracing (8-connected, clockwise) ──
   const NX = [-1,-1, 0, 1, 1, 1, 0,-1];
   const NY = [ 0,-1,-1,-1, 0, 1, 1, 1];
   const nDir = (fx,fy,tx,ty) => {
@@ -1271,53 +1343,39 @@ async function _extractTileContour(ti, layerId){
     for(let i=0;i<8;i++) if(NX[i]===dx && NY[i]===dy) return i;
     return -1;
   };
-
   const contour = [[sX, sY]];
   let curX = sX, curY = sY;
-  // Initial backtrack: cell to the West of start (start is leftmost on its scan row,
-  // so its W neighbor is empty by construction).
   let backX = sX - 1, backY = sY;
-
-  const MAX_STEPS = Math.min(nFill * 4 + 1000, 200000);
+  const MAX_STEPS = Math.min(nFill * 4 + 1000, 600000);
   let steps = 0, returned = false;
-
   while(steps++ < MAX_STEPS){
     const fromDir = nDir(curX, curY, backX, backY);
     if(fromDir < 0) break;
     let found = false;
-    // Scan clockwise from (fromDir+1) around current pixel
     for(let i=1; i<=8; i++){
       const d = (fromDir + i) & 7;
       const nx = curX + NX[d], ny = curY + NY[d];
       if(f(nx, ny)){
-        // Backtrack = previous (empty) neighbor in the clockwise scan
         const pd = (fromDir + i - 1) & 7;
         backX = curX + NX[pd]; backY = curY + NY[pd];
         curX = nx; curY = ny;
         contour.push([curX, curY]);
-        found = true;
-        break;
+        found = true; break;
       }
     }
-    if(!found) break;  // single-pixel island — degenerate
-    // Termination: revisit start (Jacob-style; require some progress to avoid 1-step exit)
+    if(!found) break;
     if(curX === sX && curY === sY){
       if(returned || contour.length > 4) break;
       returned = true;
     }
   }
-
-  // Drop trailing duplicate-of-start (the closing point we'll re-append later)
   if(contour.length > 1){
     const last = contour[contour.length-1];
     if(last[0]===sX && last[1]===sY) contour.pop();
   }
   if(contour.length < 3) return null;
 
-  // STEP 5 — Closed-polygon Ramer-Douglas-Peucker
-  // Standard RDP keeps endpoints; on a closed contour both endpoints are `start`,
-  // which biases simplification near the start pixel. Fix: split the contour at the
-  // pixel furthest from start (a natural "antipode" anchor), RDP each half, merge.
+  // ── Closed-polygon RDP ──
   const _perp = (p, a, b) => {
     const dx=b[0]-a[0], dy=b[1]-a[1], L2=dx*dx+dy*dy;
     if(L2 < 1e-12){ const ex=p[0]-a[0], ey=p[1]-a[1]; return Math.sqrt(ex*ex+ey*ey); }
@@ -1347,7 +1405,6 @@ async function _extractTileContour(ti, layerId){
     for(let i=0; i<pts.length; i++) if(keep[i]) out.push(pts[i]);
     return out;
   };
-
   let pts;
   if(contour.length < 6){
     pts = contour.slice();
@@ -1361,21 +1418,16 @@ async function _extractTileContour(ti, layerId){
     }
     const half1 = _rdp(contour.slice(0, antIdx+1), RDP_EPS);
     const half2 = _rdp(contour.slice(antIdx),     RDP_EPS);
-    // half1 ends at antipode, half2 starts at antipode → drop duplicate junction
     pts = half1.concat(half2.slice(1));
   }
-
   if(pts.length < 3) return null;
   if(pts.length > MAX_PT) pts = _sampleN(pts, MAX_PT);
-
-  // Close ring (KML LinearRing requires first==last)
   pts.push(pts[0]);
 
-  // STEP 6 — Pixel → WGS84 (Web Mercator inverse, uses ti.z, not hard-coded)
-  const n = Math.pow(2, ti.z);
+  // ── Pixel→WGS84 using stitched bbox origin (minTileX/minTileY at zoom Z) ──
   const coords = pts.map(([bx,by])=>[
-    (ti.tileX + bx/W) / n * 360 - 180,
-    Math.atan(Math.sinh(Math.PI*(1 - 2*(ti.tileY+by/W)/n))) * 180/Math.PI
+    (minTileX + bx/TS) / n * 360 - 180,
+    Math.atan(Math.sinh(Math.PI*(1 - 2*(minTileY + by/TS)/n))) * 180/Math.PI
   ]);
 
   return { type:'Polygon', coordinates:[coords] };
@@ -1439,6 +1491,231 @@ ${parts.placemark}
 </Document></kml>`;
   const blob=new Blob([xml],{type:'application/vnd.google-earth.kml+xml'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`${finalNum.replace(/:/g,'_')}.kml`;a.click();
+  map.closePopup();
+}
+
+
+// ═══ MANUAL CONTOUR EDITOR ════════════════════════════════════════
+// Yandex-Map-Constructor-style polygon editing on top of the auto-extracted
+// contour. Vertices are draggable; midpoint helpers add new vertices on click;
+// right-clicking a vertex opens a context menu with "delete". A bottom toolbar
+// holds "Завершить редактирование" (→ open save dialog) and "Отмена".
+//
+// State is kept in a single object so the editor is fully reentrant — calling
+// startContourEditor() while one is already active disposes the old one first.
+//
+// IMPORTANT: vertex coords are stored in Leaflet LatLng order (lat, lng) inside
+// the editor; conversion to GeoJSON [lon, lat] happens only at finish time.
+
+let _ce = null;  // {polygon, vertices[], midpoints[], type, cadNum, prefillDesc, originalLL}
+
+function startContourEditor(geom, type, cadNum, prefillDesc){
+  _disposeContourEditor();
+
+  // Strip closing duplicate from ring; convert [lon,lat] → [lat,lng] for Leaflet
+  const ring = geom.coordinates[0];
+  const closed = (ring.length>1 && ring[0][0]===ring[ring.length-1][0] && ring[0][1]===ring[ring.length-1][1]);
+  const ll = (closed ? ring.slice(0,-1) : ring.slice()).map(([lo,la])=>[la,lo]);
+
+  const s = CAD_STYLES[type==='str'?'oks':type] || CAD_STYLES.oks;
+  const polygon = L.polygon(ll, {
+    color:s.color, weight:s.weight, fillColor:s.fillColor, fillOpacity:0.3,
+    interactive:true
+  }).addTo(map);
+  // Right-click on the polygon body → finish/cancel context menu
+  polygon.on('contextmenu', e => {
+    if(e.originalEvent) e.originalEvent.preventDefault();
+    _showEditContextMenu(e.latlng, [
+      ['✅ Завершить редактирование', 'finishContourEditor()'],
+      ['↩ Отмена корректировок',     'cancelContourEditor()'],
+    ]);
+  });
+
+  _ce = {
+    polygon, vertices:[], midpoints:[],
+    type, cadNum:cadNum||'', prefillDesc:prefillDesc||'',
+    originalLL: ll.map(p=>p.slice())  // deep copy for "revert" support
+  };
+  ll.forEach((p,i) => _ce.vertices.push(_makeVertexMarker(p, i)));
+  _refreshMidpoints();
+  _showEditorToolbar();
+
+  try { map.fitBounds(polygon.getBounds(), {padding:[60,60], maxZoom:21}); } catch(_){}
+  showToast('✏ Тяните точки, ПКМ → удалить, кликните 🔵 чтобы добавить','info',4500);
+}
+
+function _makeVertexMarker(latlng, idx){
+  const m = L.circleMarker(latlng, {
+    radius:7, color:'#0d0f14', weight:2, fillColor:'#ff9500', fillOpacity:1,
+    interactive:true, bubblingMouseEvents:false, className:'edit-vertex'
+  }).addTo(map);
+  m._idx = idx;
+  // Drag (mouse): start tracking on mousedown, stream mousemove on map until mouseup
+  m.on('mousedown', e => _vertexDragStart(e, m));
+  // Right-click → context menu
+  m.on('contextmenu', e => {
+    if(e.originalEvent) e.originalEvent.preventDefault();
+    _showVertexContextMenu(e.latlng, m._idx);
+  });
+  return m;
+}
+
+function _vertexDragStart(e, marker){
+  if(!_ce) return;
+  L.DomEvent.preventDefault(e.originalEvent);
+  L.DomEvent.stopPropagation(e.originalEvent);
+  map.dragging.disable();
+  // Hide midpoints during drag (they re-render once on drop)
+  _ce.midpoints.forEach(m => map.removeLayer(m));
+  _ce.midpoints = [];
+  const move = ev => {
+    marker.setLatLng(ev.latlng);
+    _syncPolygonFromVertices();
+  };
+  const up = () => {
+    map.off('mousemove', move);
+    map.off('mouseup',   up);
+    map.dragging.enable();
+    _refreshMidpoints();
+  };
+  map.on('mousemove', move);
+  map.on('mouseup',   up);
+}
+
+function _syncPolygonFromVertices(){
+  if(!_ce) return;
+  _ce.polygon.setLatLngs(_ce.vertices.map(v => v.getLatLng()));
+}
+
+function _refreshMidpoints(){
+  if(!_ce) return;
+  _ce.midpoints.forEach(m => map.removeLayer(m));
+  _ce.midpoints = [];
+  const v = _ce.vertices;
+  for(let i=0; i<v.length; i++){
+    const a = v[i].getLatLng();
+    const b = v[(i+1)%v.length].getLatLng();
+    const mid = L.latLng((a.lat+b.lat)/2, (a.lng+b.lng)/2);
+    const helper = L.circleMarker(mid, {
+      radius:4, color:'#ffffff', weight:1, fillColor:'#47c8ff', fillOpacity:0.85,
+      interactive:true, bubblingMouseEvents:false, className:'edit-midpoint'
+    }).addTo(map);
+    helper._afterIdx = i;
+    helper.on('click', () => _insertVertexAt(helper._afterIdx, helper.getLatLng()));
+    _ce.midpoints.push(helper);
+  }
+}
+
+function _insertVertexAt(afterIdx, latlng){
+  if(!_ce) return;
+  const m = _makeVertexMarker(latlng, afterIdx+1);
+  _ce.vertices.splice(afterIdx+1, 0, m);
+  _ce.vertices.forEach((v,i) => v._idx = i);
+  _syncPolygonFromVertices();
+  _refreshMidpoints();
+}
+
+function _showVertexContextMenu(latlng, vertIdx){
+  const items = [];
+  if(_ce && _ce.vertices.length > 3){
+    items.push(['🗑 Удалить точку', `deleteEditorVertex(${vertIdx})`]);
+  } else {
+    items.push(['🗑 Удалить точку (мин.3)', '/* disabled */']);
+  }
+  items.push(['✅ Завершить редактирование', 'finishContourEditor()']);
+  items.push(['↩ Отмена корректировок',     'cancelContourEditor()']);
+  _showEditContextMenu(latlng, items);
+}
+
+function _showEditContextMenu(latlng, items){
+  // Render a small popup with action buttons
+  const html = `<div style="font-family:'JetBrains Mono',monospace;font-size:11px;display:flex;flex-direction:column;gap:4px;min-width:200px">`+
+    items.map(([label, action])=>{
+      const disabled = action.includes('/* disabled */');
+      const style = disabled
+        ? 'opacity:.4;cursor:not-allowed;background:#444'
+        : 'cursor:pointer;background:#1a1d24;color:#fff';
+      return `<button onclick="${disabled?'':action+';map.closePopup()'}" `+
+        `style="${style};border:1px solid #2a2d34;border-radius:4px;padding:6px 10px;text-align:left;color:#fff">${label}</button>`;
+    }).join('') + `</div>`;
+  L.popup({offset:[0,-6], closeButton:false, className:'edit-ctx-popup', autoClose:true})
+    .setLatLng(latlng).setContent(html).openOn(map);
+}
+
+window.deleteEditorVertex = function(vertIdx){
+  if(!_ce) return;
+  if(_ce.vertices.length <= 3){
+    showToast('Полигон должен иметь минимум 3 точки','warn',2500);
+    return;
+  }
+  const v = _ce.vertices[vertIdx];
+  if(!v) return;
+  map.removeLayer(v);
+  _ce.vertices.splice(vertIdx, 1);
+  _ce.vertices.forEach((m,i) => m._idx = i);
+  _syncPolygonFromVertices();
+  _refreshMidpoints();
+};
+
+function _showEditorToolbar(){
+  let bar = document.getElementById('contour-edit-bar');
+  if(!bar){
+    bar = document.createElement('div');
+    bar.id = 'contour-edit-bar';
+    bar.innerHTML =
+      `<span style="font-weight:700;color:var(--accent2)">✏ Редактирование контура</span>`+
+      `<span style="opacity:.7">тяните точки · ПКМ → удалить · клик 🔵 → добавить</span>`+
+      `<button id="contour-edit-finish" onclick="finishContourEditor()">✅ Завершить</button>`+
+      `<button id="contour-edit-revert" onclick="revertContourEditor()" title="Вернуть исходный авто-контур">↺ Сброс</button>`+
+      `<button id="contour-edit-cancel" onclick="cancelContourEditor()">Отмена</button>`;
+    document.body.appendChild(bar);
+  }
+  bar.classList.add('visible');
+}
+
+function _hideEditorToolbar(){
+  const bar = document.getElementById('contour-edit-bar');
+  if(bar) bar.classList.remove('visible');
+}
+
+window.finishContourEditor = function(){
+  if(!_ce) return;
+  const ll = _ce.vertices.map(v => v.getLatLng());
+  if(ll.length < 3){ showToast('Минимум 3 точки','error',2500); return; }
+  // LatLng → [lon, lat], close ring
+  const coords = ll.map(p => [p.lng, p.lat]);
+  coords.push(coords[0]);
+  const newGeom = { type:'Polygon', coordinates:[coords] };
+  const { type, cadNum, prefillDesc } = _ce;
+  _disposeContourEditor();
+  showKMLSaveDialog(newGeom, type, cadNum, prefillDesc);
+};
+
+window.cancelContourEditor = function(){
+  if(!_ce) return;
+  _disposeContourEditor();
+  showToast('Редактирование отменено','info',2000);
+};
+
+window.revertContourEditor = function(){
+  if(!_ce) return;
+  const orig = _ce.originalLL;
+  // Replace all vertex markers with originals
+  _ce.vertices.forEach(m => map.removeLayer(m));
+  _ce.vertices = orig.map((p,i) => _makeVertexMarker(p, i));
+  _syncPolygonFromVertices();
+  _refreshMidpoints();
+  map.closePopup();
+  showToast('Контур восстановлен','info',1800);
+};
+
+function _disposeContourEditor(){
+  if(!_ce) return;
+  if(_ce.polygon) map.removeLayer(_ce.polygon);
+  _ce.vertices.forEach(m => map.removeLayer(m));
+  _ce.midpoints.forEach(m => map.removeLayer(m));
+  _ce = null;
+  _hideEditorToolbar();
   map.closePopup();
 }
 
@@ -2748,6 +3025,7 @@ let _kdPendingType = 'oks';   // 'zu' | 'oks' | 'str'
 let _kdDiskKMLText = null;    // raw text of the disk KML file
 let _kdDiskFilename = null;   // filename for re-download
 let _kdDest = 'layer';        // current destination selection
+let _kdLayerIdx = -1;         // selected index into kmlLayers (custom dropdown)
 
 // Open the dialog — single entry point for "save cadastre/contour to KML"
 // `prefillDesc` is concatenated cadastre attributes (Площадь / Категория / ВРИ ...),
@@ -2757,6 +3035,7 @@ function showKMLSaveDialog(geom, type, prefillCadNum, prefillDesc){
   _kdPendingType = type;
   _kdDiskKMLText = null; _kdDiskFilename = null;
   _kdDest = 'layer';
+  _kdLayerIdx = -1;
 
   // Pre-fill fields
   document.getElementById('kd-cadnum').value = prefillCadNum||'';
@@ -2764,26 +3043,67 @@ function showKMLSaveDialog(geom, type, prefillCadNum, prefillDesc){
   document.getElementById('kd-desc').value   = prefillDesc||'';
   document.getElementById('kd-file-name').textContent = '';
 
-  // Build layer dropdown
-  const sel = document.getElementById('kd-layer-select');
-  sel.innerHTML = '';
-  if(kmlLayers.length){
-    kmlLayers.forEach((l,i)=>{
-      const opt=document.createElement('option');
-      opt.value=i; opt.textContent=l.docName||l.filename;
-      sel.appendChild(opt);
-    });
-    sel.style.display='block';
-  }else{
-    sel.style.display='none';
-  }
+  // Build custom-dropdown items
+  _kdRebuildDropdown();
 
   // Default destination: 'layer' if any open layer, otherwise 'new'
   kdSelectDest(kmlLayers.length?'layer':'new');
   document.getElementById('kml-save-dialog').classList.add('open');
 }
 
+// Rebuild the custom dropdown from current kmlLayers
+function _kdRebuildDropdown(){
+  const menu = document.getElementById('kd-dd-menu');
+  const cur  = document.getElementById('kd-dd-current');
+  menu.innerHTML = '';
+  if(!kmlLayers.length){
+    cur.textContent = '— нет открытых KML-слоёв —';
+    cur.style.opacity = '0.5';
+    const empty = document.createElement('div');
+    empty.className = 'kd-dd-empty';
+    empty.textContent = 'Загрузите KML-файл, чтобы выбрать его как назначение';
+    menu.appendChild(empty);
+    _kdLayerIdx = -1;
+    return;
+  }
+  cur.style.opacity = '1';
+  kmlLayers.forEach((l,i)=>{
+    const it = document.createElement('div');
+    it.className = 'kd-dd-item' + (i===0?' selected':'');
+    it.textContent = `${l.docName||l.filename}${l.placemarkCount?' ('+l.placemarkCount+')':''}`;
+    it.onclick = () => _kdPickLayer(i);
+    menu.appendChild(it);
+  });
+  _kdPickLayer(0);
+}
+
+window.kdToggleDropdown = function(ev){
+  if(ev) ev.stopPropagation();
+  if(!kmlLayers.length){
+    showToast('Сначала загрузите KML-файл (кнопка «Загрузить KML»)','warn',3000);
+    return;
+  }
+  document.getElementById('kd-layer-select').classList.toggle('open');
+};
+
+function _kdPickLayer(i){
+  _kdLayerIdx = i;
+  const layer = kmlLayers[i];
+  document.getElementById('kd-dd-current').textContent =
+    `${layer.docName||layer.filename}${layer.placemarkCount?' ('+layer.placemarkCount+')':''}`;
+  // Update selected highlight
+  document.querySelectorAll('#kd-dd-menu .kd-dd-item').forEach((el,j)=>{
+    el.classList.toggle('selected', j===i);
+  });
+  document.getElementById('kd-layer-select').classList.remove('open');
+}
+
 function kdSelectDest(dest){
+  // Block "layer" mode if no layers are loaded — gives clear feedback instead of empty dropdown
+  if(dest === 'layer' && kmlLayers.length === 0){
+    showToast('Нет открытых KML-слоёв — выберите «Создать новый файл»','warn',3000);
+    dest = 'new';
+  }
   _kdDest = dest;
   ['layer','new','disk'].forEach(d=>{
     const el=document.getElementById(`kd-opt-${d}`);
@@ -2794,6 +3114,8 @@ function kdSelectDest(dest){
   document.getElementById('kd-layer-select').style.display = dest==='layer' ? 'block' : 'none';
   document.getElementById('kd-file-btn').style.display     = dest==='disk'  ? 'block' : 'none';
   document.getElementById('kd-file-name').style.display    = dest==='disk'  ? 'block' : 'none';
+  // Closing the open dropdown when switching modes
+  document.getElementById('kd-layer-select').classList.remove('open');
 }
 
 function kdPickFile(){ document.getElementById('kd-file-input').click(); }
@@ -2808,6 +3130,7 @@ function kdFileChosen(input){
 
 function kdCancel(){
   document.getElementById('kml-save-dialog').classList.remove('open');
+  document.getElementById('kd-layer-select').classList.remove('open');
   _kdPendingGeom = null;
 }
 
@@ -2874,10 +3197,9 @@ function kdConfirm(){
   if(lyr) _attachCadEvents(lyr, name||cadNum, safeType, linesForTooltip);
 
   if(_kdDest==='layer'){
-    const sel = document.getElementById('kd-layer-select');
-    const idx = parseInt(sel.value||'0', 10);
+    const idx = _kdLayerIdx;
     const tgt = kmlLayers[idx];
-    if(!tgt){ showToast('Слой не найден','error',3000); _kdPendingGeom=null; return; }
+    if(!tgt){ showToast('Слой не найден — выберите его из списка','error',3000); _kdPendingGeom=null; return; }
     if(!tgt.cadPlacemarks) tgt.cadPlacemarks=[];
     tgt.cadPlacemarks.push({cadNum, type:safeType, geom, lines:linesForTooltip, parts:cleanParts});
     tgt.placemarkCount = (tgt.placemarkCount||0) + 1;
@@ -2931,9 +3253,14 @@ function _downloadBlob(text, filename){
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();
 }
 
-// Close dialog on backdrop click
+// Close dialog on backdrop click; close custom dropdown when clicking anywhere outside it
 document.getElementById('kml-save-dialog').addEventListener('click',e=>{
-  if(e.target===document.getElementById('kml-save-dialog')) kdCancel();
+  if(e.target===document.getElementById('kml-save-dialog')) { kdCancel(); return; }
+  // If click is outside the dropdown control, collapse it
+  const dd = document.getElementById('kd-layer-select');
+  if(dd && dd.classList.contains('open') && !dd.contains(e.target)){
+    dd.classList.remove('open');
+  }
 });
 </script>
 </body>
