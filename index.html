@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.6</title>
+<title>EkceloFoto v2.9.7</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -387,6 +387,30 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 ::-webkit-scrollbar{width:6px}
 ::-webkit-scrollbar-track{background:#0a0c10}
 ::-webkit-scrollbar-thumb{background:#2a3247;border-radius:3px}
+/* ── KML SAVE DIALOG ─────────────────────────────────────── */
+#kml-save-dialog{display:none;position:fixed;inset:0;z-index:10500;background:rgba(0,0,0,.72);backdrop-filter:blur(4px);align-items:center;justify-content:center}
+#kml-save-dialog.open{display:flex}
+#kml-save-card{background:var(--surface);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:20px 22px 18px;width:400px;max-width:96vw;box-shadow:0 24px 64px rgba(0,0,0,.85);font-family:'JetBrains Mono',monospace;font-size:12px}
+#kml-save-card h3{margin:0 0 14px;font-size:14px;font-weight:700;color:var(--accent);letter-spacing:-.3px}
+.kd-field{margin-bottom:10px}
+.kd-label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+.kd-input{width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;padding:6px 9px;outline:none}
+.kd-input:focus{border-color:var(--accent)}
+.kd-dest-group{margin:12px 0 14px}
+.kd-dest-opt{display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);cursor:pointer;margin-bottom:5px;transition:border-color .12s,background .12s;font-size:11px}
+.kd-dest-opt:hover{border-color:var(--accent);background:rgba(232,255,71,.04)}
+.kd-dest-opt.selected{border-color:var(--accent);background:rgba(232,255,71,.08)}
+.kd-dest-opt input[type=radio]{accent-color:var(--accent);cursor:pointer;margin:0;flex-shrink:0}
+.kd-dest-label{flex:1;color:var(--text)}
+#kd-layer-select{margin-top:5px;width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;padding:5px 8px;outline:none}
+#kd-file-btn{margin-top:5px;background:rgba(255,255,255,.07);border:1px solid var(--border);border-radius:var(--r);color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:10px;padding:5px 10px;cursor:pointer;transition:all .12s}
+#kd-file-btn:hover{border-color:var(--accent2);color:var(--accent2)}
+#kd-file-name{font-size:9px;color:var(--muted);margin-top:3px;min-height:12px}
+.kd-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
+.kd-btn{border-radius:var(--r);padding:7px 16px;font-family:'JetBrains Mono',monospace;font-size:11px;cursor:pointer;transition:all .15s;border:1px solid var(--border);background:var(--surface);color:var(--text)}
+.kd-btn:hover{border-color:var(--accent2)}
+.kd-btn.primary{background:var(--accent);border-color:var(--accent);color:#000;font-weight:700}
+.kd-btn.primary:hover{background:#f0ff00}
 </style>
 </head>
 <body>
@@ -394,7 +418,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.6</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.7</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -599,6 +623,48 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
   </div>
   <div id="toast"></div>
 </div>
+
+<!-- KML SAVE DIALOG -->
+<div id="kml-save-dialog">
+  <div id="kml-save-card">
+    <h3>💾 Сохранить контур в KML</h3>
+    <div class="kd-field">
+      <div class="kd-label">Название объекта</div>
+      <input class="kd-input" id="kd-name" placeholder="Административный корпус"/>
+    </div>
+    <div class="kd-field">
+      <div class="kd-label">Кадастровый номер</div>
+      <input class="kd-input" id="kd-cadnum" placeholder="90:25:020102:356"/>
+    </div>
+    <div class="kd-field">
+      <div class="kd-label">Дополнительное описание</div>
+      <input class="kd-input" id="kd-desc" placeholder="Год постройки, площадь, примечания…"/>
+    </div>
+    <div class="kd-label" style="margin-bottom:8px">Куда записать</div>
+    <div class="kd-dest-group">
+      <label class="kd-dest-opt selected" id="kd-opt-layer" onclick="kdSelectDest('layer')">
+        <input type="radio" name="kd-dest" value="layer" checked/>
+        <span class="kd-dest-label">В открытый KML-слой</span>
+      </label>
+      <select id="kd-layer-select"></select>
+      <label class="kd-dest-opt" id="kd-opt-new" onclick="kdSelectDest('new')">
+        <input type="radio" name="kd-dest" value="new"/>
+        <span class="kd-dest-label">Создать новый файл</span>
+      </label>
+      <label class="kd-dest-opt" id="kd-opt-disk" onclick="kdSelectDest('disk')">
+        <input type="radio" name="kd-dest" value="disk"/>
+        <span class="kd-dest-label">Дозаписать в файл с диска</span>
+      </label>
+      <button id="kd-file-btn" onclick="kdPickFile()" style="display:none">📂 Выбрать KML-файл…</button>
+      <div id="kd-file-name"></div>
+      <input type="file" id="kd-file-input" accept=".kml" style="display:none" onchange="kdFileChosen(this)"/>
+    </div>
+    <div class="kd-actions">
+      <button class="kd-btn" onclick="kdCancel()">Отмена</button>
+      <button class="kd-btn primary" onclick="kdConfirm()">Сохранить</button>
+    </div>
+  </div>
+</div>
 </div>
 
 <!-- FULLSCREEN VIEWER -->
@@ -663,7 +729,8 @@ function _setMapBg(white){
   ];
   all.forEach(el=>{
     if(!el) return;
-    el.style.setProperty('background', white ? '#ffffff' : '', white ? 'important' : '');
+    if(white){ el.style.setProperty('background', '#ffffff', 'important'); }
+    else      { el.style.removeProperty('background'); }
   });
 }
 
@@ -837,7 +904,7 @@ async function queryNSPDAtPoint(){
   const lat = window.lastClickedPoint.lat, lon = window.lastClickedPoint.lng;
 
   // Use current map zoom, clamped to the cadastre tile range
-  const z = Math.max(16, Math.min(19, Math.round(map.getZoom())));
+  const z = Math.min(19, Math.max(18, Math.round(map.getZoom())));
 
   const activeIds = _getActiveIds();
   if(!activeIds.length){
@@ -929,7 +996,8 @@ async function queryNSPDAtPoint(){
         geoItems.push({
           cadNum:'', geom:null, type:typeName, props:{},
           visualHit:true, layerId:id,
-          tileInfo:info,
+          tileInfo:info,   // original tileInfo
+          clickLat:lat, clickLon:lon,  // store click point for z=19 retry
         });
       }
     }
@@ -1069,7 +1137,7 @@ function saveContourToKML(idx){
 // Save tile bounding box as approximate contour (visual-only hit)
 // ── CONTOUR EXTRACTION FROM CADASTRE TILE ─────────────────────────
 //
-// Algorithm (radial sector sampling — v2.9.6):
+// Algorithm (radial sector sampling — v2.9.7):
 //
 //   Problem with previous approaches:
 //     • Angle-sort: fails for non-star-shaped (concave) regions
@@ -2625,6 +2693,168 @@ function savePendingCadastralToKML() {
   pendingCadResult = null;
   document.getElementById('cad-save-btn').style.display = 'none';
 }
+
+// ── KML SAVE DIALOG ────────────────────────────────────────────────
+// Supports 3 save destinations:
+//   'layer' → append to an open kmlLayers entry (in-memory + re-download)
+//   'new'   → create a fresh KML file with just this one Placemark
+//   'disk'  → user picks an existing KML file; we parse, append, re-download
+
+let _kdPendingGeom = null;    // GeoJSON geometry to save
+let _kdPendingType = 'oks';   // 'zu' | 'oks' | 'str'
+let _kdDiskKMLText = null;    // raw text of the disk KML file
+let _kdDiskFilename = null;   // filename for re-download
+let _kdDest = 'layer';        // current destination selection
+
+// Open the dialog — called from _renderAndSaveKML (overrides the old flow)
+function showKMLSaveDialog(geom, type, prefillCadNum){
+  _kdPendingGeom = geom;
+  _kdPendingType = type;
+  _kdDiskKMLText = null; _kdDiskFilename = null;
+  _kdDest = 'layer';
+
+  // Pre-fill fields
+  document.getElementById('kd-cadnum').value = prefillCadNum||'';
+  document.getElementById('kd-name').value   = '';
+  document.getElementById('kd-desc').value   = '';
+  document.getElementById('kd-file-name').textContent = '';
+
+  // Build layer dropdown
+  const sel = document.getElementById('kd-layer-select');
+  sel.innerHTML = '';
+  if(kmlLayers.length){
+    kmlLayers.forEach((l,i)=>{
+      const opt=document.createElement('option');
+      opt.value=i; opt.textContent=l.docName||l.filename;
+      sel.appendChild(opt);
+    });
+    sel.style.display='block';
+  }else{
+    sel.style.display='none';
+    // No open layers → default to new file
+    kdSelectDest('new');
+  }
+
+  // Reset radio selection
+  kdSelectDest(kmlLayers.length?'layer':'new');
+  document.getElementById('kml-save-dialog').classList.add('open');
+}
+
+function kdSelectDest(dest){
+  _kdDest = dest;
+  const opts=['layer','new','disk'];
+  opts.forEach(d=>{
+    const el=document.getElementById(`kd-opt-${d}`);
+    if(el) el.classList.toggle('selected', d===dest);
+    const inp=el?.querySelector('input[type=radio]');
+    if(inp) inp.checked=(d===dest);
+  });
+  document.getElementById('kd-layer-select').style.display = dest==='layer' ? 'block' : 'none';
+  document.getElementById('kd-file-btn').style.display     = dest==='disk'  ? 'block' : 'none';
+  document.getElementById('kd-file-name').style.display    = dest==='disk'  ? 'block' : 'none';
+}
+
+function kdPickFile(){ document.getElementById('kd-file-input').click(); }
+function kdFileChosen(input){
+  const file = input.files[0]; if(!file) return;
+  _kdDiskFilename = file.name;
+  document.getElementById('kd-file-name').textContent = '📄 ' + file.name;
+  const reader = new FileReader();
+  reader.onload = e => { _kdDiskKMLText = e.target.result; };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function kdCancel(){
+  document.getElementById('kml-save-dialog').classList.remove('open');
+  _kdPendingGeom = null;
+}
+
+function kdConfirm(){
+  if(!_kdPendingGeom){ kdCancel(); return; }
+  const name    = document.getElementById('kd-name').value.trim();
+  const cadNum  = document.getElementById('kd-cadnum').value.trim() || 'без_номера';
+  const desc    = document.getElementById('kd-desc').value.trim();
+  const type    = _kdPendingType;
+  const geom    = _kdPendingGeom;
+  const lines   = []; // attributes go into description field below
+  const parts   = _cadToKML(cadNum, type==='str'?'oks':type, geom, lines);
+  if(!parts){ showToast('❌ Некорректные координаты','error',4000); kdCancel(); return; }
+
+  // Build final Placemark with name + full description
+  const fullDesc = [name, cadNum, desc].filter(Boolean).join(' · ');
+  const placemark = `<Placemark><n><![CDATA[${esc(name||cadNum)}]]></n><description><![CDATA[${esc(fullDesc)}]]></description><styleUrl>#${parts.style.match(/id="([^"]+)"/)?.[1]||'cad_style'}</styleUrl>${_cadToKML(cadNum,type==='str'?'oks':type,geom,[])?.placemark?.replace(/^<Placemark>.*<styleUrl>[^<]*<\/styleUrl>/,'').replace(/<\/Placemark>$/,'')||''}</Placemark>`;
+
+  // Use the clean placemark from _cadToKML directly (it already has <n> and description)
+  const cleanParts = _cadToKML(cadNum, type==='str'?'oks':type, geom,
+    [[name||cadNum,''], desc&&['Описание',desc]].filter(Boolean).filter(a=>a[1])
+  );
+  if(!cleanParts){ showToast('❌ Ошибка генерации KML','error',3000); kdCancel(); return; }
+
+  document.getElementById('kml-save-dialog').classList.remove('open');
+
+  if(_kdDest==='layer'){
+    const sel = document.getElementById('kd-layer-select');
+    const idx = parseInt(sel.value||'0');
+    const tgt = kmlLayers[idx];
+    if(!tgt){ showToast('Слой не найден','error',3000); return; }
+    if(!tgt.cadPlacemarks) tgt.cadPlacemarks=[];
+    tgt.cadPlacemarks.push({cadNum,type,geom,lines:[],parts:cleanParts});
+    tgt.placemarkCount=(tgt.placemarkCount||0)+1;
+    const lyr=_makeCadLayer(geom,type,true);
+    if(lyr){_attachCadEvents(lyr,cadNum,type,[]);lyr.addTo(tgt.layerGroup);}
+    renderKMLDropdown();
+    showToast(`✅ Записано в «${tgt.docName||tgt.filename}»`,'success',3000);
+  } else if(_kdDest==='new'){
+    const xml=_buildKMLDocument([cleanParts.style],[cleanParts.placemark]);
+    _downloadBlob(xml, `${cadNum.replace(/:/g,'_')}.kml`);
+    showToast('✅ Скачан новый KML файл','success',3000);
+  } else if(_kdDest==='disk'){
+    if(!_kdDiskKMLText){ showToast('Файл не выбран','warn',3000); return; }
+    const updated = _appendToKMLText(_kdDiskKMLText, cleanParts.style, cleanParts.placemark);
+    _downloadBlob(updated, _kdDiskFilename||'updated.kml');
+    showToast(`✅ Дозаписано в «${_kdDiskFilename}»`,'success',3000);
+  }
+  _kdPendingGeom = null;
+}
+
+// Append style + placemark to existing KML text
+// Inserts before </Folder> if present, else before </Document>
+function _appendToKMLText(kmlText, styleXml, placemarkXml){
+  // Style: insert after last existing </Style>
+  const lastStyle = kmlText.lastIndexOf('</Style>');
+  let out = lastStyle>=0
+    ? kmlText.slice(0,lastStyle+8)+'
+'+styleXml+kmlText.slice(lastStyle+8)
+    : kmlText;
+  // Placemark: insert before </Folder> or </Document>
+  const folderClose  = out.lastIndexOf('</Folder>');
+  const docClose     = out.lastIndexOf('</Document>');
+  const insertBefore = folderClose>=0 ? folderClose : docClose;
+  if(insertBefore<0) return out + placemarkXml;
+  return out.slice(0,insertBefore) + placemarkXml + '
+' + out.slice(insertBefore);
+}
+
+function _buildKMLDocument(styles, placemarks){
+  const nl='\n';
+  return '<?xml version="1.0" encoding="UTF-8"?>'+nl+
+    '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>'+nl+
+    styles.join(nl)+nl+
+    '<Folder>'+nl+
+    placemarks.join(nl)+nl+
+    '</Folder>'+nl+
+    '</Document></kml>';
+}
+
+function _downloadBlob(text, filename){
+  const blob=new Blob([text],{type:'application/vnd.google-earth.kml+xml'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();
+}
+
+// Close dialog on backdrop click
+document.getElementById('kml-save-dialog').addEventListener('click',e=>{
+  if(e.target===document.getElementById('kml-save-dialog')) kdCancel();
+});
 </script>
 </body>
 </html>
