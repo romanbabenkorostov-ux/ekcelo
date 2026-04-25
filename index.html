@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.7</title>
+<title>EkceloFoto v2.9.8</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -418,7 +418,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.7</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.8</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -1137,7 +1137,7 @@ function saveContourToKML(idx){
 // Save tile bounding box as approximate contour (visual-only hit)
 // ── CONTOUR EXTRACTION FROM CADASTRE TILE ─────────────────────────
 //
-// Algorithm (radial sector sampling — v2.9.7):
+// Algorithm (radial sector sampling — v2.9.8):
 //
 //   Problem with previous approaches:
 //     • Angle-sort: fails for non-star-shaped (concave) regions
@@ -2780,15 +2780,21 @@ function kdConfirm(){
   const parts   = _cadToKML(cadNum, type==='str'?'oks':type, geom, lines);
   if(!parts){ showToast('❌ Некорректные координаты','error',4000); kdCancel(); return; }
 
-  // Build final Placemark with name + full description
-  const fullDesc = [name, cadNum, desc].filter(Boolean).join(' · ');
-  const placemark = `<Placemark><n><![CDATA[${esc(name||cadNum)}]]></n><description><![CDATA[${esc(fullDesc)}]]></description><styleUrl>#${parts.style.match(/id="([^"]+)"/)?.[1]||'cad_style'}</styleUrl>${_cadToKML(cadNum,type==='str'?'oks':type,geom,[])?.placemark?.replace(/^<Placemark>.*<styleUrl>[^<]*<\/styleUrl>/,'').replace(/<\/Placemark>$/,'')||''}</Placemark>`;
-
-  // Use the clean placemark from _cadToKML directly (it already has <n> and description)
-  const cleanParts = _cadToKML(cadNum, type==='str'?'oks':type, geom,
-    [[name||cadNum,''], desc&&['Описание',desc]].filter(Boolean).filter(a=>a[1])
-  );
+  // Build clean KML parts with name and description encoded in description field
+  const cleanLines = [];
+  if(name)  cleanLines.push(['Название', name]);
+  if(desc)  cleanLines.push(['Описание', desc]);
+  const cleanParts = _cadToKML(cadNum, type==='str'?'oks':type, _kdPendingGeom, cleanLines);
   if(!cleanParts){ showToast('❌ Ошибка генерации KML','error',3000); kdCancel(); return; }
+  // Override placemark to use Yandex-compatible <n> with human name + <description> with cad+desc
+  const fullDesc = [cadNum, name, desc].filter(Boolean).join(' · ');
+  const styleId  = cleanParts.style.match(/id="([^"]+)"/)?.[1]||'cad_style';
+  cleanParts.placemark = cleanParts.placemark.replace(
+    /<Placemark>.*?<styleUrl>/s,
+    '<Placemark><n><![CDATA[' + (name||cadNum) + ']]></n>' +
+    '<description><![CDATA[' + fullDesc + ']]></description>' +
+    '<styleUrl>'
+  );
 
   document.getElementById('kml-save-dialog').classList.remove('open');
 
@@ -2823,16 +2829,14 @@ function _appendToKMLText(kmlText, styleXml, placemarkXml){
   // Style: insert after last existing </Style>
   const lastStyle = kmlText.lastIndexOf('</Style>');
   let out = lastStyle>=0
-    ? kmlText.slice(0,lastStyle+8)+'
-'+styleXml+kmlText.slice(lastStyle+8)
+    ? kmlText.slice(0,lastStyle+8)+'\n'+styleXml+kmlText.slice(lastStyle+8)
     : kmlText;
   // Placemark: insert before </Folder> or </Document>
   const folderClose  = out.lastIndexOf('</Folder>');
   const docClose     = out.lastIndexOf('</Document>');
   const insertBefore = folderClose>=0 ? folderClose : docClose;
   if(insertBefore<0) return out + placemarkXml;
-  return out.slice(0,insertBefore) + placemarkXml + '
-' + out.slice(insertBefore);
+  return out.slice(0,insertBefore) + placemarkXml + '\n' + out.slice(insertBefore);
 }
 
 function _buildKMLDocument(styles, placemarks){
