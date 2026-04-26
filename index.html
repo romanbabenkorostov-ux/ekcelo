@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.12</title>
+<title>EkceloFoto v2.9.13</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -236,7 +236,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .lb-nav-btn:hover{border-color:var(--accent);color:var(--accent)}
 
 /* MAP BUTTONS */
-#fit-btn{position:absolute;top:12px;right:340px;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 11px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);cursor:pointer;transition:all .15s;white-space:nowrap}
+#fit-btn{position:absolute;top:12px;right:360px;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 11px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);cursor:pointer;transition:all .15s;white-space:nowrap}
 #fit-btn:hover{border-color:var(--accent);color:var(--accent)}
 #kml-wrap{position:absolute;top:12px;right:222px;z-index:601;display:none}
 #kml-wrap{display:none;gap:4px;align-items:center}
@@ -262,9 +262,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 /* ZOOM INDICATOR — below Leaflet +/- zoom controls */
 #zoom-indicator{position:absolute;top:96px;left:10px;z-index:600;background:rgba(22,26,36,.75);border:1px solid rgba(255,255,255,.12);border-radius:5px;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:11px;color:rgba(232,255,71,.85);pointer-events:none;letter-spacing:.5px;backdrop-filter:blur(4px)}
 
-/* MAP BUTTON ROW right-to-left: Спутник(90) | gap8 | Кадастр▾(105) | gap8 | KML▾(80) | gap8 | По фото(90)
-   right edges: layer=12, cad=92+8=110 from right edge of layer+gap, kml=110+105+8=223, fit=223+80+8=311 */
-#fit-btn{position:absolute;top:12px;right:311px;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 11px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);cursor:pointer;transition:all .15s;white-space:nowrap}
+/* MAP BUTTON ROW right-to-left: Спутник(90) | gap8 | Кадастр▾(105) | gap8 | KML(eye 32 + KML 80 = 116) | gap8 | По фото(90)
+   right edges: layer=12, cad=12+90+8=110, kml=110+105+8=223, fit=223+116+21≈360 */
+#fit-btn{position:absolute;top:12px;right:360px;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 11px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);cursor:pointer;transition:all .15s;white-space:nowrap}
 #fit-btn:hover{border-color:var(--accent);color:var(--accent)}
 #kml-wrap{position:absolute;top:12px;right:223px;z-index:601;display:none}
 #kml-btn{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 11px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);cursor:pointer;transition:all .15s;white-space:nowrap}
@@ -483,7 +483,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.12</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.13</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -854,25 +854,26 @@ updateZoomIndicator();
 
 // ── CADASTRE LAYER GROUPS ─────────────────────────────────────────
 // Cadastre WMS endpoint: https://nspd.gov.ru/api/aeggis/v2/{id}/wms
-// Layer IDs forensically determined from:
-//   (1) Default URL active_layers=37298,37299,37294,36048 (4 distinct render layers in NSPD's normal view)
-//   (2) GFI on aeggis/v3/36048/wms returns features with category:36368, categoryName:"Земельные участки ЕГРН"
-//       → 36048 is the ZU render layer (NOT 36368 — that's the EGRN category code)
-//   (3) Cross-reference with sasgis forum: 36049/36329 are LABEL pairs, not polygon renderers
 //
-// Final mapping:
-//   37294 = Здания (OKS) — буквенно-цифровая отрисовка зданий
-//   37298 = Сооружения (STR) — отрисовка сооружений (теплосети, ливнёвки и т.п.)
-//   36048 = Земельные участки из ЕГРН (ZU) — отрисовка границ участков
-//   36071 = Кадастровые кварталы
+// Final mapping (v51 — restored after v50's broken IDs 37294/37298 left OKS/STR blank):
+//   36329 = Здания / ОКС (полигоны) — render layer that worked in v45
+//   36328 = Сооружения (полигоны) — render layer that worked in v45
+//   36048 = Земельные участки из ЕГРН — confirmed by GFI evidence
+//           (returns features with category:36368, categoryName:"Земельные участки ЕГРН")
+//   36071 = Кадастровые кварталы — confirmed working
+//   36049, 36326 = Здания (подписи / labels) — auxiliary, paired with 36329 for OKS
 //
-// CRITICAL: each group must own DISJOINT layer IDs — sharing causes the v49 bug
-// where toggling «Сооружения» off also unloads ZU because 36048 was in both groups.
+// CRITICAL: each group must own DISJOINT layer IDs. v45's bug was OKS+STR sharing
+// 36048; the GFI evidence later proved 36048 is actually ZU. v50's mistake was
+// guessing 37294/37298 from an unrelated `active_layers` URL fragment — those IDs
+// don't exist as standalone WMS sources, so OKS/STR rendered blank. v51 keeps
+// 36329/36328 (proven to render in v45) and adds the label IDs as the secondary
+// per-group entry for richer rendering at higher zooms.
 const NSPD_GROUPS = {
-  oks: { ids:[37294],       label:'ОКС',         layers:[], cbId:'cad-cb-oks' },
-  str: { ids:[37298],       label:'Сооружения',  layers:[], cbId:'cad-cb-str' },
-  zu:  { ids:[36048],       label:'Зем.участки', layers:[], cbId:'cad-cb-zu'  },
-  kv:  { ids:[36071],       label:'Кварталы',    layers:[], cbId:'cad-cb-kv'  },
+  oks: { ids:[36329, 36049], label:'ОКС',         layers:[], cbId:'cad-cb-oks' },
+  str: { ids:[36328],        label:'Сооружения',  layers:[], cbId:'cad-cb-str' },
+  zu:  { ids:[36048],        label:'Зем.участки', layers:[], cbId:'cad-cb-zu'  },
+  kv:  { ids:[36071],        label:'Кварталы',    layers:[], cbId:'cad-cb-kv'  },
 };
 let cadastreActive = false;
 
@@ -1340,7 +1341,11 @@ async function _extractTileContour(ti, layerId){
   const GRID    = 3;          // 3×3 stitch around the click tile
   const W       = TS * GRID;  // 768 — full canvas
   const H       = TS * GRID;
-  const THRESH  = 25;
+  // Alpha threshold for "is this pixel a cadastre fill?".
+  // Buildings (OKS/STR) render with strong fills (alpha 60-180). ZU outlines have
+  // VERY light pink fill (alpha 8-15) and dark-maroon thin strokes (alpha 200+).
+  // Threshold 8 catches both reliably without leaking into JPEG noise (~3-5).
+  const THRESH  = 8;
   const RDP_EPS = 1.2;
   const MAX_PT  = 60;
   const Z_MAX   = 19;         // cadastre's maxNativeZoom — clip extraction zoom here
@@ -3004,8 +3009,8 @@ const CAD_STYLES = {
   // Photo dot = 11×11 px (CSS .marker-dot) → area ~95 px². 2× = 190 px² → r ≈ 7.8 → use 8.
   exp: { color:'#1e54e5',                fillColor:'#47c8ff',                weight:2 },
 };
-const NSPD_ZU_IDS  = [36048];          // Земельные участки ЕГРН — render & WFS layer
-const NSPD_OKS_IDS = [37294, 37298];   // Здания + Сооружения (no separate WFS for STR yet)
+const NSPD_ZU_IDS  = [36048];                // Земельные участки ЕГРН — confirmed
+const NSPD_OKS_IDS = [36329, 36328, 36049];   // Buildings + structures + labels (multi-attempt)
 const CAD_FIELDS   = ['cad_num','KAD_NUM','CAD_NUM','kadnum'];
 let pendingCadResult = null;
 let cadHoveredFeatures = [];
