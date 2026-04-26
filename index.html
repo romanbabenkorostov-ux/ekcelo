@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v3.2.0</title>
+<title>EkceloFoto v2.9.12</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -239,6 +239,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #fit-btn{position:absolute;top:12px;right:340px;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 11px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);cursor:pointer;transition:all .15s;white-space:nowrap}
 #fit-btn:hover{border-color:var(--accent);color:var(--accent)}
 #kml-wrap{position:absolute;top:12px;right:222px;z-index:601;display:none}
+#kml-wrap{display:none;gap:4px;align-items:center}
+#kml-wrap.has-layers{display:flex}
+#kml-eye-btn{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 9px;font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text);cursor:pointer;transition:all .15s;line-height:1}
+#kml-eye-btn:hover{border-color:var(--accent2)}
+#kml-eye-btn.all-on{border-color:var(--accent2);color:var(--accent2);background:rgba(71,200,255,.12)}
+#kml-eye-btn.all-off{opacity:.45}
 #kml-btn{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 11px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);cursor:pointer;transition:all .15s;white-space:nowrap}
 #kml-btn:hover,#kml-btn.active{border-color:var(--accent2);color:var(--accent2)}
 #kml-btn.active{background:rgba(71,200,255,.1)}
@@ -368,6 +374,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #cad-save-btn:hover{background:rgba(232,255,71,.25)}
 #cad-save-btn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 #cad-status{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);margin-top:5px;min-height:12px;line-height:1.4}
+#cad-suggest{margin-top:5px;background:var(--bg);border:1px solid var(--accent2);border-radius:var(--r);max-height:240px;overflow-y:auto;font-family:'JetBrains Mono',monospace}
+.cad-suggest-item{padding:6px 9px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);font-size:10.5px;line-height:1.35;display:flex;flex-direction:column;gap:2px}
+.cad-suggest-item:last-child{border-bottom:none}
+.cad-suggest-item:hover{background:rgba(255,149,0,.18)}
+.cad-suggest-item .cs-cad{color:var(--accent);font-weight:700}
+.cad-suggest-item .cs-name{color:var(--text);opacity:.85;font-size:10px}
+.cad-suggest-item .cs-src{color:var(--muted);font-size:9px;font-style:italic}
 /* Folder tree at bottom of sidebar */
 #folder-tree-panel{flex-shrink:0;border-top:1px solid var(--border);display:none;order:99}
 #folder-tree-panel.visible{display:block}
@@ -470,7 +483,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v3.2.0</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.12</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -541,11 +554,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
       <input type="text" id="cad-input" placeholder="47:14:1203001:1 — кадастровый номер" autocomplete="off"
         onkeydown="if(event.key==='Enter')doSearchCadastral()"
         oninput="onCadInputChange()"/>
-      <button id="cad-go-btn" onclick="doSearchCadastral()" title="Найти и отобразить">→</button>
+      <button id="cad-go-btn" onclick="doSearchCadastral()" title="Найти в KML/XLSX">→</button>
       <button id="cad-save-btn" onclick="savePendingCadastralToKML()" title="Записать в KML">
         <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
       </button>
     </div>
+    <!-- Local-search suggestion dropdown (Task 5). Hidden when input is empty.
+         Items render via _renderLocalSearchSuggestions; click delegates to _pickLocalSearchResult. -->
+    <div id="cad-suggest" style="display:none"></div>
     <div id="cad-status"></div>
   </div>
 
@@ -636,7 +652,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 
   <button id="fit-btn"      onclick="fitMapToPhotos()">⊟ По фото</button>
   <div id="kml-wrap">
-    <button id="kml-btn" onclick="toggleKMLMenu()">🗺 KML ▾</button>
+    <!-- Two-piece KML control:
+         (a) eye-button toggles ALL kmlLayers visibility at once (master switch)
+         (b) chevron-button opens the per-file dropdown with checkboxes
+         The visual distinction between "off" (gray) and "on" (cyan) is essential —
+         user reported the previous one-piece button felt like a passive label. -->
+    <button id="kml-eye-btn" onclick="toggleAllKMLVisibility()" title="Скрыть/показать все KML">👁</button>
+    <button id="kml-btn" onclick="toggleKMLMenu()" title="Список загруженных KML">🗺 KML ▾</button>
     <div id="kml-dropdown"></div>
   </div>
   <!-- Cadastre: button + layer dropdown -->
@@ -831,18 +853,25 @@ map.on('zoom zoomend', updateZoomIndicator);
 updateZoomIndicator();
 
 // ── CADASTRE LAYER GROUPS ─────────────────────────────────────────
-// Cadastre layer-id mapping for NSPD WMS (https://nspd.gov.ru/api/aeggis/v2/{id}/wms):
-//   36048,36328  = ОКС / Сооружения (рендер-полигоны)
-//   36049,36329  = парные слои (подписи / якоря) — нужны для GFI cad_num lookup
-//   36071        = Кадастровые кварталы
-//   36368        = «Земельные участки ЕГРН» — подтверждено по двум источникам:
-//                  (а) URL пользователя `selectedCard=…,36368,90:25:020102:124`
-//                  (б) форум sasgis: GeoJSON-feature возвращает
-//                      `category:36368, categoryName:"Земельные участки ЕГРН"`
+// Cadastre WMS endpoint: https://nspd.gov.ru/api/aeggis/v2/{id}/wms
+// Layer IDs forensically determined from:
+//   (1) Default URL active_layers=37298,37299,37294,36048 (4 distinct render layers in NSPD's normal view)
+//   (2) GFI on aeggis/v3/36048/wms returns features with category:36368, categoryName:"Земельные участки ЕГРН"
+//       → 36048 is the ZU render layer (NOT 36368 — that's the EGRN category code)
+//   (3) Cross-reference with sasgis forum: 36049/36329 are LABEL pairs, not polygon renderers
+//
+// Final mapping:
+//   37294 = Здания (OKS) — буквенно-цифровая отрисовка зданий
+//   37298 = Сооружения (STR) — отрисовка сооружений (теплосети, ливнёвки и т.п.)
+//   36048 = Земельные участки из ЕГРН (ZU) — отрисовка границ участков
+//   36071 = Кадастровые кварталы
+//
+// CRITICAL: each group must own DISJOINT layer IDs — sharing causes the v49 bug
+// where toggling «Сооружения» off also unloads ZU because 36048 was in both groups.
 const NSPD_GROUPS = {
-  oks: { ids:[36329,36049], label:'ОКС',         layers:[], cbId:'cad-cb-oks' },
-  str: { ids:[36328,36048], label:'Сооружения',  layers:[], cbId:'cad-cb-str' },
-  zu:  { ids:[36368],       label:'Зем.участки', layers:[], cbId:'cad-cb-zu'  },
+  oks: { ids:[37294],       label:'ОКС',         layers:[], cbId:'cad-cb-oks' },
+  str: { ids:[37298],       label:'Сооружения',  layers:[], cbId:'cad-cb-str' },
+  zu:  { ids:[36048],       label:'Зем.участки', layers:[], cbId:'cad-cb-zu'  },
   kv:  { ids:[36071],       label:'Кварталы',    layers:[], cbId:'cad-cb-kv'  },
 };
 let cadastreActive = false;
@@ -1855,12 +1884,12 @@ window.finishExplanationPoint = function(){
   if(!_ep) return;
   const ll = _ep.marker.getLatLng();
   const geom = { type:'Point', coordinates:[ll.lng, ll.lat] };
-  // Type 'str' (structure) — closest semantic match for an annotation pin in the
-  // existing KML styling system; kdConfirm strips this to 'oks' for a default
-  // green placemark, which is fine. The user can rename / restyle in KML editor.
-  // The example KML's «Въезд…» uses no type-specific style — just name+desc.
+  // Type 'exp' triggers the dedicated dark-blue/cyan style in CAD_STYLES + larger
+  // radius (8 px) in _makeCadLayer — 2× the area of a photo dot (11×11 px).
+  // The KML <Style> emitted in kdConfirm uses cyan fill + dark-blue outline so the
+  // saved file renders the same way in Google Earth / Yandex Maps Constructor.
   _disposeExplanationPoint();
-  showKMLSaveDialog(geom, 'oks', '', '');
+  showKMLSaveDialog(geom, 'exp', '', '');
 };
 
 window.cancelExplanationPoint = function(){
@@ -1910,18 +1939,16 @@ map.on('click',function(e){
   closeLightbox();
   window.lastClickedPoint=e.latlng;
   const lat=e.latlng.lat.toFixed(6),lng=e.latlng.lng.toFixed(6);
-  L.popup({maxWidth:320}).setLatLng(e.latlng).setContent(buildCoordPopup(lat,lng,null,null)).openOn(map);
+  L.popup({maxWidth:224}).setLatLng(e.latlng).setContent(buildCoordPopup(lat,lng,null,null)).openOn(map);
 });
 map.on('move zoom',()=>{if(lbLL&&document.getElementById('lightbox').classList.contains('visible'))posLightbox(lbLL,true);});
 
 function buildCoordPopup(lat,lng,kmlName,kmlDesc){
-  let h=`<div style="font-family:system-ui;line-height:1.5;font-size:13px"><b>📍 Координаты</b><br><code style="background:#f0f0f0;padding:2px 6px;border-radius:3px">${lat}, ${lng}</code>`;
-  if(kmlName||kmlDesc)h+=`<hr style="border:none;border-top:1px solid #ddd;margin:8px 0"><b>🗺 ${esc(kmlName||'Объект')}</b>${kmlDesc?'<br><span style="color:#444">'+esc(kmlDesc)+'</span>':''}`;
-  h+=`<br><br><button onclick="queryNSPDAtPoint()" style="background:#ff9500;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-weight:700;width:100%">📍 Запросить кадастр</button>`;
-  // Add explanation point — drops a draggable marker to label a place ("Въезд",
-  // "Парковка", "Точка фотосъёмки" etc.). Saves through the standard KML dialog
-  // as a Point geometry. See example KML «Въезд на таксис пересадкой на гольфкар».
-  h+=`<button onclick="startExplanationPoint(${lat},${lng})" style="background:#47c8ff;color:#0d0f14;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-weight:700;width:100%;margin-top:6px">💬 Добавить пояснение</button></div>`;
+  // Compact layout for the 30%-narrower (224px) popup: smaller font, tighter buttons
+  let h=`<div style="font-family:system-ui;line-height:1.4;font-size:11.5px"><b>📍 Координаты</b><br><code style="background:#f0f0f0;padding:1px 5px;border-radius:3px;font-size:10.5px">${lat}, ${lng}</code>`;
+  if(kmlName||kmlDesc)h+=`<hr style="border:none;border-top:1px solid #ddd;margin:6px 0"><b>🗺 ${esc(kmlName||'Объект')}</b>${kmlDesc?'<br><span style="color:#444;font-size:10.5px">'+esc(kmlDesc)+'</span>':''}`;
+  h+=`<br><br><button onclick="queryNSPDAtPoint()" style="background:#ff9500;color:#fff;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;font-weight:700;width:100%;font-size:11px">📍 Запросить кадастр</button>`;
+  h+=`<button onclick="startExplanationPoint(${lat},${lng})" style="background:#47c8ff;color:#0d0f14;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;font-weight:700;width:100%;margin-top:5px;font-size:11px">💬 Добавить пояснение</button></div>`;
   return h;
 }
 
@@ -2243,7 +2270,7 @@ function renderKMLOnMap(parsed){
     else if(pm.type==='LineString')layer=L.polyline(pm.coords,{color:pm.style.lineColor,weight:pm.style.lineWidth});
     else if(pm.type==='Point')layer=L.circleMarker(pm.coords,{radius:7,color:pm.style.lineColor,fillColor:pm.style.lineColor,fillOpacity:.85,weight:2});
     if(layer){
-      layer.on('click',e=>{L.DomEvent.stopPropagation(e);window.lastClickedPoint=e.latlng;L.popup({maxWidth:320}).setLatLng(e.latlng).setContent(buildCoordPopup(e.latlng.lat.toFixed(6),e.latlng.lng.toFixed(6),pm.name||pm.desc,pm.name?pm.desc:'')).openOn(map);});
+      layer.on('click',e=>{L.DomEvent.stopPropagation(e);window.lastClickedPoint=e.latlng;L.popup({maxWidth:224}).setLatLng(e.latlng).setContent(buildCoordPopup(e.latlng.lat.toFixed(6),e.latlng.lng.toFixed(6),pm.name||pm.desc,pm.name?pm.desc:'')).openOn(map);});
       if(pm.name||pm.desc)layer.bindTooltip(`<b>${esc(pm.name||'')}</b>${pm.desc?'<br><small>'+esc(pm.desc)+'</small>':''}`,{sticky:true,opacity:.92});
       layer.addTo(lg);
     }
@@ -2252,11 +2279,137 @@ function renderKMLOnMap(parsed){
 }
 
 async function loadKMLFromFile(file,displayName){
-  try{const text=await file.text();const parsed=parseKML(text,displayName||file.name);const lg=renderKMLOnMap(parsed);lg.addTo(map);kmlLayers.push({filename:displayName||file.name,docName:parsed.docName,layerGroup:lg,visible:true,placemarkCount:parsed.placemarks.length,parsedData:parsed,cadPlacemarks:[]});updateKMLButton();showToast(`🗺 KML: ${parsed.docName} (${parsed.placemarks.length} obj)`,'success',3000);}
-  catch(e){showToast(`❌ KML: ${e.message}`,'error',5000);}
+  try{
+    const text=await file.text();
+    await _loadKMLFromText(text, displayName||file.name);
+  } catch(e){showToast(`❌ KML: ${e.message}`,'error',5000);}
 }
 
-function updateKMLButton(){const wrap=document.getElementById('kml-wrap');wrap.style.display=kmlLayers.length?'block':'none';renderKMLDropdown();}
+// Common loader — used by file picker AND by the persistence-restore path on
+// page reload. Stores the raw text in the layer entry so we can:
+//   (a) re-emit it when the user adds a new placemark via the save dialog
+//   (b) persist the current state to localStorage so reloading the page keeps
+//       all loaded KMLs and any contours saved into them.
+async function _loadKMLFromText(text, displayName){
+  const parsed = parseKML(text, displayName);
+  const lg = renderKMLOnMap(parsed);
+  lg.addTo(map);
+  kmlLayers.push({
+    filename: displayName,
+    docName: parsed.docName,
+    layerGroup: lg,
+    visible: true,
+    placemarkCount: parsed.placemarks.length,
+    parsedData: parsed,
+    cadPlacemarks: [],
+    kmlText: text,        // raw KML — kept in sync after every kdConfirm save-to-layer
+  });
+  updateKMLButton();
+  saveKMLLayersToStorage();
+  showToast(`🗺 KML: ${parsed.docName} (${parsed.placemarks.length} obj)`,'success',3000);
+}
+
+// ── KML PERSISTENCE (localStorage) ────────────────────────────────
+// Survives page reload so contours saved to "open KML layer" don't vanish.
+// Keys are scoped under 'kmlPersist' to avoid clashes with other settings.
+// Stored as {version:1, layers:[{filename, kmlText, visible}]}.
+// Size note: localStorage limit is ~5 MB; each KML in our use-case is <100 KB,
+// so ~50 layers comfortably fit. Beyond that we trim oldest in saveKMLLayersToStorage.
+const _LS_KML_KEY = 'kmlPersist.v1';
+const _LS_KML_LIMIT_BYTES = 4_500_000;  // leave headroom under 5 MB browser cap
+
+function saveKMLLayersToStorage(){
+  try {
+    const payload = {
+      version: 1,
+      savedAt: Date.now(),
+      layers: kmlLayers.map(l => ({
+        filename: l.filename,
+        kmlText:  l.kmlText || '',
+        visible:  l.visible !== false,
+      })).filter(l => l.kmlText),
+    };
+    let serialised = JSON.stringify(payload);
+    // Trim oldest layers if oversized
+    while(serialised.length > _LS_KML_LIMIT_BYTES && payload.layers.length > 1){
+      payload.layers.shift();
+      serialised = JSON.stringify(payload);
+    }
+    localStorage.setItem(_LS_KML_KEY, serialised);
+  } catch(e){
+    console.warn('[kml-persist] save failed:', e);
+  }
+}
+
+async function restoreKMLLayersFromStorage(){
+  let payload;
+  try {
+    const raw = localStorage.getItem(_LS_KML_KEY);
+    if(!raw) return;
+    payload = JSON.parse(raw);
+  } catch(e){
+    console.warn('[kml-persist] restore failed:', e);
+    return;
+  }
+  if(!payload || !Array.isArray(payload.layers) || payload.layers.length===0) return;
+  let restored = 0;
+  for(const stored of payload.layers){
+    try {
+      await _loadKMLFromText(stored.kmlText, stored.filename);
+      // Apply visibility if it was OFF when the user reloaded
+      if(stored.visible === false){
+        const lastIdx = kmlLayers.length - 1;
+        toggleKMLLayer(lastIdx, false);
+        // Update the checkbox UI on next dropdown render
+        renderKMLDropdown();
+      }
+      restored++;
+    } catch(e){
+      console.warn('[kml-persist] failed to restore', stored.filename, e);
+    }
+  }
+  if(restored > 0){
+    showToast(`📂 Восстановлено KML-слоёв: ${restored}`, 'info', 3000);
+  }
+}
+
+function clearKMLPersistedStorage(){
+  try { localStorage.removeItem(_LS_KML_KEY); } catch(_){}
+}
+
+function updateKMLButton(){
+  const wrap=document.getElementById('kml-wrap');
+  // Use class instead of inline style so the flex layout (display:flex) survives.
+  if(kmlLayers.length){ wrap.classList.add('has-layers'); }
+  else                { wrap.classList.remove('has-layers'); }
+  renderKMLDropdown();
+  _refreshKMLEyeButton();
+}
+
+function _refreshKMLEyeButton(){
+  const eye = document.getElementById('kml-eye-btn');
+  if(!eye) return;
+  const total = kmlLayers.length;
+  const on    = kmlLayers.filter(l => l.visible).length;
+  eye.classList.toggle('all-on',  on === total && total > 0);
+  eye.classList.toggle('all-off', on === 0);
+  eye.textContent = on > 0 ? '👁' : '⊘';
+  eye.title = on === total ? 'Скрыть все KML-слои' :
+              on === 0     ? 'Показать все KML-слои' :
+                             `Видны ${on} из ${total} — клик: показать все`;
+}
+
+window.toggleAllKMLVisibility = function(){
+  if(!kmlLayers.length) return;
+  // If any layer is off → turn all on. If all are on → turn all off.
+  const someOff = kmlLayers.some(l => !l.visible);
+  const target  = someOff;
+  kmlLayers.forEach((l, i) => {
+    if(l.visible !== target) toggleKMLLayer(i, target);
+  });
+  renderKMLDropdown();
+  _refreshKMLEyeButton();
+};
 function renderKMLDropdown(){
   const dd=document.getElementById('kml-dropdown');dd.innerHTML='';
   kmlLayers.forEach((layer,i)=>{
@@ -2271,8 +2424,25 @@ function renderKMLDropdown(){
 }
 function toggleKMLMenu(){document.getElementById('kml-dropdown').classList.toggle('open');}
 function closeKMLMenu(){document.getElementById('kml-dropdown').classList.remove('open');}
-function toggleKMLLayer(idx,v){const l=kmlLayers[idx];if(!l)return;l.visible=v;if(v)l.layerGroup.addTo(map);else map.removeLayer(l.layerGroup);document.getElementById('kml-btn').classList.toggle('active',kmlLayers.some(k=>k.visible));}
-function removeKMLLayer(idx){if(kmlLayers[idx])map.removeLayer(kmlLayers[idx].layerGroup);kmlLayers.splice(idx,1);updateKMLButton();if(!kmlLayers.length)document.getElementById('kml-wrap').style.display='none';}
+function toggleKMLLayer(idx,v){
+  const l=kmlLayers[idx];if(!l)return;
+  l.visible=v;
+  if(v)l.layerGroup.addTo(map);else map.removeLayer(l.layerGroup);
+  document.getElementById('kml-btn').classList.toggle('active',kmlLayers.some(k=>k.visible));
+  _refreshKMLEyeButton();
+  saveKMLLayersToStorage();
+}
+function removeKMLLayer(idx){
+  if(kmlLayers[idx])map.removeLayer(kmlLayers[idx].layerGroup);
+  kmlLayers.splice(idx,1);
+  updateKMLButton();
+  if(!kmlLayers.length){
+    document.getElementById('kml-wrap').classList.remove('has-layers');
+    clearKMLPersistedStorage();
+  } else {
+    saveKMLLayersToStorage();
+  }
+}
 
 // ═══ MARKERS ══════════════════════════════════════════════════════
 function fovSvg(bearing,R,accent=false){if(bearing===null||isNaN(bearing))return'';const cx=R,cy=R,S=R*2,rad=a=>a*Math.PI/180,b=bearing-90;const oL=rad(b-65),oR=rad(b+65),ox1=cx+R*Math.cos(oL),oy1=cy+R*Math.sin(oL),ox2=cx+R*Math.cos(oR),oy2=cy+R*Math.sin(oR);const iL=rad(b-22),iR=rad(b+22),ix1=cx+R*Math.cos(iL),iy1=cy+R*Math.sin(iL),ix2=cx+R*Math.cos(iR),iy2=cy+R*Math.sin(iR);const nx=cx+R*.55*Math.cos(rad(b)),ny=cy+R*.55*Math.sin(rad(b));const c=accent?['rgba(71,200,255,0.10)','rgba(71,200,255,0.24)','rgba(71,200,255,0.60)','rgba(71,200,255,1.0)']:['rgba(232,255,71,0.04)','rgba(232,255,71,0.07)','rgba(232,255,71,0.20)','rgba(232,255,71,0.55)'];return`<svg width="${S}" height="${S}" viewBox="0 0 ${S} ${S}" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;overflow:visible"><path d="M${cx},${cy} L${ox1},${oy1} A${R},${R} 0 0,1 ${ox2},${oy2} Z" fill="${c[0]}"/><path d="M${cx},${cy} L${ix1},${iy1} A${R},${R} 0 0,1 ${ix2},${iy2} Z" fill="${c[1]}" stroke="${c[2]}" stroke-width="0.8"/><line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="${c[3]}" stroke-width="1.3" stroke-linecap="round"/></svg>`;}
@@ -2830,9 +3000,12 @@ function resetTimelineFilter(){
 const CAD_STYLES = {
   zu:  { color:'rgba(160,32,240,0.85)', fillColor:'rgba(160,32,240,0.10)', weight:2 },
   oks: { color:'rgba(0,180,50,0.85)',   fillColor:'rgba(0,180,50,0.10)',   weight:2 },
+  // Explanation pin: dark-blue stroke + cyan fill, area ≈ 2× photo dot.
+  // Photo dot = 11×11 px (CSS .marker-dot) → area ~95 px². 2× = 190 px² → r ≈ 7.8 → use 8.
+  exp: { color:'#1e54e5',                fillColor:'#47c8ff',                weight:2 },
 };
-const NSPD_ZU_IDS  = [36049, 36329];
-const NSPD_OKS_IDS = [36048, 36328];
+const NSPD_ZU_IDS  = [36048];          // Земельные участки ЕГРН — render & WFS layer
+const NSPD_OKS_IDS = [37294, 37298];   // Здания + Сооружения (no separate WFS for STR yet)
 const CAD_FIELDS   = ['cad_num','KAD_NUM','CAD_NUM','kadnum'];
 let pendingCadResult = null;
 let cadHoveredFeatures = [];
@@ -3078,13 +3251,18 @@ function pkkGeomToLeaflet(geom) {
 }
 
 function _makeCadLayer(geom, type, interactive) {
-  const s = CAD_STYLES[type];
+  const s = CAD_STYLES[type] || CAD_STYLES.oks;
   const ll = pkkGeomToLeaflet(geom);
   if (!ll) return null;
   const opts = { color:s.color, weight:s.weight, fillColor:s.fillColor, fillOpacity:1, interactive:!!interactive };
   if (geom.type === 'Polygon')      return L.polygon(ll, opts);
   if (geom.type === 'MultiPolygon') return L.polygon(ll.flat(), opts);
-  if (geom.type === 'Point')        return L.circleMarker(ll[0], { radius:8, ...opts, fillOpacity:.9 });
+  if (geom.type === 'Point') {
+    // Explanation-point: dark-blue stroke + cyan fill, radius=8 → ~201 px² ≈ 2× photo dot (95 px²)
+    // Other point types (rare): radius=6 to differentiate
+    const radius = type === 'exp' ? 8 : 6;
+    return L.circleMarker(ll[0], { radius, ...opts, fillOpacity: type==='exp' ? 0.95 : 0.9 });
+  }
   return null;
 }
 
@@ -3223,6 +3401,11 @@ window.togglePhotoMarkers = function(){
 let _objectCatalog = [];
 let _kdCatalogFiltered = [];  // indices into _objectCatalog matching current search
 
+// Raw XLSX bytes + filename — kept so we can re-emit the workbook with a centroid
+// column patched in (see _maybeOfferCentroidWriteback / Task 6).
+let _objectCatalogRaw = null;       // Uint8Array of original file bytes
+let _objectCatalogFilename = null;  // original filename (without .xlsx removed)
+
 function onXlsxFileChosen(input){
   const file = input.files[0];
   input.value = '';  // allow re-uploading the same file later
@@ -3234,10 +3417,15 @@ function onXlsxFileChosen(input){
   const reader = new FileReader();
   reader.onload = e => {
     try {
-      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+      const bytes = new Uint8Array(e.target.result);
+      const wb = XLSX.read(bytes, {type:'array'});
       const items = _parseCatalogWorkbook(wb);
       if(!items.length){ showToast('В файле не найдено записей на листе «Здания, сооружения»','warn',4000); return; }
       _objectCatalog = items;
+      _objectCatalogRaw = bytes;                                // Task 6: raw bytes for writeback
+      _objectCatalogFilename = file.name.replace(/\.xlsx?$/i, ''); // strip ext for re-naming
+      // Pre-load any existing centroids so search results show them immediately
+      _hydrateCatalogCentroidsFromXLSX(wb);
       showToast(`✅ Каталог: ${items.length} объект(ов) загружено`, 'success', 3000);
     } catch(err){
       console.warn('[xlsx]', err);
@@ -3245,6 +3433,34 @@ function onXlsxFileChosen(input){
     }
   };
   reader.readAsArrayBuffer(file);
+}
+
+// If the source XLSX already has a «Координаты центра объекта» column populated,
+// import those values into _objectCatalog so they show up in search results.
+function _hydrateCatalogCentroidsFromXLSX(wb){
+  const sheetName = wb.SheetNames.find(n => n === 'Здания, сооружения')
+                || wb.SheetNames.find(n => /^Здания/i.test(n))
+                || wb.SheetNames[0];
+  const ws = wb.Sheets[sheetName];
+  if(!ws || !ws['!ref']) return;
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  let centroidCol = -1;
+  for(let c = range.s.c; c <= range.e.c; c++){
+    const header = ws[XLSX.utils.encode_cell({r:1, c})];
+    if(header && /координат/i.test(String(header.v||'')) && /центр/i.test(String(header.v||''))){
+      centroidCol = c; break;
+    }
+  }
+  if(centroidCol < 0) return;
+  const G = 6;
+  for(let r = 2; r <= range.e.r; r++){
+    const cad = ws[XLSX.utils.encode_cell({r, c:G})];
+    if(!cad) continue;
+    const ce = ws[XLSX.utils.encode_cell({r, c:centroidCol})];
+    if(!ce || !ce.v) continue;
+    const it = _objectCatalog.find(x => x.cadNum === String(cad.v).trim());
+    if(it) it.centroid = String(ce.v).trim();
+  }
 }
 
 // Parse workbook → array of catalog entries.
@@ -3556,15 +3772,37 @@ function kdConfirm(){
     return;
   }
 
-  // Style: same ABGR colors as _cadToKML for consistency with v45 KMLs
-  const bABGR  = safeType==='zu' ? 'ff7f007f' : 'ff007f00';
-  const fABGR  = safeType==='zu' ? '337f007f' : '33007f00';
-  const sid    = `cad_${safeType}_${cadNum.replace(/:/g,'_')}`;
-  const styleXml = `<Style id="${sid}"><LineStyle><color>${bABGR}</color><width>2</width></LineStyle><PolyStyle><color>${fABGR}</color><fill>1</fill><outline>1</outline></PolyStyle></Style>`;
+  // Style: KML uses ABGR (alpha-blue-green-red) hex.
+  //   zu  = purple stroke + 20% transparent purple fill
+  //   oks = green  stroke + 20% transparent green  fill
+  //   exp = dark-blue stroke (#1e54e5 = R1e G54 Be5 → ABGR ffe5541e)
+  //         cyan fill      (#47c8ff = R47 Gc8 Bff → ABGR f0ffc847, alpha 0xf0 ≈ 94%)
+  let bABGR, fABGR;
+  if(safeType==='exp'){      bABGR='ffe5541e'; fABGR='f0ffc847'; }
+  else if(safeType==='zu'){  bABGR='ff7f007f'; fABGR='337f007f'; }
+  else                    {  bABGR='ff007f00'; fABGR='33007f00'; }
+  const sid    = `cad_${safeType}_${cadNum.replace(/[^0-9a-zA-Z_]/g,'_')||'pt'}`;
+  // Build per-geometry-type Style. KML's Polygon styles (LineStyle+PolyStyle) don't
+  // affect Points — Points need IconStyle. We emit BOTH in the same <Style> so the
+  // file is portable across Google Earth and Yandex Maps Constructor regardless of
+  // geometry type.
+  const isPoint  = (geom.type === 'Point');
+  // Public icon URL with cyan-blue dot for explanation pins; circle.png for others.
+  // (Maps.Yandex / GE both fetch and tint these via <color>.)
+  const iconHref = safeType === 'exp'
+    ? 'https://maps.google.com/mapfiles/kml/paddle/blu-circle.png'
+    : 'https://maps.google.com/mapfiles/kml/shapes/placemark_circle.png';
+  const iconStyleXml = `<IconStyle><color>${fABGR}</color><scale>${safeType==='exp' ? '1.2' : '1.0'}</scale><Icon><href>${iconHref}</href></Icon></IconStyle>`;
+  const polyStyleXml = `<LineStyle><color>${bABGR}</color><width>2</width></LineStyle><PolyStyle><color>${fABGR}</color><fill>1</fill><outline>1</outline></PolyStyle>`;
+  const styleXml = `<Style id="${sid}">${isPoint ? iconStyleXml : (iconStyleXml+polyStyleXml)}</Style>`;
 
-  // Placemark: <name> + <description>, exactly the structure the example KML uses
-  // <description> = "<cadNum> · <user description>" if both present
-  const fullDesc = [cadNum, desc].filter(Boolean).join(' · ');
+  // Placemark: <name> + <description>, exactly the structure the example KML uses.
+  // Description = "<cadNum> · <user description> · Центр: <lat,lon>" — the centroid
+  // gives downstream consumers (Yandex MK, Google Earth) the visual centre even
+  // for complex polygons (Task 6).
+  const _centroidObj  = _computeCentroid(geom);
+  const _centroidLine = _centroidObj ? `Центр: ${_formatCentroid(_centroidObj)}` : '';
+  const fullDesc = [cadNum, desc, _centroidLine].filter(Boolean).join(' · ');
   const placemarkXml = `<Placemark><name><![CDATA[${name||cadNum}]]></name><description><![CDATA[${fullDesc}]]></description><styleUrl>#${sid}</styleUrl>${geomXml}</Placemark>`;
   const cleanParts = { style: styleXml, placemark: placemarkXml };
 
@@ -3585,18 +3823,35 @@ function kdConfirm(){
     tgt.cadPlacemarks.push({cadNum, type:safeType, geom, lines:linesForTooltip, parts:cleanParts});
     tgt.placemarkCount = (tgt.placemarkCount||0) + 1;
     if(lyr) lyr.addTo(tgt.layerGroup);
+
+    // Update the layer's raw KML text (Task 1: persistence). If the layer was
+    // freshly created without a kmlText (e.g. user just synthesised a new
+    // "Кадастр" layer), build one from scratch with this style+placemark.
+    if(tgt.kmlText){
+      tgt.kmlText = _appendToKMLText(tgt.kmlText, styleXml, placemarkXml);
+    } else {
+      tgt.kmlText = _buildKMLDocument([styleXml], [placemarkXml]);
+    }
+    saveKMLLayersToStorage();
+
+    // Task 6: if catalog (XLSX) was loaded and this cadNum is in it, prompt to
+    // write the polygon centroid back into the «Координаты центра объекта» column.
+    _maybeOfferCentroidWriteback(cadNum, geom);
+
     renderKMLDropdown();
     showToast(`✅ Записано в «${tgt.docName||tgt.filename}»`,'success',3000);
   } else if(_kdDest==='new'){
     if(lyr) lyr.addTo(map);
     const xml = _buildKMLDocument([styleXml],[placemarkXml]);
     _downloadBlob(xml, `${cadNum.replace(/:/g,'_')}.kml`);
+    _maybeOfferCentroidWriteback(cadNum, geom);
     showToast('✅ Скачан новый KML файл','success',3000);
   } else if(_kdDest==='disk'){
     if(!_kdDiskKMLText){ showToast('Файл не выбран','warn',3000); _kdPendingGeom=null; return; }
     if(lyr) lyr.addTo(map);
     const updated = _appendToKMLText(_kdDiskKMLText, styleXml, placemarkXml);
     _downloadBlob(updated, _kdDiskFilename||'updated.kml');
+    _maybeOfferCentroidWriteback(cadNum, geom);
     showToast(`✅ Дозаписано в «${_kdDiskFilename}»`,'success',3000);
   }
   _kdPendingGeom = null;
@@ -3647,6 +3902,350 @@ document.getElementById('kml-save-dialog').addEventListener('click',e=>{
   if(cdd && cdd.classList.contains('open') && !cdd.contains(e.target)){
     cdd.classList.remove('open');
   }
+});
+
+// ── TASK 6: GEOMETRIC CENTROID + XLSX WRITEBACK ───────────────────
+// Centroid algorithm by geometry type:
+//   Point           → the point itself
+//   Polygon (CCW/CW)→ area-weighted centroid using the shoelace formula on the
+//                     outer ring; gives the visual centre even for non-convex shapes
+//                     (more correct than averaging vertices, which biases toward
+//                     dense clusters of points).
+//   MultiPolygon    → centroid of the largest sub-polygon (most useful for the
+//                     user's "where to drop a label" intent).
+function _computeCentroid(geom){
+  if(!geom) return null;
+  if(geom.type === 'Point'){
+    const [lon, lat] = geom.coordinates;
+    return { lon, lat };
+  }
+  const polyCentroid = ring => {
+    // Shoelace area-weighted centroid. Ring may or may not be closed.
+    if(!ring || ring.length < 3) return null;
+    let A = 0, cx = 0, cy = 0;
+    const n = ring.length - (ring[0][0]===ring[ring.length-1][0] && ring[0][1]===ring[ring.length-1][1] ? 1 : 0);
+    for(let i=0; i<n; i++){
+      const [x0, y0] = ring[i];
+      const [x1, y1] = ring[(i+1)%n];
+      const f = x0*y1 - x1*y0;
+      A  += f;
+      cx += (x0 + x1) * f;
+      cy += (y0 + y1) * f;
+    }
+    A /= 2;
+    if(Math.abs(A) < 1e-12){
+      // Degenerate (zero area) — fall back to mean of vertices
+      const sum = ring.slice(0, n).reduce((s,[x,y]) => [s[0]+x, s[1]+y], [0,0]);
+      return { lon: sum[0]/n, lat: sum[1]/n };
+    }
+    return { lon: cx/(6*A), lat: cy/(6*A) };
+  };
+  if(geom.type === 'Polygon'){
+    return polyCentroid(geom.coordinates[0]);
+  }
+  if(geom.type === 'MultiPolygon'){
+    // Pick the polygon with the largest absolute shoelace area
+    let best = null, bestArea = -1;
+    for(const poly of geom.coordinates){
+      const ring = poly[0];
+      if(!ring || ring.length < 3) continue;
+      let A = 0;
+      for(let i=0; i<ring.length-1; i++){
+        A += ring[i][0]*ring[i+1][1] - ring[i+1][0]*ring[i][1];
+      }
+      A = Math.abs(A/2);
+      if(A > bestArea){ bestArea = A; best = ring; }
+    }
+    return best ? polyCentroid(best) : null;
+  }
+  return null;
+}
+
+function _formatCentroid(c){
+  if(!c) return '';
+  // 6 decimals ≈ 0.11 m precision at the equator — plenty for locating an object
+  return `${c.lat.toFixed(6)}, ${c.lon.toFixed(6)}`;
+}
+
+// Append centroid line to the description so it's also embedded in the KML.
+// Called from inside kdConfirm before the placemark is built, but here we
+// implement the AFTER-save xlsx prompt + download.
+async function _maybeOfferCentroidWriteback(cadNum, geom){
+  const c = _computeCentroid(geom);
+  if(!c) return;
+  const formatted = _formatCentroid(c);
+  // No catalog loaded → just store on the in-memory record so future searches see it
+  if(!_objectCatalog || !_objectCatalog.length) return;
+  const it = _objectCatalog.find(x => x.cadNum === cadNum);
+  if(!it) return;
+  // Save into in-memory catalog regardless (search will use it)
+  it.centroid = formatted;
+  // Offer download of an updated XLSX with the «Координаты центра объекта» column
+  // populated for this row. We use SheetJS to open the original workbook (which
+  // we kept around in `_objectCatalogRaw`) and re-emit it with the value patched.
+  if(typeof XLSX === 'undefined' || !_objectCatalogRaw) return;
+  const ok = window.confirm(
+    `Записать координаты центра объекта в XLSX?\n\n`+
+    `Кад.№ ${cadNum}\n`+
+    `Центр: ${formatted}\n\n`+
+    `Будет скачан обновлённый файл (исходный не изменяется).`
+  );
+  if(!ok) return;
+  try {
+    const wb = XLSX.read(_objectCatalogRaw, {type:'array', cellStyles:true});
+    const sheetName = wb.SheetNames.find(n => n === 'Здания, сооружения')
+                  || wb.SheetNames.find(n => /^Здания/i.test(n))
+                  || wb.SheetNames[0];
+    const ws = wb.Sheets[sheetName];
+    if(!ws) throw new Error('Лист не найден');
+    // Find the column index. If header «Координаты центра объекта» exists in row 2 (header row),
+    // use it; otherwise create one column to the right of the last data column.
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    let centroidCol = -1;
+    for(let c = range.s.c; c <= range.e.c; c++){
+      const header = ws[XLSX.utils.encode_cell({r:1, c})];
+      if(header && /координат/i.test(String(header.v||'')) && /центр/i.test(String(header.v||''))){
+        centroidCol = c;
+        break;
+      }
+    }
+    if(centroidCol === -1){
+      centroidCol = range.e.c + 1;
+      ws[XLSX.utils.encode_cell({r:1, c:centroidCol})] = { t:'s', v:'Координаты центра объекта' };
+      range.e.c = centroidCol;
+      ws['!ref'] = XLSX.utils.encode_range(range);
+    }
+    // Find the cad-num row (column G = index 6 — confirmed by the template parser)
+    const G = 6;
+    let written = 0;
+    for(let r = 2; r <= range.e.r; r++){
+      const cell = ws[XLSX.utils.encode_cell({r, c:G})];
+      if(!cell) continue;
+      if(String(cell.v||'').trim() === cadNum){
+        ws[XLSX.utils.encode_cell({r, c:centroidCol})] = { t:'s', v: formatted };
+        written++;
+      }
+    }
+    if(!written){ showToast('В каталоге нет строки с этим кад.№','warn',3000); return; }
+    const out = XLSX.write(wb, {type:'array', bookType:'xlsx'});
+    const blob = new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (_objectCatalogFilename || 'каталог') + '_с_центрами.xlsx';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    showToast(`✅ Координаты центра записаны в XLSX (${written} стр.)`, 'success', 3500);
+  } catch(e){
+    console.warn('[xlsx-writeback]', e);
+    showToast('❌ Не удалось обновить XLSX: '+(e.message||e), 'error', 4000);
+  }
+}
+
+// ── TASK 5: LOCAL CADASTRE SEARCH (KML + XLSX) ────────────────────
+// Replaces the previous Internet-only search (PKK5/NSPD WFS — slow, blocked from
+// non-Russian IPs). Now searches across:
+//   1. All loaded KML layers — tries to match a cadNum in the placemark's <name>
+//      or <description>; if found, zooms to and highlights its geometry.
+//   2. The XLSX catalog (_objectCatalog) — if found, shows all its attributes
+//      and offers a "Поместить на карту" action that drops an explanation pin
+//      at the centroid (if known) or prompts user to click on the map.
+// Falls back to the previous Internet flow only if the user asks for it.
+
+// Build a flat searchable index. Called lazily on first input change after data
+// loads (kmlLayers / _objectCatalog can grow at any time).
+function _buildLocalSearchIndex(){
+  const idx = [];
+  // KML placemarks. parseKML stores coords in [lat,lon] order; convert to GeoJSON
+  // [lon,lat] for compatibility with _makeCadLayer / _computeCentroid downstream.
+  const coordsToGeom = (pm) => {
+    if(!pm.coords) return null;
+    if(pm.type === 'Point'){
+      const [lat, lon] = pm.coords;
+      return { type:'Point', coordinates:[lon, lat] };
+    }
+    if(pm.type === 'Polygon'){
+      const ring = pm.coords.map(([lat, lon]) => [lon, lat]);
+      // Close ring if needed
+      if(ring.length >= 3 && (ring[0][0]!==ring[ring.length-1][0] || ring[0][1]!==ring[ring.length-1][1])){
+        ring.push(ring[0]);
+      }
+      return { type:'Polygon', coordinates:[ring] };
+    }
+    return null;
+  };
+  for(const layer of kmlLayers){
+    const placemarks = layer.parsedData?.placemarks || [];
+    for(const pm of placemarks){
+      const blob = `${pm.name||''} ${pm.desc||''}`;
+      const m = blob.match(/(\d{1,2}:\d{1,2}:\d{1,8}:\d{1,7})/);
+      if(!m) continue;
+      idx.push({
+        source: 'kml',
+        sourceLabel: layer.docName || layer.filename,
+        cadNum: m[1],
+        name: pm.name || '',
+        desc: pm.desc || '',
+        geom: coordsToGeom(pm),
+        layerIdx: kmlLayers.indexOf(layer),
+      });
+    }
+  }
+  // XLSX catalog
+  for(const it of _objectCatalog || []){
+    idx.push({
+      source: 'xlsx',
+      sourceLabel: _objectCatalogFilename || 'XLSX',
+      cadNum: it.cadNum,
+      name: _buildCatalogName(it),
+      desc: _buildCatalogDesc(it),
+      catalogItem: it,
+    });
+  }
+  return idx;
+}
+
+let _localSearchTimeout = null;
+function _renderLocalSearchSuggestions(query){
+  const sug = document.getElementById('cad-suggest');
+  if(!sug) return;
+  const q = (query||'').trim().toLowerCase();
+  if(q.length < 2){ sug.style.display = 'none'; sug.innerHTML = ''; return; }
+  const idx = _buildLocalSearchIndex();
+  const matches = idx
+    .filter(it => it.cadNum.toLowerCase().includes(q) ||
+                  (it.name && it.name.toLowerCase().includes(q)))
+    .slice(0, 12);
+  if(!matches.length){ sug.style.display = 'none'; sug.innerHTML = ''; return; }
+  sug.innerHTML = matches.map((m,i) =>
+    `<div class="cad-suggest-item" data-idx="${i}" onclick="_pickLocalSearchResult(${i})">`+
+    `<span class="cs-cad">${esc(m.cadNum)}</span>`+
+    (m.name ? `<span class="cs-name">${esc(m.name)}</span>` : '')+
+    `<span class="cs-src">${m.source==='kml'?'🗺':'📋'} ${esc(m.sourceLabel)}</span>`+
+    `</div>`
+  ).join('');
+  sug.style.display = 'block';
+  window._localSearchMatches = matches;
+}
+
+window._pickLocalSearchResult = function(i){
+  const m = (window._localSearchMatches||[])[i];
+  if(!m) return;
+  document.getElementById('cad-input').value = m.cadNum;
+  document.getElementById('cad-suggest').style.display = 'none';
+  _focusOnLocalResult(m);
+};
+
+// Show found object on the map / display its info + optional create-on-map action
+function _focusOnLocalResult(m){
+  if(m.source === 'kml' && m.geom){
+    // Zoom to geometry; flash the layer for visibility
+    try {
+      const tmp = _makeCadLayer(m.geom, 'oks', false);
+      if(tmp){
+        const bounds = tmp.getBounds ? tmp.getBounds() : null;
+        if(bounds && bounds.isValid()) map.fitBounds(bounds, {padding:[40,40], maxZoom:20});
+        else if(m.geom.type === 'Point'){
+          map.setView([m.geom.coordinates[1], m.geom.coordinates[0]], 19);
+        }
+      }
+    } catch(_){}
+    _cadSt(`✅ Найден в KML «${m.sourceLabel}»`, 'ok');
+    return;
+  }
+  // XLSX-only result — no geometry. Show all attributes and offer to plot.
+  const it = m.catalogItem;
+  if(!it){ _cadSt('Не найдено','err'); return; }
+  const lines = [];
+  if(it.kind)         lines.push(`<b>Вид:</b> ${esc(it.kind)}`);
+  if(it.nameEGRN)     lines.push(`<b>Наименование (ЕГРН):</b> ${esc(it.nameEGRN)}`);
+  if(it.namePB)       lines.push(`<b>Наименование (бух.учёт):</b> ${esc(it.namePB)}`);
+  if(it.area)         lines.push(`<b>Площадь:</b> ${esc(it.area)} м²`);
+  if(it.purpose)      lines.push(`<b>Назначение:</b> ${esc(it.purpose)}`);
+  if(it.floors)       lines.push(`<b>Этажей:</b> ${esc(it.floors)}`);
+  if(it.undFloors)    lines.push(`<b>Подземных:</b> ${esc(it.undFloors)}`);
+  if(it.finished)     lines.push(`<b>Завершение:</b> ${esc(it.finished)}`);
+  if(it.commissioned) lines.push(`<b>Ввод:</b> ${esc(it.commissioned)}`);
+  if(it.centroid)     lines.push(`<b>Центр:</b> ${esc(it.centroid)}`);
+  const sourceMsg = `Источник: 📋 ${esc(m.sourceLabel)} (XLSX)`;
+  const html =
+    `<div style="font-family:system-ui;line-height:1.5;font-size:12px;max-width:320px">`+
+    `<b style="font-size:13px">📋 ${esc(it.cadNum)}</b><br>`+
+    `<span style="color:#888;font-size:10px">${sourceMsg}</span><hr style="border:none;border-top:1px solid #ddd;margin:6px 0">`+
+    lines.join('<br>')+
+    `<br><br><button onclick="_plotCatalogItem('${esc(it.cadNum)}')" style="background:#47c8ff;color:#0d0f14;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-weight:700;font-size:11px;width:100%">📍 Создать точку на карте</button>`+
+    `</div>`;
+  // Use centroid if known, else map center
+  let lat, lng;
+  if(it.centroid){
+    const [latS, lngS] = it.centroid.split(',').map(s => parseFloat(s.trim()));
+    if(!isNaN(latS) && !isNaN(lngS)){ lat=latS; lng=lngS; map.setView([lat,lng], 18); }
+  }
+  if(lat===undefined){
+    const c = map.getCenter();
+    lat = c.lat; lng = c.lng;
+  }
+  L.popup({maxWidth:340}).setLatLng([lat,lng]).setContent(html).openOn(map);
+  _cadSt(`✅ Найден в XLSX «${m.sourceLabel}»`, 'ok');
+}
+
+window._plotCatalogItem = function(cadNum){
+  const it = (_objectCatalog||[]).find(x => x.cadNum === cadNum);
+  if(!it){ showToast('Не найдено в каталоге','error',2500); return; }
+  map.closePopup();
+  // Drop an explanation pin at map center → user drags to correct position → save dialog
+  const c = it.centroid
+    ? it.centroid.split(',').map(s => parseFloat(s.trim()))
+    : (() => { const ce = map.getCenter(); return [ce.lat, ce.lng]; })();
+  startExplanationPoint(c[0], c[1]);
+  // Pre-fill the upcoming save dialog when finishExplanationPoint fires:
+  // we can't pre-set the dialog now (it's not open yet), but we set the catalog
+  // item so the catalog dropdown's auto-select can grab it via cadNum match.
+  showToast(`Тяните точку, затем «Сохранить» → каталог автозаполнит поля`, 'info', 4000);
+};
+
+// Override the entry point onCadInputChange / doSearchCadastral wiring.
+// Original onCadInputChange just hides the save button; we extend it to also
+// render local-search suggestions.
+const _origOnCadInputChange = window.onCadInputChange;
+window.onCadInputChange = function(){
+  if(_origOnCadInputChange) _origOnCadInputChange();
+  const inp = document.getElementById('cad-input');
+  if(!inp) return;
+  if(_localSearchTimeout) clearTimeout(_localSearchTimeout);
+  _localSearchTimeout = setTimeout(() => _renderLocalSearchSuggestions(inp.value), 120);
+};
+
+// Replace doSearchCadastral with the local-first flow.
+const _origDoSearchCadastral = window.doSearchCadastral;
+window.doSearchCadastral = async function(){
+  const inp = document.getElementById('cad-input');
+  const q = inp ? inp.value.trim() : '';
+  if(!q){ showToast('Введите кадастровый номер или название','warn',2000); return; }
+  const idx = _buildLocalSearchIndex();
+  // Exact match preferred, else first substring match
+  const exact = idx.find(m => m.cadNum === q);
+  const partial = exact || idx.find(m =>
+    m.cadNum.toLowerCase().includes(q.toLowerCase()) ||
+    (m.name && m.name.toLowerCase().includes(q.toLowerCase()))
+  );
+  if(partial){
+    _focusOnLocalResult(partial);
+    document.getElementById('cad-suggest').style.display = 'none';
+    return;
+  }
+  // No local hit → ask before going to Internet (which often fails outside RU)
+  if(window.confirm(`«${q}» не найден в загруженных KML/XLSX.\nИскать в интернете (нужен российский IP)?`)){
+    if(_origDoSearchCadastral) await _origDoSearchCadastral.call(this);
+  } else {
+    _cadSt(`«${q}» — не найдено локально`,'err');
+  }
+};
+
+// ── INIT — restore persisted KML layers on page load ──────────────
+// Run after all module-scope state is ready. Use queueMicrotask so other top-level
+// init code (placeholders, default styles) finishes first.
+queueMicrotask(() => {
+  restoreKMLLayersFromStorage().catch(e => console.warn('[init] kml restore', e));
 });
 </script>
 </body>
