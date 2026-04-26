@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.14</title>
+<title>EkceloFoto v2.9.15</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -454,6 +454,17 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 /* Manual contour editor toolbar — fixed bottom-of-map bar */
 #contour-edit-bar{display:none;position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:10400;background:rgba(13,15,20,0.96);border:1px solid var(--accent2);border-radius:8px;padding:9px 14px;gap:10px;align-items:center;font-family:'JetBrains Mono',monospace;font-size:11px;color:#fff;box-shadow:0 6px 18px rgba(0,0,0,0.5);backdrop-filter:blur(6px);max-width:calc(100vw - 24px);flex-wrap:wrap;justify-content:center}
 #contour-edit-bar.visible{display:flex}
+/* XLSX save bar — anchored to right side, above the centred contour-edit bar.
+   Persistent (auto-shows after first centroid write, dismissible via × button). */
+#xlsx-save-bar{display:none;position:fixed;bottom:18px;right:18px;z-index:10399;background:rgba(13,15,20,0.96);border:1px solid #6cd96c;border-radius:8px;padding:8px 12px;gap:8px;align-items:center;font-family:'JetBrains Mono',monospace;font-size:11px;color:#fff;box-shadow:0 6px 18px rgba(0,0,0,0.5);backdrop-filter:blur(6px);max-width:calc(100vw - 24px);flex-wrap:wrap}
+#xlsx-save-bar.visible{display:flex}
+#xlsx-save-bar #xlsx-save-status{font-weight:700;color:#6cd96c;margin-right:4px}
+#xlsx-save-bar button{border:none;border-radius:5px;padding:5px 10px;font-weight:700;cursor:pointer;font-family:inherit;font-size:10.5px;background:#1a1d24;color:#fff;border:1px solid #2a2d34;transition:background .12s,border-color .12s}
+#xlsx-save-bar button:hover{border-color:#6cd96c;background:#252830}
+#xlsx-save-bar #xlsx-save-new{background:#6cd96c;color:#0d0f14;border-color:#6cd96c}
+#xlsx-save-bar #xlsx-save-new:hover{filter:brightness(1.1)}
+#xlsx-save-bar #xlsx-save-close{background:transparent;color:#888;border:none;font-size:14px;padding:2px 6px}
+#xlsx-save-bar #xlsx-save-close:hover{color:#fff}
 #contour-edit-bar button{border:none;border-radius:5px;padding:6px 12px;font-weight:700;cursor:pointer;font-family:inherit;font-size:11px}
 #contour-edit-finish{background:var(--accent);color:#0d0f14}
 #contour-edit-finish:hover{filter:brightness(1.1)}
@@ -483,7 +494,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.14</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.15</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -1438,7 +1449,35 @@ async function _extractTileContourOnce(ti, layerId, GRID, Z){
   ctx.drawImage(bmp,0,0);
   const px  = ctx.getImageData(0,0,W,H).data;
 
-  const isOn = (x,y) => (x<0||y<0||x>=W||y>=H) ? false : px[(y*W+x)*4+3] > THRESH;
+  // ── Adaptive fill predicate (the v53 fix for ZU border-leak bug) ──
+  // OKS/STR are solid-fill polygons (interior alpha ~60-180), bounded by transparent.
+  // ZU has very different rendering: light-pink low-alpha INTERIOR (~10-15) bounded
+  // by a saturated dark-maroon BORDER (alpha 200+). Critically, ZU borders are
+  // CONNECTED across adjacent parcels. With a single "alpha > 8" predicate, the
+  // BFS leaks through the border network and floods dozens of neighbouring parcels
+  // (observed at click 44.427291,34.104668 — single parcel ballooned to ~1 km tract).
+  //
+  // Solution: detect mode at click time, then pick the right predicate.
+  //   solid mode  (OKS): isOn(x,y) = alpha > 8                     → flood entire colored shape
+  //   thin-border (ZU):  isOn(x,y) = 4 < alpha < 80                → flood only interior, treat borders as walls
+  //
+  // Detection samples a 7×7 neighbourhood around the click pixel:
+  //   - ≥80% pixels above alpha 100 → uniform solid fill → OKS-style
+  //   - otherwise → thin-border (the safer default; ZU was the bug)
+  const _alphaAt = (x,y) => (x<0||y<0||x>=W||y>=H) ? 0 : px[(y*W+x)*4+3];
+  const halfGrid_ = Math.floor(GRID/2);
+  const _clickX_  = TS * halfGrid_ + pixelX;
+  const _clickY_  = TS * halfGrid_ + pixelY;
+  let highCount = 0, sampleTotal = 0;
+  for(let dy=-3; dy<=3; dy++) for(let dx=-3; dx<=3; dx++){
+    const a = _alphaAt(_clickX_+dx, _clickY_+dy);
+    sampleTotal++;
+    if(a > 100) highCount++;
+  }
+  const fillMode = (sampleTotal > 0 && highCount/sampleTotal >= 0.8) ? 'solid' : 'thin-border';
+  const isOn = fillMode === 'solid'
+    ? (x,y) => _alphaAt(x,y) > THRESH
+    : (x,y) => { const a = _alphaAt(x,y); return a > 4 && a < 80; };
 
   // Click pixel = centre tile of the GRID×GRID stitch (offset = halfGrid tiles in)
   const clickX = TS * halfGrid + pixelX, clickY = TS * halfGrid + pixelY;
@@ -3481,10 +3520,13 @@ function onXlsxFileChosen(input){
       const items = _parseCatalogWorkbook(wb);
       if(!items.length){ showToast('В файле не найдено записей на листе «Здания, сооружения»','warn',4000); return; }
       _objectCatalog = items;
-      _objectCatalogRaw = bytes;                                // Task 6: raw bytes for writeback
-      _objectCatalogFilename = file.name.replace(/\.xlsx?$/i, ''); // strip ext for re-naming
+      _objectCatalogRaw = bytes;
+      _objectCatalogFilename = file.name.replace(/\.xlsx?$/i, '');
       // Pre-load any existing centroids so search results show them immediately
       _hydrateCatalogCentroidsFromXLSX(wb);
+      // Initialise the accumulating workbook (single source of truth for cumulative
+      // centroid edits across multiple contour saves — see _maybeOfferCentroidWriteback)
+      _initCatalogWorkbook();
       showToast(`✅ Каталог: ${items.length} объект(ов) загружено`, 'success', 3000);
     } catch(err){
       console.warn('[xlsx]', err);
@@ -4029,76 +4071,144 @@ function _formatCentroid(c){
 // Append centroid line to the description so it's also embedded in the KML.
 // Called from inside kdConfirm before the placemark is built, but here we
 // implement the AFTER-save xlsx prompt + download.
+// ── XLSX CENTROID WRITEBACK (accumulating, single download) ──────
+// Previously this function read the source bytes, patched ONE row, downloaded a
+// new file, and discarded the workbook. Saving 5 contours produced 5 files —
+// painful and the user can't merge them. v53 keeps a single in-memory workbook
+// (_objectCatalogWB) initialised when the user loads the XLSX. Each save patches
+// the workbook in-place and bumps a dirty-counter. A floating download button
+// shows up after the first edit; clicking downloads the current cumulative state.
+//
+// Lifecycle:
+//   loadXLSX → _objectCatalogWB = parsed workbook, _objectCatalogDirty = 0, button hidden
+//   saveContour → _writeCentroidToWB(cadNum) → patches WB, bumps counter, shows button
+//   user clicks button → downloadAccumulatedXLSX() → emits current WB bytes
+//   on download we DO NOT reset the counter — user might want to re-download later
+//
+// The original raw bytes (_objectCatalogRaw) are still kept for reference but no
+// longer re-parsed on every save (avoids losing accumulated edits).
+
+let _objectCatalogWB = null;       // SheetJS workbook — mutable, source of truth
+let _objectCatalogDirty = 0;       // count of unsaved centroid writes
+let _xlsxDirtyRows = new Set();    // cadNums that have pending edits (for status display)
+
+// Initialise the accumulating workbook from raw bytes. Called once after XLSX upload.
+function _initCatalogWorkbook(){
+  if(!_objectCatalogRaw || typeof XLSX === 'undefined') return;
+  try {
+    _objectCatalogWB = XLSX.read(_objectCatalogRaw, {type:'array', cellStyles:true});
+    _objectCatalogDirty = 0;
+    _xlsxDirtyRows.clear();
+    _refreshXlsxDownloadButton();
+  } catch(e){
+    console.warn('[xlsx-init]', e);
+    _objectCatalogWB = null;
+  }
+}
+
 async function _maybeOfferCentroidWriteback(cadNum, geom){
   const c = _computeCentroid(geom);
   if(!c) return;
   const formatted = _formatCentroid(c);
-  // No catalog loaded → just store on the in-memory record so future searches see it
-  if(!_objectCatalog || !_objectCatalog.length) return;
-  const it = _objectCatalog.find(x => x.cadNum === cadNum);
-  if(!it) return;
-  // Save into in-memory catalog regardless (search will use it)
-  it.centroid = formatted;
-  // Offer download of an updated XLSX with the «Координаты центра объекта» column
-  // populated for this row. We use SheetJS to open the original workbook (which
-  // we kept around in `_objectCatalogRaw`) and re-emit it with the value patched.
-  if(typeof XLSX === 'undefined' || !_objectCatalogRaw) return;
-  const ok = window.confirm(
-    `Записать координаты центра объекта в XLSX?\n\n`+
-    `Кад.№ ${cadNum}\n`+
-    `Центр: ${formatted}\n\n`+
-    `Будет скачан обновлённый файл (исходный не изменяется).`
-  );
-  if(!ok) return;
+  // Update in-memory catalog regardless of XLSX presence (search uses .centroid)
+  if(_objectCatalog?.length){
+    const it = _objectCatalog.find(x => x.cadNum === cadNum);
+    if(it) it.centroid = formatted;
+  }
+  // No XLSX → done; the centroid is in description and search index
+  if(typeof XLSX === 'undefined' || !_objectCatalogWB) return;
+  // Patch the workbook silently — no confirm prompt now. The user controls
+  // when to download via the floating button.
+  const written = _writeCentroidToWB(cadNum, formatted);
+  if(written > 0){
+    _objectCatalogDirty++;
+    _xlsxDirtyRows.add(cadNum);
+    _refreshXlsxDownloadButton();
+    showToast(`✓ Координаты центра в XLSX (всего ${_objectCatalogDirty} изм.)`, 'success', 2500);
+  }
+}
+
+// Patch _objectCatalogWB in place. Returns the number of rows updated.
+function _writeCentroidToWB(cadNum, formatted){
+  if(!_objectCatalogWB) return 0;
+  const wb = _objectCatalogWB;
+  const sheetName = wb.SheetNames.find(n => n === 'Здания, сооружения')
+                || wb.SheetNames.find(n => /^Здания/i.test(n))
+                || wb.SheetNames[0];
+  const ws = wb.Sheets[sheetName];
+  if(!ws || !ws['!ref']) return 0;
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  // Find or create the «Координаты центра объекта» column. Header row is row 2 (index 1).
+  let centroidCol = -1;
+  for(let c = range.s.c; c <= range.e.c; c++){
+    const header = ws[XLSX.utils.encode_cell({r:1, c})];
+    if(header && /координат/i.test(String(header.v||'')) && /центр/i.test(String(header.v||''))){
+      centroidCol = c;
+      break;
+    }
+  }
+  if(centroidCol === -1){
+    centroidCol = range.e.c + 1;
+    ws[XLSX.utils.encode_cell({r:1, c:centroidCol})] = { t:'s', v:'Координаты центра объекта' };
+    range.e.c = centroidCol;
+    ws['!ref'] = XLSX.utils.encode_range(range);
+  }
+  // Column G (index 6) holds the cadastral number per the template parser
+  const G = 6;
+  let written = 0;
+  for(let r = 2; r <= range.e.r; r++){
+    const cell = ws[XLSX.utils.encode_cell({r, c:G})];
+    if(!cell) continue;
+    if(String(cell.v||'').trim() === cadNum){
+      ws[XLSX.utils.encode_cell({r, c:centroidCol})] = { t:'s', v: formatted };
+      written++;
+    }
+  }
+  return written;
+}
+
+// Floating "Download updated XLSX" button — appears after first centroid write.
+// Two actions:
+//   📥 Скачать в новый файл — emits a new file with "_с_центрами" suffix
+//   📝 Сохранить как исходный — emits with the original filename (user replaces manually)
+function _refreshXlsxDownloadButton(){
+  let bar = document.getElementById('xlsx-save-bar');
+  if(!bar){
+    bar = document.createElement('div');
+    bar.id = 'xlsx-save-bar';
+    bar.innerHTML =
+      `<span id="xlsx-save-status">XLSX обновлён</span>`+
+      `<button id="xlsx-save-new"  onclick="downloadAccumulatedXLSX(false)" title="Скачать новый файл с суффиксом _с_центрами">📥 Новый файл</button>`+
+      `<button id="xlsx-save-orig" onclick="downloadAccumulatedXLSX(true)"  title="Скачать с исходным именем — заменить вручную">📝 Заменить исходный</button>`+
+      `<button id="xlsx-save-close" onclick="document.getElementById('xlsx-save-bar').classList.remove('visible')" title="Скрыть">×</button>`;
+    document.body.appendChild(bar);
+  }
+  const status = document.getElementById('xlsx-save-status');
+  if(_objectCatalogDirty > 0){
+    status.textContent = `📊 XLSX: ${_objectCatalogDirty} изм. (${_xlsxDirtyRows.size} объ.)`;
+    bar.classList.add('visible');
+  } else {
+    bar.classList.remove('visible');
+  }
+}
+
+window.downloadAccumulatedXLSX = function(useOriginalName){
+  if(!_objectCatalogWB){ showToast('Нет загруженного каталога','warn',2500); return; }
   try {
-    const wb = XLSX.read(_objectCatalogRaw, {type:'array', cellStyles:true});
-    const sheetName = wb.SheetNames.find(n => n === 'Здания, сооружения')
-                  || wb.SheetNames.find(n => /^Здания/i.test(n))
-                  || wb.SheetNames[0];
-    const ws = wb.Sheets[sheetName];
-    if(!ws) throw new Error('Лист не найден');
-    // Find the column index. If header «Координаты центра объекта» exists in row 2 (header row),
-    // use it; otherwise create one column to the right of the last data column.
-    const range = XLSX.utils.decode_range(ws['!ref']);
-    let centroidCol = -1;
-    for(let c = range.s.c; c <= range.e.c; c++){
-      const header = ws[XLSX.utils.encode_cell({r:1, c})];
-      if(header && /координат/i.test(String(header.v||'')) && /центр/i.test(String(header.v||''))){
-        centroidCol = c;
-        break;
-      }
-    }
-    if(centroidCol === -1){
-      centroidCol = range.e.c + 1;
-      ws[XLSX.utils.encode_cell({r:1, c:centroidCol})] = { t:'s', v:'Координаты центра объекта' };
-      range.e.c = centroidCol;
-      ws['!ref'] = XLSX.utils.encode_range(range);
-    }
-    // Find the cad-num row (column G = index 6 — confirmed by the template parser)
-    const G = 6;
-    let written = 0;
-    for(let r = 2; r <= range.e.r; r++){
-      const cell = ws[XLSX.utils.encode_cell({r, c:G})];
-      if(!cell) continue;
-      if(String(cell.v||'').trim() === cadNum){
-        ws[XLSX.utils.encode_cell({r, c:centroidCol})] = { t:'s', v: formatted };
-        written++;
-      }
-    }
-    if(!written){ showToast('В каталоге нет строки с этим кад.№','warn',3000); return; }
-    const out = XLSX.write(wb, {type:'array', bookType:'xlsx'});
+    const out = XLSX.write(_objectCatalogWB, {type:'array', bookType:'xlsx'});
     const blob = new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = (_objectCatalogFilename || 'каталог') + '_с_центрами.xlsx';
+    const baseName = _objectCatalogFilename || 'каталог';
+    a.download = useOriginalName ? `${baseName}.xlsx` : `${baseName}_с_центрами.xlsx`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    showToast(`✅ Координаты центра записаны в XLSX (${written} стр.)`, 'success', 3500);
+    showToast(`✅ Скачан обновлённый XLSX (${_objectCatalogDirty} изм.)`, 'success', 3000);
   } catch(e){
-    console.warn('[xlsx-writeback]', e);
-    showToast('❌ Не удалось обновить XLSX: '+(e.message||e), 'error', 4000);
+    console.warn('[xlsx-download]', e);
+    showToast('❌ Ошибка экспорта: '+(e.message||e), 'error', 4000);
   }
-}
+};
 
 // ── TASK 5: LOCAL CADASTRE SEARCH (KML + XLSX) ────────────────────
 // Replaces the previous Internet-only search (PKK5/NSPD WFS — slow, blocked from
