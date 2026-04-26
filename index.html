@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v3.1.0</title>
+<title>EkceloFoto v3.2.0</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -448,6 +448,17 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #contour-edit-cancel{background:transparent;color:#aaa;border:1px solid #555 !important}
 .edit-vertex{cursor:move !important}
 .edit-midpoint{cursor:crosshair !important}
+/* Explanation-point pin: a tall cyan teardrop, clearly distinct from edit vertices and photo dots */
+.explanation-pin{cursor:move}
+.ep-pin{width:24px;height:32px;position:relative;filter:drop-shadow(0 2px 4px rgba(0,0,0,.6))}
+.ep-pin::before{content:'';position:absolute;top:0;left:0;width:24px;height:24px;border-radius:50% 50% 50% 0;background:#47c8ff;transform:rotate(-45deg);border:2px solid #0d0f14}
+.ep-pin-dot{position:absolute;top:7px;left:7px;width:10px;height:10px;background:#0d0f14;border-radius:50%;z-index:1}
+#explanation-bar{display:none;position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:10400;background:rgba(13,15,20,0.96);border:1px solid #47c8ff;border-radius:8px;padding:9px 14px;gap:10px;align-items:center;font-family:'JetBrains Mono',monospace;font-size:11px;color:#fff;box-shadow:0 6px 18px rgba(0,0,0,0.5);backdrop-filter:blur(6px);max-width:calc(100vw - 24px);flex-wrap:wrap;justify-content:center}
+#explanation-bar.visible{display:flex}
+#explanation-bar button{border:none;border-radius:5px;padding:6px 12px;font-weight:700;cursor:pointer;font-family:inherit;font-size:11px}
+#exp-finish{background:#47c8ff;color:#0d0f14}
+#exp-finish:hover{filter:brightness(1.1)}
+#exp-cancel{background:transparent;color:#aaa;border:1px solid #555 !important}
 .leaflet-popup.edit-ctx-popup .leaflet-popup-content-wrapper{background:#0d0f14;border:1px solid var(--accent2);padding:6px}
 .leaflet-popup.edit-ctx-popup .leaflet-popup-content{margin:4px 6px;color:#fff}
 .leaflet-popup.edit-ctx-popup .leaflet-popup-tip{background:#0d0f14}
@@ -459,7 +470,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v3.1.0</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v3.2.0</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -635,6 +646,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
       <div class="cad-group">Слои кадастра</div>
       <label class="cad-layer-item"><input type="checkbox" id="cad-cb-oks"   checked onchange="onCadLayerChange()"/><span class="cad-layer-label">ОКС (здания)</span></label>
       <label class="cad-layer-item"><input type="checkbox" id="cad-cb-str"   checked onchange="onCadLayerChange()"/><span class="cad-layer-label">Сооружения</span></label>
+      <label class="cad-layer-item"><input type="checkbox" id="cad-cb-zu"    onchange="onCadLayerChange()"/><span class="cad-layer-label">Зем.участки</span></label>
       <label class="cad-layer-item"><input type="checkbox" id="cad-cb-kv"    onchange="onCadLayerChange()"/><span class="cad-layer-label">Кад.кварталы</span></label>
       <div class="cad-group">Прозрачность</div>
       <div style="display:flex;align-items:center;gap:7px;padding:4px 12px 6px;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted)">
@@ -819,14 +831,18 @@ map.on('zoom zoomend', updateZoomIndicator);
 updateZoomIndicator();
 
 // ── CADASTRE LAYER GROUPS ─────────────────────────────────────────
-// IDs confirmed by tile rendering (observed by user on Russian IP):
-//   36329, 36049 = ОКС (объекты капитального строительства — здания)
-//   36328, 36048 = Сооружения
+// Cadastre layer-id mapping for NSPD WMS (https://nspd.gov.ru/api/aeggis/v2/{id}/wms):
+//   36048,36328  = ОКС / Сооружения (рендер-полигоны)
+//   36049,36329  = парные слои (подписи / якоря) — нужны для GFI cad_num lookup
 //   36071        = Кадастровые кварталы
-// Земельные участки IDs are UNCONFIRMED — omitted to prevent tile breakage.
+//   36368        = «Земельные участки ЕГРН» — подтверждено по двум источникам:
+//                  (а) URL пользователя `selectedCard=…,36368,90:25:020102:124`
+//                  (б) форум sasgis: GeoJSON-feature возвращает
+//                      `category:36368, categoryName:"Земельные участки ЕГРН"`
 const NSPD_GROUPS = {
   oks: { ids:[36329,36049], label:'ОКС',         layers:[], cbId:'cad-cb-oks' },
   str: { ids:[36328,36048], label:'Сооружения',  layers:[], cbId:'cad-cb-str' },
+  zu:  { ids:[36368],       label:'Зем.участки', layers:[], cbId:'cad-cb-zu'  },
   kv:  { ids:[36071],       label:'Кварталы',    layers:[], cbId:'cad-cb-kv'  },
 };
 let cadastreActive = false;
@@ -1099,7 +1115,7 @@ async function queryNSPDAtPoint(){
     geoItems.filter(i=>i.geom&&!i.visualHit).forEach((item,_)=>{
       const idx = window._pendingContours.indexOf(item);
       if(item.cadNum) shownNums.add(item.cadNum);
-      const typeLabel = item.type==='oks'?'ОКС':item.type==='str'?'Соор.':'Кв.';
+      const typeLabel = item.type==='oks'?'ОКС':item.type==='str'?'Соор.':item.type==='zu'?'ЗУ':'Кв.';
       html += `• <b style="color:#d32f2f">${item.cadNum||'?'}</b> `+
         `<span style="color:#888;font-size:10px">${typeLabel}</span> `;
       if(item.cadNum) html += `<a href="https://nspd.gov.ru/map?thematic=Default&zoom=17.5&selectedCard=${encodeURIComponent(item.cadNum)}" `+
@@ -1116,7 +1132,7 @@ async function queryNSPDAtPoint(){
     // Visual-only hits (tile pixel is colored but GFI returned nothing)
     geoItems.filter(i=>i.visualHit).forEach((item,ri)=>{
       const idx = window._pendingContours.indexOf(item);
-      const typeLabel = item.type==='oks'?'ОКС':item.type==='str'?'Соор.':'Кв.';
+      const typeLabel = item.type==='oks'?'ОКС':item.type==='str'?'Соор.':item.type==='zu'?'ЗУ':'Кв.';
       html += `• <i style="color:#aaa">${typeLabel} (тайл подтверждён, ID неизвестен)</i> `+
         `<button onclick="saveContourKMLFromTile(${idx})" style="background:rgba(71,200,255,.15);border:1px solid rgba(71,200,255,.4);color:var(--accent2);border-radius:4px;padding:1px 8px;cursor:pointer;font-size:11px">📐 Контур тайла</button><br>`;
     });
@@ -1776,6 +1792,93 @@ function _disposeContourEditor(){
 }
 
 
+// ═══ EXPLANATION POINT (annotation marker) ════════════════════════
+// Drop a draggable point at the clicked location, let the user nudge it, then
+// save through the standard KML dialog as a Point geometry. Mirrors the
+// "Въезд на таксис пересадкой на гольфкар" placemark pattern in the example
+// KML — a labeled annotation pin.
+//
+// State is in a single object so the flow is fully reentrant: starting a new
+// explanation while one is active disposes the old one first.
+
+let _ep = null;  // {marker, savedHandlers}
+
+window.startExplanationPoint = function(lat, lng){
+  _disposeExplanationPoint();
+  map.closePopup();
+  // Photo markers compete visually with a single pin; same auto-hide pattern as
+  // the contour editor for the same reason.
+  const photosWereVisible = _photosVisible;
+  if(_photosVisible) setPhotoMarkersVisible(false);
+
+  // Distinct cyan pin so it's obviously different from photo markers and the
+  // edit-vertex orange dots.
+  const icon = L.divIcon({
+    className: 'explanation-pin',
+    html: '<div class="ep-pin"><div class="ep-pin-dot"></div></div>',
+    iconSize: [24, 32], iconAnchor: [12, 30]
+  });
+  const marker = L.marker([lat, lng], {icon, draggable:true, zIndexOffset:9999}).addTo(map);
+  marker.bindTooltip('Тяните для уточнения · клик — сохранить', {direction:'top', offset:[0,-28], permanent:true})
+        .openTooltip();
+  marker.on('click', e => {
+    L.DomEvent.stopPropagation(e);
+    finishExplanationPoint();
+  });
+
+  _ep = { marker, photosWereVisible };
+  _showExplanationToolbar();
+  showToast('💬 Тяните точку, затем «Сохранить»','info',3500);
+};
+
+function _showExplanationToolbar(){
+  let bar = document.getElementById('explanation-bar');
+  if(!bar){
+    bar = document.createElement('div');
+    bar.id = 'explanation-bar';
+    bar.innerHTML =
+      `<span style="font-weight:700;color:#47c8ff">💬 Точка-пояснение</span>`+
+      `<span style="opacity:.7">тяните маркер · клик по нему = сохранить</span>`+
+      `<button id="exp-finish" onclick="finishExplanationPoint()">✅ Сохранить</button>`+
+      `<button id="exp-cancel" onclick="cancelExplanationPoint()">Отмена</button>`;
+    document.body.appendChild(bar);
+  }
+  bar.classList.add('visible');
+}
+
+function _hideExplanationToolbar(){
+  const bar = document.getElementById('explanation-bar');
+  if(bar) bar.classList.remove('visible');
+}
+
+window.finishExplanationPoint = function(){
+  if(!_ep) return;
+  const ll = _ep.marker.getLatLng();
+  const geom = { type:'Point', coordinates:[ll.lng, ll.lat] };
+  // Type 'str' (structure) — closest semantic match for an annotation pin in the
+  // existing KML styling system; kdConfirm strips this to 'oks' for a default
+  // green placemark, which is fine. The user can rename / restyle in KML editor.
+  // The example KML's «Въезд…» uses no type-specific style — just name+desc.
+  _disposeExplanationPoint();
+  showKMLSaveDialog(geom, 'oks', '', '');
+};
+
+window.cancelExplanationPoint = function(){
+  if(!_ep) return;
+  _disposeExplanationPoint();
+  showToast('Точка отменена','info',1800);
+};
+
+function _disposeExplanationPoint(){
+  if(!_ep) return;
+  if(_ep.marker) map.removeLayer(_ep.marker);
+  const wantVisible = _ep.photosWereVisible !== false;
+  _ep = null;
+  _hideExplanationToolbar();
+  if(wantVisible && !_photosVisible) setPhotoMarkersVisible(true);
+}
+
+
 function toggleLayer(){
   const btn=document.getElementById('layer-btn');
   if(currentLayer==='osm'){
@@ -1814,7 +1917,11 @@ map.on('move zoom',()=>{if(lbLL&&document.getElementById('lightbox').classList.c
 function buildCoordPopup(lat,lng,kmlName,kmlDesc){
   let h=`<div style="font-family:system-ui;line-height:1.5;font-size:13px"><b>📍 Координаты</b><br><code style="background:#f0f0f0;padding:2px 6px;border-radius:3px">${lat}, ${lng}</code>`;
   if(kmlName||kmlDesc)h+=`<hr style="border:none;border-top:1px solid #ddd;margin:8px 0"><b>🗺 ${esc(kmlName||'Объект')}</b>${kmlDesc?'<br><span style="color:#444">'+esc(kmlDesc)+'</span>':''}`;
-  h+=`<br><br><button onclick="queryNSPDAtPoint()" style="background:#ff9500;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-weight:700;width:100%">📍 Запросить кадастр</button></div>`;
+  h+=`<br><br><button onclick="queryNSPDAtPoint()" style="background:#ff9500;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-weight:700;width:100%">📍 Запросить кадастр</button>`;
+  // Add explanation point — drops a draggable marker to label a place ("Въезд",
+  // "Парковка", "Точка фотосъёмки" etc.). Saves through the standard KML dialog
+  // as a Point geometry. See example KML «Въезд на таксис пересадкой на гольфкар».
+  h+=`<button onclick="startExplanationPoint(${lat},${lng})" style="background:#47c8ff;color:#0d0f14;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-weight:700;width:100%;margin-top:6px">💬 Добавить пояснение</button></div>`;
   return h;
 }
 
