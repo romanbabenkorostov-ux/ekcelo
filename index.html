@@ -3,12 +3,13 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v3.0.0</title>
+<title>EkceloFoto v3.1.0</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/piexifjs/1.0.6/piexif.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{--bg:#0d0f14;--surface:#161a24;--border:#252b3a;--accent:#e8ff47;--accent2:#47c8ff;--text:#e4e8f0;--muted:#5a6480;--danger:#ff5c5c;--warn:#f59e0b;--r:6px}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -37,6 +38,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .stat{display:flex;flex-direction:column}
 .stat-val{color:var(--text);font-weight:500;font-size:14px}
 .stat-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.5px}
+.stat-toggle{cursor:pointer;padding:2px 8px;border-radius:4px;border:1px solid transparent;transition:background .15s,border-color .15s}
+.stat-toggle:hover{background:rgba(255,255,255,.05);border-color:var(--border)}
+.stat-toggle.off .stat-val{opacity:.35}
+.stat-toggle.off .stat-lbl{color:var(--accent2)}
 #clear-btn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:var(--r);padding:5px 10px;font-size:12px;font-family:'JetBrains Mono',monospace;cursor:pointer;transition:all .15s}
 #clear-btn:hover{border-color:var(--danger);color:var(--danger)}
 #share-btn{display:none;background:#3b82f6;color:#fff;border:none;border-radius:var(--r);padding:6px 13px;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer}
@@ -402,6 +407,16 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .kd-dest-opt.selected{border-color:var(--accent);background:rgba(232,255,71,.08)}
 .kd-dest-opt input[type=radio]{accent-color:var(--accent);cursor:pointer;margin:0;flex-shrink:0}
 .kd-dest-label{flex:1;color:var(--text)}
+/* Catalog dropdown — searchable list of objects loaded from XLSX */
+#kd-catalog-search{width:calc(100% - 12px);margin:6px;padding:6px 9px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;outline:none;box-sizing:border-box}
+#kd-catalog-search:focus{border-color:var(--accent)}
+#kd-catalog-items{max-height:200px;overflow-y:auto}
+.kd-cat-item{padding:7px 12px;cursor:pointer;font-size:11px;border-bottom:1px solid rgba(255,255,255,.05);transition:background .1s;line-height:1.45}
+.kd-cat-item:last-child{border-bottom:none}
+.kd-cat-item:hover{background:rgba(255,149,0,.18)}
+.kd-cat-cad{color:var(--accent);font-weight:700}
+.kd-cat-name{color:var(--text);opacity:.85;display:block;margin-top:2px}
+.kd-cat-empty{padding:10px 12px;color:var(--muted);font-size:10px;font-style:italic;text-align:center}
 /* Custom dropdown — replaces native <select> which can fail to expand inside z-index 10500 modal */
 .kd-dropdown{position:relative;margin-top:5px;width:100%}
 .kd-dd-btn{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;padding:6px 10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;outline:none;transition:border-color .15s}
@@ -444,7 +459,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v3.0.0</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v3.1.0</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -452,7 +467,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
   <div class="upload-wrap">
     <button id="upload-btn" onclick="toggleUploadMenu(event)">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-      Загрузить фото ▾
+      Загрузить фото/объекты ▾
     </button>
     <div id="upload-menu">
       <button onclick="closeUploadMenu();triggerFolderUpload()">📂 Из локальной папки (рекурсивно)</button>
@@ -462,11 +477,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
       <button onclick="closeUploadMenu();showGDrivePanel()">📁 Google Drive (папка)</button>
       <hr/>
       <button onclick="closeUploadMenu();document.getElementById('kml-file-input').click()">🗺 Добавить KML вручную…</button>
+      <button onclick="closeUploadMenu();document.getElementById('xlsx-file-input').click()">📋 Загрузить кад.номера (XLSX)…</button>
     </div>
   </div>
   <input type="file" id="file-input"            multiple accept="image/jpeg,image/jpg,.jpg,.jpeg"/>
   <input type="file" id="folder-input-fallback" multiple accept="image/jpeg,image/jpg,.jpg,.jpeg" webkitdirectory/>
   <input type="file" id="kml-file-input"        multiple accept=".kml"/>
+  <input type="file" id="xlsx-file-input"       accept=".xlsx,.xls" style="display:none" onchange="onXlsxFileChosen(this)"/>
   <label id="auto-save-label" title="Авто-запись EXIF при навигации">
     <input type="checkbox" id="auto-save-cb" onchange="onAutoSaveCbChange(this)"/>
     Авто-запись EXIF
@@ -476,6 +493,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     <div class="stat"><span class="stat-val" id="stat-total">0</span><span class="stat-lbl">фото</span></div>
     <div class="stat"><span class="stat-val" id="stat-gps">0</span><span class="stat-lbl">с GPS</span></div>
     <div class="stat"><span class="stat-val" id="stat-angle">0</span><span class="stat-lbl">с углом</span></div>
+    <div class="stat stat-toggle" id="stat-photos-toggle" onclick="togglePhotoMarkers()" title="Скрыть/показать точки фотографий на карте">
+      <span class="stat-val" id="stat-photos-state">👁</span><span class="stat-lbl" id="stat-photos-lbl">Откл.фото</span>
+    </div>
   </div>
   <button id="clear-btn" onclick="clearAll()">очистить</button>
 </header>
@@ -654,6 +674,19 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="kml-save-dialog">
   <div id="kml-save-card">
     <h3>💾 Сохранить контур в KML</h3>
+    <div class="kd-field" id="kd-catalog-field" style="display:none">
+      <div class="kd-label">📋 Из каталога объектов <span id="kd-catalog-count" style="opacity:.55;font-weight:400"></span></div>
+      <div class="kd-dropdown" id="kd-catalog-dd">
+        <button type="button" class="kd-dd-btn" onclick="kdToggleCatalogDD(event)">
+          <span id="kd-catalog-current">— выберите для автозаполнения —</span>
+          <span class="kd-dd-arrow">▾</span>
+        </button>
+        <div class="kd-dd-menu" id="kd-catalog-menu">
+          <input type="text" id="kd-catalog-search" placeholder="🔎 поиск по названию или кад.номеру" oninput="kdFilterCatalog(this.value)" onclick="event.stopPropagation()"/>
+          <div id="kd-catalog-items"></div>
+        </div>
+      </div>
+    </div>
     <div class="kd-field">
       <div class="kd-label">Название объекта</div>
       <input class="kd-input" id="kd-name" placeholder="Административный корпус"/>
@@ -1172,7 +1205,18 @@ function saveContourToKML(idx){
 
   // Pre-fill the dialog's description with cadastre attributes (площадь / категория / ВРИ etc.)
   const prefillDesc = lines.map(([k,v])=>`${k}: ${v}`).join('; ');
-  showKMLSaveDialog(geom, type, item.cadNum||'', prefillDesc);
+  // Editor auto-opens. WFS geometry is already exact, but the user may still want
+  // to nudge / split / clean it before save — same UX as the tile-contour path.
+  // Polygon / MultiPolygon → editor handles only ring[0]; Points bypass the editor.
+  if(geom && geom.type === 'Polygon'){
+    startContourEditor(geom, type, item.cadNum||'', prefillDesc);
+  } else if(geom && geom.type === 'MultiPolygon' && geom.coordinates?.[0]){
+    const flat = { type:'Polygon', coordinates: geom.coordinates[0] };
+    startContourEditor(flat, type, item.cadNum||'', prefillDesc);
+  } else {
+    // Points: nothing to edit, go straight to save
+    showKMLSaveDialog(geom, type, item.cadNum||'', prefillDesc);
+  }
 }
 
 // ── CONTOUR EXTRACTION FROM CADASTRE TILE ─────────────────────────
@@ -1507,10 +1551,17 @@ ${parts.placemark}
 // IMPORTANT: vertex coords are stored in Leaflet LatLng order (lat, lng) inside
 // the editor; conversion to GeoJSON [lon, lat] happens only at finish time.
 
-let _ce = null;  // {polygon, vertices[], midpoints[], type, cadNum, prefillDesc, originalLL}
+let _ce = null;  // {polygon, vertices[], midpoints[], type, cadNum, prefillDesc, originalLL, photosWereVisible}
 
 function startContourEditor(geom, type, cadNum, prefillDesc){
   _disposeContourEditor();
+
+  // Auto-hide photo markers — user explicitly asked: photo dots compete with
+  // the orange edit vertices for clicks and clutter the building-tracing area.
+  // We restore the previous state in _disposeContourEditor (so a manually-toggled
+  // "off" stays off after editing).
+  const photosWereVisible = _photosVisible;
+  if(_photosVisible) setPhotoMarkersVisible(false);
 
   // Strip closing duplicate from ring; convert [lon,lat] → [lat,lng] for Leaflet
   const ring = geom.coordinates[0];
@@ -1534,7 +1585,8 @@ function startContourEditor(geom, type, cadNum, prefillDesc){
   _ce = {
     polygon, vertices:[], midpoints:[],
     type, cadNum:cadNum||'', prefillDesc:prefillDesc||'',
-    originalLL: ll.map(p=>p.slice())  // deep copy for "revert" support
+    originalLL: ll.map(p=>p.slice()),  // deep copy for "revert" support
+    photosWereVisible
   };
   ll.forEach((p,i) => _ce.vertices.push(_makeVertexMarker(p, i)));
   _refreshMidpoints();
@@ -1714,9 +1766,13 @@ function _disposeContourEditor(){
   if(_ce.polygon) map.removeLayer(_ce.polygon);
   _ce.vertices.forEach(m => map.removeLayer(m));
   _ce.midpoints.forEach(m => map.removeLayer(m));
+  // Restore photo markers to their pre-edit state (we only auto-show them if the
+  // user had them on before editing started — manual "off" stays off).
+  const wantVisible = _ce.photosWereVisible !== false;
   _ce = null;
   _hideEditorToolbar();
   map.closePopup();
+  if(wantVisible && !_photosVisible) setPhotoMarkersVisible(true);
 }
 
 
@@ -3027,6 +3083,210 @@ let _kdDiskFilename = null;   // filename for re-download
 let _kdDest = 'layer';        // current destination selection
 let _kdLayerIdx = -1;         // selected index into kmlLayers (custom dropdown)
 
+// ── Photo markers visibility toggle ───────────────────────────────
+// Hides ALL photo dots from the map without touching the photos[] array, the
+// timeline, or the side list. Used both manually (Откл.фото button) and
+// automatically while the contour editor is active (so the dots don't compete
+// for clicks with the edit vertices).
+let _photosVisible = true;
+
+function setPhotoMarkersVisible(visible){
+  _photosVisible = !!visible;
+  if(typeof photos === 'undefined') return;
+  photos.forEach(p => {
+    if(!p || !p.marker) return;
+    const el = p.marker.getElement && p.marker.getElement();
+    if(el) el.style.display = visible ? '' : 'none';
+  });
+  const stat = document.getElementById('stat-photos-toggle');
+  const val  = document.getElementById('stat-photos-state');
+  const lbl  = document.getElementById('stat-photos-lbl');
+  if(stat){ stat.classList.toggle('off', !visible); }
+  if(val) { val.textContent  = visible ? '👁' : '⊘'; }
+  if(lbl) { lbl.textContent  = visible ? 'Откл.фото' : 'Вкл.фото'; }
+}
+
+window.togglePhotoMarkers = function(){
+  setPhotoMarkersVisible(!_photosVisible);
+};
+
+// ── Object catalog (loaded from XLSX template) ────────────────────
+// Each entry: {cadNum, namePB, nameEGRN, kind, area, purpose, floors, undFloors, finished, commissioned}
+// Kept in module scope so the dialog can autofill fields from a selection.
+let _objectCatalog = [];
+let _kdCatalogFiltered = [];  // indices into _objectCatalog matching current search
+
+function onXlsxFileChosen(input){
+  const file = input.files[0];
+  input.value = '';  // allow re-uploading the same file later
+  if(!file) return;
+  if(typeof XLSX === 'undefined'){
+    showToast('Библиотека XLSX не загружена — проверьте интернет','error',4000);
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+      const items = _parseCatalogWorkbook(wb);
+      if(!items.length){ showToast('В файле не найдено записей на листе «Здания, сооружения»','warn',4000); return; }
+      _objectCatalog = items;
+      showToast(`✅ Каталог: ${items.length} объект(ов) загружено`, 'success', 3000);
+    } catch(err){
+      console.warn('[xlsx]', err);
+      showToast('❌ Не удалось разобрать XLSX: '+(err.message||err),'error',5000);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// Parse workbook → array of catalog entries.
+// The template's data sheet is "Здания, сооружения" with header row at row 2 and
+// data starting at row 3. Column letters according to the template:
+//   C=Наименование по бух.учёту   D=Вид объекта недвижимости
+//   E=Наименование по выписке из ЕГРН   G=Кадастровый номер
+//   H=Площадь, кв.м   I=Назначение
+//   J=Количество этажей (в т.ч. подземных)   K=Количество подземных этажей
+//   M=Завершение строительства   N=Ввод в эксплуатацию
+function _parseCatalogWorkbook(wb){
+  // Find the "Здания, сооружения" sheet — exact match first, then fuzzy by leading word
+  const want = 'Здания, сооружения';
+  let sheetName = wb.SheetNames.find(n => n === want)
+              || wb.SheetNames.find(n => /^Здания/i.test(n))
+              || wb.SheetNames[0];
+  const ws = wb.Sheets[sheetName];
+  if(!ws) return [];
+
+  // Read as array-of-arrays so we can address by Excel column letter regardless of headers
+  const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:true, blankrows:false});
+  if(rows.length < 3) return [];
+
+  // Excel column letter → 0-based array index. A=0, B=1, … AA=26, AB=27 …
+  const col = letter => {
+    let n = 0;
+    for(const ch of letter) n = n*26 + (ch.charCodeAt(0)-64);
+    return n - 1;
+  };
+  const C=col('C'), D=col('D'), E=col('E'), G=col('G'), H=col('H'),
+        I=col('I'), J=col('J'), K=col('K'), M=col('M'), N=col('N');
+
+  const items = [];
+  for(let r=2; r<rows.length; r++){              // r=2 → row 3 in Excel
+    const row = rows[r];
+    if(!row) continue;
+    const cad = (row[G]==null? '' : String(row[G])).trim();
+    if(!cad || !/\d/.test(cad)) continue;        // skip rows without a real cad number
+    const cell = idx => {
+      const v = row[idx];
+      if(v == null) return '';
+      const s = String(v).trim();
+      return s === '' || s === '-' ? '' : s;
+    };
+    items.push({
+      cadNum:       cad,
+      namePB:       cell(C),
+      kind:         cell(D),
+      nameEGRN:     cell(E),
+      area:         cell(H),
+      purpose:      cell(I),
+      floors:       cell(J),
+      undFloors:    cell(K),
+      finished:     cell(M),
+      commissioned: cell(N),
+    });
+  }
+  return items;
+}
+
+// Build "name" (object name) per spec:
+//   "<Наименование по выписке из ЕГРН> / <Наименование по бух.учету>"
+//   Only non-empty parts are joined; if both empty → returns empty string.
+function _buildCatalogName(it){
+  const parts = [it.nameEGRN, it.namePB].filter(Boolean);
+  return parts.join(' / ');
+}
+
+// Build "description" per spec:
+//   "<Вид>, <Площадь, кв.м>, <Назначение>, <Этажей>/<Подземных>, <Завершение>/<Ввод>"
+//   Only non-empty fragments are emitted; the floors / dates pairs collapse to a
+//   single value when only one side is present.
+function _buildCatalogDesc(it){
+  const fragments = [];
+  if(it.kind)    fragments.push(it.kind);
+  if(it.area)    fragments.push(it.area + ' м²');
+  if(it.purpose) fragments.push(it.purpose);
+  // Floors pair: "5/1" if both, "5" or "1" if one side only
+  const floors = [it.floors, it.undFloors].filter(Boolean).join('/');
+  if(floors) fragments.push('этажей: ' + floors);
+  // Build dates pair the same way
+  const dates = [it.finished, it.commissioned].filter(Boolean).join('/');
+  if(dates) fragments.push(dates);
+  return fragments.join(', ');
+}
+
+// Toggle catalog dropdown (mirrors kdToggleDropdown but for the catalog field)
+window.kdToggleCatalogDD = function(ev){
+  if(ev) ev.stopPropagation();
+  if(_objectCatalog.length === 0){
+    showToast('Каталог пуст — загрузите XLSX через меню «Загрузить фото/объекты»','info',3500);
+    return;
+  }
+  const dd = document.getElementById('kd-catalog-dd');
+  dd.classList.toggle('open');
+  if(dd.classList.contains('open')){
+    // Re-render filtered list (in case catalog updated since last open)
+    _kdRenderCatalog(document.getElementById('kd-catalog-search').value || '');
+    setTimeout(()=>document.getElementById('kd-catalog-search').focus(), 30);
+  }
+};
+
+window.kdFilterCatalog = function(q){ _kdRenderCatalog(q); };
+
+function _kdRenderCatalog(q){
+  const items = document.getElementById('kd-catalog-items');
+  if(!items) return;
+  const needle = (q||'').trim().toLowerCase();
+  _kdCatalogFiltered = _objectCatalog
+    .map((it, i) => ({i, it}))
+    .filter(({it}) => !needle ||
+      it.cadNum.toLowerCase().includes(needle) ||
+      _buildCatalogName(it).toLowerCase().includes(needle));
+  items.innerHTML = '';
+  if(!_kdCatalogFiltered.length){
+    const e = document.createElement('div');
+    e.className = 'kd-cat-empty';
+    e.textContent = needle ? 'Ничего не найдено' : 'Каталог пуст';
+    items.appendChild(e);
+    return;
+  }
+  _kdCatalogFiltered.forEach(({i, it}) => {
+    const el = document.createElement('div');
+    el.className = 'kd-cat-item';
+    const name = _buildCatalogName(it) || '— без названия —';
+    el.innerHTML = `<span class="kd-cat-cad">${it.cadNum}</span>`+
+                   `<span class="kd-cat-name">${_escapeHtml(name)}</span>`;
+    el.onclick = () => _kdApplyCatalogItem(i);
+    items.appendChild(el);
+  });
+}
+
+function _escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function _kdApplyCatalogItem(catIdx){
+  const it = _objectCatalog[catIdx];
+  if(!it) return;
+  document.getElementById('kd-name').value   = _buildCatalogName(it);
+  document.getElementById('kd-cadnum').value = it.cadNum;
+  document.getElementById('kd-desc').value   = _buildCatalogDesc(it);
+  document.getElementById('kd-catalog-current').textContent =
+    `${it.cadNum} — ${_buildCatalogName(it) || '—'}`.slice(0, 60);
+  document.getElementById('kd-catalog-dd').classList.remove('open');
+  showToast('✓ Поля заполнены из каталога','success',1800);
+}
+
 // Open the dialog — single entry point for "save cadastre/contour to KML"
 // `prefillDesc` is concatenated cadastre attributes (Площадь / Категория / ВРИ ...),
 // used when the dialog is opened from a WFS hit; empty for tile-traced contours.
@@ -3045,6 +3305,18 @@ function showKMLSaveDialog(geom, type, prefillCadNum, prefillDesc){
 
   // Build custom-dropdown items
   _kdRebuildDropdown();
+
+  // Show / hide catalog field depending on whether XLSX has been loaded
+  const catField = document.getElementById('kd-catalog-field');
+  if(_objectCatalog.length > 0){
+    catField.style.display = 'block';
+    document.getElementById('kd-catalog-count').textContent = `(${_objectCatalog.length})`;
+    document.getElementById('kd-catalog-current').textContent = '— выберите для автозаполнения —';
+    document.getElementById('kd-catalog-search').value = '';
+    document.getElementById('kd-catalog-dd').classList.remove('open');
+  } else {
+    catField.style.display = 'none';
+  }
 
   // Default destination: 'layer' if any open layer, otherwise 'new'
   kdSelectDest(kmlLayers.length?'layer':'new');
@@ -3131,6 +3403,8 @@ function kdFileChosen(input){
 function kdCancel(){
   document.getElementById('kml-save-dialog').classList.remove('open');
   document.getElementById('kd-layer-select').classList.remove('open');
+  const cdd = document.getElementById('kd-catalog-dd');
+  if(cdd) cdd.classList.remove('open');
   _kdPendingGeom = null;
 }
 
@@ -3253,13 +3527,18 @@ function _downloadBlob(text, filename){
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();
 }
 
-// Close dialog on backdrop click; close custom dropdown when clicking anywhere outside it
+// Close dialog on backdrop click; close any open dropdowns when clicking outside them
 document.getElementById('kml-save-dialog').addEventListener('click',e=>{
   if(e.target===document.getElementById('kml-save-dialog')) { kdCancel(); return; }
-  // If click is outside the dropdown control, collapse it
+  // Layer dropdown
   const dd = document.getElementById('kd-layer-select');
   if(dd && dd.classList.contains('open') && !dd.contains(e.target)){
     dd.classList.remove('open');
+  }
+  // Catalog dropdown — collapse only if click was outside its container
+  const cdd = document.getElementById('kd-catalog-dd');
+  if(cdd && cdd.classList.contains('open') && !cdd.contains(e.target)){
+    cdd.classList.remove('open');
   }
 });
 </script>
