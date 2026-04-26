@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.13</title>
+<title>EkceloFoto v2.9.14</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -483,7 +483,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.13</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.14</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -1336,10 +1336,60 @@ async function saveContourKMLFromTile(idx){
   startContourEditor(geom, item.type||'oks', item.cadNum||'', '');
 }
 
+// ── PUBLIC ENTRY: tile-contour extractor with adaptive coverage ──
+// The single attempt fetches a GRID×GRID stitch of WMS tiles and traces the polygon.
+// If the flood-filled region touches the canvas edge, the cadastre object is
+// LARGER than the fetched area — the trace would close along the artificial
+// canvas border instead of the real outline (bug seen on ZU 90:25:020102:119,
+// ~400m diagonal at z=19 where a 3×3 stitch covers only ~228m).
+//
+// Retry strategy:
+//   1. Try GRID=3 at the click zoom
+//   2. If clipped → GRID=5 same zoom (covers ~1.66× more area, single fetch)
+//   3. If still clipped → drop zoom by 1 (coverage ×2), GRID=3
+//   4. Repeat down to z=15 (cadastre detail still legible there)
+//   5. If still clipped → return what we have with a console warning, since
+//      further zoom-out makes the trace too coarse to be useful.
 async function _extractTileContour(ti, layerId){
+  const Z_MAX = 19, Z_MIN = 15;
+  const attempts = [
+    { dz: 0, grid: 3 },   // try 1: native zoom, 3×3 = 768px canvas
+    { dz: 0, grid: 5 },   // try 2: same zoom, 5×5 = 1280px canvas (~1.7× area)
+    { dz:-1, grid: 3 },   // try 3: zoom-1, 3×3 (≈2× area vs try 1, sharper boundaries than try 2)
+    { dz:-1, grid: 5 },   // try 4: zoom-1, 5×5 (≈3.3× area)
+    { dz:-2, grid: 3 },   // try 5: zoom-2, 3×3 (~4× area)
+    { dz:-2, grid: 5 },   // try 6: zoom-2, 5×5 (~6.7× area — last resort)
+  ];
+  const baseZ = Math.min(ti.z, Z_MAX);
+  let result = null, lastError = null;
+  for(const a of attempts){
+    const z = baseZ + a.dz;
+    if(z < Z_MIN) continue;
+    try {
+      const r = await _extractTileContourOnce(ti, layerId, a.grid, z);
+      if(!r) continue;
+      result = r;
+      // Edge-touching detection: if BFS hit any of the 4 canvas borders, the
+      // object is larger than what we fetched and the polygon is artificially
+      // clipped. Try the next, larger configuration.
+      if(!r.touchedEdge) break;
+      console.info(`[contour] z=${z} grid=${a.grid}: clipped on edges ${r.touchedEdge}, retrying`);
+    } catch(e){
+      lastError = e;
+      console.warn(`[contour] z=${z} grid=${a.grid} failed:`, e.message);
+    }
+  }
+  if(!result){
+    if(lastError) throw lastError;
+    return null;
+  }
+  // Strip the diagnostic field before returning a clean GeoJSON geometry
+  return { type: result.type, coordinates: result.coordinates };
+}
+
+async function _extractTileContourOnce(ti, layerId, GRID, Z){
   const TS      = 256;        // single tile dimension
-  const GRID    = 3;          // 3×3 stitch around the click tile
-  const W       = TS * GRID;  // 768 — full canvas
+  const W       = TS * GRID;
   const H       = TS * GRID;
   // Alpha threshold for "is this pixel a cadastre fill?".
   // Buildings (OKS/STR) render with strong fills (alpha 60-180). ZU outlines have
@@ -1348,34 +1398,26 @@ async function _extractTileContour(ti, layerId){
   const THRESH  = 8;
   const RDP_EPS = 1.2;
   const MAX_PT  = 60;
-  const Z_MAX   = 19;         // cadastre's maxNativeZoom — clip extraction zoom here
 
-  // ── Cap zoom at 19 even if user clicked at z21+ ──
-  // At z21 a single 256-tile covers ~18m of geography → almost any building straddles
-  // tile borders and the polygon trace follows the seam. Force extraction at z≤19
-  // (≈75m per tile, so a 3×3 stitch covers ~225m — fits any normal cadastre object).
-  let tileX, tileY, pixelX, pixelY, Z;
-  if(ti.z <= Z_MAX){
-    Z = ti.z; tileX = ti.tileX; tileY = ti.tileY;
-    pixelX = ti.pixelX; pixelY = ti.pixelY;
-  } else {
-    // Reconstruct click lat/lon from original tileInfo, then recompute at Z_MAX
-    const n0  = Math.pow(2, ti.z);
-    const lon = (ti.tileX + ti.pixelX/TS) / n0 * 360 - 180;
-    const lat = Math.atan(Math.sinh(Math.PI*(1 - 2*(ti.tileY + ti.pixelY/TS)/n0))) * 180/Math.PI;
-    Z = Z_MAX;
-    const n  = Math.pow(2, Z);
-    const xf = (lon + 180) / 360 * n;
-    const lat_rad = lat * Math.PI / 180;
-    const yf = (1 - Math.log(Math.tan(lat_rad) + 1/Math.cos(lat_rad)) / Math.PI) / 2 * n;
-    tileX  = Math.floor(xf); tileY = Math.floor(yf);
-    pixelX = Math.floor((xf - tileX) * TS);
-    pixelY = Math.floor((yf - tileY) * TS);
-  }
+  // Recompute click pixel at the requested zoom (ti.z may differ).
+  // First convert original tileInfo back to lat/lon, then forward to {Z, tileX, tileY, pixelX, pixelY}.
+  const n0  = Math.pow(2, ti.z);
+  const lon = (ti.tileX + ti.pixelX/TS) / n0 * 360 - 180;
+  const lat = Math.atan(Math.sinh(Math.PI*(1 - 2*(ti.tileY + ti.pixelY/TS)/n0))) * 180/Math.PI;
+  const n  = Math.pow(2, Z);
+  const xf = (lon + 180) / 360 * n;
+  const lat_rad = lat * Math.PI / 180;
+  const yf = (1 - Math.log(Math.tan(lat_rad) + 1/Math.cos(lat_rad)) / Math.PI) / 2 * n;
+  const tileX  = Math.floor(xf), tileY = Math.floor(yf);
+  const pixelX = Math.floor((xf - tileX) * TS);
+  const pixelY = Math.floor((yf - tileY) * TS);
 
-  // ── 3×3 BBOX in EPSG:3857 (single WMS request → no inter-tile seams) ──
-  const minTileX = tileX - 1, minTileY = tileY - 1;
-  const n = Math.pow(2, Z);
+  // ── GRID×GRID BBOX in EPSG:3857 (single WMS request → no inter-tile seams) ──
+  // For GRID=3 the click tile is at offset 1 (centre); for GRID=5 it's at offset 2.
+  // Generally offset = floor(GRID/2). Same applies to the click pixel.
+  const halfGrid = Math.floor(GRID/2);
+  const minTileX = tileX - halfGrid, minTileY = tileY - halfGrid;
+  // Reuse `n` from above (computed once for the px→tile conversion).
   const bboxMinX = minTileX           / n * 2 * _R - _R;
   const bboxMaxX = (minTileX + GRID)  / n * 2 * _R - _R;
   const latTop   = Math.atan(Math.sinh(Math.PI * (1 - 2 *  minTileY          / n))) * 180/Math.PI;
@@ -1398,8 +1440,8 @@ async function _extractTileContour(ti, layerId){
 
   const isOn = (x,y) => (x<0||y<0||x>=W||y>=H) ? false : px[(y*W+x)*4+3] > THRESH;
 
-  // Click pixel = center tile of the 3×3 stitch (offset by one tile width)
-  const clickX = TS + pixelX, clickY = TS + pixelY;
+  // Click pixel = centre tile of the GRID×GRID stitch (offset = halfGrid tiles in)
+  const clickX = TS * halfGrid + pixelX, clickY = TS * halfGrid + pixelY;
   if(!isOn(clickX, clickY)) return null;
 
   // ── BFS flood-fill ──
@@ -1409,16 +1451,28 @@ async function _extractTileContour(ti, layerId){
   seed(clickX, clickY);
   while(sp>0){ const y=stk[--sp],x=stk[--sp]; seed(x-1,y);seed(x+1,y);seed(x,y-1);seed(x,y+1); }
 
+  // Track which canvas borders the flood touched. If any of the 4 edges is hit,
+  // the cadastre object extends beyond our fetched canvas and the polygon will
+  // be clipped along that artificial border. The wrapper will retry with a
+  // larger grid or lower zoom.
   let nFill=0, minX=W, minY=H, maxX=-1, maxY=-1;
   const MAX_FILL = Math.floor(W*H*0.8);  // 80% of canvas → "user clicked the background fill"
+  let edgeT=false, edgeB=false, edgeL=false, edgeR=false;
   for(let y=0;y<H;y++) for(let x=0;x<W;x++){
     if(filled[y*W+x]!==1) continue;
     nFill++;
     if(x<minX)minX=x; if(y<minY)minY=y;
     if(x>maxX)maxX=x; if(y>maxY)maxY=y;
+    if(y===0)     edgeT = true;
+    if(y===H-1)   edgeB = true;
+    if(x===0)     edgeL = true;
+    if(x===W-1)   edgeR = true;
   }
   if(nFill < 8)        return null;
   if(nFill > MAX_FILL) throw new Error('Область слишком велика — это фоновый регион?');
+  const touchedEdge = [
+    edgeT && 'top', edgeB && 'bottom', edgeL && 'left', edgeR && 'right'
+  ].filter(Boolean).join(',') || null;
 
   const f = (x,y) => (x<0||y<0||x>=W||y>=H) ? 0 : filled[y*W+x];
 
@@ -1524,7 +1578,7 @@ async function _extractTileContour(ti, layerId){
     Math.atan(Math.sinh(Math.PI*(1 - 2*(minTileY + by/TS)/n))) * 180/Math.PI
   ]);
 
-  return { type:'Polygon', coordinates:[coords] };
+  return { type:'Polygon', coordinates:[coords], touchedEdge };
 }
 
 // Uniform subsample: keep first + last, pick evenly spaced between
