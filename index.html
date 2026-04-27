@@ -3,13 +3,18 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.17</title>
+<title>EkceloFoto v2.9.18</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/piexifjs/1.0.6/piexif.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- xlsx-js-style: drop-in replacement for SheetJS community.
+     Same XLSX global, same API, but ALSO writes cell styles (the community
+     SheetJS reads styles with cellStyles:true but loses them on write).
+     This lets us preserve the user's row-1/2/3 formatting when emitting an
+     updated workbook with the new "Координаты центра объекта" column. -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <style>
 :root{--bg:#0d0f14;--surface:#161a24;--border:#252b3a;--accent:#e8ff47;--accent2:#47c8ff;--text:#e4e8f0;--muted:#5a6480;--danger:#ff5c5c;--warn:#f59e0b;--r:6px}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -512,7 +517,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.17</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.18</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -529,8 +534,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
       <button onclick="closeUploadMenu();showYandexDialog()">🌐 Яндекс.Диск (ссылка)</button>
       <button onclick="closeUploadMenu();showGDrivePanel()">📁 Google Drive (папка)</button>
       <hr/>
-      <button onclick="closeUploadMenu();document.getElementById('kml-file-input').click()">🗺 Добавить KML вручную…</button>
-      <button onclick="closeUploadMenu();document.getElementById('xlsx-file-input').click()">📋 Загрузить кад.номера (XLSX)…</button>
+      <button onclick="closeUploadMenu();pickKMLViaMenu()">🗺 Добавить KML вручную…</button>
+      <button onclick="closeUploadMenu();pickXlsxCatalog()">📋 Загрузить кад.номера (XLSX)…</button>
     </div>
   </div>
   <input type="file" id="file-input"            multiple accept="image/jpeg,image/jpg,.jpg,.jpeg"/>
@@ -2456,19 +2461,41 @@ function renderKMLOnMap(parsed){
   return lg;
 }
 
-async function loadKMLFromFile(file,displayName){
+async function loadKMLFromFile(file,displayName,handle){
   try{
     const text=await file.text();
-    await _loadKMLFromText(text, displayName||file.name);
+    await _loadKMLFromText(text, displayName||file.name, handle||null);
   } catch(e){showToast(`❌ KML: ${e.message}`,'error',5000);}
 }
+
+// FSA-aware menu picker for KML — gives writable handle so saves go to the same file
+window.pickKMLViaMenu = async function(){
+  if(_fsaSupported){
+    try {
+      const handles = await window.showOpenFilePicker({
+        types:[{description:'KML', accept:{'application/vnd.google-earth.kml+xml':['.kml']}}],
+        multiple: true,
+      });
+      for(const h of handles){
+        const f = await h.getFile();
+        await loadKMLFromFile(f, f.name, h);
+      }
+      return;
+    } catch(e){
+      if(e?.name === 'AbortError') return;
+    }
+  }
+  document.getElementById('kml-file-input').click();
+};
 
 // Common loader — used by file picker AND by the persistence-restore path on
 // page reload. Stores the raw text in the layer entry so we can:
 //   (a) re-emit it when the user adds a new placemark via the save dialog
 //   (b) persist the current state to localStorage so reloading the page keeps
 //       all loaded KMLs and any contours saved into them.
-async function _loadKMLFromText(text, displayName){
+//   (c) write back via FSA handle (if FSA path was used) so saves go to the
+//       same file in its original folder, not to ~/Downloads.
+async function _loadKMLFromText(text, displayName, handle){
   const parsed = parseKML(text, displayName);
   const lg = renderKMLOnMap(parsed);
   lg.addTo(map);
@@ -2481,10 +2508,12 @@ async function _loadKMLFromText(text, displayName){
     parsedData: parsed,
     cadPlacemarks: [],
     kmlText: text,        // raw KML — kept in sync after every kdConfirm save-to-layer
+    handle: handle||null, // FSA writable handle — null on legacy upload path
   });
   updateKMLButton();
   saveKMLLayersToStorage();
-  showToast(`🗺 KML: ${parsed.docName} (${parsed.placemarks.length} obj)`,'success',3000);
+  const handleNote = handle ? ' (можно сохранять обратно в ту же папку)' : '';
+  showToast(`🗺 KML: ${parsed.docName} (${parsed.placemarks.length} obj)${handleNote}`,'success',3000);
 }
 
 // ── KML PERSISTENCE (localStorage) ────────────────────────────────
@@ -3545,6 +3574,7 @@ let _kdPendingGeom = null;    // GeoJSON geometry to save
 let _kdPendingType = 'oks';   // 'zu' | 'oks' | 'str'
 let _kdDiskKMLText = null;    // raw text of the disk KML file
 let _kdDiskFilename = null;   // filename for re-download
+let _kdDiskHandle = null;     // FSA writable handle if user picked via showOpenFilePicker
 let _kdDest = 'layer';        // current destination selection
 let _kdLayerIdx = -1;         // selected index into kmlLayers (custom dropdown)
 
@@ -3583,66 +3613,101 @@ let _kdCatalogFiltered = [];  // indices into _objectCatalog matching current se
 
 // Raw XLSX bytes + filename — kept so we can re-emit the workbook with a centroid
 // column patched in (see _maybeOfferCentroidWriteback / Task 6).
+// File System Access API support — lets us save the updated XLSX back to the
+// EXACT file the user picked, instead of forcing a download to ~/Downloads.
+// Available in Chromium-based browsers (Chrome, Edge, Opera). Fallback below
+// uses the standard <input type="file"> + <a download> flow.
 let _objectCatalogRaw = null;       // Uint8Array of original file bytes
 let _objectCatalogFilename = null;  // original filename (without .xlsx removed)
+let _objectCatalogHandle = null;    // FileSystemFileHandle if FSA path was used (else null)
+
+const _fsaSupported = typeof window.showOpenFilePicker === 'function'
+                   && typeof window.showSaveFilePicker === 'function';
+
+// Triggered by the upload menu item. If FSA is supported, opens the modern
+// file picker (which gives us a handle we can write back to). Otherwise falls
+// back to the legacy <input type=file> path which can only download new files.
+window.pickXlsxCatalog = async function(){
+  if(_fsaSupported){
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        types:[{description:'Excel spreadsheets', accept:{'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx','.xlsm']}}],
+        multiple: false,
+      });
+      const file = await handle.getFile();
+      await _ingestXlsxFile(file, handle);
+    } catch(e){
+      // User cancelled or denied — silent
+      if(e?.name !== 'AbortError') console.warn('[xlsx-fsa]', e);
+    }
+  } else {
+    // Legacy fallback: trigger hidden <input>
+    document.getElementById('xlsx-file-input').click();
+  }
+};
 
 function onXlsxFileChosen(input){
   const file = input.files[0];
-  input.value = '';  // allow re-uploading the same file later
+  input.value = '';
   if(!file) return;
+  // No handle in legacy path — saves will go to ~/Downloads via showSaveFilePicker fallback
+  _ingestXlsxFile(file, null);
+}
+
+async function _ingestXlsxFile(file, handle){
   if(typeof XLSX === 'undefined'){
     showToast('Библиотека XLSX не загружена — проверьте интернет','error',4000);
     return;
   }
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const bytes = new Uint8Array(e.target.result);
-      const wb = XLSX.read(bytes, {type:'array'});
-      const items = _parseCatalogWorkbook(wb);
-      if(!items.length){ showToast('В файле не найдено записей на листе «Здания, сооружения»','warn',4000); return; }
-      _objectCatalog = items;
-      _objectCatalogRaw = bytes;
-      _objectCatalogFilename = file.name.replace(/\.xlsx?$/i, '');
-      // Pre-load any existing centroids so search results show them immediately
-      _hydrateCatalogCentroidsFromXLSX(wb);
-      // Initialise the accumulating workbook (single source of truth for cumulative
-      // centroid edits across multiple contour saves — see _maybeOfferCentroidWriteback)
-      _initCatalogWorkbook();
-      showToast(`✅ Каталог: ${items.length} объект(ов) загружено`, 'success', 3000);
-    } catch(err){
-      console.warn('[xlsx]', err);
-      showToast('❌ Не удалось разобрать XLSX: '+(err.message||err),'error',5000);
-    }
-  };
-  reader.readAsArrayBuffer(file);
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const wb = XLSX.read(bytes, {type:'array', cellStyles:true});
+    const items = _parseCatalogWorkbook(wb);
+    if(!items.length){ showToast('В файле не найдено записей на листах «Земельные участки» / «Здания, сооружения»','warn',4500); return; }
+    _objectCatalog         = items;
+    _objectCatalogRaw      = bytes;
+    _objectCatalogFilename = file.name.replace(/\.xlsx?$/i, '');
+    _objectCatalogHandle   = handle;  // null on legacy path; set on FSA path
+    _hydrateCatalogCentroidsFromXLSX(wb);
+    _initCatalogWorkbook();
+    const handleNote = handle ? ' (можно сохранять обратно в ту же папку)' : '';
+    showToast(`✅ Каталог: ${items.length} объект(ов) загружено${handleNote}`, 'success', 3500);
+  } catch(err){
+    console.warn('[xlsx]', err);
+    showToast('❌ Не удалось разобрать XLSX: '+(err.message||err),'error',5000);
+  }
 }
 
 // If the source XLSX already has a «Координаты центра объекта» column populated,
 // import those values into _objectCatalog so they show up in search results.
 function _hydrateCatalogCentroidsFromXLSX(wb){
-  const sheetName = wb.SheetNames.find(n => n === 'Здания, сооружения')
-                || wb.SheetNames.find(n => /^Здания/i.test(n))
-                || wb.SheetNames[0];
-  const ws = wb.Sheets[sheetName];
-  if(!ws || !ws['!ref']) return;
-  const range = XLSX.utils.decode_range(ws['!ref']);
-  let centroidCol = -1;
-  for(let c = range.s.c; c <= range.e.c; c++){
-    const header = ws[XLSX.utils.encode_cell({r:1, c})];
-    if(header && /координат/i.test(String(header.v||'')) && /центр/i.test(String(header.v||''))){
-      centroidCol = c; break;
+  // Hydrate from both sheets — each has its own primary cad column (F for ZU, G for OKS).
+  const sheetMap = [
+    { name: wb.SheetNames.find(n => /^Земельные/i.test(n)), cadCol: 5 },
+    { name: wb.SheetNames.find(n => n === 'Здания, сооружения')
+         || wb.SheetNames.find(n => /^Здания/i.test(n)),     cadCol: 6 },
+  ];
+  for(const {name, cadCol} of sheetMap){
+    if(!name) continue;
+    const ws = wb.Sheets[name];
+    if(!ws || !ws['!ref']) continue;
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    let centroidCol = -1;
+    for(let c = range.s.c; c <= range.e.c; c++){
+      const header = ws[XLSX.utils.encode_cell({r:1, c})];
+      if(header && /координат/i.test(String(header.v||'')) && /центр/i.test(String(header.v||''))){
+        centroidCol = c; break;
+      }
     }
-  }
-  if(centroidCol < 0) return;
-  const G = 6;
-  for(let r = 2; r <= range.e.r; r++){
-    const cad = ws[XLSX.utils.encode_cell({r, c:G})];
-    if(!cad) continue;
-    const ce = ws[XLSX.utils.encode_cell({r, c:centroidCol})];
-    if(!ce || !ce.v) continue;
-    const it = _objectCatalog.find(x => x.cadNum === String(cad.v).trim());
-    if(it) it.centroid = String(ce.v).trim();
+    if(centroidCol < 0) continue;
+    for(let r = 2; r <= range.e.r; r++){
+      const cad = ws[XLSX.utils.encode_cell({r, c:cadCol})];
+      if(!cad) continue;
+      const ce = ws[XLSX.utils.encode_cell({r, c:centroidCol})];
+      if(!ce || !ce.v) continue;
+      const it = _objectCatalog.find(x => x.cadNum === String(cad.v).trim());
+      if(it) it.centroid = String(ce.v).trim();
+    }
   }
 }
 
@@ -3654,52 +3719,108 @@ function _hydrateCatalogCentroidsFromXLSX(wb){
 //   H=Площадь, кв.м   I=Назначение
 //   J=Количество этажей (в т.ч. подземных)   K=Количество подземных этажей
 //   M=Завершение строительства   N=Ввод в эксплуатацию
+// Parse workbook → array of catalog entries from BOTH sheets if present.
+// Sheet layouts (from inspection of «Список_недвижимости_ОС_2026-04-22_15_59_36+5.xlsx»):
+//
+//   «Земельные участки» — 22 columns:
+//     B=Инв.№, C=Наименование по бух.учёту, D=Наименование по ЕГРН, E=Адрес,
+//     F=Кадастровый номер, G=Площадь, H=Категория земель, I=ВРИ, ...
+//
+//   «Здания, сооружения» — 30 columns:
+//     B=Инв.№, C=Наименование по бух.учёту, D=Вид объекта, E=Наименование по ЕГРН,
+//     F=Адрес, G=Кадастровый номер, H=Площадь, I=Назначение,
+//     J=Этажей, K=Подз.этажей, M=Завершение строительства, N=Ввод в эксплуатацию,
+//     O=Кадастр. № ЗУ родителя ...
+//
+// Both sheets share the same data-from-row-3 structure. Catalog entries get a
+// `_sheetType` field ('zu' | 'oks') so search results show source-aware data.
 function _parseCatalogWorkbook(wb){
-  // Find the "Здания, сооружения" sheet — exact match first, then fuzzy by leading word
-  const want = 'Здания, сооружения';
-  let sheetName = wb.SheetNames.find(n => n === want)
-              || wb.SheetNames.find(n => /^Здания/i.test(n))
-              || wb.SheetNames[0];
-  const ws = wb.Sheets[sheetName];
-  if(!ws) return [];
-
-  // Read as array-of-arrays so we can address by Excel column letter regardless of headers
-  const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:true, blankrows:false});
-  if(rows.length < 3) return [];
-
-  // Excel column letter → 0-based array index. A=0, B=1, … AA=26, AB=27 …
+  const items = [];
   const col = letter => {
     let n = 0;
     for(const ch of letter) n = n*26 + (ch.charCodeAt(0)-64);
     return n - 1;
   };
-  const C=col('C'), D=col('D'), E=col('E'), G=col('G'), H=col('H'),
-        I=col('I'), J=col('J'), K=col('K'), M=col('M'), N=col('N');
 
-  const items = [];
-  for(let r=2; r<rows.length; r++){              // r=2 → row 3 in Excel
-    const row = rows[r];
-    if(!row) continue;
-    const cad = (row[G]==null? '' : String(row[G])).trim();
-    if(!cad || !/\d/.test(cad)) continue;        // skip rows without a real cad number
-    const cell = idx => {
-      const v = row[idx];
-      if(v == null) return '';
-      const s = String(v).trim();
-      return s === '' || s === '-' ? '' : s;
-    };
-    items.push({
-      cadNum:       cad,
-      namePB:       cell(C),
-      kind:         cell(D),
-      nameEGRN:     cell(E),
-      area:         cell(H),
-      purpose:      cell(I),
-      floors:       cell(J),
-      undFloors:    cell(K),
-      finished:     cell(M),
-      commissioned: cell(N),
-    });
+  // ── ZU sheet (cad column F, no purpose/floors/dates) ──
+  const zuName = wb.SheetNames.find(n => /^Земельные/i.test(n));
+  if(zuName){
+    const ws = wb.Sheets[zuName];
+    if(ws){
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:true, blankrows:false});
+      const F=col('F'), C=col('C'), D=col('D'), E=col('E'), G=col('G'), H=col('H'), I=col('I');
+      for(let r=2; r<rows.length; r++){
+        const row = rows[r]; if(!row) continue;
+        const cad = (row[F]==null? '' : String(row[F])).trim();
+        if(!cad || !/\d:\d/.test(cad)) continue;
+        const cell = idx => {
+          const v = row[idx]; if(v == null) return '';
+          const s = String(v).trim(); return s === '' || s === '-' ? '' : s;
+        };
+        items.push({
+          cadNum:       cad,
+          _sheetType:   'zu',
+          namePB:       cell(C),
+          kind:         'Земельный участок',
+          nameEGRN:     cell(D),
+          address:      cell(E),
+          area:         cell(G),
+          category:     cell(H),
+          purpose:      cell(I),
+          floors:       '', undFloors:'', finished:'', commissioned:'',
+        });
+      }
+    }
+  }
+
+  // ── OKS/Здания sheet (cad column G, has purpose/floors/dates) ──
+  const oksName = wb.SheetNames.find(n => n === 'Здания, сооружения')
+              || wb.SheetNames.find(n => /^Здания/i.test(n));
+  if(oksName){
+    const ws = wb.Sheets[oksName];
+    if(ws){
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:true, blankrows:false});
+      const C=col('C'), D=col('D'), E=col('E'), G=col('G'), H=col('H'),
+            I=col('I'), J=col('J'), K=col('K'), M=col('M'), N=col('N');
+      for(let r=2; r<rows.length; r++){
+        const row = rows[r]; if(!row) continue;
+        const cad = (row[G]==null? '' : String(row[G])).trim();
+        if(!cad || !/\d:\d/.test(cad)) continue;
+        const cell = idx => {
+          const v = row[idx]; if(v == null) return '';
+          const s = String(v).trim(); return s === '' || s === '-' ? '' : s;
+        };
+        items.push({
+          cadNum:       cad,
+          _sheetType:   'oks',
+          namePB:       cell(C),
+          kind:         cell(D),
+          nameEGRN:     cell(E),
+          area:         cell(H),
+          purpose:      cell(I),
+          floors:       cell(J),
+          undFloors:    cell(K),
+          finished:     cell(M),
+          commissioned: cell(N),
+        });
+      }
+    }
+  }
+
+  // Fallback: if neither known sheet was found, try the first sheet with column G/F
+  if(items.length === 0 && wb.SheetNames.length > 0){
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    if(ws){
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:true, blankrows:false});
+      const G=col('G'), F=col('F');
+      for(let r=2; r<rows.length; r++){
+        const row = rows[r]; if(!row) continue;
+        const cad = String(row[G]||row[F]||'').trim();
+        if(!cad || !/\d:\d/.test(cad)) continue;
+        items.push({ cadNum: cad, _sheetType: 'unknown', namePB: '', kind: '', nameEGRN: '',
+                     area:'', purpose:'', floors:'', undFloors:'', finished:'', commissioned:'' });
+      }
+    }
   }
   return items;
 }
@@ -3799,7 +3920,7 @@ function _kdApplyCatalogItem(catIdx){
 function showKMLSaveDialog(geom, type, prefillCadNum, prefillDesc){
   _kdPendingGeom = geom;
   _kdPendingType = type;
-  _kdDiskKMLText = null; _kdDiskFilename = null;
+  _kdDiskKMLText = null; _kdDiskFilename = null; _kdDiskHandle = null;
   _kdDest = 'layer';
   _kdLayerIdx = -1;
 
@@ -3896,10 +4017,30 @@ function kdSelectDest(dest){
   document.getElementById('kd-layer-select').classList.remove('open');
 }
 
-function kdPickFile(){ document.getElementById('kd-file-input').click(); }
+async function kdPickFile(){
+  if(_fsaSupported){
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        types:[{description:'KML', accept:{'application/vnd.google-earth.kml+xml':['.kml']}}],
+        multiple: false,
+      });
+      const file = await handle.getFile();
+      _kdDiskFilename = file.name;
+      _kdDiskHandle   = handle;
+      document.getElementById('kd-file-name').textContent = '📄 ' + file.name + ' ✓';
+      _kdDiskKMLText = await file.text();
+      return;
+    } catch(e){
+      if(e?.name === 'AbortError') return;
+      // Fall through to legacy picker
+    }
+  }
+  document.getElementById('kd-file-input').click();
+}
 function kdFileChosen(input){
   const file = input.files[0]; if(!file) return;
   _kdDiskFilename = file.name;
+  _kdDiskHandle   = null;  // legacy upload — no writable handle
   document.getElementById('kd-file-name').textContent = '📄 ' + file.name;
   const reader = new FileReader();
   reader.onload = e => { _kdDiskKMLText = e.target.result; };
@@ -4023,28 +4164,79 @@ function kdConfirm(){
     }
     saveKMLLayersToStorage();
 
-    // Task 6: if catalog (XLSX) was loaded and this cadNum is in it, prompt to
-    // write the polygon centroid back into the «Координаты центра объекта» column.
-    _maybeOfferCentroidWriteback(cadNum, geom);
+    // Also download the updated KML file so the user has a tangible artifact —
+    // not just an in-memory + localStorage entry. If the layer was loaded via
+    // FSA (handle present) we write back to the same file in-place.
+    const filename = tgt.filename || `${(tgt.docName||'kml').replace(/[^\wа-яА-Я-]/g,'_')}.kml`;
+    if(tgt.handle){
+      // FSA path — overwrite the original file in-place
+      _writeKMLToHandle(tgt.handle, tgt.kmlText, filename);
+    } else {
+      _downloadBlob(tgt.kmlText, filename);
+    }
 
+    _maybeOfferCentroidWriteback(cadNum, geom);
     renderKMLDropdown();
     showToast(`✅ Записано в «${tgt.docName||tgt.filename}»`,'success',3000);
   } else if(_kdDest==='new'){
     if(lyr) lyr.addTo(map);
     const docName = name || cadNum || 'Контур';
     const xml = _buildKMLDocument([styleXml],[placemarkXml], docName);
-    _downloadBlob(xml, `${cadNum.replace(/:/g,'_')||'kontur'}.kml`);
+    const fname = `${cadNum.replace(/:/g,'_')||'kontur'}.kml`;
+    // Try FSA save dialog → user picks where; falls back to legacy download.
+    _saveKMLPickFolder(xml, fname);
     _maybeOfferCentroidWriteback(cadNum, geom);
-    showToast('✅ Скачан новый KML файл','success',3000);
   } else if(_kdDest==='disk'){
     if(!_kdDiskKMLText){ showToast('Файл не выбран','warn',3000); _kdPendingGeom=null; return; }
     if(lyr) lyr.addTo(map);
     const updated = _appendToKMLText(_kdDiskKMLText, styleXml, placemarkXml);
-    _downloadBlob(updated, _kdDiskFilename||'updated.kml');
+    if(_kdDiskHandle){
+      _writeKMLToHandle(_kdDiskHandle, updated, _kdDiskFilename||'updated.kml');
+    } else {
+      _downloadBlob(updated, _kdDiskFilename||'updated.kml');
+    }
     _maybeOfferCentroidWriteback(cadNum, geom);
     showToast(`✅ Дозаписано в «${_kdDiskFilename}»`,'success',3000);
   }
   _kdPendingGeom = null;
+}
+
+// Save raw KML text via FSA writable handle, with fallback toast on error.
+async function _writeKMLToHandle(handle, text, filename){
+  try {
+    const writable = await handle.createWritable();
+    await writable.write(text);
+    await writable.close();
+    _showSaveInfoDialog(filename, null,
+      'Файл сохранён ПО ТОМУ ЖЕ пути, откуда был открыт.');
+  } catch(e){
+    console.warn('[kml-fsa-write]', e);
+    showToast(`⚠ Не удалось перезаписать KML: ${e.message||e}. Скачиваем копию…`,'warn',4500);
+    _downloadBlob(text, filename);
+  }
+}
+
+// Save KML via showSaveFilePicker (lets user pick destination folder), with
+// fallback to legacy <a download> on browsers without FSA support.
+async function _saveKMLPickFolder(text, suggestedName){
+  if(_fsaSupported){
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName,
+        types:[{description:'KML', accept:{'application/vnd.google-earth.kml+xml':['.kml']}}],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(text);
+      await writable.close();
+      _showSaveInfoDialog(handle.name||suggestedName, null,
+        'Файл сохранён в выбранную папку.');
+      return;
+    } catch(e){
+      if(e?.name === 'AbortError') return;
+      console.warn('[kml-save-picker]', e);
+    }
+  }
+  _downloadBlob(text, suggestedName);
 }
 
 // Append style + placemark to existing KML text
@@ -4097,7 +4289,7 @@ function _downloadBlob(text, filename){
 // Show the post-save destination dialog.
 // `path`     — the filename the browser used (browsers don't reveal the full OS path)
 // `blobUrl`  — blob: URL of the saved file (still valid in this tab session)
-function _showSaveInfoDialog(path, blobUrl){
+function _showSaveInfoDialog(path, blobUrl, whereMsg){
   let modal = document.getElementById('save-info-modal');
   if(!modal){
     modal = document.createElement('div');
@@ -4107,7 +4299,7 @@ function _showSaveInfoDialog(path, blobUrl){
         `<h3>📁 Файл сохранён</h3>`+
         `<div class="sim-label">Имя файла:</div>`+
         `<code id="sim-path"></code>`+
-        `<div class="sim-hint">Сохранён в папку <b>Загрузки</b> вашего браузера (или другую — если вы изменили настройки)</div>`+
+        `<div class="sim-hint" id="sim-where"></div>`+
         `<div class="sim-actions">`+
           `<button id="sim-copy"  onclick="_copySaveLink()" title="Копировать ссылку на файл (действительна до закрытия вкладки)">`+
             `<span class="sim-ico">🔗</span><span>Копировать ссылку</span>`+
@@ -4124,6 +4316,13 @@ function _showSaveInfoDialog(path, blobUrl){
     document.body.appendChild(modal);
   }
   document.getElementById('sim-path').textContent = path;
+  document.getElementById('sim-where').innerHTML = whereMsg
+    || 'Сохранён в папку <b>Загрузки</b> вашего браузера (или другую — если вы изменили настройки)';
+  // Hide "Copy link" if no blob URL (FSA path saves directly to disk, no blob)
+  document.getElementById('sim-copy').style.display = blobUrl ? '' : 'none';
+  // Hide "Yandex" button for non-KML files
+  const isKml = /\.kml$/i.test(path);
+  document.getElementById('sim-yndx').style.display = isKml ? '' : 'none';
   modal._blobUrl = blobUrl;
   modal.classList.add('open');
 }
@@ -4291,87 +4490,104 @@ async function _maybeOfferCentroidWriteback(cadNum, geom){
 
 // Patch _objectCatalogWB in place. Returns the number of rows updated.
 //
-// Sheet selection strategy (v55 upgrade):
-//   1. If cadNum has the ZU pattern (XX:XX:NNNNNNN — short third segment, even N digits),
-//      try the «Земельные участки» sheet first.
-//   2. Otherwise / not found → try «Здания, сооружения».
-//   3. Final fallback → scan every sheet in the workbook for ANY row whose any
-//      cell contains the exact cadNum string. Patches the column either at the
-//      «Координаты центра объекта» header (if present) or the next free column.
+// Sheet selection strategy (v56):
+//   1. If the «Земельные участки» sheet exists → check its cad.№ column F (index 5)
+//   2. If the «Здания, сооружения» sheet exists → check its cad.№ column G (index 6)
+//   3. For unknown sheets → find the column header «Кадастровый номер» that does NOT
+//      contain «земельного участка» (which would be the OKS sheet's column O —
+//      "Кадастровый № Земельного участка , на котором расположен объект" — it lists
+//      the parent ZU and would falsely match a ZU's cadnum when we mean to patch a row)
 //
-// The fallback handles non-standard templates (custom sheet names, mixed sheets)
-// without forcing the user to rename anything.
+// Returning the number of rows updated lets the caller report success/failure clearly.
 function _writeCentroidToWB(cadNum, formatted){
   if(!_objectCatalogWB) return 0;
   const wb = _objectCatalogWB;
 
-  // ZU pattern: 4-segment kadastr where the 4th part is missing or short
-  //   ZU      = "90:25:020102:124"  → 4 segments, last is parcel id
-  //   OKS/STR = "90:25:020102:356"  → same shape, but "object" semantically
-  // We can't distinguish ZU vs OKS purely by the number — they share the same
-  // 4-segment structure. So strategy: try BOTH known sheets, accept any hit.
-  const candidates = [];
-  const zuSheet  = wb.SheetNames.find(n => /^Земельные/i.test(n));
-  const oksSheet = wb.SheetNames.find(n => n === 'Здания, сооружения')
-               || wb.SheetNames.find(n => /^Здания/i.test(n));
-  if(zuSheet)  candidates.push(zuSheet);
-  if(oksSheet) candidates.push(oksSheet);
-  // Fallback: every other sheet
-  for(const n of wb.SheetNames){
-    if(!candidates.includes(n)) candidates.push(n);
+  // Build sheet → primary-cadnum-column map. Each sheet has exactly ONE cad.№ column
+  // that semantically identifies its rows. Using the wrong column (e.g. OKS column O
+  // which lists parent ZU cadnums) would cause a ZU patch to falsely hit OKS rows.
+  const sheets = [];
+  for(const name of wb.SheetNames){
+    let primaryCol = -1;
+    let headerRow  = 1;  // template uses row 2 (index 1)
+    if(/^Земельные/i.test(name)){
+      primaryCol = 5;  // F
+    } else if(/^Здания/i.test(name) || name === 'Здания, сооружения'){
+      primaryCol = 6;  // G
+    } else {
+      // Unknown sheet — find header containing "Кадастровый номер" but NOT
+      // "земельного участка" (skip the cross-reference column)
+      const ws = wb.Sheets[name];
+      if(ws && ws['!ref']){
+        const range = XLSX.utils.decode_range(ws['!ref']);
+        for(let r = 0; r <= Math.min(3, range.e.r); r++){
+          for(let c = range.s.c; c <= range.e.c; c++){
+            const cell = ws[XLSX.utils.encode_cell({r, c})];
+            const v = cell ? String(cell.v||'') : '';
+            if(/кадастров.*номер/i.test(v) && !/земельного\s+участка/i.test(v)){
+              primaryCol = c; headerRow = r;
+              break;
+            }
+          }
+          if(primaryCol >= 0) break;
+        }
+      }
+    }
+    sheets.push({name, primaryCol, headerRow});
   }
 
   let totalWritten = 0;
-  for(const sheetName of candidates){
-    const ws = wb.Sheets[sheetName];
+  for(const {name, primaryCol, headerRow} of sheets){
+    if(primaryCol < 0) continue;
+    const ws = wb.Sheets[name];
     if(!ws || !ws['!ref']) continue;
-    const written = _writeCentroidToSheet(ws, cadNum, formatted);
-    totalWritten += written;
-    if(written > 0 && (sheetName === zuSheet || sheetName === oksSheet)){
-      // Found in a known structured sheet — no need to scan further
-      break;
-    }
+    totalWritten += _writeCentroidToSheet(ws, cadNum, formatted, primaryCol, headerRow);
   }
   return totalWritten;
 }
 
-function _writeCentroidToSheet(ws, cadNum, formatted){
+function _writeCentroidToSheet(ws, cadNum, formatted, primaryCadCol, headerRow){
   if(!ws || !ws['!ref']) return 0;
   const range = XLSX.utils.decode_range(ws['!ref']);
 
   // Find or create the «Координаты центра объекта» column.
-  // Header row in the standard template is row 2 (index 1). For non-standard
-  // sheets we scan rows 0-3 looking for the header anywhere.
-  let centroidCol = -1, headerRow = 1;
-  outer: for(let r = 0; r <= Math.min(3, range.e.r); r++){
-    for(let c = range.s.c; c <= range.e.c; c++){
-      const cell = ws[XLSX.utils.encode_cell({r, c})];
-      const v = cell ? String(cell.v||'') : '';
-      if(/координат/i.test(v) && /центр/i.test(v)){
-        centroidCol = c; headerRow = r;
-        break outer;
-      }
+  // We scan ONLY the header row (we know exactly where it is).
+  let centroidCol = -1;
+  for(let c = range.s.c; c <= range.e.c; c++){
+    const cell = ws[XLSX.utils.encode_cell({r:headerRow, c})];
+    const v = cell ? String(cell.v||'') : '';
+    if(/координат/i.test(v) && /центр/i.test(v)){
+      centroidCol = c;
+      break;
     }
   }
   if(centroidCol === -1){
     centroidCol = range.e.c + 1;
-    ws[XLSX.utils.encode_cell({r:headerRow, c:centroidCol})] = { t:'s', v:'Координаты центра объекта' };
+    // Copy the header style from a neighbouring header cell (e.g. column G/F header)
+    // so the new column blends with the existing styling.
+    const tplCell = ws[XLSX.utils.encode_cell({r:headerRow, c:primaryCadCol})];
+    const newHeader = { t:'s', v:'Координаты центра объекта' };
+    if(tplCell && tplCell.s){ newHeader.s = JSON.parse(JSON.stringify(tplCell.s)); }
+    ws[XLSX.utils.encode_cell({r:headerRow, c:centroidCol})] = newHeader;
     range.e.c = centroidCol;
     ws['!ref'] = XLSX.utils.encode_range(range);
   }
 
-  // Find rows containing the cadNum. We scan ALL columns rather than just G=6,
-  // since custom sheets may put the kadastr in any column.
+  // Now find rows where the PRIMARY cad.№ column matches our target.
+  // CRITICAL: only check `primaryCadCol`, not all columns — the OKS sheet's
+  // column O contains lists like "90:25:020102:119, 90:25:020102:124" and
+  // a multi-column scan would falsely match when patching the ZU :119.
   let written = 0;
   for(let r = headerRow + 1; r <= range.e.r; r++){
-    let matched = false;
-    for(let c = range.s.c; c <= range.e.c; c++){
-      const cell = ws[XLSX.utils.encode_cell({r, c})];
-      if(!cell) continue;
-      if(String(cell.v||'').trim() === cadNum){ matched = true; break; }
-    }
-    if(matched){
-      ws[XLSX.utils.encode_cell({r, c:centroidCol})] = { t:'s', v: formatted };
+    const cell = ws[XLSX.utils.encode_cell({r, c:primaryCadCol})];
+    if(!cell) continue;
+    if(String(cell.v||'').trim() === cadNum){
+      // Try to copy the cell style from the neighbour data cell so the
+      // centroid value visually matches the data row (font, alignment, borders).
+      const tplCell = ws[XLSX.utils.encode_cell({r, c:primaryCadCol})];
+      const valCell = { t:'s', v: formatted };
+      if(tplCell && tplCell.s){ valCell.s = JSON.parse(JSON.stringify(tplCell.s)); }
+      ws[XLSX.utils.encode_cell({r, c:centroidCol})] = valCell;
       written++;
     }
   }
@@ -4405,42 +4621,83 @@ function _refreshXlsxDownloadButton(){
 }
 
 // Modes:
-//   'new'   → "<base>_с_центрами.xlsx"           — fresh file, never collides
-//   'orig'  → "<base>.xlsx"                      — replace the original on disk
-//   'copy1' → "<base> (1).xlsx"                  — escape hatch when original is
-//                                                  locked by Excel/another app
-window.downloadAccumulatedXLSX = function(mode){
+//   'orig'  → write to the EXACT file the user picked (FSA path) OR show
+//             showSaveFilePicker() to let user replace it (FSA fallback) OR
+//             legacy download to ~/Downloads with original name.
+//   'new'   → "<base>_с_центрами.xlsx" — fresh file
+//   'copy1' → "<base> (1).xlsx" — copy variant when user wants to keep original
+window.downloadAccumulatedXLSX = async function(mode){
   if(!_objectCatalogWB){ showToast('Нет загруженного каталога','warn',2500); return; }
-  // Sanity-warn the user about the file-lock situation BEFORE the browser
-  // tries to overwrite. We can't detect the lock from JS (the OS file picker
-  // shows "file in use" only after the click), but a clear warning lets the
-  // user close Excel proactively.
-  if(mode === 'orig'){
+  let bytes;
+  try {
+    bytes = XLSX.write(_objectCatalogWB, {type:'array', bookType:'xlsx', cellStyles:true});
+  } catch(e){
+    console.warn('[xlsx-write]', e);
+    showToast('❌ Ошибка кодирования XLSX: '+(e.message||e), 'error', 4000);
+    return;
+  }
+  const baseName = _objectCatalogFilename || 'каталог';
+  let suffix;
+  if(mode === 'orig')       suffix = '';
+  else if(mode === 'copy1') suffix = ' (1)';
+  else                      suffix = '_с_центрами';
+  const filename = `${baseName}${suffix}.xlsx`;
+
+  // Path A: original file via FSA handle (saves to the exact source folder)
+  if(mode === 'orig' && _objectCatalogHandle){
     const ok = window.confirm(
-      `Сохранение под исходным именем «${_objectCatalogFilename}.xlsx».\n\n`+
-      `⚠ Если файл сейчас открыт в Excel/другой программе — закройте его, иначе ОС не позволит перезаписать.\n\n`+
-      `Если возникнет ошибка скачивания — используйте «Копия (1)».`
+      `Перезаписать исходный файл «${baseName}.xlsx» в той же папке?\n\n`+
+      `⚠ Если файл сейчас открыт в Excel — закройте его, иначе ОС не позволит запись.\n\n`+
+      `(Если возникнет ошибка, используйте «Копия (1)».)`
     );
     if(!ok) return;
+    try {
+      const writable = await _objectCatalogHandle.createWritable();
+      await writable.write(bytes);
+      await writable.close();
+      _showSaveInfoDialog(filename, null,
+        'Файл сохранён ПО ТОМУ ЖЕ пути, откуда был открыт.');
+      showToast(`✅ Исходный XLSX обновлён (${_objectCatalogDirty} изм.)`, 'success', 3500);
+      return;
+    } catch(e){
+      console.warn('[xlsx-fsa-write]', e);
+      showToast(`⚠ Не удалось перезаписать: ${e.message||e}. Пробуем диалог «Сохранить как…»`,'warn',4500);
+      // Fall through to Path B
+    }
   }
-  try {
-    const out = XLSX.write(_objectCatalogWB, {type:'array', bookType:'xlsx'});
-    const blob = new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    const baseName = _objectCatalogFilename || 'каталог';
-    let suffix;
-    if(mode === 'orig')       suffix = '';
-    else if(mode === 'copy1') suffix = ' (1)';
-    else                      suffix = '_с_центрами';
-    a.download = `${baseName}${suffix}.xlsx`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    showToast(`✅ Скачан XLSX «${a.download}» (${_objectCatalogDirty} изм.)`, 'success', 3000);
-  } catch(e){
-    console.warn('[xlsx-download]', e);
-    showToast('❌ Ошибка экспорта: '+(e.message||e)+'. Попробуйте «Копия (1)».', 'error', 5000);
+
+  // Path B: showSaveFilePicker — user picks where to save (Chromium-based)
+  if(_fsaSupported){
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: filename,
+        types:[{description:'Excel spreadsheet', accept:{'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx']}}],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(bytes);
+      await writable.close();
+      // For mode='orig' on FSA path, also remember the new handle so future saves go there
+      if(mode === 'orig') _objectCatalogHandle = handle;
+      _showSaveInfoDialog(handle.name || filename, null,
+        'Файл сохранён в выбранную папку.');
+      showToast(`✅ Скачан XLSX «${handle.name||filename}» (${_objectCatalogDirty} изм.)`, 'success', 3500);
+      return;
+    } catch(e){
+      if(e?.name === 'AbortError') return;  // user cancelled — silent
+      console.warn('[xlsx-save-picker]', e);
+      // Fall through to Path C
+    }
   }
+
+  // Path C: legacy download → ~/Downloads
+  const blob = new Blob([bytes], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  _showSaveInfoDialog(filename, url,
+    'Сохранён в папку «Загрузки» вашего браузера (FSA не поддерживается этим браузером).');
+  showToast(`✅ Скачан XLSX «${filename}» (${_objectCatalogDirty} изм.)`, 'success', 3500);
 };
 
 // ── TASK 5: LOCAL CADASTRE SEARCH (KML + XLSX) ────────────────────
