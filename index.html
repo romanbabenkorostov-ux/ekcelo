@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.16</title>
+<title>EkceloFoto v2.9.17</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -408,6 +408,24 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 /* ── KML SAVE DIALOG ─────────────────────────────────────── */
 #kml-save-dialog{display:none;position:fixed;inset:0;z-index:10500;background:rgba(0,0,0,.72);backdrop-filter:blur(4px);align-items:center;justify-content:center}
 #kml-save-dialog.open{display:flex}
+/* ── Post-save info modal (after every KML download) ──────────────
+   Shows the user what file landed where + offers a quick copy-link to the blob
+   URL (still valid for the rest of this tab session). z-index above the regular
+   save dialog so chained interactions stack visually.                         */
+#save-info-modal{display:none;position:fixed;inset:0;z-index:10600;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace}
+#save-info-modal.open{display:flex}
+#save-info-modal .sim-card{background:var(--surface);border:1px solid var(--accent2);border-radius:8px;padding:18px 22px;min-width:340px;max-width:480px;box-shadow:0 12px 32px rgba(0,0,0,0.6);color:var(--text)}
+#save-info-modal h3{margin:0 0 12px;font-size:14px;color:var(--accent2);font-weight:700}
+#save-info-modal .sim-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:8px 0 4px}
+#save-info-modal #sim-path{display:block;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:8px 10px;font-size:11px;color:var(--text);word-break:break-all;line-height:1.4}
+#save-info-modal .sim-hint{font-size:10px;color:var(--muted);margin:8px 0 14px;line-height:1.5}
+#save-info-modal .sim-hint b{color:var(--accent);font-weight:700}
+#save-info-modal .sim-actions{display:flex;gap:8px;flex-wrap:wrap}
+#save-info-modal .sim-actions button{flex:1;min-width:120px;display:flex;align-items:center;justify-content:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:8px 12px;font-family:inherit;font-size:11px;color:var(--text);cursor:pointer;transition:all .15s}
+#save-info-modal .sim-actions button:hover{border-color:var(--accent2);color:var(--accent2);background:rgba(71,200,255,.08)}
+#save-info-modal #sim-copy:hover{border-color:var(--accent);color:var(--accent);background:rgba(255,149,0,.08)}
+#save-info-modal #sim-close{background:transparent}
+#save-info-modal .sim-ico{font-size:13px}
 #kml-save-card{background:var(--surface);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:20px 22px 18px;width:400px;max-width:96vw;box-shadow:0 24px 64px rgba(0,0,0,.85);font-family:'JetBrains Mono',monospace;font-size:12px}
 #kml-save-card h3{margin:0 0 14px;font-size:14px;font-weight:700;color:var(--accent);letter-spacing:-.3px}
 .kd-field{margin-bottom:10px}
@@ -494,7 +512,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.16</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.17</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -1407,15 +1425,17 @@ async function _extractTileContourOnce(ti, layerId, GRID, Z){
   // VERY light pink fill (alpha 8-15) and dark-maroon thin strokes (alpha 200+).
   // Threshold 8 catches both reliably without leaking into JPEG noise (~3-5).
   const THRESH  = 8;
-  // RDP simplification tolerance in pixels. 1.2 was too tight — it kept every
-  // 1-2 px stair-step from the rasterised border. After morphological opening
-  // (below) a value of 1.6 px reliably collapses sub-pixel jaggies while
-  // preserving real corners (corner deviation from straight ≫ 1.6 px).
-  const RDP_EPS = 1.6;
-  // Hard cap on vertex count to keep KML readable. 60 was too few for complex
-  // ZU shapes (e.g. piers along coastline have 30+ legitimate corners). 100
-  // gives headroom; with RDP doing its job, real polygons rarely exceed 50.
-  const MAX_PT  = 100;
+  // RDP simplification tolerance in pixels.
+  // v54 used 1.6 — too aggressive: real corners on long-perimeter shapes (piers,
+  // L-junctions) within a ~1 m local deviation got collapsed.
+  // v55: 0.9 px ≈ 0.5 m at z18. Combined with morphological opening (which removes
+  // sub-pixel jaggies BEFORE RDP runs), 0.9 keeps every meaningful corner without
+  // re-introducing antialias spikes.
+  const RDP_EPS = 0.9;
+  // Hard cap on vertex count. v54=100 was still tight for complex coastline ZU
+  // (piers + bays). v55: 200 — gives RDP room to keep all real corners while
+  // staying well under Yandex MK's per-placemark budget.
+  const MAX_PT  = 200;
 
   // Recompute click pixel at the requested zoom (ti.z may differ).
   // First convert original tileInfo back to lat/lon, then forward to {Z, tileX, tileY, pixelX, pixelY}.
@@ -3155,9 +3175,11 @@ function resetTimelineFilter(){
 //
 // Если поиск не находит — отображается кнопка-ссылка на ПКК для ручного просмотра.
 
+// Swapped in v55: ZU now green (per request — visually associates with land/grass),
+// OKS now purple (was green). Saved KMLs use matching ABGR in kdConfirm.
 const CAD_STYLES = {
-  zu:  { color:'rgba(160,32,240,0.85)', fillColor:'rgba(160,32,240,0.10)', weight:2 },
-  oks: { color:'rgba(0,180,50,0.85)',   fillColor:'rgba(0,180,50,0.10)',   weight:2 },
+  zu:  { color:'rgba(0,180,50,0.85)',   fillColor:'rgba(0,180,50,0.10)',   weight:2 },
+  oks: { color:'rgba(160,32,240,0.85)', fillColor:'rgba(160,32,240,0.10)', weight:2 },
   // Explanation pin: dark-blue stroke + cyan fill, area ≈ 2× photo dot.
   // Photo dot = 11×11 px (CSS .marker-dot) → area ~95 px². 2× = 190 px² → r ≈ 7.8 → use 8.
   exp: { color:'#1e54e5',                fillColor:'#47c8ff',                weight:2 },
@@ -3490,8 +3512,8 @@ function _cadToKML(cadNum, type, geom, lines) {
     cs = `${lo},${la},0`;
   } else { return null; }
 
-  const bABGR = type==='zu' ? 'ff7f007f' : 'ff007f00';   // border: opaque purple / green
-  const fABGR = type==='zu' ? '337f007f' : '33007f00';   // fill: 20% opacity (0x33=51 ≈ 20%)
+  const bABGR = type==='zu' ? 'ff007f00' : 'ff7f007f';   // border: opaque green (zu) / purple (oks)
+  const fABGR = type==='zu' ? '33007f00' : '337f007f';   // fill: 20% opacity (zu green / oks purple)
   const sid   = `cad_${type}_${cadNum.replace(/:/g,'_')}`;
   const desc  = lines.map(([k,v])=>`${k}: ${v}`).join('; ');
   const gkml  = geom.type==='Point'
@@ -3938,10 +3960,16 @@ function kdConfirm(){
   //   oks = green  stroke + 20% transparent green  fill
   //   exp = dark-blue stroke (#1e54e5 = R1e G54 Be5 → ABGR ffe5541e)
   //         cyan fill      (#47c8ff = R47 Gc8 Bff → ABGR f0ffc847, alpha 0xf0 ≈ 94%)
+  // Style: KML uses ABGR (alpha-blue-green-red) hex.
+  // Swapped in v55:
+  //   zu  = green stroke + 20% transparent green fill (was purple)
+  //   oks = purple stroke + 20% transparent purple fill (was green)
+  //   exp = dark-blue stroke (#1e54e5 = R1e G54 Be5 → ABGR ffe5541e)
+  //         cyan fill      (#47c8ff = R47 Gc8 Bff → ABGR f0ffc847, alpha 0xf0 ≈ 94%)
   let bABGR, fABGR;
   if(safeType==='exp'){      bABGR='ffe5541e'; fABGR='f0ffc847'; }
-  else if(safeType==='zu'){  bABGR='ff7f007f'; fABGR='337f007f'; }
-  else                    {  bABGR='ff007f00'; fABGR='33007f00'; }
+  else if(safeType==='zu'){  bABGR='ff007f00'; fABGR='33007f00'; }
+  else                    {  bABGR='ff7f007f'; fABGR='337f007f'; }
   const sid    = `cad_${safeType}_${cadNum.replace(/[^0-9a-zA-Z_]/g,'_')||'pt'}`;
   // Build per-geometry-type Style. KML's Polygon styles (LineStyle+PolyStyle) don't
   // affect Points — Points need IconStyle. We emit BOTH in the same <Style> so the
@@ -3991,7 +4019,7 @@ function kdConfirm(){
     if(tgt.kmlText){
       tgt.kmlText = _appendToKMLText(tgt.kmlText, styleXml, placemarkXml);
     } else {
-      tgt.kmlText = _buildKMLDocument([styleXml], [placemarkXml]);
+      tgt.kmlText = _buildKMLDocument([styleXml], [placemarkXml], tgt.docName || tgt.filename);
     }
     saveKMLLayersToStorage();
 
@@ -4003,8 +4031,9 @@ function kdConfirm(){
     showToast(`✅ Записано в «${tgt.docName||tgt.filename}»`,'success',3000);
   } else if(_kdDest==='new'){
     if(lyr) lyr.addTo(map);
-    const xml = _buildKMLDocument([styleXml],[placemarkXml]);
-    _downloadBlob(xml, `${cadNum.replace(/:/g,'_')}.kml`);
+    const docName = name || cadNum || 'Контур';
+    const xml = _buildKMLDocument([styleXml],[placemarkXml], docName);
+    _downloadBlob(xml, `${cadNum.replace(/:/g,'_')||'kontur'}.kml`);
     _maybeOfferCentroidWriteback(cadNum, geom);
     showToast('✅ Скачан новый KML файл','success',3000);
   } else if(_kdDest==='disk'){
@@ -4034,21 +4063,93 @@ function _appendToKMLText(kmlText, styleXml, placemarkXml){
   return out.slice(0,insertBefore) + placemarkXml + '\n' + out.slice(insertBefore);
 }
 
-function _buildKMLDocument(styles, placemarks){
+function _buildKMLDocument(styles, placemarks, docName){
+  // Document-level <name> required for Yandex Maps Constructor to show
+  // the layer with a meaningful label in its sidebar (not just "Слой 1").
   const nl='\n';
+  const safeName = (docName || 'Контуры').replace(/[<>&]/g, '');
   return '<?xml version="1.0" encoding="UTF-8"?>'+nl+
     '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>'+nl+
+    `<name><![CDATA[${safeName}]]></name>`+nl+
     styles.join(nl)+nl+
     '<Folder>'+nl+
+    `<name><![CDATA[${safeName}]]></name>`+nl+
     placemarks.join(nl)+nl+
     '</Folder>'+nl+
     '</Document></kml>';
 }
 
 function _downloadBlob(text, filename){
-  const blob=new Blob([text],{type:'application/vnd.google-earth.kml+xml'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();
+  // Browser security: we cannot read the OS path the user picks during download,
+  // and we cannot programmatically place the file in a known directory. Modern
+  // browsers default to the "Downloads" folder unless the user changed the
+  // setting. We surface this in the modal so the user knows where to look.
+  const blob = new Blob([text], {type:'application/vnd.google-earth.kml+xml'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  // Open the post-save modal with the destination info + copy-link + close.
+  // The blob: URL is valid until the user closes the tab — so "Copy link" gives
+  // them an in-tab reference they can paste into another tab to download again.
+  _showSaveInfoDialog(filename, url);
 }
+
+// Show the post-save destination dialog.
+// `path`     — the filename the browser used (browsers don't reveal the full OS path)
+// `blobUrl`  — blob: URL of the saved file (still valid in this tab session)
+function _showSaveInfoDialog(path, blobUrl){
+  let modal = document.getElementById('save-info-modal');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.id = 'save-info-modal';
+    modal.innerHTML =
+      `<div class="sim-card">`+
+        `<h3>📁 Файл сохранён</h3>`+
+        `<div class="sim-label">Имя файла:</div>`+
+        `<code id="sim-path"></code>`+
+        `<div class="sim-hint">Сохранён в папку <b>Загрузки</b> вашего браузера (или другую — если вы изменили настройки)</div>`+
+        `<div class="sim-actions">`+
+          `<button id="sim-copy"  onclick="_copySaveLink()" title="Копировать ссылку на файл (действительна до закрытия вкладки)">`+
+            `<span class="sim-ico">🔗</span><span>Копировать ссылку</span>`+
+          `</button>`+
+          `<button id="sim-yndx"  onclick="window.open('https://yandex.ru/map-constructor/','_blank')" title="Открыть Яндекс.Конструктор карт — туда можно загрузить этот KML">`+
+            `<span class="sim-ico">🗺</span><span>Яндекс.Карты</span>`+
+          `</button>`+
+          `<button id="sim-close" onclick="_closeSaveInfoDialog()" title="Закрыть">`+
+            `<span class="sim-ico">✖</span><span>Закрыть</span>`+
+          `</button>`+
+        `</div>`+
+      `</div>`;
+    modal.addEventListener('click', e => { if(e.target === modal) _closeSaveInfoDialog(); });
+    document.body.appendChild(modal);
+  }
+  document.getElementById('sim-path').textContent = path;
+  modal._blobUrl = blobUrl;
+  modal.classList.add('open');
+}
+
+window._copySaveLink = function(){
+  const modal = document.getElementById('save-info-modal');
+  if(!modal || !modal._blobUrl) return;
+  const url = modal._blobUrl;
+  // Try modern clipboard API; fall back to a hidden textarea for old browsers
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = url; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch(_){}
+    document.body.removeChild(ta);
+  };
+  if(navigator.clipboard?.writeText){
+    navigator.clipboard.writeText(url).catch(fallback);
+  } else { fallback(); }
+  showToast('🔗 Ссылка скопирована (действует до закрытия вкладки)','success',2500);
+};
+
+window._closeSaveInfoDialog = function(){
+  const modal = document.getElementById('save-info-modal');
+  if(modal) modal.classList.remove('open');
+};
 
 // Close dialog on backdrop click; close any open dropdowns when clicking outside them
 document.getElementById('kml-save-dialog').addEventListener('click',e=>{
@@ -4189,37 +4290,87 @@ async function _maybeOfferCentroidWriteback(cadNum, geom){
 }
 
 // Patch _objectCatalogWB in place. Returns the number of rows updated.
+//
+// Sheet selection strategy (v55 upgrade):
+//   1. If cadNum has the ZU pattern (XX:XX:NNNNNNN — short third segment, even N digits),
+//      try the «Земельные участки» sheet first.
+//   2. Otherwise / not found → try «Здания, сооружения».
+//   3. Final fallback → scan every sheet in the workbook for ANY row whose any
+//      cell contains the exact cadNum string. Patches the column either at the
+//      «Координаты центра объекта» header (if present) or the next free column.
+//
+// The fallback handles non-standard templates (custom sheet names, mixed sheets)
+// without forcing the user to rename anything.
 function _writeCentroidToWB(cadNum, formatted){
   if(!_objectCatalogWB) return 0;
   const wb = _objectCatalogWB;
-  const sheetName = wb.SheetNames.find(n => n === 'Здания, сооружения')
-                || wb.SheetNames.find(n => /^Здания/i.test(n))
-                || wb.SheetNames[0];
-  const ws = wb.Sheets[sheetName];
+
+  // ZU pattern: 4-segment kadastr where the 4th part is missing or short
+  //   ZU      = "90:25:020102:124"  → 4 segments, last is parcel id
+  //   OKS/STR = "90:25:020102:356"  → same shape, but "object" semantically
+  // We can't distinguish ZU vs OKS purely by the number — they share the same
+  // 4-segment structure. So strategy: try BOTH known sheets, accept any hit.
+  const candidates = [];
+  const zuSheet  = wb.SheetNames.find(n => /^Земельные/i.test(n));
+  const oksSheet = wb.SheetNames.find(n => n === 'Здания, сооружения')
+               || wb.SheetNames.find(n => /^Здания/i.test(n));
+  if(zuSheet)  candidates.push(zuSheet);
+  if(oksSheet) candidates.push(oksSheet);
+  // Fallback: every other sheet
+  for(const n of wb.SheetNames){
+    if(!candidates.includes(n)) candidates.push(n);
+  }
+
+  let totalWritten = 0;
+  for(const sheetName of candidates){
+    const ws = wb.Sheets[sheetName];
+    if(!ws || !ws['!ref']) continue;
+    const written = _writeCentroidToSheet(ws, cadNum, formatted);
+    totalWritten += written;
+    if(written > 0 && (sheetName === zuSheet || sheetName === oksSheet)){
+      // Found in a known structured sheet — no need to scan further
+      break;
+    }
+  }
+  return totalWritten;
+}
+
+function _writeCentroidToSheet(ws, cadNum, formatted){
   if(!ws || !ws['!ref']) return 0;
   const range = XLSX.utils.decode_range(ws['!ref']);
-  // Find or create the «Координаты центра объекта» column. Header row is row 2 (index 1).
-  let centroidCol = -1;
-  for(let c = range.s.c; c <= range.e.c; c++){
-    const header = ws[XLSX.utils.encode_cell({r:1, c})];
-    if(header && /координат/i.test(String(header.v||'')) && /центр/i.test(String(header.v||''))){
-      centroidCol = c;
-      break;
+
+  // Find or create the «Координаты центра объекта» column.
+  // Header row in the standard template is row 2 (index 1). For non-standard
+  // sheets we scan rows 0-3 looking for the header anywhere.
+  let centroidCol = -1, headerRow = 1;
+  outer: for(let r = 0; r <= Math.min(3, range.e.r); r++){
+    for(let c = range.s.c; c <= range.e.c; c++){
+      const cell = ws[XLSX.utils.encode_cell({r, c})];
+      const v = cell ? String(cell.v||'') : '';
+      if(/координат/i.test(v) && /центр/i.test(v)){
+        centroidCol = c; headerRow = r;
+        break outer;
+      }
     }
   }
   if(centroidCol === -1){
     centroidCol = range.e.c + 1;
-    ws[XLSX.utils.encode_cell({r:1, c:centroidCol})] = { t:'s', v:'Координаты центра объекта' };
+    ws[XLSX.utils.encode_cell({r:headerRow, c:centroidCol})] = { t:'s', v:'Координаты центра объекта' };
     range.e.c = centroidCol;
     ws['!ref'] = XLSX.utils.encode_range(range);
   }
-  // Column G (index 6) holds the cadastral number per the template parser
-  const G = 6;
+
+  // Find rows containing the cadNum. We scan ALL columns rather than just G=6,
+  // since custom sheets may put the kadastr in any column.
   let written = 0;
-  for(let r = 2; r <= range.e.r; r++){
-    const cell = ws[XLSX.utils.encode_cell({r, c:G})];
-    if(!cell) continue;
-    if(String(cell.v||'').trim() === cadNum){
+  for(let r = headerRow + 1; r <= range.e.r; r++){
+    let matched = false;
+    for(let c = range.s.c; c <= range.e.c; c++){
+      const cell = ws[XLSX.utils.encode_cell({r, c})];
+      if(!cell) continue;
+      if(String(cell.v||'').trim() === cadNum){ matched = true; break; }
+    }
+    if(matched){
       ws[XLSX.utils.encode_cell({r, c:centroidCol})] = { t:'s', v: formatted };
       written++;
     }
@@ -4238,8 +4389,9 @@ function _refreshXlsxDownloadButton(){
     bar.id = 'xlsx-save-bar';
     bar.innerHTML =
       `<span id="xlsx-save-status">XLSX обновлён</span>`+
-      `<button id="xlsx-save-new"  onclick="downloadAccumulatedXLSX(false)" title="Скачать новый файл с суффиксом _с_центрами">📥 Новый файл</button>`+
-      `<button id="xlsx-save-orig" onclick="downloadAccumulatedXLSX(true)"  title="Скачать с исходным именем — заменить вручную">📝 Заменить исходный</button>`+
+      `<button id="xlsx-save-new"  onclick="downloadAccumulatedXLSX('new')"   title="Новый файл с суффиксом _с_центрами">📥 Новый файл</button>`+
+      `<button id="xlsx-save-orig" onclick="downloadAccumulatedXLSX('orig')"  title="Сохранить под исходным именем (если открыт в Excel — закройте файл)">📝 Изменить исходный</button>`+
+      `<button id="xlsx-save-cp1"  onclick="downloadAccumulatedXLSX('copy1')" title="Если исходный файл занят другой программой — суффикс (1)">📋 Копия (1)</button>`+
       `<button id="xlsx-save-close" onclick="document.getElementById('xlsx-save-bar').classList.remove('visible')" title="Скрыть">×</button>`;
     document.body.appendChild(bar);
   }
@@ -4252,21 +4404,42 @@ function _refreshXlsxDownloadButton(){
   }
 }
 
-window.downloadAccumulatedXLSX = function(useOriginalName){
+// Modes:
+//   'new'   → "<base>_с_центрами.xlsx"           — fresh file, never collides
+//   'orig'  → "<base>.xlsx"                      — replace the original on disk
+//   'copy1' → "<base> (1).xlsx"                  — escape hatch when original is
+//                                                  locked by Excel/another app
+window.downloadAccumulatedXLSX = function(mode){
   if(!_objectCatalogWB){ showToast('Нет загруженного каталога','warn',2500); return; }
+  // Sanity-warn the user about the file-lock situation BEFORE the browser
+  // tries to overwrite. We can't detect the lock from JS (the OS file picker
+  // shows "file in use" only after the click), but a clear warning lets the
+  // user close Excel proactively.
+  if(mode === 'orig'){
+    const ok = window.confirm(
+      `Сохранение под исходным именем «${_objectCatalogFilename}.xlsx».\n\n`+
+      `⚠ Если файл сейчас открыт в Excel/другой программе — закройте его, иначе ОС не позволит перезаписать.\n\n`+
+      `Если возникнет ошибка скачивания — используйте «Копия (1)».`
+    );
+    if(!ok) return;
+  }
   try {
     const out = XLSX.write(_objectCatalogWB, {type:'array', bookType:'xlsx'});
     const blob = new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     const baseName = _objectCatalogFilename || 'каталог';
-    a.download = useOriginalName ? `${baseName}.xlsx` : `${baseName}_с_центрами.xlsx`;
+    let suffix;
+    if(mode === 'orig')       suffix = '';
+    else if(mode === 'copy1') suffix = ' (1)';
+    else                      suffix = '_с_центрами';
+    a.download = `${baseName}${suffix}.xlsx`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    showToast(`✅ Скачан обновлённый XLSX (${_objectCatalogDirty} изм.)`, 'success', 3000);
+    showToast(`✅ Скачан XLSX «${a.download}» (${_objectCatalogDirty} изм.)`, 'success', 3000);
   } catch(e){
     console.warn('[xlsx-download]', e);
-    showToast('❌ Ошибка экспорта: '+(e.message||e), 'error', 4000);
+    showToast('❌ Ошибка экспорта: '+(e.message||e)+'. Попробуйте «Копия (1)».', 'error', 5000);
   }
 };
 
