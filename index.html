@@ -34,6 +34,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #upload-menu button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:transparent;border:none;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;padding:9px 14px;cursor:pointer;transition:background .1s}
 #upload-menu button:hover{background:rgba(255,255,255,.07)}
 #upload-menu hr{border:none;border-top:1px solid var(--border);margin:3px 0}
+.upload-hints{display:none;padding:8px 14px;border-top:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--muted);background:rgba(255,255,255,.025);line-height:1.5}
+.upload-hints .uh-title{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px;opacity:.7}
+.upload-hints .uh-row{display:flex;gap:5px;align-items:flex-start;margin-bottom:2px;overflow:hidden}
+.upload-hints .uh-ico{flex-shrink:0;font-size:10px}
+.upload-hints .uh-lbl{flex-shrink:0;color:var(--accent2);font-weight:700;min-width:34px}
+.upload-hints .uh-val{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px;opacity:.85}
 #file-input,#folder-input-fallback,#kml-file-input{display:none}
 #auto-save-label{display:flex;align-items:center;gap:6px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);white-space:nowrap;padding:5px 8px;border:1px solid var(--border);border-radius:var(--r);transition:border-color .15s,color .15s;user-select:none;flex-shrink:0}
 #auto-save-label:hover{border-color:var(--accent);color:var(--accent)}
@@ -536,6 +542,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
       <hr/>
       <button onclick="closeUploadMenu();pickKMLViaMenu()">🗺 Добавить KML вручную…</button>
       <button onclick="closeUploadMenu();pickXlsxCatalog()">📋 Загрузить кад.номера (XLSX)…</button>
+      <!-- Path hints (Task 1): persistent reminders of last opened locations.
+           Browsers don't expose absolute paths; we show the file/folder NAME so the
+           user can verify they're working with the right source. Hidden when empty. -->
+      <div id="upload-hints" class="upload-hints"></div>
     </div>
   </div>
   <input type="file" id="file-input"            multiple accept="image/jpeg,image/jpg,.jpg,.jpeg"/>
@@ -2141,14 +2151,35 @@ let remotePhotos=[];
 let timelineMode='full';
 
 // ═══ UPLOAD ═══════════════════════════════════════════════════════
-function toggleUploadMenu(e){e.stopPropagation();document.getElementById('upload-menu').classList.toggle('open');}
+function toggleUploadMenu(e){
+  e.stopPropagation();
+  const m = document.getElementById('upload-menu');
+  if(!m.classList.contains('open')) _refreshUploadHints();
+  m.classList.toggle('open');
+}
 function closeUploadMenu(){document.getElementById('upload-menu').classList.remove('open');}
+
+function _refreshUploadHints(){
+  const el = document.getElementById('upload-hints');
+  if(!el) return;
+  const photo = _loadPathHint(_LS_PATH_PHOTO);
+  const xlsx  = _loadPathHint(_LS_PATH_XLSX);
+  const kml   = _loadPathHint(_LS_PATH_KML);
+  const parts = [];
+  if(photo) parts.push(`<div class="uh-row"><span class="uh-ico">📂</span><span class="uh-lbl">Фото:</span><span class="uh-val">${_escapeHtml(photo.name)}</span></div>`);
+  if(xlsx)  parts.push(`<div class="uh-row"><span class="uh-ico">📋</span><span class="uh-lbl">XLSX:</span><span class="uh-val">${_escapeHtml(xlsx.name)}</span></div>`);
+  if(kml)   parts.push(`<div class="uh-row"><span class="uh-ico">🗺</span><span class="uh-lbl">KML:</span><span class="uh-val">${_escapeHtml(kml.name)}</span></div>`);
+  if(parts.length === 0){ el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  el.innerHTML = `<div class="uh-title">Последние загруженные:</div>${parts.join('')}`;
+}
 document.addEventListener('click',()=>{closeUploadMenu();closeKMLMenu();});
 
 async function triggerFolderUpload(){
   if('showDirectoryPicker' in window){
     try{
       const dh=await window.showDirectoryPicker({mode:'read'});
+      _savePathHint(_LS_PATH_PHOTO, dh.name);
       showToast('⏳ Сканирование…','info',6000);
       const{photos:pe,kmls:ke}=await collectFilesFromHandle(dh,'',dh.name);
       for(const k of ke)await loadKMLFromFile(k.file,k.name);
@@ -2478,6 +2509,7 @@ window.pickKMLViaMenu = async function(){
       });
       for(const h of handles){
         const f = await h.getFile();
+        _savePathHint(_LS_PATH_KML, f.name);
         await loadKMLFromFile(f, f.name, h);
       }
       return;
@@ -2523,6 +2555,29 @@ async function _loadKMLFromText(text, displayName, handle){
 // Size note: localStorage limit is ~5 MB; each KML in our use-case is <100 KB,
 // so ~50 layers comfortably fit. Beyond that we trim oldest in saveKMLLayersToStorage.
 const _LS_KML_KEY = 'kmlPersist.v1';
+
+// ── Path-hint persistence (Task 1) ────────────────────────────────
+// localStorage keys for the LAST opened folder per data type. Browsers don't
+// expose absolute paths to JS for security reasons, but FSA gives us file
+// names and (when re-querying) folder hints. We store:
+//   • lastPhotoDir.name    — folder display name from last photo upload
+//   • lastPhotoDir.handle  — directory handle (if FSA supports it; not all browsers do)
+//   • lastXlsxFile.name    — file name from last XLSX
+//   • lastKMLFile.name     — file name from last KML
+// Display purpose: show "📂 Последняя папка фото: …" / "📋 Последний XLSX: …" hints
+// in toasts. Cannot programmatically navigate to OS paths — browser security.
+const _LS_PATH_PHOTO = 'paths.photo.v1';
+const _LS_PATH_XLSX  = 'paths.xlsx.v1';
+const _LS_PATH_KML   = 'paths.kml.v1';
+
+function _savePathHint(key, name){
+  try { localStorage.setItem(key, JSON.stringify({name, savedAt:Date.now()})); }
+  catch(_){}
+}
+function _loadPathHint(key){
+  try { return JSON.parse(localStorage.getItem(key) || 'null'); }
+  catch(_){ return null; }
+}
 const _LS_KML_LIMIT_BYTES = 4_500_000;  // leave headroom under 5 MB browser cap
 
 function saveKMLLayersToStorage(){
@@ -3667,7 +3722,8 @@ async function _ingestXlsxFile(file, handle){
     _objectCatalog         = items;
     _objectCatalogRaw      = bytes;
     _objectCatalogFilename = file.name.replace(/\.xlsx?$/i, '');
-    _objectCatalogHandle   = handle;  // null on legacy path; set on FSA path
+    _objectCatalogHandle   = handle;
+    _savePathHint(_LS_PATH_XLSX, file.name);  // remember last XLSX file name
     _hydrateCatalogCentroidsFromXLSX(wb);
     _initCatalogWorkbook();
     const handleNote = handle ? ' (можно сохранять обратно в ту же папку)' : '';
@@ -3969,7 +4025,26 @@ function _kdRebuildDropdown(){
   kmlLayers.forEach((l,i)=>{
     const it = document.createElement('div');
     it.className = 'kd-dd-item' + (i===0?' selected':'');
-    it.textContent = `${l.docName||l.filename}${l.placemarkCount?' ('+l.placemarkCount+')':''}`;
+    // Rich item layout (Task 3):
+    //   line 1: 📂 docName  (N)
+    //   line 2: 📄 filename
+    //   line 3: ✓ in-place save (FSA) | 📥 will download (legacy)
+    // Browsers don't expose absolute paths to JS; the FSA handle gives only the
+    // file name. We can't show "E:\ОБЪЕКТЫ\..." literally — the OS hides that
+    // for privacy. What we CAN show:
+    //   • the file name the user picked
+    //   • whether saves go IN-PLACE (FSA handle present) or to ~/Downloads
+    const docName    = l.docName || l.filename || 'KML-слой';
+    const filename   = l.filename || '';
+    const count      = l.placemarkCount || 0;
+    const inPlace    = !!l.handle;
+    const pathHint   = inPlace
+      ? '<span class="kd-dd-fsa">✓ запись в исходную папку</span>'
+      : '<span class="kd-dd-leg">📥 будет скачан в Загрузки</span>';
+    const fnLine     = filename && filename !== docName
+      ? `<div class="kd-dd-fn">📄 ${_escapeHtml(filename)}</div>`
+      : '';
+    it.innerHTML = `<div class="kd-dd-name">📂 ${_escapeHtml(docName)} <span class="kd-dd-cnt">(${count})</span></div>${fnLine}<div class="kd-dd-path">${pathHint}</div>`;
     it.onclick = () => _kdPickLayer(i);
     menu.appendChild(it);
   });
@@ -3988,9 +4063,9 @@ window.kdToggleDropdown = function(ev){
 function _kdPickLayer(i){
   _kdLayerIdx = i;
   const layer = kmlLayers[i];
+  // Concise display in the closed dropdown button: name (count)
   document.getElementById('kd-dd-current').textContent =
-    `${layer.docName||layer.filename}${layer.placemarkCount?' ('+layer.placemarkCount+')':''}`;
-  // Update selected highlight
+    `${layer.docName||layer.filename||'KML'}${layer.placemarkCount?' ('+layer.placemarkCount+')':''}`;
   document.querySelectorAll('#kd-dd-menu .kd-dd-item').forEach((el,j)=>{
     el.classList.toggle('selected', j===i);
   });
@@ -4072,22 +4147,27 @@ function kdConfirm(){
     Math.abs(lo)<=180 && Math.abs(la)<=90 && la>=-85 && la<=85
   );
   let geomXml = '', csOk = true;
+  // For Google Earth Pro: Polygon needs <tessellate>1</tessellate> + <altitudeMode>clampToGround</altitudeMode>
+  // for proper rendering on terrain (otherwise long edges go straight through hills).
+  // Yandex MK ignores these tags but doesn't reject them — safe to emit always.
+  const polyExtras = '<tessellate>1</tessellate><altitudeMode>clampToGround</altitudeMode>';
+  const pointExtras = '<altitudeMode>clampToGround</altitudeMode>';
   if(geom.type==='Polygon'){
     if(!coordsSafe(geom.coordinates[0])) csOk=false;
     else {
       const cs = geom.coordinates[0].map(([lo,la])=>`${lo},${la},0`).join(' ');
-      geomXml = `<Polygon><outerBoundaryIs><LinearRing><coordinates>${cs}</coordinates></LinearRing></outerBoundaryIs></Polygon>`;
+      geomXml = `<Polygon>${polyExtras}<outerBoundaryIs><LinearRing>${polyExtras}<coordinates>${cs}</coordinates></LinearRing></outerBoundaryIs></Polygon>`;
     }
   } else if(geom.type==='MultiPolygon'){
     if(!coordsSafe(geom.coordinates[0][0])) csOk=false;
     else {
       const cs = geom.coordinates[0][0].map(([lo,la])=>`${lo},${la},0`).join(' ');
-      geomXml = `<Polygon><outerBoundaryIs><LinearRing><coordinates>${cs}</coordinates></LinearRing></outerBoundaryIs></Polygon>`;
+      geomXml = `<Polygon>${polyExtras}<outerBoundaryIs><LinearRing>${polyExtras}<coordinates>${cs}</coordinates></LinearRing></outerBoundaryIs></Polygon>`;
     }
   } else if(geom.type==='Point'){
     const [lo,la] = geom.coordinates;
     if(Math.abs(lo)>180||Math.abs(la)>90) csOk=false;
-    else geomXml = `<Point><coordinates>${lo},${la},0</coordinates></Point>`;
+    else geomXml = `<Point>${pointExtras}<coordinates>${lo},${la},0</coordinates></Point>`;
   } else { csOk=false; }
 
   if(!csOk || !geomXml){
@@ -4256,19 +4336,26 @@ function _appendToKMLText(kmlText, styleXml, placemarkXml){
 }
 
 function _buildKMLDocument(styles, placemarks, docName){
-  // Document-level <name> required for Yandex Maps Constructor to show
-  // the layer with a meaningful label in its sidebar (not just "Слой 1").
+  // Cross-compatible KML 2.2 for Google Earth Pro AND Yandex Map Constructor.
+  //   GE Pro needs:  <Style id> child of Document, <styleUrl> in Placemark,
+  //                  tessellate+altitudeMode on Polygon (added in geomXml),
+  //                  <open>1</open> so the layer expands on load.
+  //   Yandex MK needs: <name>+<description> CDATA, UTF-8 no BOM, KML 2.2 ns only.
   const nl='\n';
   const safeName = (docName || 'Контуры').replace(/[<>&]/g, '');
   return '<?xml version="1.0" encoding="UTF-8"?>'+nl+
-    '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>'+nl+
+    '<kml xmlns="http://www.opengis.net/kml/2.2">'+nl+
+    '<Document>'+nl+
     `<name><![CDATA[${safeName}]]></name>`+nl+
+    '<open>1</open>'+nl+
     styles.join(nl)+nl+
     '<Folder>'+nl+
     `<name><![CDATA[${safeName}]]></name>`+nl+
+    '<open>1</open>'+nl+
     placemarks.join(nl)+nl+
     '</Folder>'+nl+
-    '</Document></kml>';
+    '</Document>'+nl+
+    '</kml>';
 }
 
 function _downloadBlob(text, filename){
