@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.15</title>
+<title>EkceloFoto v2.9.16</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -494,7 +494,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.15</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.16</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -1407,8 +1407,15 @@ async function _extractTileContourOnce(ti, layerId, GRID, Z){
   // VERY light pink fill (alpha 8-15) and dark-maroon thin strokes (alpha 200+).
   // Threshold 8 catches both reliably without leaking into JPEG noise (~3-5).
   const THRESH  = 8;
-  const RDP_EPS = 1.2;
-  const MAX_PT  = 60;
+  // RDP simplification tolerance in pixels. 1.2 was too tight — it kept every
+  // 1-2 px stair-step from the rasterised border. After morphological opening
+  // (below) a value of 1.6 px reliably collapses sub-pixel jaggies while
+  // preserving real corners (corner deviation from straight ≫ 1.6 px).
+  const RDP_EPS = 1.6;
+  // Hard cap on vertex count to keep KML readable. 60 was too few for complex
+  // ZU shapes (e.g. piers along coastline have 30+ legitimate corners). 100
+  // gives headroom; with RDP doing its job, real polygons rarely exceed 50.
+  const MAX_PT  = 100;
 
   // Recompute click pixel at the requested zoom (ti.z may differ).
   // First convert original tileInfo back to lat/lon, then forward to {Z, tileX, tileY, pixelX, pixelY}.
@@ -1513,7 +1520,60 @@ async function _extractTileContourOnce(ti, layerId, GRID, Z){
     edgeT && 'top', edgeB && 'bottom', edgeL && 'left', edgeR && 'right'
   ].filter(Boolean).join(',') || null;
 
-  const f = (x,y) => (x<0||y<0||x>=W||y>=H) ? 0 : filled[y*W+x];
+  // ── Morphological opening (erode → dilate) to clean trace boundary ──
+  // The thin-border ZU mode picks up antialiased border pixels (alpha 30-60) which
+  // form a thin fringe around the parcel core. After Moore-tracing this fringe,
+  // the polygon has dozens of 1-2 px spikes ("antennas") that survive RDP because
+  // they're bigger than RDP_EPS=1.2. A single iteration of 3×3 morphological
+  // opening:
+  //   • erode: pixel survives only if all 8 neighbours are filled  → kills spikes
+  //   • dilate: pixel becomes filled if any 8-neighbour was filled → restores body
+  // Net effect: 1-px spikes vanish, main shape preserved (1 px inset overall is
+  // imperceptible at z18+ where 1 px ≈ 0.6 m).
+  //
+  // Skipped in solid-fill mode (OKS) because their borders are sharp and the
+  // opening would just round corners unnecessarily.
+  let cleanedFilled = filled;
+  if(fillMode === 'thin-border' && nFill > 50){
+    const eroded = new Uint8Array(W*H);
+    for(let y=1; y<H-1; y++) for(let x=1; x<W-1; x++){
+      const i = y*W+x;
+      // 8-connectivity erode: all 9 cells in 3×3 window must be filled
+      if(filled[i] && filled[i-1] && filled[i+1] && filled[i-W] && filled[i+W] &&
+         filled[i-W-1] && filled[i-W+1] && filled[i+W-1] && filled[i+W+1]){
+        eroded[i] = 1;
+      }
+    }
+    const dilated = new Uint8Array(W*H);
+    for(let y=0; y<H; y++) for(let x=0; x<W; x++){
+      const i = y*W+x;
+      if(eroded[i]){ dilated[i]=1; continue; }
+      // 8-connectivity dilate: pixel becomes filled if any neighbour was eroded
+      const xL = x>0, xR = x<W-1, yT = y>0, yB = y<H-1;
+      if((xL && eroded[i-1]) || (xR && eroded[i+1]) ||
+         (yT && eroded[i-W]) || (yB && eroded[i+W]) ||
+         (xL && yT && eroded[i-W-1]) || (xR && yT && eroded[i-W+1]) ||
+         (xL && yB && eroded[i+W-1]) || (xR && yB && eroded[i+W+1])){
+        dilated[i] = 1;
+      }
+    }
+    // Sanity: opening can disconnect a small parcel through a narrow neck. Verify
+    // the click pixel is still inside; if not, fall back to original mask.
+    if(dilated[clickY*W + clickX]){
+      cleanedFilled = dilated;
+      // Recount + recompute bbox on the cleaned mask (start point depends on it)
+      nFill = 0; minX = W; minY = H; maxX = -1; maxY = -1;
+      for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+        if(cleanedFilled[y*W+x]!==1) continue;
+        nFill++;
+        if(x<minX)minX=x; if(y<minY)minY=y;
+        if(x>maxX)maxX=x; if(y>maxY)maxY=y;
+      }
+      if(nFill < 8) cleanedFilled = filled;  // opening ate the whole shape — restore
+    }
+  }
+
+  const f = (x,y) => (x<0||y<0||x>=W||y>=H) ? 0 : cleanedFilled[y*W+x];
 
   // ── Topmost-leftmost = trace start (always on outer boundary) ──
   let sX=-1, sY=-1;
