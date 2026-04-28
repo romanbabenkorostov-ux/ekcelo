@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.18</title>
+<title>EkceloFoto v2.9.19</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -111,6 +111,49 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 
 /* PHOTO LIST */
 #photo-list{flex:1;overflow-y:auto;min-height:0;padding:5px 5px 14px}
+
+/* ── SIDEBAR TABS (Task 4) ─────────────────────────────────────────
+   Switches lower sidebar between photo grid and marker list.
+   Only ONE .sidebar-panel is visible at a time. */
+#sidebar-tabs{display:flex;border-bottom:1px solid var(--border);background:#000;flex-shrink:0}
+#sidebar-tabs .sb-tab{flex:1;background:transparent;border:none;color:#888;font-family:'JetBrains Mono',monospace;font-size:11px;padding:8px 6px;cursor:pointer;border-bottom:2px solid transparent;transition:all .12s;font-weight:600}
+#sidebar-tabs .sb-tab:hover{color:#fff;background:rgba(255,255,255,.04)}
+#sidebar-tabs .sb-tab.active{color:#fff;border-bottom-color:var(--accent);background:rgba(255,149,0,.08)}
+.sidebar-panel{flex:1;overflow-y:auto;min-height:0}
+
+/* ── MARKERS LIST (Task 4) ─────────────────────────────────────────
+   Three vertical sub-groups — Зем.участки / ОКСы / Пояснения — each with its
+   own scrollable area. White text on black background per the user's spec.
+   Differentiation icons: ■ (zu, filled square), ▢ (oks, empty square), ● (exp, dot). */
+#marks-list{display:flex;flex-direction:column;background:#000;color:#fff;font-family:'JetBrains Mono',monospace;padding:0;gap:0}
+.marks-group{display:flex;flex-direction:column;flex:1;min-height:0;border-bottom:1px solid #1a1a1a}
+.marks-group:last-child{border-bottom:none}
+.marks-group.collapsed .marks-group-body{display:none}
+.marks-group.collapsed{flex:0 0 auto}
+.marks-group-header{display:flex;align-items:center;gap:6px;padding:7px 10px;background:#0a0a0a;border-bottom:1px solid #1a1a1a;cursor:pointer;user-select:none;flex-shrink:0;transition:background .12s}
+.marks-group-header:hover{background:#141414}
+.marks-group-header > span:first-child{font-size:9px;color:#888;width:10px}
+.mg-icon{font-size:12px;width:14px;text-align:center;display:inline-block}
+.mg-icon-zu{color:#3ec870}
+.mg-icon-oks{color:#c180f0}
+.mg-icon-exp{color:#47c8ff}
+.mg-title{flex:1;font-size:11px;font-weight:700;color:#fff}
+.mg-count{font-size:10px;color:#666;background:#181818;padding:1px 6px;border-radius:9px;min-width:18px;text-align:center}
+.marks-group-body{flex:1;overflow-y:auto;min-height:0;padding:2px 0}
+.marks-group-body::-webkit-scrollbar{width:5px}
+.marks-group-body::-webkit-scrollbar-thumb{background:#333}
+.marks-group.collapsed .marks-group-body{display:none}
+
+/* Individual marker entries — checkbox + name + description */
+.mark-item{display:flex;align-items:flex-start;gap:7px;padding:6px 10px;border-bottom:1px solid #0d0d0d;cursor:pointer;transition:background .1s}
+.mark-item:hover{background:#0e0e0e}
+.mark-item.active{background:#1f1407;border-left:2px solid var(--accent);padding-left:8px}
+.mark-item.active .mark-name{color:var(--accent)}
+.mark-item input[type=checkbox]{margin-top:3px;flex-shrink:0;accent-color:var(--accent2);cursor:pointer;width:12px;height:12px}
+.mark-content{flex:1;min-width:0}
+.mark-name{font-size:11px;color:#fff;font-weight:600;line-height:1.3;word-break:break-word}
+.mark-desc{font-size:9px;color:#999;margin-top:2px;line-height:1.4;word-break:break-word}
+.mark-empty{padding:14px 10px;color:#555;font-size:10px;font-style:italic;text-align:center}
 #photo-list::-webkit-scrollbar{width:5px}
 #photo-list::-webkit-scrollbar-thumb{background:#2a3247;border-radius:3px}
 /* П4: full card is clickable */
@@ -468,7 +511,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .kd-dropdown.open .kd-dd-arrow{transform:rotate(180deg)}
 .kd-dd-menu{display:none;position:absolute;top:calc(100% + 2px);left:0;right:0;background:#0d0f14;border:1px solid var(--accent);border-radius:var(--r);max-height:180px;overflow-y:auto;z-index:10510;box-shadow:0 6px 18px rgba(0,0,0,0.5)}
 .kd-dropdown.open .kd-dd-menu{display:block}
-.kd-dd-item{padding:7px 10px;cursor:pointer;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;border-bottom:1px solid rgba(255,255,255,0.05);transition:background .1s}
+.kd-dd-item{padding:7px 10px;cursor:pointer;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;border-bottom:1px solid rgba(255,255,255,0.05);transition:background .1s;line-height:1.4}
+.kd-dd-name{font-size:11px;color:var(--text);font-weight:600}
+.kd-dd-cnt{color:var(--accent);font-weight:700}
+.kd-dd-fn{font-size:9.5px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kd-dd-path{font-size:9px;margin-top:3px;font-style:italic}
+.kd-dd-fsa{color:#6cd96c}
+.kd-dd-leg{color:var(--muted)}
 .kd-dd-item:last-child{border-bottom:none}
 .kd-dd-item:hover{background:rgba(255,149,0,0.15)}
 .kd-dd-item.selected{background:rgba(255,149,0,0.25);color:var(--accent)}
@@ -523,7 +572,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.18</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.19</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -616,7 +665,45 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     <button id="folder-filter-reset" onclick="clearFolderFilter()">× сбросить</button>
   </div>
 
-  <div id="photo-list"></div>
+  <!-- Sidebar tabs (Task 4): Photos / Markers — switches the lower panel between
+       photo thumbnails and a Google-Earth-Pro-style hierarchical marker list. -->
+  <div id="sidebar-tabs">
+    <button class="sb-tab active" data-tab="photos" onclick="switchSidebarTab('photos')">📸 Фото</button>
+    <button class="sb-tab"        data-tab="marks"  onclick="switchSidebarTab('marks')">🏷 Метки</button>
+  </div>
+
+  <div id="photo-list" class="sidebar-panel"></div>
+
+  <!-- Markers panel — split into 3 vertical scrollable subgroups -->
+  <div id="marks-list" class="sidebar-panel" style="display:none">
+    <div class="marks-group" id="marks-group-zu">
+      <div class="marks-group-header" onclick="toggleMarksGroup('zu')">
+        <span id="marks-arrow-zu">▼</span>
+        <span class="mg-icon mg-icon-zu" title="Земельные участки — заполненный квадрат">■</span>
+        <span class="mg-title">Зем.участки</span>
+        <span class="mg-count" id="marks-count-zu">0</span>
+      </div>
+      <div class="marks-group-body" id="marks-body-zu"></div>
+    </div>
+    <div class="marks-group" id="marks-group-oks">
+      <div class="marks-group-header" onclick="toggleMarksGroup('oks')">
+        <span id="marks-arrow-oks">▼</span>
+        <span class="mg-icon mg-icon-oks" title="ОКСы — пустой квадрат">▢</span>
+        <span class="mg-title">ОКСы</span>
+        <span class="mg-count" id="marks-count-oks">0</span>
+      </div>
+      <div class="marks-group-body" id="marks-body-oks"></div>
+    </div>
+    <div class="marks-group" id="marks-group-exp">
+      <div class="marks-group-header" onclick="toggleMarksGroup('exp')">
+        <span id="marks-arrow-exp">▼</span>
+        <span class="mg-icon mg-icon-exp" title="Пояснения — точка-пин">●</span>
+        <span class="mg-title">Пояснения</span>
+        <span class="mg-count" id="marks-count-exp">0</span>
+      </div>
+      <div class="marks-group-body" id="marks-body-exp"></div>
+    </div>
+  </div>
 
   <!-- FOLDER TREE (bottom of sidebar) -->
   <div id="folder-tree-panel">
@@ -2133,6 +2220,7 @@ map.on('click',function(e){
   window.lastClickedPoint=e.latlng;
   const lat=e.latlng.lat.toFixed(6),lng=e.latlng.lng.toFixed(6);
   L.popup({maxWidth:224}).setLatLng(e.latlng).setContent(buildCoordPopup(lat,lng,null,null)).openOn(map);
+  if(window.activateMarkersAtLatLng) window.activateMarkersAtLatLng(e.latlng);
 });
 map.on('move zoom',()=>{if(lbLL&&document.getElementById('lightbox').classList.contains('visible'))posLightbox(lbLL,true);});
 
@@ -2484,7 +2572,7 @@ function renderKMLOnMap(parsed){
     else if(pm.type==='LineString')layer=L.polyline(pm.coords,{color:pm.style.lineColor,weight:pm.style.lineWidth});
     else if(pm.type==='Point')layer=L.circleMarker(pm.coords,{radius:7,color:pm.style.lineColor,fillColor:pm.style.lineColor,fillOpacity:.85,weight:2});
     if(layer){
-      layer.on('click',e=>{L.DomEvent.stopPropagation(e);window.lastClickedPoint=e.latlng;L.popup({maxWidth:224}).setLatLng(e.latlng).setContent(buildCoordPopup(e.latlng.lat.toFixed(6),e.latlng.lng.toFixed(6),pm.name||pm.desc,pm.name?pm.desc:'')).openOn(map);});
+      layer.on('click',e=>{L.DomEvent.stopPropagation(e);window.lastClickedPoint=e.latlng;L.popup({maxWidth:224}).setLatLng(e.latlng).setContent(buildCoordPopup(e.latlng.lat.toFixed(6),e.latlng.lng.toFixed(6),pm.name||pm.desc,pm.name?pm.desc:'')).openOn(map);if(window.activateMarkersAtLatLng)window.activateMarkersAtLatLng(e.latlng);});
       if(pm.name||pm.desc)layer.bindTooltip(`<b>${esc(pm.name||'')}</b>${pm.desc?'<br><small>'+esc(pm.desc)+'</small>':''}`,{sticky:true,opacity:.92});
       layer.addTo(lg);
     }
@@ -2543,7 +2631,7 @@ async function _loadKMLFromText(text, displayName, handle){
     handle: handle||null, // FSA writable handle — null on legacy upload path
   });
   updateKMLButton();
-  saveKMLLayersToStorage();
+  saveKMLLayersToStorage();if(typeof renderMarksList==='function'&&_activeSidebarTab==='marks')renderMarksList();
   const handleNote = handle ? ' (можно сохранять обратно в ту же папку)' : '';
   showToast(`🗺 KML: ${parsed.docName} (${parsed.placemarks.length} obj)${handleNote}`,'success',3000);
 }
@@ -2692,7 +2780,7 @@ function toggleKMLLayer(idx,v){
   if(v)l.layerGroup.addTo(map);else map.removeLayer(l.layerGroup);
   document.getElementById('kml-btn').classList.toggle('active',kmlLayers.some(k=>k.visible));
   _refreshKMLEyeButton();
-  saveKMLLayersToStorage();
+  saveKMLLayersToStorage();if(typeof renderMarksList==='function'&&_activeSidebarTab==='marks')renderMarksList();
 }
 function removeKMLLayer(idx){
   if(kmlLayers[idx])map.removeLayer(kmlLayers[idx].layerGroup);
@@ -2702,7 +2790,7 @@ function removeKMLLayer(idx){
     document.getElementById('kml-wrap').classList.remove('has-layers');
     clearKMLPersistedStorage();
   } else {
-    saveKMLLayersToStorage();
+    saveKMLLayersToStorage();if(typeof renderMarksList==='function'&&_activeSidebarTab==='marks')renderMarksList();
   }
 }
 
@@ -2722,6 +2810,194 @@ function fitMapToPhotos(){const pts=photos.filter(p=>p.lat!=null);if(!pts.length
 
 // ═══ П4: SIDEBAR — full card click + folder filter ═════════════════
 function getSortTs(p){return p.dateObj?.getTime()||p._sortTs||0;}
+
+// ── SIDEBAR TABS + MARKERS PANEL (Task 4) ─────────────────────────
+// Switches between Photos and Markers in the left sidebar. The Markers panel
+// has 3 sub-groups: ZU (зем.участки), OKS (здания/сооружения), Exp (пояснения).
+// Each entry: checkbox (visible toggle) + name + description, white-on-black.
+// Click on a map marker activates the corresponding sidebar entry across ALL
+// matching groups (a click point may hit a polygon and a pin at once).
+
+let _activeSidebarTab = 'photos';
+
+window.switchSidebarTab = function(tab){
+  _activeSidebarTab = tab;
+  document.querySelectorAll('#sidebar-tabs .sb-tab').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === tab);
+  });
+  document.getElementById('photo-list').style.display = tab === 'photos' ? '' : 'none';
+  document.getElementById('marks-list').style.display = tab === 'marks'  ? '' : 'none';
+  if(tab === 'marks') renderMarksList();
+};
+
+window.toggleMarksGroup = function(grp){
+  const el = document.getElementById(`marks-group-${grp}`);
+  const arrow = document.getElementById(`marks-arrow-${grp}`);
+  if(!el) return;
+  el.classList.toggle('collapsed');
+  if(arrow) arrow.textContent = el.classList.contains('collapsed') ? '▶' : '▼';
+};
+
+// Build the Markers list from current state. Sources:
+//   1. kmlLayers[*].cadPlacemarks — contours saved via the dialog (typed by safeType)
+//   2. kmlLayers[*].parsedData.placemarks — placemarks from loaded KML files; we
+//      classify by Style id pattern (cad_zu_/cad_oks_/cad_exp_) when present,
+//      otherwise by geometry type (Point → exp, Polygon → oks default).
+//
+// Each entry stores a stable composite id `${layerIdx}:${kind}:${innerIdx}` so
+// click events on the map can re-find and highlight the row.
+function _gatherMarkers(){
+  const buckets = { zu: [], oks: [], exp: [] };
+  kmlLayers.forEach((layer, layerIdx) => {
+    // (1) Contours saved via kdConfirm — explicit type
+    (layer.cadPlacemarks || []).forEach((pm, i) => {
+      let bucket = pm.type === 'zu' ? 'zu' : pm.type === 'exp' ? 'exp' : 'oks';
+      const lat = pm.geom?.coordinates ? _markerLatLon(pm.geom) : null;
+      buckets[bucket].push({
+        id:        `cad:${layerIdx}:${i}`,
+        layerIdx, source:'cad', innerIdx:i,
+        name:      pm.cadNum || '(без номера)',
+        desc:      _markerDescFromLines(pm.lines) || _markerDescFromPlacemark(layer.parsedData?.placemarks?.find(p => (p.name||'').includes(pm.cadNum))),
+        layerName: layer.docName || layer.filename || '',
+        lat,
+        visible:   layer.visible !== false,  // overall layer visibility
+      });
+    });
+    // (2) Placemarks from a loaded KML file (not added through the dialog)
+    (layer.parsedData?.placemarks || []).forEach((pm, i) => {
+      // Skip ones we already counted via cadPlacemarks (matched by name)
+      const alreadyTracked = (layer.cadPlacemarks || []).some(c =>
+        (pm.name||'').includes(c.cadNum));
+      if(alreadyTracked) return;
+      // Classify: prefer styleUrl pattern, fall back to geometry type
+      let bucket = 'oks';
+      if(pm.styleUrl){
+        if(/cad_zu_/i.test(pm.styleUrl))       bucket = 'zu';
+        else if(/cad_exp_/i.test(pm.styleUrl)) bucket = 'exp';
+      } else if(pm.type === 'Point'){
+        bucket = 'exp';  // free-floating points → annotations
+      }
+      const lat = pm.coords ? (pm.type === 'Point' ? pm.coords : pm.coords[0]) : null;
+      buckets[bucket].push({
+        id:        `pm:${layerIdx}:${i}`,
+        layerIdx, source:'pm', innerIdx:i,
+        name:      pm.name || '(без названия)',
+        desc:      pm.desc || '',
+        layerName: layer.docName || layer.filename || '',
+        lat,
+        visible:   layer.visible !== false,
+      });
+    });
+  });
+  return buckets;
+}
+
+function _markerLatLon(geom){
+  if(geom.type === 'Point') return geom.coordinates;
+  if(geom.type === 'Polygon')      return geom.coordinates[0]?.[0];
+  if(geom.type === 'MultiPolygon') return geom.coordinates[0]?.[0]?.[0];
+  return null;
+}
+function _markerDescFromLines(lines){
+  if(!lines || !lines.length) return '';
+  return lines.map(([k,v]) => `${k}: ${v}`).join(' · ');
+}
+function _markerDescFromPlacemark(pm){
+  return pm?.desc || '';
+}
+
+function renderMarksList(){
+  const buckets = _gatherMarkers();
+  for(const grp of ['zu','oks','exp']){
+    const body = document.getElementById(`marks-body-${grp}`);
+    const cnt  = document.getElementById(`marks-count-${grp}`);
+    if(!body || !cnt) continue;
+    cnt.textContent = buckets[grp].length;
+    body.innerHTML = '';
+    if(!buckets[grp].length){
+      const e = document.createElement('div');
+      e.className = 'mark-empty';
+      e.textContent = grp === 'zu' ? 'Нет земельных участков' :
+                      grp === 'oks' ? 'Нет ОКС/сооружений' :
+                                      'Нет пояснений-точек';
+      body.appendChild(e);
+      continue;
+    }
+    for(const m of buckets[grp]){
+      const item = document.createElement('div');
+      item.className = 'mark-item';
+      item.dataset.markId = m.id;
+      // Checkbox toggles the parent KML layer visibility (atomic granularity is
+      // per-layer in this data model — toggling a single placemark would require
+      // reconstructing the leaflet group, which we leave for a future iteration).
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = m.visible;
+      cb.title = 'Видимость слоя на карте';
+      cb.onclick = e => {
+        e.stopPropagation();
+        toggleKMLLayer(m.layerIdx, cb.checked);
+        renderMarksList();  // refresh others — same layer affects multiple entries
+      };
+      const content = document.createElement('div');
+      content.className = 'mark-content';
+      content.innerHTML =
+        `<div class="mark-name">${_escapeHtml(m.name)}</div>`+
+        (m.desc ? `<div class="mark-desc">${_escapeHtml(m.desc)}</div>` : '');
+      item.appendChild(cb);
+      item.appendChild(content);
+      // Click body → fly to marker on map and pulse it
+      item.onclick = () => _flyToMarker(m);
+      body.appendChild(item);
+    }
+  }
+}
+
+function _flyToMarker(m){
+  if(!m || !m.lat) return;
+  const [lon, lat] = m.lat;
+  if(typeof map !== 'undefined' && lat != null && lon != null){
+    map.setView([lat, lon], Math.max(map.getZoom(), 18), {animate:true});
+  }
+  // Highlight the row
+  document.querySelectorAll('.mark-item').forEach(el => el.classList.remove('active'));
+  const row = document.querySelector(`.mark-item[data-mark-id="${CSS.escape(m.id)}"]`);
+  if(row) row.classList.add('active');
+}
+
+// Called from leaflet click handlers when a contour or marker is clicked on the
+// map. Highlights ALL matching sidebar entries (a single click can hit a ZU
+// polygon AND an OKS polygon AND an exp pin if they overlap) and scrolls them
+// into view in their respective sub-group.
+window.activateMarkersAtLatLng = function(latlng){
+  if(_activeSidebarTab !== 'marks') return;
+  if(!latlng) return;
+  const tolerance = 0.0001;  // ~11 m at the equator — enough fuzz to forgive imprecise click coords
+  const buckets = _gatherMarkers();
+  document.querySelectorAll('.mark-item').forEach(el => el.classList.remove('active'));
+  for(const grp of ['zu','oks','exp']){
+    for(const m of buckets[grp]){
+      if(!m.lat) continue;
+      const [lon0, lat0] = m.lat;
+      // For polygons we compare the FIRST vertex; for points the point itself.
+      // This is approximate but cheap; precise hit-testing would require geometric
+      // point-in-polygon for every entry on every click.
+      const dLat = Math.abs(lat0 - latlng.lat);
+      const dLon = Math.abs(lon0 - latlng.lng);
+      // For polygons, accept any reasonably nearby first-vertex
+      const isPolygon = m.source === 'cad' || /cad_(zu|oks)/.test(m.id);
+      const tol = isPolygon ? 0.005 : tolerance;  // ~500 m for polygons (first vertex can be anywhere on the ring)
+      if(dLat < tol && dLon < tol){
+        const row = document.querySelector(`.mark-item[data-mark-id="${CSS.escape(m.id)}"]`);
+        if(row){
+          row.classList.add('active');
+          row.scrollIntoView({behavior:'smooth', block:'nearest'});
+        }
+      }
+    }
+  }
+};
+
 
 function renderList(){
   const list=document.getElementById('photo-list');
@@ -3535,7 +3811,7 @@ function _attachCadEvents(layer, cadNum, type, lines) {
   layer.on('mouseover', e => { cadHoveredFeatures = cadHoveredFeatures.filter(f => f.cadNum !== cadNum); cadHoveredFeatures.push(fi); _showCadTip(e.originalEvent); });
   layer.on('mousemove', e => _showCadTip(e.originalEvent));
   layer.on('mouseout',  () => { cadHoveredFeatures = cadHoveredFeatures.filter(f => f.cadNum !== cadNum); if (!cadHoveredFeatures.length) _hideCadTip(); });
-  layer.on('click', e => { L.DomEvent.stopPropagation(e); window.lastClickedPoint = e.latlng; L.popup({maxWidth:340}).setLatLng(e.latlng).setContent(_cadPopup(e.latlng.lat.toFixed(6), e.latlng.lng.toFixed(6), type, cadNum, lines)).openOn(map); });
+  layer.on('click', e => { L.DomEvent.stopPropagation(e); window.lastClickedPoint = e.latlng; L.popup({maxWidth:340}).setLatLng(e.latlng).setContent(_cadPopup(e.latlng.lat.toFixed(6), e.latlng.lng.toFixed(6), type, cadNum, lines)).openOn(map); if(window.activateMarkersAtLatLng) window.activateMarkersAtLatLng(e.latlng); });
 }
 
 function _showCadTip(ev) {
@@ -4242,7 +4518,7 @@ function kdConfirm(){
     } else {
       tgt.kmlText = _buildKMLDocument([styleXml], [placemarkXml], tgt.docName || tgt.filename);
     }
-    saveKMLLayersToStorage();
+    saveKMLLayersToStorage();if(typeof renderMarksList==='function'&&_activeSidebarTab==='marks')renderMarksList();
 
     // Also download the updated KML file so the user has a tangible artifact —
     // not just an in-memory + localStorage entry. If the layer was loaded via
