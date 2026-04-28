@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.19</title>
+<title>EkceloFoto v2.9.20</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -152,7 +152,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .mark-item input[type=checkbox]{margin-top:3px;flex-shrink:0;accent-color:var(--accent2);cursor:pointer;width:12px;height:12px}
 .mark-content{flex:1;min-width:0}
 .mark-name{font-size:11px;color:#fff;font-weight:600;line-height:1.3;word-break:break-word}
-.mark-desc{font-size:9px;color:#999;margin-top:2px;line-height:1.4;word-break:break-word}
+.mark-desc{font-size:10px;color:#cfd2d6;margin-top:3px;line-height:1.45;word-break:break-word;opacity:.9}
 .mark-empty{padding:14px 10px;color:#555;font-size:10px;font-style:italic;text-align:center}
 #photo-list::-webkit-scrollbar{width:5px}
 #photo-list::-webkit-scrollbar-thumb{background:#2a3247;border-radius:3px}
@@ -572,7 +572,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.19</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.20</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -612,6 +612,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     <div class="stat"><span class="stat-val" id="stat-angle">0</span><span class="stat-lbl">с углом</span></div>
     <div class="stat stat-toggle" id="stat-photos-toggle" onclick="togglePhotoMarkers()" title="Скрыть/показать точки фотографий на карте">
       <span class="stat-val" id="stat-photos-state">👁</span><span class="stat-lbl" id="stat-photos-lbl">Откл.фото</span>
+    </div>
+    <!-- KML master visibility toggle (moved here in v58, was floating to the right
+         of the map and overlapping the «По объектам» button). Hidden when no KML
+         layers are loaded — see _refreshKMLEyeButton, which now also drives this. -->
+    <div class="stat stat-toggle" id="stat-kml-toggle" onclick="toggleAllKMLVisibility()" style="display:none" title="Скрыть/показать все KML-слои на карте">
+      <span class="stat-val" id="stat-kml-state">👁</span><span class="stat-lbl" id="stat-kml-lbl">Откл.KML</span>
     </div>
   </div>
   <button id="clear-btn" onclick="clearAll()">очистить</button>
@@ -781,14 +787,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
   <!-- Zoom indicator -->
   <div id="zoom-indicator">z</div>
 
-  <button id="fit-btn"      onclick="fitMapToPhotos()">⊟ По фото</button>
+  <button id="fit-btn"      onclick="fitMapToPhotos()">⊟ По объектам</button>
   <div id="kml-wrap">
-    <!-- Two-piece KML control:
-         (a) eye-button toggles ALL kmlLayers visibility at once (master switch)
-         (b) chevron-button opens the per-file dropdown with checkboxes
-         The visual distinction between "off" (gray) and "on" (cyan) is essential —
-         user reported the previous one-piece button felt like a passive label. -->
-    <button id="kml-eye-btn" onclick="toggleAllKMLVisibility()" title="Скрыть/показать все KML">👁</button>
+    <!-- v58: master visibility toggle moved to the stats panel (#stat-kml-toggle)
+         to sit next to #stat-photos-toggle. Only the dropdown trigger remains here. -->
     <button id="kml-btn" onclick="toggleKMLMenu()" title="Список загруженных KML">🗺 KML ▾</button>
     <div id="kml-dropdown"></div>
   </div>
@@ -2531,36 +2533,105 @@ function kmlAlpha(c){ if(!c||c.length<2)return 1; return parseInt(c.padStart(8,'
 
 function parseKML(xmlText,filename){
   const doc=new DOMParser().parseFromString(xmlText,'text/xml');
-  const styles={};
-  doc.querySelectorAll('Style').forEach(s=>{
-    const id=s.getAttribute('id');if(!id)return;
-    const fillColor_raw = s.querySelector('PolyStyle color')?.textContent||'';
-    styles['#'+id]={
-      lineColor:  kmlColorToCss(s.querySelector('LineStyle color')?.textContent||''),
-      lineWidth:  parseFloat(s.querySelector('LineStyle width')?.textContent||'2'),
-      fillColor:  kmlColorToCss(fillColor_raw),
-      // Store fill opacity from alpha channel of the KML fill color (NOT hardcoded 1)
-      fillOpacity: s.querySelector('PolyStyle fill')?.textContent==='0' ? 0 : kmlAlpha(fillColor_raw),
-      hasFill:    s.querySelector('PolyStyle fill')?.textContent!=='0',
-    };
-  });
-  const docEl=doc.querySelector('Document');
-  const docName=docEl?.querySelector(':scope > n')?.textContent?.trim()||docEl?.querySelector(':scope > name')?.textContent?.trim()||filename.replace(/\.kml$/i,'');
+  // ── Robust name/description extraction ────────────────────────
+  // querySelector with namespace-aware XML can fail to match plain <name>;
+  // getElementsByTagName ignores namespaces — safer for both Yandex-style KML
+  // (where some old files use <n>) and standard KML (where it's <name>).
+  // We use a helper that scans direct CHILDREN only (depth=1) to avoid picking
+  // up a Folder's <name> when looking for a Document's <name>.
+  const childText = (parent, tagOrTags) => {
+    const tags = Array.isArray(tagOrTags) ? tagOrTags : [tagOrTags];
+    for(const t of tags){
+      for(const child of parent.children){
+        if(child.localName === t || child.tagName === t){
+          return (child.textContent || '').trim();
+        }
+      }
+    }
+    return '';
+  };
+  // Pick the first Document we find
+  const docEl = doc.getElementsByTagName('Document')[0];
+  const docName = (docEl && (childText(docEl, 'name') || childText(docEl, 'n'))) || filename.replace(/\.kml$/i,'');
+
+  // Build style table: id → resolved style block. We also preserve the raw
+  // styleUrl on each placemark so downstream consumers (e.g. the marker list
+  // grouping in renderMarksList) can classify by "cad_zu_/cad_oks_/cad_exp_".
+  const styles = _parseKMLStyles(doc);
+
   const placemarks=[];
-  doc.querySelectorAll('Placemark').forEach(pm=>{
-    const name=(pm.querySelector(':scope > n')?.textContent||pm.querySelector(':scope > name')?.textContent||'').trim();
-    const desc=(pm.querySelector(':scope > description')?.textContent||'').trim();
-    const styleUrl=pm.querySelector('styleUrl')?.textContent?.trim()||'';
-    const style=styles[styleUrl]||{lineColor:'rgba(71,200,255,0.9)',lineWidth:2,fillColor:'rgba(71,200,255,0.12)',fillOpacity:0.12,hasFill:true};
-    const pc=txt=>txt.trim().split(/\s+/).map(pair=>{const p=pair.split(',');return[parseFloat(p[1]),parseFloat(p[0])];}).filter(c=>!isNaN(c[0])&&!isNaN(c[1]));
-    const pCoord=pm.querySelector('Point coordinates');
-    if(pCoord){const p=pCoord.textContent.trim().split(',');const lat=parseFloat(p[1]),lon=parseFloat(p[0]);if(!isNaN(lat))placemarks.push({type:'Point',name,desc,style,coords:[lat,lon]});}
-    const polyEl=pm.querySelector('Polygon outerBoundaryIs LinearRing coordinates');
-    if(polyEl){const c=pc(polyEl.textContent);if(c.length>2)placemarks.push({type:'Polygon',name,desc,style,coords:c});}
-    const lineEl=pm.querySelector('LineString coordinates');
-    if(lineEl){const c=pc(lineEl.textContent);if(c.length>1)placemarks.push({type:'LineString',name,desc,style,coords:c});}
-  });
-  return{docName,filename,placemarks};
+  const pmList = doc.getElementsByTagName('Placemark');
+  for(const pm of pmList){
+    const name = childText(pm, 'name') || childText(pm, 'n') || '';
+    const desc = childText(pm, 'description') || '';
+    const styleUrl = childText(pm, 'styleUrl');
+    const style = styles[styleUrl] || styles[styleUrl.replace(/^#/, '')] ||
+                  {lineColor:'rgba(71,200,255,0.9)',lineWidth:2,fillColor:'rgba(71,200,255,0.12)',fillOpacity:0.12,hasFill:true};
+
+    // Helpers for coordinate parsing — KML stores "lon,lat[,alt]"
+    const parseCoordList = txt => txt.trim().split(/\s+/).map(pair => {
+      const p = pair.split(','); return [parseFloat(p[1]), parseFloat(p[0])]; // [lat, lon] for Leaflet
+    }).filter(c => !isNaN(c[0]) && !isNaN(c[1]));
+
+    const pCoord = pm.getElementsByTagName('Point')[0]?.getElementsByTagName('coordinates')[0];
+    if(pCoord){
+      const p = pCoord.textContent.trim().split(',');
+      const lat = parseFloat(p[1]), lon = parseFloat(p[0]);
+      if(!isNaN(lat) && !isNaN(lon)){
+        placemarks.push({type:'Point', name, desc, style, styleUrl, coords:[lat,lon]});
+      }
+    }
+    const polyCoordsEl = pm.getElementsByTagName('Polygon')[0]
+                          ?.getElementsByTagName('outerBoundaryIs')[0]
+                          ?.getElementsByTagName('LinearRing')[0]
+                          ?.getElementsByTagName('coordinates')[0];
+    if(polyCoordsEl){
+      const c = parseCoordList(polyCoordsEl.textContent);
+      if(c.length > 2) placemarks.push({type:'Polygon', name, desc, style, styleUrl, coords:c});
+    }
+    const lineEl = pm.getElementsByTagName('LineString')[0]?.getElementsByTagName('coordinates')[0];
+    if(lineEl){
+      const c = parseCoordList(lineEl.textContent);
+      if(c.length > 1) placemarks.push({type:'LineString', name, desc, style, styleUrl, coords:c});
+    }
+  }
+  return {docName, filename, placemarks};
+}
+
+// Extracted style-table builder (unchanged behaviour, factored out so parseKML
+// reads cleaner). Returns map styleUrl → resolved {lineColor, lineWidth, ...}.
+function _parseKMLStyles(doc){
+  const styles = {};
+  const styleEls = doc.getElementsByTagName('Style');
+  for(const s of styleEls){
+    const id = s.getAttribute('id');
+    if(!id) continue;
+    const ls = s.getElementsByTagName('LineStyle')[0];
+    const ps = s.getElementsByTagName('PolyStyle')[0];
+    const is = s.getElementsByTagName('IconStyle')[0];
+    const lineCol  = ls?.getElementsByTagName('color')[0]?.textContent?.trim() || 'ff000000';
+    const lineW    = parseFloat(ls?.getElementsByTagName('width')[0]?.textContent || '2');
+    const polyCol  = ps?.getElementsByTagName('color')[0]?.textContent?.trim() || lineCol;
+    const fill     = (ps?.getElementsByTagName('fill')[0]?.textContent || '1').trim() !== '0';
+    const iconCol  = is?.getElementsByTagName('color')[0]?.textContent?.trim() || lineCol;
+    const ABGRtoRGBA = c => {
+      if(!c || c.length < 6) return 'rgba(71,200,255,0.5)';
+      const a = parseInt(c.slice(0,2), 16) / 255;
+      const b = parseInt(c.slice(2,4), 16);
+      const g = parseInt(c.slice(4,6), 16);
+      const r = parseInt(c.slice(6,8), 16);
+      return `rgba(${r},${g},${b},${a.toFixed(3)})`;
+    };
+    styles['#'+id] = styles[id] = {
+      lineColor: ABGRtoRGBA(lineCol),
+      lineWidth: lineW,
+      fillColor: ABGRtoRGBA(polyCol),
+      fillOpacity: parseInt((polyCol||'00').slice(0,2), 16) / 255,
+      hasFill: fill,
+      iconColor: ABGRtoRGBA(iconCol),
+    };
+  }
+  return styles;
 }
 
 function renderKMLOnMap(parsed){
@@ -2737,16 +2808,31 @@ function updateKMLButton(){
 }
 
 function _refreshKMLEyeButton(){
-  const eye = document.getElementById('kml-eye-btn');
-  if(!eye) return;
+  // v58: KML master toggle relocated from a floating button (which collided with
+  // «По объектам») into the stats panel as #stat-kml-toggle, sitting next to
+  // #stat-photos-toggle. We keep the old #kml-eye-btn DOM lookup conditional so
+  // legacy markup (if any) doesn't error.
   const total = kmlLayers.length;
   const on    = kmlLayers.filter(l => l.visible).length;
-  eye.classList.toggle('all-on',  on === total && total > 0);
-  eye.classList.toggle('all-off', on === 0);
-  eye.textContent = on > 0 ? '👁' : '⊘';
-  eye.title = on === total ? 'Скрыть все KML-слои' :
-              on === 0     ? 'Показать все KML-слои' :
-                             `Видны ${on} из ${total} — клик: показать все`;
+
+  // New stat-style toggle in the header
+  const stat  = document.getElementById('stat-kml-toggle');
+  const state = document.getElementById('stat-kml-state');
+  const lbl   = document.getElementById('stat-kml-lbl');
+  if(stat){
+    stat.style.display = total > 0 ? '' : 'none';
+    if(state) state.textContent = on > 0 ? '👁' : '⊘';
+    if(lbl)   lbl.textContent   = on > 0 ? 'Откл.KML' : 'Вкл.KML';
+    stat.classList.toggle('active', on > 0 && on === total);
+    stat.title = on === total ? 'Скрыть все KML-слои' :
+                 on === 0     ? 'Показать все KML-слои' :
+                                `Видны ${on} из ${total} — клик: показать все`;
+  }
+  // Legacy floating eye button (left in DOM for now — hidden by display rule below)
+  const eye = document.getElementById('kml-eye-btn');
+  if(eye){
+    eye.style.display = 'none';  // suppressed in v58, replaced by stat-kml-toggle
+  }
 }
 
 window.toggleAllKMLVisibility = function(){
@@ -2806,7 +2892,43 @@ function addMarker(photo,idx){
 function rebuildMarkerListeners(){photos.forEach((p,i)=>{if(!p.marker)return;p.marker.off('click');p.marker.on('click',()=>openLightbox(i,p.marker.getLatLng()));});}
 function setActiveMarker(idx){photos.forEach((p,i)=>{const d=p.marker?.getElement()?.querySelector('.marker-dot');if(d)d.classList.toggle('active',i===idx);});}
 function clearActiveMarker(){photos.forEach(p=>p.marker?.getElement()?.querySelector('.marker-dot')?.classList.remove('active'));}
-function fitMapToPhotos(){const pts=photos.filter(p=>p.lat!=null);if(!pts.length)return;document.getElementById('map-hint').classList.add('hidden');if(pts.length===1)map.setView([pts[0].lat,pts[0].lon],19);else map.fitBounds(L.latLngBounds(pts.map(p=>[p.lat,p.lon])),{padding:[60,60],maxZoom:19});}
+function fitMapToPhotos(){
+  // "По объектам" — fit map to UNION of:
+  //   • photo GPS points (with .lat set)
+  //   • all cad placemarks (saved contours from kdConfirm) — every polygon vertex,
+  //     plus point coords for explanation pins
+  //   • all parsed-KML placemarks (loaded from KML files) — same
+  // Without the KML/cad union, "fit" was useless when user had cadastre but no
+  // photos, or photos in one place and contours in another.
+  const lls = [];
+  for(const p of photos){
+    if(p.lat != null) lls.push([p.lat, p.lon]);
+  }
+  for(const layer of kmlLayers){
+    if(!layer || layer.visible === false) continue;  // respect visibility toggle
+    for(const pm of (layer.cadPlacemarks || [])){
+      if(!pm.geom?.coordinates) continue;
+      const g = pm.geom;
+      if(g.type === 'Point'){
+        const [lon, lat] = g.coordinates; lls.push([lat, lon]);
+      } else if(g.type === 'Polygon'){
+        for(const [lon, lat] of g.coordinates[0] || []) lls.push([lat, lon]);
+      } else if(g.type === 'MultiPolygon'){
+        for(const ring of (g.coordinates[0] || [])) for(const [lon, lat] of ring) lls.push([lat, lon]);
+      }
+    }
+    for(const pm of (layer.parsedData?.placemarks || [])){
+      if(!pm.coords) continue;
+      // pm.coords is [lat,lon] for Point, [[lat,lon],...] for Polygon/LineString (Leaflet order)
+      if(pm.type === 'Point') lls.push(pm.coords);
+      else if(Array.isArray(pm.coords[0])) for(const c of pm.coords) lls.push(c);
+    }
+  }
+  if(!lls.length) return;
+  document.getElementById('map-hint').classList.add('hidden');
+  if(lls.length === 1) map.setView(lls[0], 19);
+  else map.fitBounds(L.latLngBounds(lls), {padding:[60,60], maxZoom:19});
+}
 
 // ═══ П4: SIDEBAR — full card click + folder filter ═════════════════
 function getSortTs(p){return p.dateObj?.getTime()||p._sortTs||0;}
@@ -2849,42 +2971,58 @@ window.toggleMarksGroup = function(grp){
 function _gatherMarkers(){
   const buckets = { zu: [], oks: [], exp: [] };
   kmlLayers.forEach((layer, layerIdx) => {
-    // (1) Contours saved via kdConfirm — explicit type
+    // (1) Contours saved via kdConfirm — explicit type, GeoJSON [lon,lat] geometry
     (layer.cadPlacemarks || []).forEach((pm, i) => {
-      let bucket = pm.type === 'zu' ? 'zu' : pm.type === 'exp' ? 'exp' : 'oks';
-      const lat = pm.geom?.coordinates ? _markerLatLon(pm.geom) : null;
+      const bucket = pm.type === 'zu' ? 'zu' : pm.type === 'exp' ? 'exp' : 'oks';
+      // _markerLatLon returns [lat, lon] — same Leaflet convention used everywhere
+      // else in the marker module. _flyToMarker / activateMarkersAtLatLng all
+      // assume [lat, lon] now (fixed v58 — earlier code mixed conventions).
+      const ll = pm.geom?.coordinates ? _markerLatLon(pm.geom) : null;
+      // Try to enrich the displayed name from the parsed KML placemark with the
+      // matching cadNum: this is the only way to surface user-given names like
+      // "Корпус №2, пл.7030,8м2" — `cadPlacemarks[i].cadNum` only holds the bare
+      // cad number. We keep `cadNum` as the technical fallback.
+      const matched = layer.parsedData?.placemarks?.find(p =>
+        (p.name||'').includes(pm.cadNum) || (p.desc||'').includes(pm.cadNum));
       buckets[bucket].push({
         id:        `cad:${layerIdx}:${i}`,
         layerIdx, source:'cad', innerIdx:i,
-        name:      pm.cadNum || '(без номера)',
-        desc:      _markerDescFromLines(pm.lines) || _markerDescFromPlacemark(layer.parsedData?.placemarks?.find(p => (p.name||'').includes(pm.cadNum))),
+        name:      (matched?.name && matched.name !== pm.cadNum) ? matched.name : (pm.cadNum || '(без номера)'),
+        desc:      _markerDescFromLines(pm.lines) || matched?.desc || '',
         layerName: layer.docName || layer.filename || '',
-        lat,
-        visible:   layer.visible !== false,  // overall layer visibility
+        latlng:    ll,
+        visible:   layer.visible !== false,
       });
     });
-    // (2) Placemarks from a loaded KML file (not added through the dialog)
+    // (2) Placemarks from a loaded KML file (not added through the dialog).
+    // Skip those already covered by (1).
     (layer.parsedData?.placemarks || []).forEach((pm, i) => {
-      // Skip ones we already counted via cadPlacemarks (matched by name)
       const alreadyTracked = (layer.cadPlacemarks || []).some(c =>
-        (pm.name||'').includes(c.cadNum));
+        (pm.name||'').includes(c.cadNum) || (pm.desc||'').includes(c.cadNum));
       if(alreadyTracked) return;
-      // Classify: prefer styleUrl pattern, fall back to geometry type
+      // Classify: styleUrl pattern → explicit type; fallback by geometry type.
+      // Bonus heuristic: if name/desc contains "Земельн" or starts with "ЗУ" → ZU.
       let bucket = 'oks';
       if(pm.styleUrl){
         if(/cad_zu_/i.test(pm.styleUrl))       bucket = 'zu';
         else if(/cad_exp_/i.test(pm.styleUrl)) bucket = 'exp';
+        else if(/cad_oks_/i.test(pm.styleUrl)) bucket = 'oks';
       } else if(pm.type === 'Point'){
-        bucket = 'exp';  // free-floating points → annotations
+        bucket = 'exp';
+      } else if(/^(зу|земельн)/i.test(pm.name||'') || /^(зу|земельн)/i.test(pm.desc||'')){
+        bucket = 'zu';
       }
-      const lat = pm.coords ? (pm.type === 'Point' ? pm.coords : pm.coords[0]) : null;
+      // pm.coords is [lat, lon] for Point, [[lat,lon],...] for Polygon (Leaflet order).
+      // Use the FIRST vertex of a polygon as a representative point — good enough for
+      // fly-to and approximate hit-testing.
+      const ll = pm.coords ? (pm.type === 'Point' ? pm.coords : pm.coords[0]) : null;
       buckets[bucket].push({
         id:        `pm:${layerIdx}:${i}`,
         layerIdx, source:'pm', innerIdx:i,
-        name:      pm.name || '(без названия)',
+        name:      pm.name || pm.desc?.split(' · ')?.[0] || '(без названия)',
         desc:      pm.desc || '',
         layerName: layer.docName || layer.filename || '',
-        lat,
+        latlng:    ll,
         visible:   layer.visible !== false,
       });
     });
@@ -2892,10 +3030,21 @@ function _gatherMarkers(){
   return buckets;
 }
 
+// Returns [lat, lon] — Leaflet convention, NOT GeoJSON. All marker-list code
+// (fly-to, hit-test) uses this convention to avoid swap bugs.
 function _markerLatLon(geom){
-  if(geom.type === 'Point') return geom.coordinates;
-  if(geom.type === 'Polygon')      return geom.coordinates[0]?.[0];
-  if(geom.type === 'MultiPolygon') return geom.coordinates[0]?.[0]?.[0];
+  if(geom.type === 'Point'){
+    const [lon, lat] = geom.coordinates;
+    return [lat, lon];
+  }
+  if(geom.type === 'Polygon'){
+    const v = geom.coordinates[0]?.[0];
+    return v ? [v[1], v[0]] : null;
+  }
+  if(geom.type === 'MultiPolygon'){
+    const v = geom.coordinates[0]?.[0]?.[0];
+    return v ? [v[1], v[0]] : null;
+  }
   return null;
 }
 function _markerDescFromLines(lines){
@@ -2954,12 +3103,11 @@ function renderMarksList(){
 }
 
 function _flyToMarker(m){
-  if(!m || !m.lat) return;
-  const [lon, lat] = m.lat;
+  if(!m || !m.latlng) return;
+  const [lat, lon] = m.latlng;  // Leaflet convention — see _markerLatLon
   if(typeof map !== 'undefined' && lat != null && lon != null){
     map.setView([lat, lon], Math.max(map.getZoom(), 18), {animate:true});
   }
-  // Highlight the row
   document.querySelectorAll('.mark-item').forEach(el => el.classList.remove('active'));
   const row = document.querySelector(`.mark-item[data-mark-id="${CSS.escape(m.id)}"]`);
   if(row) row.classList.add('active');
@@ -2972,22 +3120,21 @@ function _flyToMarker(m){
 window.activateMarkersAtLatLng = function(latlng){
   if(_activeSidebarTab !== 'marks') return;
   if(!latlng) return;
-  const tolerance = 0.0001;  // ~11 m at the equator — enough fuzz to forgive imprecise click coords
   const buckets = _gatherMarkers();
   document.querySelectorAll('.mark-item').forEach(el => el.classList.remove('active'));
   for(const grp of ['zu','oks','exp']){
     for(const m of buckets[grp]){
-      if(!m.lat) continue;
-      const [lon0, lat0] = m.lat;
-      // For polygons we compare the FIRST vertex; for points the point itself.
-      // This is approximate but cheap; precise hit-testing would require geometric
-      // point-in-polygon for every entry on every click.
-      const dLat = Math.abs(lat0 - latlng.lat);
-      const dLon = Math.abs(lon0 - latlng.lng);
-      // For polygons, accept any reasonably nearby first-vertex
-      const isPolygon = m.source === 'cad' || /cad_(zu|oks)/.test(m.id);
-      const tol = isPolygon ? 0.005 : tolerance;  // ~500 m for polygons (first vertex can be anywhere on the ring)
-      if(dLat < tol && dLon < tol){
+      if(!m.latlng) continue;
+      const [lat0, lon0] = m.latlng;  // Leaflet [lat,lon]
+      // For polygons we compare the FIRST vertex (cheap; full point-in-polygon
+      // would require carrying full ring data into _gatherMarkers). Tolerance is
+      // looser for polygons (their first vertex can be hundreds of metres from
+      // a click anywhere inside the shape).
+      const isPolygon = m.source === 'cad'
+                     || /cad_(zu|oks)/.test(m.id)
+                     || (kmlLayers[m.layerIdx]?.parsedData?.placemarks?.[m.innerIdx]?.type === 'Polygon');
+      const tol = isPolygon ? 0.005 : 0.0001;  // ~500 m polygon, ~11 m point
+      if(Math.abs(lat0 - latlng.lat) < tol && Math.abs(lon0 - latlng.lng) < tol){
         const row = document.querySelector(`.mark-item[data-mark-id="${CSS.escape(m.id)}"]`);
         if(row){
           row.classList.add('active');
