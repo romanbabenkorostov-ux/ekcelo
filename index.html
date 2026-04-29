@@ -448,10 +448,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 /* ── INFO CARDS (v61) ─────────────────────────────────────────────
    Multiple draggable cards with thin connector lines back to the
    click point. Replaces L.popup for cad/KML hits + coords display. */
-.info-card{position:absolute;background:rgba(13,15,20,0.96);border:1px solid var(--border);border-radius:7px;
+.info-card{position:absolute;background:rgba(13,15,20,0.88);border:1px solid var(--border);border-radius:7px;
   font-family:'JetBrains Mono',monospace;color:var(--text);box-shadow:0 6px 22px rgba(0,0,0,.65);
   backdrop-filter:blur(4px);min-width:200px;max-width:260px;overflow:hidden;animation:pop-in .15s ease both}
-.info-card.dragging{box-shadow:0 12px 32px rgba(0,0,0,.8);border-color:var(--accent)}
+.info-card.dragging{box-shadow:0 12px 32px rgba(0,0,0,.8);border-color:#00ff66;background:rgba(13,15,20,0.95)}
 .info-card .ic-header{display:flex;align-items:center;gap:6px;padding:5px 7px 5px 10px;
   background:rgba(255,255,255,.04);border-bottom:1px solid var(--border);cursor:move;user-select:none}
 .info-card .ic-header.ic-zu{background:rgba(0,180,50,0.13);border-bottom-color:rgba(0,180,50,.4)}
@@ -2360,11 +2360,10 @@ function showInfoCardsAt(latlng, hits){
 // Compute the initial pixel offset (dx, dy) for card index i out of total N.
 // Cards fan out clockwise around the anchor at radius R, so they don't overlap.
 function _initialCardOffset(idx, total){
-  const R = 130;
-  // Spread over a 270° arc (top-left to bottom-left, skipping the area directly
-  // below the anchor which often holds tooltips). Angle 0 = right.
-  const startAngle = -Math.PI * 0.7;   // ≈ -126°
-  const endAngle   =  Math.PI * 0.7;   // ≈  126°
+  // v62: radius 130 → 160 so the anchor dot stays visible between cards.
+  const R = 160;
+  const startAngle = -Math.PI * 0.7;
+  const endAngle   =  Math.PI * 0.7;
   const t = total > 1 ? (idx / (total - 1)) : 0.5;
   const a = startAngle + t * (endAngle - startAngle);
   return { dx: Math.cos(a) * R, dy: Math.sin(a) * R - 60 };
@@ -2474,17 +2473,19 @@ function _redrawConnectors(){
     line.setAttribute('y1', ap.y);
     line.setAttribute('x2', cx);
     line.setAttribute('y2', cy);
-    line.setAttribute('stroke', '#e8ff47');
+    // v62: bright green (was #e8ff47 yellow). Yellow conflicted visually with
+    // photo-GPS markers (yellow dots) — user couldn't tell click-anchor from photos.
+    line.setAttribute('stroke', '#00ff66');
     line.setAttribute('stroke-width', '1');
-    line.setAttribute('stroke-opacity', '0.55');
+    line.setAttribute('stroke-opacity', '0.65');
     line.setAttribute('stroke-dasharray', '3,3');
     _connectorSvg.appendChild(line);
     if(!drewAnchor){
       const dot = document.createElementNS('http://www.w3.org/2000/svg','circle');
       dot.setAttribute('cx', ap.x);
       dot.setAttribute('cy', ap.y);
-      dot.setAttribute('r', '4');
-      dot.setAttribute('fill', '#e8ff47');
+      dot.setAttribute('r', '5');
+      dot.setAttribute('fill', '#00ff66');
       dot.setAttribute('stroke', '#0d0f14');
       dot.setAttribute('stroke-width', '1.5');
       _connectorSvg.appendChild(dot);
@@ -2562,20 +2563,39 @@ window._copyToClip = function(text, btn){
   } else { fallback(); flash(); }
 };
 
-// ── Map click pipeline (v61) ──────────────────────────────────────
-// Single entry point for ALL map-area clicks. Hit-tests, opens cards, and
-// auto-switches sidebar tabs per Task 3.
-function _handleMapAreaClick(latlng){
+// Map click pipeline (v61, augmented v62)
+//   • directHit: optional {kind, marker} when the click handler KNOWS exactly
+//     which placemark was clicked (its leaflet layer's own click handler).
+//     Geometric hit-test alone can miss the polygon when the click latlng
+//     falls a fraction of a degree outside the ring (rasterisation rounding).
+//     The directHit guarantees the just-clicked object is in the cards.
+function _handleMapAreaClick(latlng, directHit){
   closeAllInfoCards();
-  const hits = _hitTestAllAtPoint(latlng);
+  let hits = _hitTestAllAtPoint(latlng);
+  if(directHit && directHit.marker
+     && !hits.some(h => h.marker.id === directHit.marker.id)){
+    hits.push(directHit);
+  }
   showInfoCardsAt(latlng, hits);
-  // Task 3: switch to "Метки" tab if there are object hits and the user isn't
-  // currently working with photos. (Photo clicks go through the photo-marker's
-  // own handler which calls openLightbox and stays on Фото tab.)
   if(hits.length > 0 && typeof switchSidebarTab === 'function'){
     switchSidebarTab('marks');
     if(window.activateMarkersAtLatLng) window.activateMarkersAtLatLng(latlng);
   }
+}
+
+// Helper: given a leaflet layer (`evt.target`), find its corresponding marker
+// entry from `_gatherMarkers` so we can pass it as directHit.
+function _markerForLeafletLayer(leafletLayer){
+  if(!leafletLayer || typeof _gatherMarkers !== 'function') return null;
+  const buckets = _gatherMarkers();
+  for(const grp of ['zu','oks','exp']){
+    for(const m of buckets[grp]){
+      if(m.pmRef && m.pmRef._leafletLayer === leafletLayer){
+        return {kind: grp, marker: m};
+      }
+    }
+  }
+  return null;
 }
 
 // Keep original buildCoordPopup name as a no-op stub so older callsites that
@@ -2989,12 +3009,15 @@ function renderKMLOnMap(parsed){
     else if(pm.type==='LineString')layer=L.polyline(pm.coords,{color:pm.style.lineColor,weight:pm.style.lineWidth});
     else if(pm.type==='Point')layer=L.circleMarker(pm.coords,{radius:7,color:pm.style.lineColor,fillColor:pm.style.lineColor,fillOpacity:.85,weight:2});
     if(layer){
-      // v61: click delegates to the unified map-area pipeline. Hit-test will
-      // re-discover this same placemark plus any others overlapping the click.
+      // v61: click delegates to the unified map-area pipeline. v62: also pass
+      // `directHit` so hit-test never misses the polygon we just clicked
+      // (floating-point edge cases were causing point-in-ring to return false
+      // for clicks landing on the rasterised polygon edge).
       layer.on('click', e => {
         L.DomEvent.stopPropagation(e);
         window.lastClickedPoint = e.latlng;
-        _handleMapAreaClick(e.latlng);
+        const direct = _markerForLeafletLayer(layer);
+        _handleMapAreaClick(e.latlng, direct);
       });
       layer.addTo(lg);
       pm._leafletLayer = layer;
@@ -3539,14 +3562,13 @@ function _refreshGroupCheckbox(grp, items){
 }
 
 function _flyToMarker(m){
-  // Task 5 + 2 (v59-v61): smooth fly + open info card(s) anchored at the marker.
-  // v61: replaced the L.popup-based path with the new info-cards pipeline. This
-  // gives a draggable card with a connector line back to the anchor — and if
-  // the user later clicks the same point on the map they get the same UI.
-  // Re-enables visibility if the marker was hidden (Task 5).
   if(!m || !m.latlng) return;
   const [lat, lon] = m.latlng;
   if(typeof map === 'undefined' || lat == null || lon == null) return;
+
+  // Task 2 (v62): selecting an object in Метки should hide any open photo
+  // lightbox — the user is now focused on the cad/KML object, not on photos.
+  if(typeof closeLightbox === 'function') closeLightbox();
 
   if(m.pmRef && m.pmRef._visible === false){
     setMarkerVisible(m.pmRef, true);
@@ -3561,9 +3583,7 @@ function _flyToMarker(m){
   const targetZoom = Math.max(map.getZoom(), 18);
   map.flyTo([lat, lon], targetZoom, {animate:true, duration:0.8});
   window.lastClickedPoint = L.latLng(lat, lon);
-  // After fly settles, open the info card(s) at the marker's anchor point
   setTimeout(() => _handleMapAreaClick(L.latLng(lat, lon)), 850);
-  // Highlight the row
   document.querySelectorAll('.mark-item').forEach(el => el.classList.remove('active'));
   const row = document.querySelector(`.mark-item[data-mark-id="${CSS.escape(m.id)}"]`);
   if(row) row.classList.add('active');
@@ -3808,7 +3828,7 @@ function enterGPSFromLightbox(){
 }
 
 function posLightbox(latlng,fast=false){
-  if(lbManualPos)return; // user has dragged it — don't auto-reposition
+  if(lbManualPos){ _redrawLightboxConnector(); return; } // user has dragged it — don't auto-reposition (but still redraw connector)
   const lb=document.getElementById('lightbox'),card=document.getElementById('lb-card'),mw=document.getElementById('map-wrap');
   const cw=card.offsetWidth||320,ch=card.offsetHeight||400,W=mw.offsetWidth,H=mw.offsetHeight,gap=16;
   let left,top;
@@ -3816,6 +3836,66 @@ function posLightbox(latlng,fast=false){
   else{const pt=map.latLngToContainerPoint(latlng);left=pt.x+36;top=pt.y-ch/2;if(left+cw>W-gap)left=pt.x-cw-36;if(left<gap)left=gap;if(top<gap)top=gap;if(top+ch>H-gap)top=H-ch-gap;}
   if(fast){lb.classList.add('no-transition');lb.style.left=left+'px';lb.style.top=top+'px';requestAnimationFrame(()=>lb.classList.remove('no-transition'));}
   else{lb.style.left=left+'px';lb.style.top=top+'px';}
+  _redrawLightboxConnector();
+}
+
+// ── Lightbox connector (Task 4, v62) ──────────────────────────────
+// Draws a thin yellow line from the photo's GPS marker to the lightbox card.
+// Yellow (#e8ff47) deliberately matches the photo-marker color so it visually
+// reads as "this card belongs to that yellow dot" — useful when multiple photos
+// are stacked at the same coordinate ("пирог точек") and the user can't tell
+// which dot is currently selected.
+function _redrawLightboxConnector(){
+  const lb = document.getElementById('lightbox');
+  if(!lb || !lb.classList.contains('visible')) return _clearLightboxConnector();
+  if(!lbLL || activeIdx === null) return _clearLightboxConnector();
+  const photo = photos[activeIdx];
+  if(!photo || photo.lat == null) return _clearLightboxConnector();
+
+  // Use the dedicated SVG layer (created on demand). Separate from the info-cards
+  // SVG so that closeAllInfoCards() doesn't blow away the lightbox connector.
+  const mw = document.getElementById('map-wrap');
+  if(!mw) return;
+  let svg = document.getElementById('lb-connector-svg');
+  if(!svg){
+    svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+    svg.id = 'lb-connector-svg';
+    svg.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:1899;width:100%;height:100%';
+    mw.appendChild(svg);
+  }
+  svg.innerHTML = '';
+
+  // Anchor: the photo's GPS coordinate (NOT the original lbLL — that may be a
+  // map-click point used to OPEN the lightbox; we want the photo's true location).
+  const ap = map.latLngToContainerPoint([photo.lat, photo.lon]);
+  const card = document.getElementById('lb-card');
+  const lbR = lb.getBoundingClientRect();
+  const mwR = mw.getBoundingClientRect();
+  const cx = lbR.left - mwR.left + lbR.width/2;
+  const cy = lbR.top  - mwR.top  + lbR.height/2;
+
+  const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+  line.setAttribute('x1', ap.x); line.setAttribute('y1', ap.y);
+  line.setAttribute('x2', cx);   line.setAttribute('y2', cy);
+  line.setAttribute('stroke', '#e8ff47');
+  line.setAttribute('stroke-width', '1');
+  line.setAttribute('stroke-opacity', '0.7');
+  line.setAttribute('stroke-dasharray', '4,3');
+  svg.appendChild(line);
+
+  // Highlight ring around the photo dot — makes the selected one obvious in a stack
+  const ring = document.createElementNS('http://www.w3.org/2000/svg','circle');
+  ring.setAttribute('cx', ap.x); ring.setAttribute('cy', ap.y);
+  ring.setAttribute('r', '11');
+  ring.setAttribute('fill', 'none');
+  ring.setAttribute('stroke', '#e8ff47');
+  ring.setAttribute('stroke-width', '2');
+  ring.setAttribute('stroke-opacity', '0.85');
+  svg.appendChild(ring);
+}
+function _clearLightboxConnector(){
+  const svg = document.getElementById('lb-connector-svg');
+  if(svg) svg.innerHTML = '';
 }
 
 // Item 3: draggable lightbox via filename bar ─────────────────────
@@ -4475,13 +4555,13 @@ function _makeCadLayer(geom, type, interactive) {
 }
 
 function _attachCadEvents(layer, cadNum, type, lines) {
-  // v61: hover-free, single click handler that delegates to the unified
-  // map-click pipeline. The pipeline does its own hit-testing across all
-  // overlapping objects and opens one info card per match.
   layer.on('click', e => {
     L.DomEvent.stopPropagation(e);
     window.lastClickedPoint = e.latlng;
-    _handleMapAreaClick(e.latlng);
+    // v62: augment with directHit so the just-clicked polygon is guaranteed
+    // to appear in the info cards even when point-in-polygon fails on the edge.
+    const direct = _markerForLeafletLayer(layer);
+    _handleMapAreaClick(e.latlng, direct);
   });
 }
 
