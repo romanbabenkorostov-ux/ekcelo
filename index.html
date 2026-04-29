@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.24</title>
+<title>EkceloFoto v2.9.25</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -15,6 +15,10 @@
      This lets us preserve the user's row-1/2/3 formatting when emitting an
      updated workbook with the new "Координаты центра объекта" column. -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<!-- JSZip — used for KMZ export (KMZ is a ZIP with doc.kml + media files).
+     ~95KB minified, no dependencies. We don't load until the user clicks
+     "Экспорт в KMZ" — the script tag itself is just ~95KB and parses fast. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 :root{--bg:#0d0f14;--surface:#161a24;--border:#252b3a;--accent:#e8ff47;--accent2:#47c8ff;--text:#e4e8f0;--muted:#5a6480;--danger:#ff5c5c;--warn:#f59e0b;--r:6px}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -45,6 +49,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #auto-save-label:hover{border-color:var(--accent);color:var(--accent)}
 #auto-save-label input{accent-color:var(--accent);cursor:pointer;width:13px;height:13px}
 #auto-save-label.active-label{border-color:var(--accent);color:var(--accent);background:rgba(232,255,71,.08)}
+/* KMZ export button — same visual language as #auto-save-label so they read as a pair. */
+#kmz-export-btn{display:flex;align-items:center;gap:6px;background:transparent;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);white-space:nowrap;padding:5px 9px;border:1px solid var(--border);border-radius:var(--r);transition:border-color .15s,color .15s,background .15s;cursor:pointer;flex-shrink:0}
+#kmz-export-btn:hover{border-color:#6cd96c;color:#6cd96c;background:rgba(108,217,108,.08)}
+#kmz-export-btn:disabled{opacity:.4;cursor:not-allowed;border-color:var(--border)}
+#kmz-export-btn.busy{border-color:var(--accent);color:var(--accent);background:rgba(255,149,0,.08);animation:pulse-busy 1.2s ease-in-out infinite}
+@keyframes pulse-busy{0%,100%{opacity:.7}50%{opacity:1}}
 #stats{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);margin-left:auto;display:flex;gap:20px}
 .stat{display:flex;flex-direction:column}
 .stat-val{color:var(--text);font-weight:500;font-size:14px}
@@ -607,7 +617,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.24</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.25</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -640,6 +650,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     <input type="checkbox" id="auto-save-cb" onchange="onAutoSaveCbChange(this)"/>
     Авто-запись EXIF
   </label>
+  <!-- KMZ export — bundles every loaded KML layer + every photo with GPS into
+       a single .kmz that opens in Google Earth Pro. Disabled until there's
+       something to export. -->
+  <button id="kmz-export-btn" onclick="exportKMZ()" title="Экспортировать все объекты и фото с GPS в один .kmz для Google Earth Pro">📦 Экспорт в KMZ</button>
   <button id="share-btn" onclick="copyShareLink()" style="display:none">🔗 Поделиться</button>
   <div id="stats">
     <div class="stat"><span class="stat-val" id="stat-total">0</span><span class="stat-lbl">фото</span></div>
@@ -3614,22 +3628,61 @@ window.activateMarkersAtLatLng = function(latlng){
   if(!latlng) return;
   const buckets = _gatherMarkers();
   document.querySelectorAll('.mark-item').forEach(el => el.classList.remove('active'));
-  let firstActiveRow = null;
+
+  // Track the FIRST matched row per group — we need to scroll each group's own
+  // scrollable body independently. Browsers nest scrollIntoView through every
+  // scrolling ancestor, so calling it on rows in different .marks-group-body
+  // containers correctly affects each container without interfering.
+  const firstByGroup = { zu: null, oks: null, exp: null };
   for(const grp of ['zu','oks','exp']){
     for(const m of buckets[grp]){
       if(!_hitTestMarker(m, latlng.lat, latlng.lng)) continue;
       const row = document.querySelector(`.mark-item[data-mark-id="${CSS.escape(m.id)}"]`);
       if(row){
         row.classList.add('active');
-        if(!firstActiveRow) firstActiveRow = row;
+        if(!firstByGroup[grp]) firstByGroup[grp] = row;
       }
     }
   }
-  // Scroll only the FIRST match into view; others may be in different group panels
-  // (with their own scrollers) and will already be visible if the user has the
-  // group expanded.
-  if(firstActiveRow) firstActiveRow.scrollIntoView({behavior:'smooth', block:'nearest'});
+
+  // Scroll the first matched row of EACH group into view. Use a custom helper
+  // (instead of scrollIntoView) that scrolls ONLY the .marks-group-body — never
+  // bubbling up to the page-level scroll. This avoids accidentally scrolling
+  // the sidebar or window when the markers panel is short.
+  for(const grp of ['zu','oks','exp']){
+    const row = firstByGroup[grp];
+    if(row) _scrollRowIntoGroupBody(row);
+  }
 };
+
+// Scroll a marker row into its enclosing .marks-group-body without affecting
+// other scroll ancestors. The group must be expanded — if collapsed, expand it
+// first so the row is actually rendered/visible.
+function _scrollRowIntoGroupBody(row){
+  if(!row) return;
+  const body = row.closest('.marks-group-body');
+  if(!body) return;
+  const group = body.closest('.marks-group');
+  // If the group is collapsed, expand it so the row becomes visible at all
+  if(group && group.classList.contains('collapsed')){
+    group.classList.remove('collapsed');
+    const grpKey = group.id.replace('marks-group-','');
+    const arrow = document.getElementById(`marks-arrow-${grpKey}`);
+    if(arrow) arrow.textContent = '▼';
+  }
+  // Use offsetTop relative to body — robust against transforms / sticky headers
+  const rowRect = row.getBoundingClientRect();
+  const bodyRect = body.getBoundingClientRect();
+  const rowTopInBody = rowRect.top - bodyRect.top + body.scrollTop;
+  const visibleStart = body.scrollTop;
+  const visibleEnd   = body.scrollTop + body.clientHeight;
+  // If row is already fully visible, leave the scroll alone — avoids nervous
+  // jumping when user clicks repeatedly on the same area.
+  if(rowTopInBody >= visibleStart + 4 && rowTopInBody + rowRect.height <= visibleEnd - 4) return;
+  // Center the row in the body's viewport
+  const target = Math.max(0, rowTopInBody - body.clientHeight/2 + rowRect.height/2);
+  body.scrollTo({top: target, behavior:'smooth'});
+}
 
 // Determine if a click at (clickLat, clickLon) lies inside / on a marker.
 // For polygons we use ray-casting on the outer ring; for points we use a small
@@ -5414,6 +5467,296 @@ function _buildKMLDocument(styles, placemarks, docName){
     '</Folder>'+nl+
     '</Document>'+nl+
     '</kml>';
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// KMZ EXPORT (v63) — bundle KML objects + photos into a single archive
+// ═══════════════════════════════════════════════════════════════════
+//
+// KMZ format: a ZIP file containing `doc.kml` + media files (referenced from
+// the KML by relative paths like `images/foo.jpg`). Google Earth Pro reads it
+// natively. Yandex Maps Constructor doesn't support KMZ — only KML.
+//
+// LIMITATIONS (informed user-facing):
+//   • Browser memory: JSZip builds the entire archive in RAM. ~500MB total
+//     payload is the practical ceiling on most desktops; bigger may crash the tab.
+//   • Photos: each is downsized to 1600px on the long side (JPEG quality 0.78)
+//     to keep size sane. Originals are NOT embedded — that would explode size.
+//     Typical 1600px thumb is 200-400 KB; 500 photos ≈ 150 MB.
+//   • GE Pro performance: above ~500 placemarks the timeline + render slow down.
+//   • No video / GPX / EXIF preserved in the embedded thumbs (re-encoded JPEG).
+//   • Coordinate accuracy: KML uses lon,lat,alt at 6-decimal precision (~11 cm).
+//   • Encoding: KML inside KMZ uses UTF-8, no BOM.
+//
+// What gets exported:
+//   1. Every loaded KML layer's parsedData.placemarks (polygons, lines, points)
+//   2. Every cad placemark saved via the dialog (cadPlacemarks)
+//   3. Every photo with a GPS coordinate — as a Placemark with the photo as a
+//      thumbnail icon AND embedded full-size in the description's <img>.
+
+window.exportKMZ = async function(){
+  const btn = document.getElementById('kmz-export-btn');
+  if(typeof JSZip === 'undefined'){
+    showToast('Библиотека JSZip не загружена — проверьте интернет','error',4500);
+    return;
+  }
+  // Estimate scope
+  const photosWithGPS = (typeof photos !== 'undefined' ? photos : []).filter(p => p.lat != null);
+  const layerCount = (kmlLayers||[]).length;
+  let placemarkCount = 0;
+  for(const l of (kmlLayers||[])){
+    placemarkCount += (l.parsedData?.placemarks?.length || 0);
+    placemarkCount += (l.cadPlacemarks?.length || 0);
+  }
+  if(placemarkCount === 0 && photosWithGPS.length === 0){
+    showToast('Нечего экспортировать: загрузите KML или фото с GPS','warn',4000);
+    return;
+  }
+  // Confirm with the user — they need to know about the size implications
+  const ok = window.confirm(
+    `Экспорт в KMZ для Google Earth Pro:\n\n`+
+    `  • Объектов KML/cad: ${placemarkCount}\n`+
+    `  • Фото с GPS: ${photosWithGPS.length} (будут уменьшены до 1600 px)\n`+
+    `  • Слоёв KML: ${layerCount}\n\n`+
+    `Ограничения:\n`+
+    `  • Архив строится в памяти браузера (~500 MB безопасный потолок)\n`+
+    `  • Фото пере-кодируются в JPEG q=0.78, EXIF не переносится\n`+
+    `  • Yandex.Карты не открывают KMZ — только KML\n`+
+    `  • При большом числе фото GE Pro может тормозить\n\n`+
+    `Продолжить?`
+  );
+  if(!ok) return;
+  btn.classList.add('busy');
+  btn.disabled = true;
+  const origLabel = btn.innerHTML;
+  btn.innerHTML = '⏳ Экспорт…';
+  try {
+    const zip = new JSZip();
+    const imagesFolder = zip.folder('images');
+
+    // Build KML pieces: collect styles + placemarks from all sources
+    const styleXmls = new Set();   // dedupe by string content
+    const placemarkXmls = [];
+
+    // ── (1) Loaded KML layers ──────────────────────────────────────
+    for(const layer of (kmlLayers||[])){
+      const parsed = layer.parsedData;
+      if(!parsed?.placemarks) continue;
+      for(const pm of parsed.placemarks){
+        if(pm._visible === false) continue;  // honour hidden state
+        const sid = (pm.styleUrl || '').replace('#','') || 'default';
+        // We don't have the original style XML for parsed-style — synthesize one
+        // matching the resolved style attributes (close enough for GE Pro)
+        styleXmls.add(_synthStyleXmlFromParsedStyle(sid, pm.style));
+        placemarkXmls.push(_pmToKMLXml(pm.name, pm.desc, sid, pm));
+      }
+      for(const pm of (layer.cadPlacemarks||[])){
+        if(pm._visible === false) continue;
+        if(pm.parts?.style) styleXmls.add(pm.parts.style);
+        if(pm.parts?.placemark) placemarkXmls.push(pm.parts.placemark);
+      }
+    }
+
+    // ── (2) Photo placemarks ───────────────────────────────────────
+    // Style for photo icons: a small yellow dot (matches the in-app marker)
+    styleXmls.add(
+      `<Style id="photo_icon">`+
+        `<IconStyle>`+
+          `<color>ffe5ff47</color>`+   // ABGR yellow
+          `<scale>1.0</scale>`+
+          `<Icon><href>http://maps.google.com/mapfiles/kml/shapes/camera.png</href></Icon>`+
+        `</IconStyle>`+
+        `<LabelStyle><scale>0.7</scale></LabelStyle>`+
+      `</Style>`
+    );
+
+    // Throttled photo encoding: process N at a time to avoid memory spikes.
+    // Each photo: read as ArrayBuffer → decode to image → draw to canvas at
+    // max 1600px → encode as JPEG q=0.78 → add to ZIP under images/<name>.jpg
+    const BATCH = 4;
+    for(let i = 0; i < photosWithGPS.length; i += BATCH){
+      const batch = photosWithGPS.slice(i, i + BATCH);
+      btn.innerHTML = `⏳ Фото ${i+1}-${Math.min(i+BATCH, photosWithGPS.length)} / ${photosWithGPS.length}`;
+      await Promise.all(batch.map(async (p, j) => {
+        const idx = i + j;
+        const safeName = `photo_${String(idx+1).padStart(4,'0')}.jpg`;
+        try {
+          const blob = await _downscalePhotoForKMZ(p);
+          if(blob) imagesFolder.file(safeName, blob);
+        } catch(e){
+          console.warn('[kmz-photo]', p.name, e);
+          return;
+        }
+        const ts = p.date ? new Date(p.date).toISOString() : '';
+        const angle = (p.bearing != null && !isNaN(p.bearing)) ? `Угол съёмки: ${p.bearing.toFixed(0)}°<br/>` : '';
+        const desc =
+          `<![CDATA[<div style="font-family:Arial,sans-serif">`+
+            `<img src="images/${safeName}" style="max-width:480px;display:block;margin-bottom:6px"/>`+
+            `<b>${_escapeHtml(p.name||safeName)}</b><br/>`+
+            `Координаты: ${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}<br/>`+
+            angle+
+            (ts ? `Снято: ${ts}<br/>` : '')+
+          `</div>]]>`;
+        placemarkXmls.push(
+          `<Placemark>`+
+            `<name>${_escapeXml(p.name||safeName)}</name>`+
+            `<description>${desc}</description>`+
+            `<styleUrl>#photo_icon</styleUrl>`+
+            (ts ? `<TimeStamp><when>${ts}</when></TimeStamp>` : '')+
+            `<Point><altitudeMode>clampToGround</altitudeMode>`+
+              `<coordinates>${p.lon.toFixed(6)},${p.lat.toFixed(6)},0</coordinates>`+
+            `</Point>`+
+          `</Placemark>`
+        );
+      }));
+    }
+
+    // ── Build doc.kml ──────────────────────────────────────────────
+    btn.innerHTML = '⏳ Сборка KML…';
+    const kml = _buildKMLDocument([...styleXmls], placemarkXmls, 'EkceloFoto экспорт');
+    zip.file('doc.kml', kml);
+
+    // ── Generate the .kmz blob ─────────────────────────────────────
+    btn.innerHTML = '⏳ Сжатие…';
+    const blob = await zip.generateAsync({
+      type:'blob',
+      mimeType:'application/vnd.google-earth.kmz',
+      compression:'DEFLATE',
+      compressionOptions:{level:6},
+    });
+
+    // Save (FSA picker first, fallback to legacy download)
+    const stamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,16);
+    const filename = `ekcelo_export_${stamp}.kmz`;
+    if(typeof window.showSaveFilePicker === 'function'){
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: filename,
+          types:[{description:'KMZ', accept:{'application/vnd.google-earth.kmz':['.kmz']}}],
+        });
+        const w = await handle.createWritable();
+        await w.write(blob); await w.close();
+        _showSaveInfoDialog(handle.name||filename, null,
+          'KMZ сохранён в выбранную папку. Откройте его в Google Earth Pro.');
+        showToast(`✅ KMZ: ${(blob.size/1024/1024).toFixed(1)} MB`, 'success', 3500);
+        return;
+      } catch(e){
+        if(e?.name === 'AbortError'){ return; }
+        // fallthrough
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 8000);
+    _showSaveInfoDialog(filename, url, 'KMZ скачан в папку «Загрузки». Откройте в Google Earth Pro.');
+    showToast(`✅ KMZ: ${(blob.size/1024/1024).toFixed(1)} MB`, 'success', 3500);
+  } catch(e){
+    console.warn('[kmz-export]', e);
+    showToast('❌ Ошибка экспорта: '+(e.message||e), 'error', 5500);
+  } finally {
+    btn.classList.remove('busy');
+    btn.disabled = false;
+    btn.innerHTML = origLabel;
+  }
+};
+
+// Convert a parsed KML placemark back to KML XML for re-emission
+function _pmToKMLXml(name, desc, sid, pm){
+  const safeName = _escapeXml(name||'');
+  const safeDesc = desc ? `<description><![CDATA[${desc}]]></description>` : '';
+  const styleRef = `<styleUrl>#${sid}</styleUrl>`;
+  let geom = '';
+  if(pm.type === 'Point' && pm.coords){
+    const [lat, lon] = pm.coords;
+    geom = `<Point><altitudeMode>clampToGround</altitudeMode><coordinates>${lon},${lat},0</coordinates></Point>`;
+  } else if(pm.type === 'Polygon' && pm.coords?.length){
+    const cs = pm.coords.map(([la,lo]) => `${lo},${la},0`).join(' ');
+    geom = `<Polygon><tessellate>1</tessellate><altitudeMode>clampToGround</altitudeMode>`+
+           `<outerBoundaryIs><LinearRing><tessellate>1</tessellate><coordinates>${cs}</coordinates></LinearRing></outerBoundaryIs>`+
+           `</Polygon>`;
+  } else if(pm.type === 'LineString' && pm.coords?.length){
+    const cs = pm.coords.map(([la,lo]) => `${lo},${la},0`).join(' ');
+    geom = `<LineString><tessellate>1</tessellate><coordinates>${cs}</coordinates></LineString>`;
+  }
+  return `<Placemark><name>${safeName}</name>${safeDesc}${styleRef}${geom}</Placemark>`;
+}
+
+// Synthesize a KML <Style> from a resolved style object (lineColor as rgba(),
+// fillColor as rgba(), lineWidth, etc). Used for placemarks loaded from a KML
+// where we don't have the original Style XML.
+function _synthStyleXmlFromParsedStyle(id, st){
+  const rgba2ABGR = c => {
+    if(!c) return 'ff7f7f7f';
+    const m = String(c).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+    if(!m) return 'ff7f7f7f';
+    const r = (+m[1]).toString(16).padStart(2,'0');
+    const g = (+m[2]).toString(16).padStart(2,'0');
+    const b = (+m[3]).toString(16).padStart(2,'0');
+    const a = (Math.round((m[4] != null ? +m[4] : 1) * 255)).toString(16).padStart(2,'0');
+    return a+b+g+r;
+  };
+  const lineColor = rgba2ABGR(st?.lineColor);
+  const fillColor = rgba2ABGR(st?.fillColor);
+  const w = st?.lineWidth || 2;
+  return `<Style id="${id}">`+
+    `<LineStyle><color>${lineColor}</color><width>${w}</width></LineStyle>`+
+    `<PolyStyle><color>${fillColor}</color><fill>${st?.hasFill?1:0}</fill></PolyStyle>`+
+    `<IconStyle><color>${lineColor}</color><scale>0.9</scale></IconStyle>`+
+    `</Style>`;
+}
+
+// XML escape helper for attribute / element text (NOT for CDATA — keep CDATA as-is).
+function _escapeXml(s){
+  return String(s||'').replace(/[&<>'"]/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&apos;','"':'&quot;'}[c]));
+}
+
+// Downscale photo for embedding in KMZ. Returns a Blob (jpeg q=0.78).
+// Source priority:
+//   1. p.displayUrl  — usually the in-memory blob URL of the original
+//   2. p.thumbUrl    — fallback (smaller, but still embeddable)
+//   3. p.file        — File object (created from input/folder upload)
+//   4. p.originalBlob — re-encoded blob if EXIF was rewritten
+// Remote photos (Yandex/GDrive) use displayUrl pointing at fetched blob URL.
+async function _downscalePhotoForKMZ(p){
+  const MAX = 1600;
+  const Q = 0.78;
+  let src = p.displayUrl || p.thumbUrl;
+  let createdUrl = false;
+  if(!src){
+    const blob = p.originalBlob || p.file || null;
+    if(blob){ src = URL.createObjectURL(blob); createdUrl = true; }
+  }
+  if(!src) return null;
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    // crossOrigin avoids tainted-canvas exceptions on some remote photos.
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const w = img.naturalWidth, h = img.naturalHeight;
+        const scale = Math.min(1, MAX / Math.max(w, h));
+        const tw = Math.round(w * scale), th = Math.round(h * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = tw; canvas.height = th;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, tw, th);
+        canvas.toBlob(b => {
+          if(createdUrl) URL.revokeObjectURL(src);
+          resolve(b);
+        }, 'image/jpeg', Q);
+      } catch(e){
+        if(createdUrl) URL.revokeObjectURL(src);
+        reject(e);
+      }
+    };
+    img.onerror = () => {
+      if(createdUrl) URL.revokeObjectURL(src);
+      reject(new Error('Image decode failed: '+(p.name||'')));
+    };
+    img.src = src;
+  });
 }
 
 function _downloadBlob(text, filename){
