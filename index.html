@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.22</title>
+<title>EkceloFoto v2.9.23</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -444,6 +444,39 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 /* CADASTRAL FLOATING TOOLTIP */
 #cad-tooltip{display:none;position:absolute;z-index:3000;pointer-events:none;max-width:280px;min-width:170px;font-family:'JetBrains Mono',monospace;font-size:11px}
 #cad-tooltip.visible{display:block}
+
+/* ── INFO CARDS (v61) ─────────────────────────────────────────────
+   Multiple draggable cards with thin connector lines back to the
+   click point. Replaces L.popup for cad/KML hits + coords display. */
+.info-card{position:absolute;background:rgba(13,15,20,0.96);border:1px solid var(--border);border-radius:7px;
+  font-family:'JetBrains Mono',monospace;color:var(--text);box-shadow:0 6px 22px rgba(0,0,0,.65);
+  backdrop-filter:blur(4px);min-width:200px;max-width:260px;overflow:hidden;animation:pop-in .15s ease both}
+.info-card.dragging{box-shadow:0 12px 32px rgba(0,0,0,.8);border-color:var(--accent)}
+.info-card .ic-header{display:flex;align-items:center;gap:6px;padding:5px 7px 5px 10px;
+  background:rgba(255,255,255,.04);border-bottom:1px solid var(--border);cursor:move;user-select:none}
+.info-card .ic-header.ic-zu{background:rgba(0,180,50,0.13);border-bottom-color:rgba(0,180,50,.4)}
+.info-card .ic-header.ic-oks{background:rgba(160,32,240,0.14);border-bottom-color:rgba(160,32,240,.4)}
+.info-card .ic-header.ic-exp{background:rgba(71,200,255,0.13);border-bottom-color:rgba(71,200,255,.4)}
+.info-card .ic-title{flex:1;font-size:10.5px;font-weight:700;color:#fff;letter-spacing:.2px}
+.info-card .ic-close{background:transparent;border:none;color:#888;font-size:14px;cursor:pointer;padding:0 4px;line-height:1}
+.info-card .ic-close:hover{color:#fff}
+.info-card .ic-body{padding:7px 9px 9px;font-size:10.5px;line-height:1.4}
+.info-card .ic-coords-row{display:flex;align-items:center;gap:4px;margin-bottom:6px}
+.info-card .ic-coords{flex:1;background:rgba(255,255,255,.07);padding:3px 6px;border-radius:3px;
+  font-size:10.5px;color:var(--accent2);font-family:inherit;letter-spacing:.3px}
+.info-card .ic-copy{background:transparent;border:1px solid var(--border);border-radius:3px;
+  color:var(--muted);font-size:10px;padding:2px 6px;cursor:pointer;font-family:inherit;line-height:1;
+  transition:all .12s;flex-shrink:0}
+.info-card .ic-copy:hover{color:var(--accent);border-color:var(--accent)}
+.info-card .ic-copy.flashed{color:var(--accent);border-color:var(--accent);background:rgba(255,149,0,.12)}
+.info-card .ic-copy-bottom{display:block;width:100%;margin-top:5px;padding:4px 6px;font-size:10px;text-align:center}
+.info-card .ic-name{font-size:11px;font-weight:600;color:#fff;margin-bottom:3px;line-height:1.35;word-break:break-word}
+.info-card .ic-desc{font-size:10px;color:#cfd2d6;line-height:1.45;word-break:break-word;opacity:.92}
+.info-card .ic-action{display:block;width:100%;border:none;border-radius:4px;padding:5px 8px;
+  font-family:inherit;font-size:10.5px;font-weight:700;cursor:pointer;margin-top:5px;transition:filter .1s}
+.info-card .ic-action:hover{filter:brightness(1.12)}
+.info-card .ic-orange{background:#ff9500;color:#fff}
+.info-card .ic-cyan{background:#47c8ff;color:#0d0f14}
 .cad-tip-section{padding:6px 9px;line-height:1.5}
 .cad-tip-section+.cad-tip-section{border-top:1px solid rgba(255,255,255,.08)}
 .cad-tip-zu{background:#1a0b26;border-left:3px solid #a020f0}
@@ -574,7 +607,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.22</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.23</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -2223,10 +2256,12 @@ map.on('click',function(e){
   if(manualGPSActive){handleMapClickForGPS(e);return;}
   closeLightbox();
   window.lastClickedPoint=e.latlng;
-  const lat=e.latlng.lat.toFixed(6),lng=e.latlng.lng.toFixed(6);
-  L.popup({maxWidth:224}).setLatLng(e.latlng).setContent(buildCoordPopup(lat,lng,null,null)).openOn(map);
-  if(window.activateMarkersAtLatLng) window.activateMarkersAtLatLng(e.latlng);
+  // v61: unified click pipeline. Hit-tests cad/KML at point, opens one card per
+  // hit (or just a coords card), auto-switches to Метки tab if objects were hit.
+  _handleMapAreaClick(e.latlng);
 });
+// Keep cards anchored to map: redraw on every move/zoom/resize.
+map.on('move zoom moveend zoomend resize',()=>{ _redrawConnectors(); });
 map.on('move zoom',()=>{if(lbLL&&document.getElementById('lightbox').classList.contains('visible'))posLightbox(lbLL,true);});
 // v60 fix: when the user pans, leaflet renders/re-renders markers lazily —
 // new DOM nodes don't carry the .active class that was set on the previous
@@ -2234,14 +2269,318 @@ map.on('move zoom',()=>{if(lbLL&&document.getElementById('lightbox').classList.c
 // "selected photo" dot stays visible when the user explores the map.
 map.on('moveend zoomend',()=>{ if(activeIdx!==null) setActiveMarker(activeIdx); });
 
-function buildCoordPopup(lat,lng,kmlName,kmlDesc){
-  // Compact layout for the 30%-narrower (224px) popup: smaller font, tighter buttons
-  let h=`<div style="font-family:system-ui;line-height:1.4;font-size:11.5px"><b>📍 Координаты</b><br><code style="background:#f0f0f0;padding:1px 5px;border-radius:3px;font-size:10.5px">${lat}, ${lng}</code>`;
-  if(kmlName||kmlDesc)h+=`<hr style="border:none;border-top:1px solid #ddd;margin:6px 0"><b>🗺 ${esc(kmlName||'Объект')}</b>${kmlDesc?'<br><span style="color:#444;font-size:10.5px">'+esc(kmlDesc)+'</span>':''}`;
-  h+=`<br><br><button onclick="queryNSPDAtPoint()" style="background:#ff9500;color:#fff;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;font-weight:700;width:100%;font-size:11px">📍 Запросить кадастр</button>`;
-  h+=`<button onclick="startExplanationPoint(${lat},${lng})" style="background:#47c8ff;color:#0d0f14;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;font-weight:700;width:100%;margin-top:5px;font-size:11px">💬 Добавить пояснение</button></div>`;
-  return h;
+// ═══════════════════════════════════════════════════════════════════
+// INFO CARDS — multi-popup overlay with connector lines (v61)
+// ═══════════════════════════════════════════════════════════════════
+// Replaces the L.popup-based single-card approach. When the user clicks the
+// map, we hit-test every cad polygon, KML placemark, and (in future) photo
+// marker at that latlng and open ONE draggable card per hit. All cards share
+// the same anchor (the click point), connected by thin dashed SVG lines.
+//
+// Why custom instead of L.popup?
+//   • Leaflet's L.popup auto-closes on map click — no good for multi-card UI.
+//   • L.popup can't draw a connector to its anchor when dragged (it's not draggable at all).
+//   • We need different cards for cad (with full attributes) vs KML (with name+desc).
+//
+// State model:
+//   _infoCards: Map<id, {el, anchorLL, dx, dy, hit}>
+//     • el: the .info-card DOM element
+//     • anchorLL: the click latlng (shared by all cards in a session)
+//     • dx, dy: pixel offset from anchor to card top-left, in map-wrap coords;
+//                user-adjustable via drag
+//     • hit: the source hit object {kind, cadNum, name, desc, lat, lng, …}
+//
+// Lifecycle:
+//   click on map / cad / KML  →  closeAllInfoCards() → hits = _hitTestAllAtPoint(ll)
+//                              →  showInfoCardsAt(ll, hits) creates one card per hit
+//                              →  on drag/move/zoom: _redrawConnectors()
+//   click outside cards (incl. another map click) → closeAllInfoCards before reopening
+
+const _infoCards = new Map();      // id → entry
+let   _connectorSvg = null;        // <svg> element holding all lines
+let   _infoCardsContainer = null;  // <div> holding all .info-card elements
+let   _infoCardSeq = 0;            // monotonic id
+
+function _ensureInfoOverlay(){
+  if(_connectorSvg && _infoCardsContainer) return;
+  const mw = document.getElementById('map-wrap');
+  if(!mw) return;
+  if(!_connectorSvg){
+    _connectorSvg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+    _connectorSvg.id = 'info-connectors';
+    _connectorSvg.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:1900;width:100%;height:100%';
+    mw.appendChild(_connectorSvg);
+  }
+  if(!_infoCardsContainer){
+    _infoCardsContainer = document.createElement('div');
+    _infoCardsContainer.id = 'info-cards';
+    _infoCardsContainer.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:1901;width:100%;height:100%';
+    mw.appendChild(_infoCardsContainer);
+  }
 }
+
+function closeAllInfoCards(){
+  _infoCards.forEach(c => c.el.remove());
+  _infoCards.clear();
+  if(_connectorSvg) _connectorSvg.innerHTML = '';
+}
+
+// Hit-test: return all objects (cad placemarks + parsed-KML placemarks) whose
+// geometry contains/is at the given latlng. Reuses `_gatherMarkers` so it sees
+// exactly what the markers panel sees.
+function _hitTestAllAtPoint(latlng){
+  const hits = [];
+  if(typeof _gatherMarkers !== 'function') return hits;
+  const buckets = _gatherMarkers();
+  for(const grp of ['zu','oks','exp']){
+    for(const m of buckets[grp]){
+      if(_hitTestMarker(m, latlng.lat, latlng.lng)){
+        hits.push({kind: grp, marker: m});
+      }
+    }
+  }
+  return hits;
+}
+
+// Open cards. If no hits → single "Координаты" card (just the click point).
+// Multiple hits → one card per hit, fanned around the anchor in a circle.
+function showInfoCardsAt(latlng, hits){
+  closeAllInfoCards();
+  _ensureInfoOverlay();
+  const anchorLL = latlng;
+  // Coords card always first — gives the user the standard "request cadastre"
+  // and "add explanation" actions even when objects exist at the click.
+  _createInfoCard({type:'coords', lat:latlng.lat, lng:latlng.lng}, anchorLL, 0, hits.length + 1);
+  hits.forEach((hit, i) => {
+    _createInfoCard({type:'object', hit}, anchorLL, i + 1, hits.length + 1);
+  });
+  _redrawConnectors();
+}
+
+// Compute the initial pixel offset (dx, dy) for card index i out of total N.
+// Cards fan out clockwise around the anchor at radius R, so they don't overlap.
+function _initialCardOffset(idx, total){
+  const R = 130;
+  // Spread over a 270° arc (top-left to bottom-left, skipping the area directly
+  // below the anchor which often holds tooltips). Angle 0 = right.
+  const startAngle = -Math.PI * 0.7;   // ≈ -126°
+  const endAngle   =  Math.PI * 0.7;   // ≈  126°
+  const t = total > 1 ? (idx / (total - 1)) : 0.5;
+  const a = startAngle + t * (endAngle - startAngle);
+  return { dx: Math.cos(a) * R, dy: Math.sin(a) * R - 60 };
+}
+
+function _createInfoCard(payload, anchorLL, idx, total){
+  _ensureInfoOverlay();
+  const id = ++_infoCardSeq;
+  const el = document.createElement('div');
+  el.className = 'info-card';
+  el.dataset.cardId = id;
+  el.style.pointerEvents = 'auto';
+
+  // Build inner HTML based on payload type
+  if(payload.type === 'coords'){
+    el.innerHTML = _renderCoordsCard(payload.lat, payload.lng, id);
+  } else if(payload.type === 'object'){
+    el.innerHTML = _renderObjectCard(payload.hit, id);
+  }
+
+  _infoCardsContainer.appendChild(el);
+
+  // Initial position
+  const offset = _initialCardOffset(idx, total);
+  const anchorPt = map.latLngToContainerPoint(anchorLL);
+  const cardW = el.offsetWidth || 240;
+  const cardH = el.offsetHeight || 140;
+  const mw = document.getElementById('map-wrap');
+  const W = mw.offsetWidth, H = mw.offsetHeight;
+  let x = anchorPt.x + offset.dx - cardW/2;
+  let y = anchorPt.y + offset.dy - cardH/2;
+  // Clamp to viewport
+  x = Math.max(8, Math.min(W - cardW - 8, x));
+  y = Math.max(8, Math.min(H - cardH - 8, y));
+  el.style.left = x + 'px';
+  el.style.top  = y + 'px';
+
+  const entry = { el, anchorLL, dx: x - anchorPt.x, dy: y - anchorPt.y, payload };
+  _infoCards.set(id, entry);
+
+  // Drag handle: header bar
+  _attachInfoCardDrag(el, entry);
+
+  // Close button delegate
+  el.querySelector('.ic-close')?.addEventListener('click', e => {
+    e.stopPropagation();
+    el.remove();
+    _infoCards.delete(id);
+    _redrawConnectors();
+  });
+
+  return entry;
+}
+
+function _attachInfoCardDrag(el, entry){
+  const handle = el.querySelector('.ic-header') || el;
+  let dragging = false, sx=0, sy=0, ox=0, oy=0;
+  handle.addEventListener('mousedown', e => {
+    if(e.target.closest('button')) return;  // don't drag when clicking a button
+    dragging = true;
+    sx = e.clientX; sy = e.clientY;
+    ox = parseInt(el.style.left, 10) || 0;
+    oy = parseInt(el.style.top, 10)  || 0;
+    el.classList.add('dragging');
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if(!dragging) return;
+    const mw = document.getElementById('map-wrap');
+    const W = mw.offsetWidth, H = mw.offsetHeight;
+    const cw = el.offsetWidth, ch = el.offsetHeight;
+    const nx = Math.max(0, Math.min(W - cw, ox + (e.clientX - sx)));
+    const ny = Math.max(0, Math.min(H - ch, oy + (e.clientY - sy)));
+    el.style.left = nx + 'px';
+    el.style.top  = ny + 'px';
+    // Update entry's pixel-delta-from-anchor so it survives map move
+    const ap = map.latLngToContainerPoint(entry.anchorLL);
+    entry.dx = nx - ap.x;
+    entry.dy = ny - ap.y;
+    _redrawConnectors();
+  });
+  document.addEventListener('mouseup', () => {
+    if(dragging){ dragging = false; el.classList.remove('dragging'); }
+  });
+}
+
+// Recompute connector lines + reposition cards relative to current map state.
+// Cards stick to their anchor latlng — when the map pans, they pan with it.
+function _redrawConnectors(){
+  if(!_connectorSvg) return;
+  _connectorSvg.innerHTML = '';
+  if(_infoCards.size === 0) return;
+  // For each card: compute current anchor pixel, set card position = anchor + delta,
+  // then draw connector line + small dot at anchor.
+  let drewAnchor = false;
+  _infoCards.forEach(entry => {
+    const ap = map.latLngToContainerPoint(entry.anchorLL);
+    const cw = entry.el.offsetWidth, ch = entry.el.offsetHeight;
+    const x = ap.x + entry.dx;
+    const y = ap.y + entry.dy;
+    entry.el.style.left = x + 'px';
+    entry.el.style.top  = y + 'px';
+    // Connector: from anchor to nearest edge of card
+    const cx = x + cw/2, cy = y + ch/2;
+    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1', ap.x);
+    line.setAttribute('y1', ap.y);
+    line.setAttribute('x2', cx);
+    line.setAttribute('y2', cy);
+    line.setAttribute('stroke', '#e8ff47');
+    line.setAttribute('stroke-width', '1');
+    line.setAttribute('stroke-opacity', '0.55');
+    line.setAttribute('stroke-dasharray', '3,3');
+    _connectorSvg.appendChild(line);
+    if(!drewAnchor){
+      const dot = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      dot.setAttribute('cx', ap.x);
+      dot.setAttribute('cy', ap.y);
+      dot.setAttribute('r', '4');
+      dot.setAttribute('fill', '#e8ff47');
+      dot.setAttribute('stroke', '#0d0f14');
+      dot.setAttribute('stroke-width', '1.5');
+      _connectorSvg.appendChild(dot);
+      drewAnchor = true;
+    }
+  });
+}
+
+// ── Card renderers ─────────────────────────────────────────────────
+// Compact coords card with copy buttons (Task 6).
+// No "🗺" icon, smaller fields, copy-icon next to coords.
+function _renderCoordsCard(lat, lng, cardId){
+  const ll = `${(+lat).toFixed(6)}, ${(+lng).toFixed(6)}`;
+  return (
+    `<div class="ic-header">`+
+      `<span class="ic-title">📍 Координаты</span>`+
+      `<button class="ic-close" title="Закрыть">×</button>`+
+    `</div>`+
+    `<div class="ic-body">`+
+      `<div class="ic-coords-row">`+
+        `<code class="ic-coords">${ll}</code>`+
+        `<button class="ic-copy" title="Копировать координаты" onclick="_copyToClip('${ll}', this)">⎘</button>`+
+      `</div>`+
+      `<button class="ic-action ic-orange" onclick="queryNSPDAtPoint()" title="Запросить кадастр в этой точке">📍 Запросить кадастр</button>`+
+      `<button class="ic-action ic-cyan"   onclick="startExplanationPoint(${+lat},${+lng})" title="Добавить точку-пояснение">💬 Добавить пояснение</button>`+
+    `</div>`
+  );
+}
+
+// Object card: name + cadnum + description, with copy-text icon (Task 6).
+function _renderObjectCard(hit, cardId){
+  const m = hit.marker;
+  const groupTitle = hit.kind === 'zu'  ? 'Земельный участок'
+                  :  hit.kind === 'oks' ? 'ОКС / Сооружение'
+                  :                       'Пояснение';
+  const groupClass = hit.kind === 'zu'  ? 'ic-zu'
+                  :  hit.kind === 'oks' ? 'ic-oks'
+                  :                       'ic-exp';
+  const safeName = _escapeHtml(m.name || '(без названия)');
+  const safeDesc = _escapeHtml(m.desc || '');
+  const fullText = `${m.name || ''}${m.desc ? '\n' + m.desc : ''}`;
+  const fullTextEsc = fullText.replace(/'/g,"\\'").replace(/\n/g,'\\n');
+  return (
+    `<div class="ic-header ${groupClass}">`+
+      `<span class="ic-title">${groupTitle}</span>`+
+      `<button class="ic-close" title="Закрыть">×</button>`+
+    `</div>`+
+    `<div class="ic-body">`+
+      `<div class="ic-name">${safeName}</div>`+
+      (safeDesc ? `<div class="ic-desc">${safeDesc}</div>` : '')+
+      `<button class="ic-copy ic-copy-bottom" title="Копировать текст" onclick="_copyToClip('${fullTextEsc}', this)">⎘ Копировать</button>`+
+    `</div>`
+  );
+}
+
+// Copy helper used by all info-card buttons. Briefly flashes the button to
+// confirm the action.
+window._copyToClip = function(text, btn){
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); }catch(_){}
+    document.body.removeChild(ta);
+  };
+  const flash = () => {
+    if(!btn) return;
+    const orig = btn.textContent;
+    btn.classList.add('flashed');
+    btn.textContent = '✓';
+    setTimeout(() => { btn.classList.remove('flashed'); btn.textContent = orig; }, 900);
+  };
+  if(navigator.clipboard?.writeText){
+    navigator.clipboard.writeText(text).then(flash, () => { fallback(); flash(); });
+  } else { fallback(); flash(); }
+};
+
+// ── Map click pipeline (v61) ──────────────────────────────────────
+// Single entry point for ALL map-area clicks. Hit-tests, opens cards, and
+// auto-switches sidebar tabs per Task 3.
+function _handleMapAreaClick(latlng){
+  closeAllInfoCards();
+  const hits = _hitTestAllAtPoint(latlng);
+  showInfoCardsAt(latlng, hits);
+  // Task 3: switch to "Метки" tab if there are object hits and the user isn't
+  // currently working with photos. (Photo clicks go through the photo-marker's
+  // own handler which calls openLightbox and stays on Фото tab.)
+  if(hits.length > 0 && typeof switchSidebarTab === 'function'){
+    switchSidebarTab('marks');
+    if(window.activateMarkersAtLatLng) window.activateMarkersAtLatLng(latlng);
+  }
+}
+
+// Keep original buildCoordPopup name as a no-op stub so older callsites that
+// still try to invoke it during transition don't crash. Returns empty string.
+function buildCoordPopup(){ return ''; }
 
 // ═══ STATE ════════════════════════════════════════════════════════
 let photos=[],activeIdx=null,lbLL=null,lbScale=1;
@@ -2650,12 +2989,14 @@ function renderKMLOnMap(parsed){
     else if(pm.type==='LineString')layer=L.polyline(pm.coords,{color:pm.style.lineColor,weight:pm.style.lineWidth});
     else if(pm.type==='Point')layer=L.circleMarker(pm.coords,{radius:7,color:pm.style.lineColor,fillColor:pm.style.lineColor,fillOpacity:.85,weight:2});
     if(layer){
-      layer.on('click',e=>{L.DomEvent.stopPropagation(e);window.lastClickedPoint=e.latlng;L.popup({maxWidth:224}).setLatLng(e.latlng).setContent(buildCoordPopup(e.latlng.lat.toFixed(6),e.latlng.lng.toFixed(6),pm.name||pm.desc,pm.name?pm.desc:'')).openOn(map);if(window.activateMarkersAtLatLng)window.activateMarkersAtLatLng(e.latlng);});
-      // v60: bindTooltip removed — user wants info only on click, not on hover.
+      // v61: click delegates to the unified map-area pipeline. Hit-test will
+      // re-discover this same placemark plus any others overlapping the click.
+      layer.on('click', e => {
+        L.DomEvent.stopPropagation(e);
+        window.lastClickedPoint = e.latlng;
+        _handleMapAreaClick(e.latlng);
+      });
       layer.addTo(lg);
-      // Per-marker visibility (Task 1, v59): retain a reference to the leaflet layer
-      // and a default-true visibility flag. The marker list checkboxes flip this
-      // flag and add/remove the sublayer from its parent layerGroup.
       pm._leafletLayer = layer;
       pm._parentGroup  = lg;
       if(pm._visible === undefined) pm._visible = true;
@@ -3016,24 +3357,22 @@ function _gatherMarkers(){
         (pm.name||'').includes(c.cadNum) || (pm.desc||'').includes(c.cadNum));
       if(alreadyTracked) return;
       // Classify: styleUrl pattern → explicit type; otherwise rich heuristic.
-      // (v60 fix) Earlier "starts-with" check missed real ZU placemarks like
-      // "Пляж" with desc "90:25:020102:119 · 7022 кв.м · Земли населённых пунктов".
-      // Now we look at WHOLE name+desc for any ZU signature:
-      //   • "Земли" (земли населённых пунктов / лесного фонда / etc.)
-      //   • "земельн" (земельный участок, земельные участки)
-      //   • " кв.м" or " м²" together with "Земли" — a ZU always has area
-      //   • styleUrl beginning #cad_zu_… (our own KML)
+      // (v61) Match the "земл" word-root anywhere in name OR desc — covers
+      // "Земля под канаткой" / "Земельный участок" / "Земли населённых пунктов" /
+      // "Пляж … 7022 кв.м · Земли" all in one regex. Word-boundary check (\b before
+      // the prefix) avoids false positives on words like "примЗемлерь".
       let bucket = 'oks';
       const blob = `${pm.name||''} | ${pm.desc||''}`.toLowerCase();
+      const looksLikeZU = /(^|[^a-zа-яё])земл/i.test(blob);
       if(pm.styleUrl){
         if(/cad_zu_/i.test(pm.styleUrl))       bucket = 'zu';
         else if(/cad_exp_/i.test(pm.styleUrl)) bucket = 'exp';
         else if(/cad_oks_/i.test(pm.styleUrl)) bucket = 'oks';
-        else if(/земельн|земли\s/.test(blob))  bucket = 'zu';
+        else if(looksLikeZU)                   bucket = 'zu';
         else if(pm.type === 'Point')           bucket = 'exp';
       } else if(pm.type === 'Point'){
         bucket = 'exp';
-      } else if(/земельн|земли\s/.test(blob)){
+      } else if(looksLikeZU){
         bucket = 'zu';
       }
       const ll = pm.coords ? (pm.type === 'Point' ? pm.coords : pm.coords[0]) : null;
@@ -3200,38 +3539,30 @@ function _refreshGroupCheckbox(grp, items){
 }
 
 function _flyToMarker(m){
-  // Task 2 (v59): smooth fly + open the coord popup for this object so the user
-  // sees the map pan towards the selection AND immediately gets the object's
-  // info card (same popup as a direct map click would show).
-  // Task 5 (v60): clicking a row also re-enables the marker if it was hidden —
-  // showing the object on the map is the whole point of selecting it. Updates
-  // the per-marker checkbox to reflect the new visible state.
+  // Task 5 + 2 (v59-v61): smooth fly + open info card(s) anchored at the marker.
+  // v61: replaced the L.popup-based path with the new info-cards pipeline. This
+  // gives a draggable card with a connector line back to the anchor — and if
+  // the user later clicks the same point on the map they get the same UI.
+  // Re-enables visibility if the marker was hidden (Task 5).
   if(!m || !m.latlng) return;
   const [lat, lon] = m.latlng;
   if(typeof map === 'undefined' || lat == null || lon == null) return;
 
   if(m.pmRef && m.pmRef._visible === false){
     setMarkerVisible(m.pmRef, true);
-    // Refresh the row's checkbox so it visually matches the new state
     const cb = document.querySelector(`.mark-item[data-mark-id="${CSS.escape(m.id)}"] input[type=checkbox]`);
     if(cb) cb.checked = true;
-    // And the group-level master checkbox state
     const grp = m.id.split(':')[0] === 'cad'
       ? (m.pmRef.type === 'zu' ? 'zu' : m.pmRef.type === 'exp' ? 'exp' : 'oks')
       : null;
     if(grp) _refreshGroupCheckbox(grp);
   }
 
-  // flyTo gives a smooth pan+zoom; setView is jarring. duration ~1s.
   const targetZoom = Math.max(map.getZoom(), 18);
   map.flyTo([lat, lon], targetZoom, {animate:true, duration:0.8});
-  // Open the coord popup. Use buildCoordPopup so the format matches a direct
-  // map-click — name, description, and the standard action buttons.
   window.lastClickedPoint = L.latLng(lat, lon);
-  const popup = L.popup({maxWidth:224})
-    .setLatLng([lat, lon])
-    .setContent(buildCoordPopup(lat.toFixed(6), lon.toFixed(6), m.name, m.desc));
-  setTimeout(() => popup.openOn(map), 850);
+  // After fly settles, open the info card(s) at the marker's anchor point
+  setTimeout(() => _handleMapAreaClick(L.latLng(lat, lon)), 850);
   // Highlight the row
   document.querySelectorAll('.mark-item').forEach(el => el.classList.remove('active'));
   const row = document.querySelector(`.mark-item[data-mark-id="${CSS.escape(m.id)}"]`);
@@ -3426,6 +3757,11 @@ const ICON={
 
 async function openLightbox(idx,latlng){
   const p=photos[idx];if(!p)return;
+  // Task 2 (v61): selecting a photo means the user wants to see its location on
+  // the map — auto-enable the photo-markers layer if it was toggled off.
+  if(typeof _photosVisible !== 'undefined' && !_photosVisible && typeof setPhotoMarkersVisible === 'function'){
+    setPhotoMarkersVisible(true);
+  }
   activeIdx=idx;lbLL=latlng;lbScale=1;lbManualPos=false; // reset drag on new photo
   document.querySelectorAll('.photo-item').forEach(el=>el.classList.remove('active'));
   const item=document.querySelector(`.photo-item[data-idx="${idx}"]`);
@@ -4139,20 +4475,13 @@ function _makeCadLayer(geom, type, interactive) {
 }
 
 function _attachCadEvents(layer, cadNum, type, lines) {
-  // v60: hover handlers REMOVED per user request.
-  //   • No more mouseover/mousemove/mouseout — they showed a tooltip and
-  //     highlighted a "capture rectangle" around the polygon, which was distracting
-  //     when working with dense maps.
-  //   • Cad info is now shown ONLY on click — a popup with full details.
-  //   • cadHoveredFeatures stays declared elsewhere but is unused now.
+  // v61: hover-free, single click handler that delegates to the unified
+  // map-click pipeline. The pipeline does its own hit-testing across all
+  // overlapping objects and opens one info card per match.
   layer.on('click', e => {
     L.DomEvent.stopPropagation(e);
     window.lastClickedPoint = e.latlng;
-    L.popup({maxWidth:340})
-      .setLatLng(e.latlng)
-      .setContent(_cadPopup(e.latlng.lat.toFixed(6), e.latlng.lng.toFixed(6), type, cadNum, lines))
-      .openOn(map);
-    if(window.activateMarkersAtLatLng) window.activateMarkersAtLatLng(e.latlng);
+    _handleMapAreaClick(e.latlng);
   });
 }
 
