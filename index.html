@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.21</title>
+<title>EkceloFoto v2.9.22</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -574,7 +574,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.21</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.22</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -1041,9 +1041,10 @@ function _getActiveIds(){
 
 function toggleCadastreMenu(e){
   e && e.stopPropagation();
+  // v60 (Task 7): close KML dropdown when opening Кадастр so they don't overlap
+  document.getElementById('kml-dropdown')?.classList.remove('open');
   const dd = document.getElementById('cadastre-dropdown');
   dd.classList.toggle('open');
-  // If opening for the first time, activate default checked groups
   if (dd.classList.contains('open') && !cadastreActive) _applyCadastreLayers();
 }
 document.addEventListener('click', e=>{
@@ -2227,6 +2228,11 @@ map.on('click',function(e){
   if(window.activateMarkersAtLatLng) window.activateMarkersAtLatLng(e.latlng);
 });
 map.on('move zoom',()=>{if(lbLL&&document.getElementById('lightbox').classList.contains('visible'))posLightbox(lbLL,true);});
+// v60 fix: when the user pans, leaflet renders/re-renders markers lazily —
+// new DOM nodes don't carry the .active class that was set on the previous
+// node (which has been thrown away). Re-apply on every moveend so the yellow
+// "selected photo" dot stays visible when the user explores the map.
+map.on('moveend zoomend',()=>{ if(activeIdx!==null) setActiveMarker(activeIdx); });
 
 function buildCoordPopup(lat,lng,kmlName,kmlDesc){
   // Compact layout for the 30%-narrower (224px) popup: smaller font, tighter buttons
@@ -2645,7 +2651,7 @@ function renderKMLOnMap(parsed){
     else if(pm.type==='Point')layer=L.circleMarker(pm.coords,{radius:7,color:pm.style.lineColor,fillColor:pm.style.lineColor,fillOpacity:.85,weight:2});
     if(layer){
       layer.on('click',e=>{L.DomEvent.stopPropagation(e);window.lastClickedPoint=e.latlng;L.popup({maxWidth:224}).setLatLng(e.latlng).setContent(buildCoordPopup(e.latlng.lat.toFixed(6),e.latlng.lng.toFixed(6),pm.name||pm.desc,pm.name?pm.desc:'')).openOn(map);if(window.activateMarkersAtLatLng)window.activateMarkersAtLatLng(e.latlng);});
-      if(pm.name||pm.desc)layer.bindTooltip(`<b>${esc(pm.name||'')}</b>${pm.desc?'<br><small>'+esc(pm.desc)+'</small>':''}`,{sticky:true,opacity:.92});
+      // v60: bindTooltip removed — user wants info only on click, not on hover.
       layer.addTo(lg);
       // Per-marker visibility (Task 1, v59): retain a reference to the leaflet layer
       // and a default-true visibility flag. The marker list checkboxes flip this
@@ -2866,10 +2872,11 @@ function renderKMLDropdown(){
   document.getElementById('kml-btn').classList.toggle('active',kmlLayers.some(l=>l.visible));
 }
 function toggleKMLMenu(ev){
-  // Stop the click from bubbling to document, where the global outside-click
-  // handler (line ~2266) calls closeKMLMenu() — which would immediately close
-  // the dropdown we just opened. Same defensive pattern used in toggleUploadMenu.
   if(ev) ev.stopPropagation();
+  // v60 (Task 7): mutually-exclusive dropdowns. Opening one closes the other so
+  // they don't overlap visually (cad menu sits left of KML menu and they would
+  // otherwise stack on top of each other when both open).
+  document.getElementById('cadastre-dropdown')?.classList.remove('open');
   document.getElementById('kml-dropdown').classList.toggle('open');
 }
 function closeKMLMenu(){document.getElementById('kml-dropdown').classList.remove('open');}
@@ -3008,14 +3015,25 @@ function _gatherMarkers(){
       const alreadyTracked = (layer.cadPlacemarks || []).some(c =>
         (pm.name||'').includes(c.cadNum) || (pm.desc||'').includes(c.cadNum));
       if(alreadyTracked) return;
+      // Classify: styleUrl pattern → explicit type; otherwise rich heuristic.
+      // (v60 fix) Earlier "starts-with" check missed real ZU placemarks like
+      // "Пляж" with desc "90:25:020102:119 · 7022 кв.м · Земли населённых пунктов".
+      // Now we look at WHOLE name+desc for any ZU signature:
+      //   • "Земли" (земли населённых пунктов / лесного фонда / etc.)
+      //   • "земельн" (земельный участок, земельные участки)
+      //   • " кв.м" or " м²" together with "Земли" — a ZU always has area
+      //   • styleUrl beginning #cad_zu_… (our own KML)
       let bucket = 'oks';
+      const blob = `${pm.name||''} | ${pm.desc||''}`.toLowerCase();
       if(pm.styleUrl){
         if(/cad_zu_/i.test(pm.styleUrl))       bucket = 'zu';
         else if(/cad_exp_/i.test(pm.styleUrl)) bucket = 'exp';
         else if(/cad_oks_/i.test(pm.styleUrl)) bucket = 'oks';
+        else if(/земельн|земли\s/.test(blob))  bucket = 'zu';
+        else if(pm.type === 'Point')           bucket = 'exp';
       } else if(pm.type === 'Point'){
         bucket = 'exp';
-      } else if(/^(зу|земельн)/i.test(pm.name||'') || /^(зу|земельн)/i.test(pm.desc||'')){
+      } else if(/земельн|земли\s/.test(blob)){
         bucket = 'zu';
       }
       const ll = pm.coords ? (pm.type === 'Point' ? pm.coords : pm.coords[0]) : null;
@@ -3185,9 +3203,25 @@ function _flyToMarker(m){
   // Task 2 (v59): smooth fly + open the coord popup for this object so the user
   // sees the map pan towards the selection AND immediately gets the object's
   // info card (same popup as a direct map click would show).
+  // Task 5 (v60): clicking a row also re-enables the marker if it was hidden —
+  // showing the object on the map is the whole point of selecting it. Updates
+  // the per-marker checkbox to reflect the new visible state.
   if(!m || !m.latlng) return;
   const [lat, lon] = m.latlng;
   if(typeof map === 'undefined' || lat == null || lon == null) return;
+
+  if(m.pmRef && m.pmRef._visible === false){
+    setMarkerVisible(m.pmRef, true);
+    // Refresh the row's checkbox so it visually matches the new state
+    const cb = document.querySelector(`.mark-item[data-mark-id="${CSS.escape(m.id)}"] input[type=checkbox]`);
+    if(cb) cb.checked = true;
+    // And the group-level master checkbox state
+    const grp = m.id.split(':')[0] === 'cad'
+      ? (m.pmRef.type === 'zu' ? 'zu' : m.pmRef.type === 'exp' ? 'exp' : 'oks')
+      : null;
+    if(grp) _refreshGroupCheckbox(grp);
+  }
+
   // flyTo gives a smooth pan+zoom; setView is jarring. duration ~1s.
   const targetZoom = Math.max(map.getZoom(), 18);
   map.flyTo([lat, lon], targetZoom, {animate:true, duration:0.8});
@@ -3197,7 +3231,6 @@ function _flyToMarker(m){
   const popup = L.popup({maxWidth:224})
     .setLatLng([lat, lon])
     .setContent(buildCoordPopup(lat.toFixed(6), lon.toFixed(6), m.name, m.desc));
-  // Wait for flyTo to settle before opening so the popup lands at the new viewport center
   setTimeout(() => popup.openOn(map), 850);
   // Highlight the row
   document.querySelectorAll('.mark-item').forEach(el => el.classList.remove('active'));
@@ -3209,33 +3242,87 @@ function _flyToMarker(m){
 // map. Highlights ALL matching sidebar entries (a single click can hit a ZU
 // polygon AND an OKS polygon AND an exp pin if they overlap) and scrolls them
 // into view in their respective sub-group.
+// v60: precise point-in-polygon hit-test instead of the loose 500m bbox check.
+// Activates ONLY markers whose geometry actually contains (or is at) the click.
+// • Polygon — ray-cast point-in-polygon on outer ring (KML coords [lat,lon])
+// • Point   — distance ≤ ~11m
+// Multiple groups can match (a building can sit on a parcel and overlap a pin),
+// so all matching groups light up — but only the matching ROWS, not whole groups.
 window.activateMarkersAtLatLng = function(latlng){
   if(_activeSidebarTab !== 'marks') return;
   if(!latlng) return;
   const buckets = _gatherMarkers();
   document.querySelectorAll('.mark-item').forEach(el => el.classList.remove('active'));
+  let firstActiveRow = null;
   for(const grp of ['zu','oks','exp']){
     for(const m of buckets[grp]){
-      if(!m.latlng) continue;
-      const [lat0, lon0] = m.latlng;  // Leaflet [lat,lon]
-      // For polygons we compare the FIRST vertex (cheap; full point-in-polygon
-      // would require carrying full ring data into _gatherMarkers). Tolerance is
-      // looser for polygons (their first vertex can be hundreds of metres from
-      // a click anywhere inside the shape).
-      const isPolygon = m.source === 'cad'
-                     || /cad_(zu|oks)/.test(m.id)
-                     || (kmlLayers[m.layerIdx]?.parsedData?.placemarks?.[m.innerIdx]?.type === 'Polygon');
-      const tol = isPolygon ? 0.005 : 0.0001;  // ~500 m polygon, ~11 m point
-      if(Math.abs(lat0 - latlng.lat) < tol && Math.abs(lon0 - latlng.lng) < tol){
-        const row = document.querySelector(`.mark-item[data-mark-id="${CSS.escape(m.id)}"]`);
-        if(row){
-          row.classList.add('active');
-          row.scrollIntoView({behavior:'smooth', block:'nearest'});
-        }
+      if(!_hitTestMarker(m, latlng.lat, latlng.lng)) continue;
+      const row = document.querySelector(`.mark-item[data-mark-id="${CSS.escape(m.id)}"]`);
+      if(row){
+        row.classList.add('active');
+        if(!firstActiveRow) firstActiveRow = row;
       }
     }
   }
+  // Scroll only the FIRST match into view; others may be in different group panels
+  // (with their own scrollers) and will already be visible if the user has the
+  // group expanded.
+  if(firstActiveRow) firstActiveRow.scrollIntoView({behavior:'smooth', block:'nearest'});
 };
+
+// Determine if a click at (clickLat, clickLon) lies inside / on a marker.
+// For polygons we use ray-casting on the outer ring; for points we use a small
+// distance threshold (~11m at the equator).
+function _hitTestMarker(m, clickLat, clickLon){
+  if(!m || !m.pmRef) return false;
+  const pm = m.pmRef;
+  // Cad placemark — geom is GeoJSON, coordinates [lon, lat]
+  if(m.source === 'cad'){
+    const g = pm.geom;
+    if(!g) return false;
+    if(g.type === 'Point'){
+      const [lon, lat] = g.coordinates;
+      return Math.abs(lat - clickLat) < 0.0001 && Math.abs(lon - clickLon) < 0.0001;
+    }
+    if(g.type === 'Polygon'){
+      const ring = (g.coordinates[0] || []).map(([lon, lat]) => [lat, lon]); // → [[lat,lon],…]
+      return _pointInRing(clickLat, clickLon, ring);
+    }
+    if(g.type === 'MultiPolygon'){
+      for(const poly of g.coordinates){
+        const ring = (poly[0] || []).map(([lon, lat]) => [lat, lon]);
+        if(_pointInRing(clickLat, clickLon, ring)) return true;
+      }
+      return false;
+    }
+    return false;
+  }
+  // Parsed KML placemark — coords are already [lat, lon] for Point, [[lat,lon],…] for Polygon
+  if(pm.type === 'Point'){
+    const [lat, lon] = pm.coords;
+    return Math.abs(lat - clickLat) < 0.0001 && Math.abs(lon - clickLon) < 0.0001;
+  }
+  if(pm.type === 'Polygon' && pm.coords?.length){
+    return _pointInRing(clickLat, clickLon, pm.coords);
+  }
+  return false;
+}
+
+// Ray-casting point-in-polygon. ring = [[lat,lon], …]. Self-closing or open both
+// supported (we treat the segment from last vertex back to first as also part of
+// the polygon edges).
+function _pointInRing(lat, lon, ring){
+  if(!ring || ring.length < 3) return false;
+  let inside = false;
+  for(let i = 0, j = ring.length - 1; i < ring.length; j = i++){
+    const [lat_i, lon_i] = ring[i];
+    const [lat_j, lon_j] = ring[j];
+    const intersect = ((lat_i > lat) !== (lat_j > lat)) &&
+                      (lon < (lon_j - lon_i) * (lat - lat_i) / (lat_j - lat_i) + lon_i);
+    if(intersect) inside = !inside;
+  }
+  return inside;
+}
 
 
 function renderList(){
@@ -3398,6 +3485,12 @@ function posLightbox(latlng,fast=false){
 // Item 3: draggable lightbox via filename bar ─────────────────────
 let lbManualPos=false; // set when user drags, prevents map auto-reposition
 (function initLightboxDrag(){
+  // v60 fix: #lightbox is `position:absolute` inside #map-wrap, so style.left/top
+  // values are ALREADY in map-wrap's coordinate space. The earlier code subtracted
+  // map-wrap's viewport offset on mousedown but then added the raw cursor delta
+  // on mousemove — meaning the lightbox jumped by exactly map-wrap.left pixels
+  // and then drifted by the same amount on every mousemove. The fix is to keep
+  // the entire calculation in the same coordinate space (map-wrap-local).
   let dragging=false, startX=0, startY=0, origL=0, origT=0;
   const handle=()=>document.getElementById('lb-filename-bar');
   const lb=()=>document.getElementById('lightbox');
@@ -3407,9 +3500,9 @@ let lbManualPos=false; // set when user drags, prevents map auto-reposition
     if(!lb().classList.contains('visible'))return;
     dragging=true;
     startX=e.clientX; startY=e.clientY;
-    const mw=document.getElementById('map-wrap').getBoundingClientRect();
-    origL=parseInt(lb().style.left||'0')-mw.left;
-    origT=parseInt(lb().style.top||'0')-mw.top;
+    // style.left/top are px relative to #map-wrap (the offset parent). No subtraction.
+    origL = parseInt(lb().style.left||'0', 10);
+    origT = parseInt(lb().style.top ||'0', 10);
     lb().classList.add('no-transition');
     e.preventDefault();
   });
@@ -4046,11 +4139,21 @@ function _makeCadLayer(geom, type, interactive) {
 }
 
 function _attachCadEvents(layer, cadNum, type, lines) {
-  const fi = { priority: type === 'zu' ? 3 : 2, cadNum, type, lines };
-  layer.on('mouseover', e => { cadHoveredFeatures = cadHoveredFeatures.filter(f => f.cadNum !== cadNum); cadHoveredFeatures.push(fi); _showCadTip(e.originalEvent); });
-  layer.on('mousemove', e => _showCadTip(e.originalEvent));
-  layer.on('mouseout',  () => { cadHoveredFeatures = cadHoveredFeatures.filter(f => f.cadNum !== cadNum); if (!cadHoveredFeatures.length) _hideCadTip(); });
-  layer.on('click', e => { L.DomEvent.stopPropagation(e); window.lastClickedPoint = e.latlng; L.popup({maxWidth:340}).setLatLng(e.latlng).setContent(_cadPopup(e.latlng.lat.toFixed(6), e.latlng.lng.toFixed(6), type, cadNum, lines)).openOn(map); if(window.activateMarkersAtLatLng) window.activateMarkersAtLatLng(e.latlng); });
+  // v60: hover handlers REMOVED per user request.
+  //   • No more mouseover/mousemove/mouseout — they showed a tooltip and
+  //     highlighted a "capture rectangle" around the polygon, which was distracting
+  //     when working with dense maps.
+  //   • Cad info is now shown ONLY on click — a popup with full details.
+  //   • cadHoveredFeatures stays declared elsewhere but is unused now.
+  layer.on('click', e => {
+    L.DomEvent.stopPropagation(e);
+    window.lastClickedPoint = e.latlng;
+    L.popup({maxWidth:340})
+      .setLatLng(e.latlng)
+      .setContent(_cadPopup(e.latlng.lat.toFixed(6), e.latlng.lng.toFixed(6), type, cadNum, lines))
+      .openOn(map);
+    if(window.activateMarkersAtLatLng) window.activateMarkersAtLatLng(e.latlng);
+  });
 }
 
 function _showCadTip(ev) {
