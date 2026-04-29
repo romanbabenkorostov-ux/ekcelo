@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.20</title>
+<title>EkceloFoto v2.9.21</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -133,6 +133,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .marks-group-header{display:flex;align-items:center;gap:6px;padding:7px 10px;background:#0a0a0a;border-bottom:1px solid #1a1a1a;cursor:pointer;user-select:none;flex-shrink:0;transition:background .12s}
 .marks-group-header:hover{background:#141414}
 .marks-group-header > span:first-child{font-size:9px;color:#888;width:10px}
+.mg-master-cb{margin:0 6px 0 0;flex-shrink:0;accent-color:var(--accent2);cursor:pointer;width:13px;height:13px}
+.mg-master-cb:disabled{opacity:.35;cursor:not-allowed}
 .mg-icon{font-size:12px;width:14px;text-align:center;display:inline-block}
 .mg-icon-zu{color:#3ec870}
 .mg-icon-oks{color:#c180f0}
@@ -572,7 +574,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.20</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.21</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -791,8 +793,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
   <div id="kml-wrap">
     <!-- v58: master visibility toggle moved to the stats panel (#stat-kml-toggle)
          to sit next to #stat-photos-toggle. Only the dropdown trigger remains here. -->
-    <button id="kml-btn" onclick="toggleKMLMenu()" title="Список загруженных KML">🗺 KML ▾</button>
-    <div id="kml-dropdown"></div>
+    <button id="kml-btn" onclick="toggleKMLMenu(event)" title="Список загруженных KML">🗺 KML ▾</button>
+    <div id="kml-dropdown" onclick="event.stopPropagation()"></div>
   </div>
   <!-- Cadastre: button + layer dropdown -->
   <div id="cad-wrap">
@@ -2638,7 +2640,6 @@ function renderKMLOnMap(parsed){
   const lg=L.layerGroup();
   parsed.placemarks.forEach(pm=>{
     let layer;
-    // FIX: use pm.style.fillOpacity (actual alpha from KML) instead of hardcoded 1
     if(pm.type==='Polygon')layer=L.polygon(pm.coords,{color:pm.style.lineColor,weight:pm.style.lineWidth,fillColor:pm.style.fillColor,fillOpacity:pm.style.fillOpacity??0.1});
     else if(pm.type==='LineString')layer=L.polyline(pm.coords,{color:pm.style.lineColor,weight:pm.style.lineWidth});
     else if(pm.type==='Point')layer=L.circleMarker(pm.coords,{radius:7,color:pm.style.lineColor,fillColor:pm.style.lineColor,fillOpacity:.85,weight:2});
@@ -2646,6 +2647,12 @@ function renderKMLOnMap(parsed){
       layer.on('click',e=>{L.DomEvent.stopPropagation(e);window.lastClickedPoint=e.latlng;L.popup({maxWidth:224}).setLatLng(e.latlng).setContent(buildCoordPopup(e.latlng.lat.toFixed(6),e.latlng.lng.toFixed(6),pm.name||pm.desc,pm.name?pm.desc:'')).openOn(map);if(window.activateMarkersAtLatLng)window.activateMarkersAtLatLng(e.latlng);});
       if(pm.name||pm.desc)layer.bindTooltip(`<b>${esc(pm.name||'')}</b>${pm.desc?'<br><small>'+esc(pm.desc)+'</small>':''}`,{sticky:true,opacity:.92});
       layer.addTo(lg);
+      // Per-marker visibility (Task 1, v59): retain a reference to the leaflet layer
+      // and a default-true visibility flag. The marker list checkboxes flip this
+      // flag and add/remove the sublayer from its parent layerGroup.
+      pm._leafletLayer = layer;
+      pm._parentGroup  = lg;
+      if(pm._visible === undefined) pm._visible = true;
     }
   });
   return lg;
@@ -2858,7 +2865,13 @@ function renderKMLDropdown(){
   });
   document.getElementById('kml-btn').classList.toggle('active',kmlLayers.some(l=>l.visible));
 }
-function toggleKMLMenu(){document.getElementById('kml-dropdown').classList.toggle('open');}
+function toggleKMLMenu(ev){
+  // Stop the click from bubbling to document, where the global outside-click
+  // handler (line ~2266) calls closeKMLMenu() — which would immediately close
+  // the dropdown we just opened. Same defensive pattern used in toggleUploadMenu.
+  if(ev) ev.stopPropagation();
+  document.getElementById('kml-dropdown').classList.toggle('open');
+}
 function closeKMLMenu(){document.getElementById('kml-dropdown').classList.remove('open');}
 function toggleKMLLayer(idx,v){
   const l=kmlLayers[idx];if(!l)return;
@@ -2974,16 +2987,11 @@ function _gatherMarkers(){
     // (1) Contours saved via kdConfirm — explicit type, GeoJSON [lon,lat] geometry
     (layer.cadPlacemarks || []).forEach((pm, i) => {
       const bucket = pm.type === 'zu' ? 'zu' : pm.type === 'exp' ? 'exp' : 'oks';
-      // _markerLatLon returns [lat, lon] — same Leaflet convention used everywhere
-      // else in the marker module. _flyToMarker / activateMarkersAtLatLng all
-      // assume [lat, lon] now (fixed v58 — earlier code mixed conventions).
       const ll = pm.geom?.coordinates ? _markerLatLon(pm.geom) : null;
-      // Try to enrich the displayed name from the parsed KML placemark with the
-      // matching cadNum: this is the only way to surface user-given names like
-      // "Корпус №2, пл.7030,8м2" — `cadPlacemarks[i].cadNum` only holds the bare
-      // cad number. We keep `cadNum` as the technical fallback.
       const matched = layer.parsedData?.placemarks?.find(p =>
         (p.name||'').includes(pm.cadNum) || (p.desc||'').includes(pm.cadNum));
+      // pmRef is the SAME OBJECT as pm — letting checkbox handlers mutate _visible
+      // and add/remove the underlying leaflet sublayer (pm._leafletLayer).
       buckets[bucket].push({
         id:        `cad:${layerIdx}:${i}`,
         layerIdx, source:'cad', innerIdx:i,
@@ -2991,17 +2999,15 @@ function _gatherMarkers(){
         desc:      _markerDescFromLines(pm.lines) || matched?.desc || '',
         layerName: layer.docName || layer.filename || '',
         latlng:    ll,
-        visible:   layer.visible !== false,
+        layerVisible: layer.visible !== false,
+        markerVisible: pm._visible !== false,
+        pmRef: pm,
       });
     });
-    // (2) Placemarks from a loaded KML file (not added through the dialog).
-    // Skip those already covered by (1).
     (layer.parsedData?.placemarks || []).forEach((pm, i) => {
       const alreadyTracked = (layer.cadPlacemarks || []).some(c =>
         (pm.name||'').includes(c.cadNum) || (pm.desc||'').includes(c.cadNum));
       if(alreadyTracked) return;
-      // Classify: styleUrl pattern → explicit type; fallback by geometry type.
-      // Bonus heuristic: if name/desc contains "Земельн" or starts with "ЗУ" → ZU.
       let bucket = 'oks';
       if(pm.styleUrl){
         if(/cad_zu_/i.test(pm.styleUrl))       bucket = 'zu';
@@ -3012,9 +3018,6 @@ function _gatherMarkers(){
       } else if(/^(зу|земельн)/i.test(pm.name||'') || /^(зу|земельн)/i.test(pm.desc||'')){
         bucket = 'zu';
       }
-      // pm.coords is [lat, lon] for Point, [[lat,lon],...] for Polygon (Leaflet order).
-      // Use the FIRST vertex of a polygon as a representative point — good enough for
-      // fly-to and approximate hit-testing.
       const ll = pm.coords ? (pm.type === 'Point' ? pm.coords : pm.coords[0]) : null;
       buckets[bucket].push({
         id:        `pm:${layerIdx}:${i}`,
@@ -3023,11 +3026,31 @@ function _gatherMarkers(){
         desc:      pm.desc || '',
         layerName: layer.docName || layer.filename || '',
         latlng:    ll,
-        visible:   layer.visible !== false,
+        layerVisible: layer.visible !== false,
+        markerVisible: pm._visible !== false,
+        pmRef: pm,
       });
     });
   });
   return buckets;
+}
+
+// Show/hide a single placemark on the map by adding/removing its leaflet sublayer
+// from the parent layerGroup. The flag pm._visible carries the persistent state
+// (in-memory only — not written to localStorage; preferences reset between
+// reloads, which is acceptable for marker visibility).
+function setMarkerVisible(pm, visible){
+  if(!pm || !pm._leafletLayer || !pm._parentGroup) return;
+  pm._visible = !!visible;
+  if(visible){
+    if(!pm._parentGroup.hasLayer(pm._leafletLayer)){
+      pm._parentGroup.addLayer(pm._leafletLayer);
+    }
+  } else {
+    if(pm._parentGroup.hasLayer(pm._leafletLayer)){
+      pm._parentGroup.removeLayer(pm._leafletLayer);
+    }
+  }
 }
 
 // Returns [lat, lon] — Leaflet convention, NOT GeoJSON. All marker-list code
@@ -3063,6 +3086,13 @@ function renderMarksList(){
     if(!body || !cnt) continue;
     cnt.textContent = buckets[grp].length;
     body.innerHTML = '';
+
+    // Group-header checkbox: bulk-toggle every marker in this subgroup at once.
+    // We compute its state from the visibility of children (all on / all off /
+    // mixed → indeterminate). Created lazily on first render so the static HTML
+    // stays clean.
+    _ensureGroupCheckbox(grp, buckets[grp]);
+
     if(!buckets[grp].length){
       const e = document.createElement('div');
       e.className = 'mark-empty';
@@ -3076,18 +3106,22 @@ function renderMarksList(){
       const item = document.createElement('div');
       item.className = 'mark-item';
       item.dataset.markId = m.id;
-      // Checkbox toggles the parent KML layer visibility (atomic granularity is
-      // per-layer in this data model — toggling a single placemark would require
-      // reconstructing the leaflet group, which we leave for a future iteration).
+
+      // Per-marker checkbox (Task 1, v59): toggles visibility of THIS specific
+      // placemark only. Independent of layer-level visibility — a hidden marker
+      // re-appears when its individual checkbox is checked, regardless of
+      // sibling state. Implementation: setMarkerVisible attaches/detaches the
+      // leaflet sublayer from the parent layerGroup.
       const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.checked = m.visible;
-      cb.title = 'Видимость слоя на карте';
-      cb.onclick = e => {
-        e.stopPropagation();
-        toggleKMLLayer(m.layerIdx, cb.checked);
-        renderMarksList();  // refresh others — same layer affects multiple entries
-      };
+      cb.type    = 'checkbox';
+      cb.checked = m.markerVisible;
+      cb.title   = 'Показать/скрыть этот объект на карте';
+      cb.addEventListener('click', e => e.stopPropagation());  // don't fly-to on cb click
+      cb.addEventListener('change', () => {
+        setMarkerVisible(m.pmRef, cb.checked);
+        // Refresh the group checkbox state (children changed)
+        _refreshGroupCheckbox(grp);
+      });
       const content = document.createElement('div');
       content.className = 'mark-content';
       content.innerHTML =
@@ -3095,19 +3129,77 @@ function renderMarksList(){
         (m.desc ? `<div class="mark-desc">${_escapeHtml(m.desc)}</div>` : '');
       item.appendChild(cb);
       item.appendChild(content);
-      // Click body → fly to marker on map and pulse it
-      item.onclick = () => _flyToMarker(m);
+      // Click body → smoothly fly to marker, open coord popup with object info
+      item.addEventListener('click', () => _flyToMarker(m));
       body.appendChild(item);
     }
+    _refreshGroupCheckbox(grp);
   }
 }
 
-function _flyToMarker(m){
-  if(!m || !m.latlng) return;
-  const [lat, lon] = m.latlng;  // Leaflet convention — see _markerLatLon
-  if(typeof map !== 'undefined' && lat != null && lon != null){
-    map.setView([lat, lon], Math.max(map.getZoom(), 18), {animate:true});
+// Ensure the group header has a master-checkbox child (insertion is idempotent
+// per group). The checkbox sits BEFORE the existing group title text. When
+// toggled, it forces every marker in the group to the same visibility state.
+function _ensureGroupCheckbox(grp, items){
+  const header = document.querySelector(`#marks-group-${grp} .marks-group-header`);
+  if(!header) return;
+  let cb = header.querySelector('.mg-master-cb');
+  if(!cb){
+    cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'mg-master-cb';
+    cb.title = 'Показать/скрыть всю группу';
+    cb.addEventListener('click', e => e.stopPropagation());  // don't toggle group collapse
+    cb.addEventListener('change', () => {
+      // Apply the checked state to every item in this group
+      const buckets = _gatherMarkers();
+      for(const m of buckets[grp]){
+        setMarkerVisible(m.pmRef, cb.checked);
+      }
+      // Re-render to update individual checkboxes
+      renderMarksList();
+    });
+    // Insert as the first child so it sits visually before the arrow + icon
+    header.insertBefore(cb, header.firstChild);
   }
+  _refreshGroupCheckbox(grp, items);
+}
+
+function _refreshGroupCheckbox(grp, items){
+  const header = document.querySelector(`#marks-group-${grp} .marks-group-header`);
+  const cb = header?.querySelector('.mg-master-cb');
+  if(!cb) return;
+  const list = items || _gatherMarkers()[grp] || [];
+  if(list.length === 0){
+    cb.checked = false; cb.indeterminate = false; cb.disabled = true;
+    return;
+  }
+  cb.disabled = false;
+  const onCount = list.filter(m => m.pmRef?._visible !== false).length;
+  if(onCount === 0)              { cb.checked = false; cb.indeterminate = false; }
+  else if(onCount === list.length){ cb.checked = true;  cb.indeterminate = false; }
+  else                            { cb.checked = false; cb.indeterminate = true;  }
+}
+
+function _flyToMarker(m){
+  // Task 2 (v59): smooth fly + open the coord popup for this object so the user
+  // sees the map pan towards the selection AND immediately gets the object's
+  // info card (same popup as a direct map click would show).
+  if(!m || !m.latlng) return;
+  const [lat, lon] = m.latlng;
+  if(typeof map === 'undefined' || lat == null || lon == null) return;
+  // flyTo gives a smooth pan+zoom; setView is jarring. duration ~1s.
+  const targetZoom = Math.max(map.getZoom(), 18);
+  map.flyTo([lat, lon], targetZoom, {animate:true, duration:0.8});
+  // Open the coord popup. Use buildCoordPopup so the format matches a direct
+  // map-click — name, description, and the standard action buttons.
+  window.lastClickedPoint = L.latLng(lat, lon);
+  const popup = L.popup({maxWidth:224})
+    .setLatLng([lat, lon])
+    .setContent(buildCoordPopup(lat.toFixed(6), lon.toFixed(6), m.name, m.desc));
+  // Wait for flyTo to settle before opening so the popup lands at the new viewport center
+  setTimeout(() => popup.openOn(map), 850);
+  // Highlight the row
   document.querySelectorAll('.mark-item').forEach(el => el.classList.remove('active'));
   const row = document.querySelector(`.mark-item[data-mark-id="${CSS.escape(m.id)}"]`);
   if(row) row.classList.add('active');
@@ -4653,7 +4745,16 @@ function kdConfirm(){
     const tgt = kmlLayers[idx];
     if(!tgt){ showToast('Слой не найден — выберите его из списка','error',3000); _kdPendingGeom=null; return; }
     if(!tgt.cadPlacemarks) tgt.cadPlacemarks=[];
-    tgt.cadPlacemarks.push({cadNum, type:safeType, geom, lines:linesForTooltip, parts:cleanParts});
+    // v59: store the actual leaflet layer + visibility flag so the marker-list
+    // checkbox can independently show/hide just THIS contour without affecting
+    // its siblings (the previous design toggled the whole layer group).
+    const cadEntry = {
+      cadNum, type:safeType, geom, lines:linesForTooltip, parts:cleanParts,
+      _leafletLayer: lyr || null,
+      _parentGroup:  tgt.layerGroup,
+      _visible:      true,
+    };
+    tgt.cadPlacemarks.push(cadEntry);
     tgt.placemarkCount = (tgt.placemarkCount||0) + 1;
     if(lyr) lyr.addTo(tgt.layerGroup);
 
@@ -5410,11 +5511,15 @@ window.doSearchCadastral = async function(){
   }
 };
 
-// ── INIT — restore persisted KML layers on page load ──────────────
-// Run after all module-scope state is ready. Use queueMicrotask so other top-level
-// init code (placeholders, default styles) finishes first.
+// ── INIT — KML restore policy ─────────────────────────────────────
+// v59: auto-restore disabled per user request. The user wants explicit control
+// over what KMLs are loaded into the session. We also CLEAR previously stored
+// state so old layers don't quietly accumulate in localStorage and surprise
+// later sessions if restore is ever re-enabled.
+//
+// To re-enable later: just call `restoreKMLLayersFromStorage()` here.
 queueMicrotask(() => {
-  restoreKMLLayersFromStorage().catch(e => console.warn('[init] kml restore', e));
+  try { localStorage.removeItem(_LS_KML_KEY); } catch(_){}
 });
 </script>
 </body>
