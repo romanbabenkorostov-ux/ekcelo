@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.26</title>
+<title>EkceloFoto v2.9.27</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -40,7 +40,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #upload-menu hr{border:none;border-top:1px solid var(--border);margin:3px 0}
 .upload-hints{display:none;padding:8px 14px;border-top:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--muted);background:rgba(255,255,255,.025);line-height:1.5}
 .upload-hints .uh-title{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px;opacity:.7}
-.upload-hints .uh-row{display:flex;gap:5px;align-items:flex-start;margin-bottom:2px;overflow:hidden}
+.upload-hints .uh-row{display:flex;gap:5px;align-items:flex-start;margin-bottom:2px;overflow:hidden;width:100%;text-align:left;background:transparent;border:1px solid transparent;border-radius:3px;padding:3px 5px;font-family:inherit;font-size:9.5px;color:var(--muted);cursor:pointer;transition:all .12s}
+.upload-hints .uh-clickable:hover{border-color:var(--accent2);background:rgba(71,200,255,.08);color:var(--text)}
+.upload-hints .uh-clickable:hover .uh-val{color:var(--accent2)}
 .upload-hints .uh-ico{flex-shrink:0;font-size:10px}
 .upload-hints .uh-lbl{flex-shrink:0;color:var(--accent2);font-weight:700;min-width:34px}
 .upload-hints .uh-val{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px;opacity:.85}
@@ -512,6 +514,24 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
    save dialog so chained interactions stack visually.                         */
 #save-info-modal{display:none;position:fixed;inset:0;z-index:10600;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace}
 #save-info-modal.open{display:flex}
+/* Duplicate-detection dialog (v65) — sits above kml-save-dialog so the user
+   can see context. Same visual language as #save-info-modal. */
+#dup-modal{display:none;position:fixed;inset:0;z-index:10700;background:rgba(0,0,0,.7);backdrop-filter:blur(3px);align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace}
+#dup-modal.open{display:flex}
+#dup-modal .dm-card{background:var(--surface);border:1px solid var(--accent);border-radius:8px;padding:18px 22px;min-width:380px;max-width:520px;box-shadow:0 12px 32px rgba(0,0,0,0.6);color:var(--text)}
+#dup-modal h3{margin:0 0 12px;font-size:14px;color:var(--accent);font-weight:700}
+#dup-modal .dm-body{font-size:11px;line-height:1.55;margin-bottom:14px}
+#dup-modal .dm-info{background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:10px 12px}
+#dup-modal .dm-pmname{color:var(--accent2);font-weight:600;display:inline-block;margin:3px 0}
+#dup-modal .dm-info code{display:block;margin-top:6px;background:rgba(255,255,255,.04);padding:5px 7px;border-radius:3px;font-size:10px;color:var(--muted);word-break:break-all}
+#dup-modal .dm-actions{display:flex;flex-direction:column;gap:6px}
+#dup-modal .dm-btn{padding:8px 14px;border:1px solid var(--border);border-radius:5px;background:var(--bg);color:var(--text);font-family:inherit;font-size:11px;cursor:pointer;transition:all .15s;text-align:left}
+#dup-modal .dm-cancel{border-color:#6cd96c;color:#6cd96c}
+#dup-modal .dm-cancel:hover{background:rgba(108,217,108,.1)}
+#dup-modal .dm-edit{border-color:var(--accent2);color:var(--accent2)}
+#dup-modal .dm-edit:hover{background:rgba(71,200,255,.1)}
+#dup-modal .dm-force{border-color:var(--accent);color:var(--accent)}
+#dup-modal .dm-force:hover{background:rgba(255,149,0,.1)}
 #save-info-modal .sim-card{background:var(--surface);border:1px solid var(--accent2);border-radius:8px;padding:18px 22px;min-width:340px;max-width:480px;box-shadow:0 12px 32px rgba(0,0,0,0.6);color:var(--text)}
 #save-info-modal h3{margin:0 0 12px;font-size:14px;color:var(--accent2);font-weight:700}
 #save-info-modal .sim-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:8px 0 4px}
@@ -616,7 +636,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.26</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.27</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -2692,13 +2712,24 @@ function _refreshUploadHints(){
   const photo = _loadPathHint(_LS_PATH_PHOTO);
   const xlsx  = _loadPathHint(_LS_PATH_XLSX);
   const kml   = _loadPathHint(_LS_PATH_KML);
+  // v65 (Task 3): hints are now ACTION buttons, not just labels. Clicking
+  // re-triggers the appropriate file picker so the user can quickly reload the
+  // last source. Browsers don't permit auto-loading by stored path (security),
+  // so we open the same picker the menu button does — but the picker remembers
+  // the last folder per file-type, so the user lands close to their target.
+  const row = (kind, ico, lbl, name, onclick) =>
+    `<button class="uh-row uh-clickable" type="button" onclick="${onclick}" title="Открыть тот же тип файла повторно">`+
+      `<span class="uh-ico">${ico}</span>`+
+      `<span class="uh-lbl">${lbl}:</span>`+
+      `<span class="uh-val">${_escapeHtml(name)}</span>`+
+    `</button>`;
   const parts = [];
-  if(photo) parts.push(`<div class="uh-row"><span class="uh-ico">📂</span><span class="uh-lbl">Фото:</span><span class="uh-val">${_escapeHtml(photo.name)}</span></div>`);
-  if(xlsx)  parts.push(`<div class="uh-row"><span class="uh-ico">📋</span><span class="uh-lbl">XLSX:</span><span class="uh-val">${_escapeHtml(xlsx.name)}</span></div>`);
-  if(kml)   parts.push(`<div class="uh-row"><span class="uh-ico">🗺</span><span class="uh-lbl">KML:</span><span class="uh-val">${_escapeHtml(kml.name)}</span></div>`);
+  if(photo) parts.push(row('photo', '📂', 'Фото', photo.name, 'closeUploadMenu();triggerFolderUpload()'));
+  if(xlsx)  parts.push(row('xlsx',  '📋', 'XLSX', xlsx.name,  'closeUploadMenu();pickXlsxCatalog()'));
+  if(kml)   parts.push(row('kml',   '🗺',  'KML',  kml.name,   'closeUploadMenu();pickKMLViaMenu()'));
   if(parts.length === 0){ el.style.display = 'none'; return; }
   el.style.display = 'block';
-  el.innerHTML = `<div class="uh-title">Последние загруженные:</div>${parts.join('')}`;
+  el.innerHTML = `<div class="uh-title">Последние загруженные (клик — открыть повторно):</div>${parts.join('')}`;
 }
 document.addEventListener('click',()=>{closeUploadMenu();closeKMLMenu();});
 
@@ -3482,7 +3513,41 @@ function _gatherMarkers(){
       });
     });
   });
+  // v65 (Task 1): dedupe across layers. When two KML files contain the SAME
+  // placemark (e.g. the user loaded "v1.kml" and "v14.kml" of the same dataset),
+  // identical entries appear in both — same name, same description, same
+  // geometry. We collapse them to a single representative (first encountered)
+  // per group. Signature: lower-cased trimmed name|desc, joined by `||`. We
+  // intentionally do NOT match on geometry alone — two distinct placemarks
+  // can share the same coords (a building inside its parcel), only when name
+  // AND description also match is it a real duplicate.
+  for(const grp of ['zu','oks','exp']){
+    const seen = new Map();   // signature → first marker
+    const deduped = [];
+    for(const m of buckets[grp]){
+      const sig = _markerSignature(m);
+      if(seen.has(sig)) continue;
+      seen.set(sig, m);
+      deduped.push(m);
+    }
+    buckets[grp] = deduped;
+  }
   return buckets;
+}
+
+// Composite signature for cross-layer deduplication. Trims, lowercases,
+// strips repeated whitespace. Empty or "(без названия)" names fall back to
+// the first 80 chars of the description so empty-name placemarks still dedupe
+// when they share content.
+function _markerSignature(m){
+  const norm = s => String(s||'').toLowerCase().replace(/\s+/g,' ').trim();
+  const n = norm(m.name);
+  const d = norm(m.desc);
+  if(!n || /^\(без/.test(n)){
+    // fall back to first stable chunk of desc
+    return 'desc:' + d.slice(0, 80);
+  }
+  return `${n}||${d.slice(0, 80)}`;
 }
 
 // Show/hide a single placemark on the map by adding/removing its leaflet sublayer
@@ -5288,6 +5353,158 @@ function kdConfirm(){
   const geom   = _kdPendingGeom;
   const safeType = (type==='str') ? 'oks' : type;
 
+  // v65 (Task 1): pre-flight duplicate check. Scan the target layer (and all
+  // others — duplicates across layers also confuse the user) for an existing
+  // placemark with the same cadNum, same name, or geometrically-equivalent
+  // contour. Show a modal asking the user how to proceed.
+  if(_kdDest === 'layer' || _kdDest === 'disk'){
+    const dup = _findDuplicate(cadNum, name, desc, geom, _kdDest, _kdLayerIdx);
+    if(dup){
+      // Save state needed to resume
+      _kdDuplicatePendingState = { cadNum, name, desc, type, geom, safeType };
+      _showDuplicateDialog(dup);
+      return;  // user will resolve via modal
+    }
+  }
+
+  _kdConfirmInner({cadNum, name, desc, type, geom, safeType});
+}
+
+// State carried while the duplicate-resolution modal is open
+let _kdDuplicatePendingState = null;
+
+// Find the first duplicate of (cadNum / name / desc / geom) in any loaded layer.
+// Returns {layerName, placemark, reason} or null.
+function _findDuplicate(cadNum, name, desc, geom){
+  const norm = s => String(s||'').toLowerCase().trim();
+  const targetCad  = norm(cadNum);
+  const targetName = norm(name);
+  const targetDesc = norm(desc);
+  // Compute a reduced fingerprint of the contour: rounded-to-6-decimals first
+  // 5 vertices joined. Two contours with identical first 5 vertices at 6dp
+  // are practically the same shape.
+  const geomFingerprint = g => {
+    if(!g?.coordinates) return '';
+    if(g.type === 'Point'){
+      const [lon, lat] = g.coordinates;
+      return `pt:${lat.toFixed(6)},${lon.toFixed(6)}`;
+    }
+    let ring = null;
+    if(g.type === 'Polygon')      ring = g.coordinates[0];
+    if(g.type === 'MultiPolygon') ring = g.coordinates[0]?.[0];
+    if(!ring) return '';
+    return ring.slice(0, 5).map(([lo,la]) => `${la.toFixed(6)},${lo.toFixed(6)}`).join('|');
+  };
+  const targetFp = geomFingerprint(geom);
+  for(let li = 0; li < kmlLayers.length; li++){
+    const layer = kmlLayers[li];
+    // (1) cad-saved entries
+    for(const c of (layer.cadPlacemarks || [])){
+      if(targetCad && targetCad !== 'без_номера' && norm(c.cadNum) === targetCad){
+        return {
+          layerName: layer.docName || layer.filename,
+          placemarkName: c.cadNum,
+          reason: 'кадастровый номер',
+          conflictText: cadNum,
+        };
+      }
+      if(targetFp && c.geom && geomFingerprint(c.geom) === targetFp){
+        return {
+          layerName: layer.docName || layer.filename,
+          placemarkName: c.cadNum,
+          reason: 'идентичный контур',
+          conflictText: targetFp.slice(0, 60) + '…',
+        };
+      }
+    }
+    // (2) parsed-KML placemarks
+    for(const pm of (layer.parsedData?.placemarks || [])){
+      const pmName = norm(pm.name);
+      const pmDesc = norm(pm.desc);
+      if(targetName && pmName === targetName){
+        return {
+          layerName: layer.docName || layer.filename,
+          placemarkName: pm.name,
+          reason: 'название',
+          conflictText: name,
+        };
+      }
+      // Substring match for cadNum inside description
+      if(targetCad && targetCad !== 'без_номера' && pmDesc.includes(targetCad)){
+        return {
+          layerName: layer.docName || layer.filename,
+          placemarkName: pm.name || pm.desc?.slice(0, 50),
+          reason: 'кадастровый номер в описании',
+          conflictText: cadNum,
+        };
+      }
+      if(targetDesc && pmDesc === targetDesc){
+        return {
+          layerName: layer.docName || layer.filename,
+          placemarkName: pm.name || '(без названия)',
+          reason: 'идентичное описание',
+          conflictText: (desc.length > 60 ? desc.slice(0, 60) + '…' : desc),
+        };
+      }
+    }
+  }
+  return null;
+}
+
+// Show modal dialog; user picks one of three outcomes.
+function _showDuplicateDialog(dup){
+  let modal = document.getElementById('dup-modal');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.id = 'dup-modal';
+    modal.innerHTML =
+      `<div class="dm-card">`+
+        `<h3>⚠ Возможный дубликат</h3>`+
+        `<div class="dm-body">`+
+          `<div class="dm-info" id="dm-info"></div>`+
+        `</div>`+
+        `<div class="dm-actions">`+
+          `<button class="dm-btn dm-cancel" onclick="_dupResolve('cancel')">Отказ от записи</button>`+
+          `<button class="dm-btn dm-edit"   onclick="_dupResolve('edit')">Вернуться к редактированию</button>`+
+          `<button class="dm-btn dm-force"  onclick="_dupResolve('force')">Всё равно записать</button>`+
+        `</div>`+
+      `</div>`;
+    document.body.appendChild(modal);
+  }
+  document.getElementById('dm-info').innerHTML =
+    `Найдено совпадение в слое <b>«${_escapeHtml(dup.layerName)}»</b>:<br/>`+
+    `<span class="dm-pmname">${_escapeHtml(dup.placemarkName||'')}</span><br/>`+
+    `Причина: <b>${_escapeHtml(dup.reason)}</b><br/>`+
+    `<code>${_escapeHtml(dup.conflictText||'')}</code>`;
+  modal.classList.add('open');
+  // Default focus on the safest button
+  setTimeout(() => modal.querySelector('.dm-cancel')?.focus(), 60);
+}
+
+window._dupResolve = function(action){
+  document.getElementById('dup-modal')?.classList.remove('open');
+  const st = _kdDuplicatePendingState;
+  _kdDuplicatePendingState = null;
+  if(!st) return;
+  if(action === 'cancel'){
+    _kdPendingGeom = null;
+    showToast('Сохранение отменено','info',2000);
+    return;
+  }
+  if(action === 'edit'){
+    document.getElementById('kml-save-dialog').classList.add('open');
+    return;
+  }
+  if(action === 'force'){
+    _kdConfirmInner(st);
+  }
+};
+
+// Inner save — invoked either directly when no duplicate, or after the user
+// chose "Всё равно записать" in the duplicate modal.
+function _kdConfirmInner(st){
+  const {cadNum, name, desc, type, geom, safeType} = st;
+
   // Coordinate sanity check (must be near Earth surface, within Web Mercator latitudes)
   const coordsSafe = (cs) => cs.every(([lo,la])=>
     Math.abs(lo)<=180 && Math.abs(la)<=90 && la>=-85 && la<=85
@@ -5407,7 +5624,14 @@ function kdConfirm(){
       // FSA path — overwrite the original file in-place
       _writeKMLToHandle(tgt.handle, tgt.kmlText, filename);
     } else {
-      _downloadBlob(tgt.kmlText, filename);
+      // v65 (Task 2): no handle (layer was uploaded via legacy <input>) — open
+      // a Save dialog instead of dumping to ~/Downloads. The browser remembers
+      // the last folder used in any save dialog this session, so if the user
+      // opened ANY KML via FSA earlier (or saved one), the dialog opens there.
+      // Pre-fill the original filename so just hitting Enter overwrites it.
+      // ALSO: capture the resulting handle into tgt.handle so subsequent saves
+      // in this session go straight to that file with no further dialog.
+      _saveKMLPickFolderAndCapture(tgt.kmlText, filename, tgt);
     }
 
     _maybeOfferCentroidWriteback(cadNum, geom);
@@ -5465,6 +5689,34 @@ async function _saveKMLPickFolder(text, suggestedName){
       await writable.close();
       _showSaveInfoDialog(handle.name||suggestedName, null,
         'Файл сохранён в выбранную папку.');
+      return handle;
+    } catch(e){
+      if(e?.name === 'AbortError') return null;
+      console.warn('[kml-save-picker]', e);
+    }
+  }
+  _downloadBlob(text, suggestedName);
+  return null;
+}
+
+// Same as _saveKMLPickFolder but ALSO captures the picked handle onto the
+// target layer entry so future saves go to that file with no dialog. Used by
+// the "save to layer" branch when the layer originally had no FSA handle
+// (legacy <input> upload). Future re-saves use _writeKMLToHandle directly.
+async function _saveKMLPickFolderAndCapture(text, suggestedName, tgt){
+  if(_fsaSupported){
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName,
+        types:[{description:'KML', accept:{'application/vnd.google-earth.kml+xml':['.kml']}}],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(text);
+      await writable.close();
+      tgt.handle = handle;
+      tgt.filename = handle.name || suggestedName;
+      _showSaveInfoDialog(handle.name||suggestedName, null,
+        'Файл сохранён в выбранную папку. Дальнейшие записи пойдут в тот же файл.');
       return;
     } catch(e){
       if(e?.name === 'AbortError') return;
