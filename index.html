@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.27</title>
+<title>EkceloFoto v2.9.28</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -636,7 +636,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.27</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.28</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -2738,6 +2738,7 @@ async function triggerFolderUpload(){
     try{
       const dh=await window.showDirectoryPicker({mode:'read'});
       _savePathHint(_LS_PATH_PHOTO, dh.name);
+      _captureFirstSessionName('photo', dh.name);
       showToast('⏳ Сканирование…','info',6000);
       const{photos:pe,kmls:ke}=await collectFilesFromHandle(dh,'',dh.name);
       for(const k of ke)await loadKMLFromFile(k.file,k.name);
@@ -2763,8 +2764,8 @@ async function collectFilesFromHandle(dh,relPath,rootName){
 
 function triggerFileUpload(){document.getElementById('file-input').click();}
 document.getElementById('file-input').addEventListener('change',e=>{const ents=[...(e.target.files||[])].map(f=>({file:f,locPath:deriveFolderPath(f,''),fileHandle:null}));handleFileEntries(ents,'');e.target.value='';});
-document.getElementById('folder-input-fallback').addEventListener('change',e=>{const files=[...(e.target.files||[])];if(!files.length)return;const rn=(files[0].webkitRelativePath||'').split('/')[0]||'';handleFileEntries(files.map(f=>({file:f,locPath:deriveFolderPath(f,rn),fileHandle:null})),rn);e.target.value='';});
-document.getElementById('kml-file-input').addEventListener('change',async e=>{for(const f of e.target.files||[])await loadKMLFromFile(f,f.name);e.target.value='';});
+document.getElementById('folder-input-fallback').addEventListener('change',e=>{const files=[...(e.target.files||[])];if(!files.length)return;const rn=(files[0].webkitRelativePath||'').split('/')[0]||'';if(rn){_captureFirstSessionName('photo',rn);_savePathHint(_LS_PATH_PHOTO,rn);}handleFileEntries(files.map(f=>({file:f,locPath:deriveFolderPath(f,rn),fileHandle:null})),rn);e.target.value='';});
+document.getElementById('kml-file-input').addEventListener('change',async e=>{for(const f of e.target.files||[]){_captureFirstSessionName('kml',f.name);await loadKMLFromFile(f,f.name);}e.target.value='';});
 document.getElementById('map-wrap').addEventListener('dragover',e=>e.preventDefault());
 document.getElementById('map-wrap').addEventListener('drop',e=>{e.preventDefault();const fs=[...e.dataTransfer.files];const js=fs.filter(f=>/jpe?g/i.test(f.type||f.name));const ks=fs.filter(f=>/\.kml$/i.test(f.name));if(js.length)handleFileEntries(js.map(f=>({file:f,locPath:'',fileHandle:null})),'');ks.forEach(f=>loadKMLFromFile(f,f.name));});
 
@@ -3116,6 +3117,10 @@ function renderKMLOnMap(parsed){
       // for clicks landing on the rasterised polygon edge).
       layer.on('click', e => {
         L.DomEvent.stopPropagation(e);
+        // v66: when "Указать GPS" is active, the click sets the photo's anchor
+        // point — don't open info cards or switch sidebar tab. Mirrors the
+        // top-level map.on('click') guard.
+        if(manualGPSActive){ handleMapClickForGPS(e); return; }
         window.lastClickedPoint = e.latlng;
         const direct = _markerForLeafletLayer(layer);
         _handleMapAreaClick(e.latlng, direct);
@@ -3146,7 +3151,7 @@ window.pickKMLViaMenu = async function(){
       });
       for(const h of handles){
         const f = await h.getFile();
-        _savePathHint(_LS_PATH_KML, f.name);
+        _savePathHint(_LS_PATH_KML, f.name); _captureFirstSessionName('kml', f.name);
         await loadKMLFromFile(f, f.name, h);
       }
       return;
@@ -3206,6 +3211,27 @@ const _LS_KML_KEY = 'kmlPersist.v1';
 const _LS_PATH_PHOTO = 'paths.photo.v1';
 const _LS_PATH_XLSX  = 'paths.xlsx.v1';
 const _LS_PATH_KML   = 'paths.kml.v1';
+
+// Session-level "first opened" name (NOT from localStorage — that's a previous
+// session's hint). Whichever was first this session becomes the KMZ root folder
+// name. Priority: photo folder > KML doc > XLSX > generic fallback.
+let _firstSessionPhotoFolder = null;  // root folder name from triggerFolderUpload
+let _firstSessionKMLName     = null;  // first KML's docName (without .kml)
+let _firstSessionXLSXName    = null;  // first XLSX basename
+function _captureFirstSessionName(kind, name){
+  if(!name) return;
+  const trimmed = String(name).replace(/\.kml$/i,'').replace(/\.xlsx?$/i,'').trim();
+  if(!trimmed) return;
+  if(kind === 'photo' && !_firstSessionPhotoFolder) _firstSessionPhotoFolder = trimmed;
+  else if(kind === 'kml' && !_firstSessionKMLName)  _firstSessionKMLName    = trimmed;
+  else if(kind === 'xlsx' && !_firstSessionXLSXName) _firstSessionXLSXName  = trimmed;
+}
+function _kmzRootName(){
+  return _firstSessionPhotoFolder
+      || _firstSessionKMLName
+      || _firstSessionXLSXName
+      || 'EkceloFoto экспорт';
+}
 
 function _savePathHint(key, name){
   try { localStorage.setItem(key, JSON.stringify({name, savedAt:Date.now()})); }
@@ -4741,9 +4767,10 @@ function _makeCadLayer(geom, type, interactive) {
 function _attachCadEvents(layer, cadNum, type, lines) {
   layer.on('click', e => {
     L.DomEvent.stopPropagation(e);
+    // v66: when "Указать GPS" is active, the click anchors a photo — info-card
+    // pipeline is bypassed (and so is the auto-switch to Метки tab).
+    if(manualGPSActive){ handleMapClickForGPS(e); return; }
     window.lastClickedPoint = e.latlng;
-    // v62: augment with directHit so the just-clicked polygon is guaranteed
-    // to appear in the info cards even when point-in-polygon fails on the edge.
     const direct = _markerForLeafletLayer(layer);
     _handleMapAreaClick(e.latlng, direct);
   });
@@ -4934,7 +4961,7 @@ async function _ingestXlsxFile(file, handle){
     _objectCatalogRaw      = bytes;
     _objectCatalogFilename = file.name.replace(/\.xlsx?$/i, '');
     _objectCatalogHandle   = handle;
-    _savePathHint(_LS_PATH_XLSX, file.name);  // remember last XLSX file name
+    _savePathHint(_LS_PATH_XLSX, file.name); _captureFirstSessionName('xlsx', file.name);  // remember last XLSX file name
     _hydrateCatalogCentroidsFromXLSX(wb);
     _initCatalogWorkbook();
     const handleNote = handle ? ' (можно сохранять обратно в ту же папку)' : '';
@@ -5830,35 +5857,69 @@ window.exportKMZ = async function(){
     const zip = new JSZip();
     const imagesFolder = zip.folder('images');
 
-    // Build KML pieces: collect styles + placemarks from all sources
-    const styleXmls = new Set();   // dedupe by string content
-    const placemarkXmls = [];
+    // ── Bucket placemarks by category for KML sub-folders ─────────────
+    // 4 categories: zu / oks / exp (objects from KML/cad) + photos (handled
+    // separately below — they get nested by source-folder structure). Each
+    // bucket holds its own placemark XML strings; styles are dedup'd globally.
+    const styleXmls       = new Set();
+    const buckets = { zu: [], oks: [], exp: [] };
+    const photoNodes      = [];   // {locPath, xml} entries for photo subfolder tree
+
+    // Use the same classifier the marker list uses, so categorisation in the
+    // KMZ matches what the user sees in Метки.
+    const classifyParsed = (pm) => {
+      const blob = `${pm.name||''} | ${pm.desc||''}`.toLowerCase();
+      const looksLikeZU = /(^|[^a-zа-яё])земл/i.test(blob);
+      if(pm.styleUrl){
+        if(/cad_zu_/i.test(pm.styleUrl))       return 'zu';
+        if(/cad_exp_/i.test(pm.styleUrl))      return 'exp';
+        if(/cad_oks_/i.test(pm.styleUrl))      return 'oks';
+        if(looksLikeZU)                        return 'zu';
+        if(pm.type === 'Point')                return 'exp';
+        return 'oks';
+      }
+      if(pm.type === 'Point')                  return 'exp';
+      if(looksLikeZU)                          return 'zu';
+      return 'oks';
+    };
 
     // ── (1) Loaded KML layers ──────────────────────────────────────
+    // Cross-layer dedup so two loaded KMLs of the same dataset don't double-up.
+    const seenSig = new Set();
+    const sig = (n,d) => `${(n||'').trim().toLowerCase()}||${(d||'').slice(0,80).trim().toLowerCase()}`;
+
     for(const layer of (kmlLayers||[])){
       const parsed = layer.parsedData;
       if(!parsed?.placemarks) continue;
       for(const pm of parsed.placemarks){
-        if(pm._visible === false) continue;  // honour hidden state
+        if(pm._visible === false) continue;
+        const s = sig(pm.name, pm.desc);
+        if(seenSig.has(s)) continue;
+        seenSig.add(s);
         const sid = (pm.styleUrl || '').replace('#','') || 'default';
-        // We don't have the original style XML for parsed-style — synthesize one
-        // matching the resolved style attributes (close enough for GE Pro)
         styleXmls.add(_synthStyleXmlFromParsedStyle(sid, pm.style));
-        placemarkXmls.push(_pmToKMLXml(pm.name, pm.desc, sid, pm));
+        const cat = classifyParsed(pm);
+        buckets[cat].push(_pmToKMLXml(pm.name, pm.desc, sid, pm));
       }
       for(const pm of (layer.cadPlacemarks||[])){
         if(pm._visible === false) continue;
-        if(pm.parts?.style) styleXmls.add(pm.parts.style);
-        if(pm.parts?.placemark) placemarkXmls.push(pm.parts.placemark);
+        const cat = pm.type === 'zu' ? 'zu' : pm.type === 'exp' ? 'exp' : 'oks';
+        const cn  = pm.cadNum || '';
+        const matched = parsed?.placemarks?.find(p =>
+          (p.name||'').includes(cn) || (p.desc||'').includes(cn));
+        const s = sig(matched?.name || cn, matched?.desc || (pm.lines||[]).map(([k,v])=>`${k}: ${v}`).join(' · '));
+        if(seenSig.has(s)) continue;
+        seenSig.add(s);
+        if(pm.parts?.style)     styleXmls.add(pm.parts.style);
+        if(pm.parts?.placemark) buckets[cat].push(pm.parts.placemark);
       }
     }
 
-    // ── (2) Photo placemarks ───────────────────────────────────────
-    // Style for photo icons: a small yellow dot (matches the in-app marker)
+    // ── (2) Photo placemarks ──────────────────────────────────────
     styleXmls.add(
       `<Style id="photo_icon">`+
         `<IconStyle>`+
-          `<color>ffe5ff47</color>`+   // ABGR yellow
+          `<color>ffe5ff47</color>`+
           `<scale>1.0</scale>`+
           `<Icon><href>http://maps.google.com/mapfiles/kml/shapes/camera.png</href></Icon>`+
         `</IconStyle>`+
@@ -5866,9 +5927,20 @@ window.exportKMZ = async function(){
       `</Style>`
     );
 
-    // Throttled photo encoding: process N at a time to avoid memory spikes.
-    // Each photo: read as ArrayBuffer → decode to image → draw to canvas at
-    // max 1600px → encode as JPEG q=0.78 → add to ZIP under images/<name>.jpg
+    // Subfolder skip-list — these names mean "this is the photo container folder
+    // itself, drop into it" rather than being a meaningful subfolder name. So a
+    // photo at "Часовня/Фото/01.jpg" appears as if it were directly in Часовня.
+    const PHOTO_FOLDER_SKIP = /^(фото|фотографии|фотография|foto|photos?)$/i;
+
+    // Sanitize a path segment for the photo subfolder tree (no leading skip-list
+    // names, normalise separators).
+    const cleanPhotoPath = (locPath) => {
+      if(!locPath) return [];
+      return String(locPath).split(/[\\/]/)
+        .map(s => s.trim())
+        .filter(s => s && !PHOTO_FOLDER_SKIP.test(s));
+    };
+
     const BATCH = 4;
     for(let i = 0; i < photosWithGPS.length; i += BATCH){
       const batch = photosWithGPS.slice(i, i + BATCH);
@@ -5893,7 +5965,7 @@ window.exportKMZ = async function(){
             angle+
             (ts ? `Снято: ${ts}<br/>` : '')+
           `</div>]]>`;
-        placemarkXmls.push(
+        const xml =
           `<Placemark>`+
             `<name>${_escapeXml(p.name||safeName)}</name>`+
             `<description>${desc}</description>`+
@@ -5902,17 +5974,70 @@ window.exportKMZ = async function(){
             `<Point><altitudeMode>clampToGround</altitudeMode>`+
               `<coordinates>${p.lon.toFixed(6)},${p.lat.toFixed(6)},0</coordinates>`+
             `</Point>`+
-          `</Placemark>`
-        );
+          `</Placemark>`;
+        photoNodes.push({pathSegments: cleanPhotoPath(p.locPath), xml});
       }));
     }
 
-    // ── Build doc.kml ──────────────────────────────────────────────
+    // Build photo folder tree from the path segments. {root: {childMap}, items: [xml...]}
+    const buildPhotoTree = (nodes) => {
+      const root = {children: new Map(), items: []};
+      for(const n of nodes){
+        let cur = root;
+        for(const seg of n.pathSegments){
+          if(!cur.children.has(seg)) cur.children.set(seg, {children: new Map(), items: []});
+          cur = cur.children.get(seg);
+        }
+        cur.items.push(n.xml);
+      }
+      return root;
+    };
+    const photoTreeToKML = (node, name) => {
+      const childParts = [];
+      for(const [childName, childNode] of node.children){
+        childParts.push(photoTreeToKML(childNode, childName));
+      }
+      const itemsPart = node.items.join('\n');
+      const inner = childParts.join('\n') + (childParts.length && itemsPart ? '\n' : '') + itemsPart;
+      // Top-level "Фотографии" folder is always emitted; nested folders only if name given
+      if(name == null) return inner;
+      return `<Folder>`+
+        `<name><![CDATA[${name}]]></name>`+
+        `<open>0</open>`+
+        inner+
+        `</Folder>`;
+    };
+
+    // ── Build doc.kml ─────────────────────────────────────────────
     btn.innerHTML = '⏳ Сборка KML…';
-    const kml = _buildKMLDocument([...styleXmls], placemarkXmls, 'EkceloFoto экспорт');
+    const rootName = _kmzRootName();
+    const photoTree = buildPhotoTree(photoNodes);
+    const photosFolderXml = photoNodes.length
+      ? `<Folder><name><![CDATA[Фотографии]]></name><open>1</open>${photoTreeToKML(photoTree, null)}</Folder>`
+      : '';
+    const subfolder = (label, items) => items.length
+      ? `<Folder><name><![CDATA[${label}]]></name><open>1</open>${items.join('\n')}</Folder>`
+      : '';
+    const allFolders = [
+      subfolder('Зем.участки', buckets.zu),
+      subfolder('ОКСы',        buckets.oks),
+      subfolder('Пояснения',   buckets.exp),
+      photosFolderXml,
+    ].filter(Boolean).join('\n');
+
+    const kml =
+      '<?xml version="1.0" encoding="UTF-8"?>\n'+
+      '<kml xmlns="http://www.opengis.net/kml/2.2">\n'+
+      '<Document>\n'+
+      `<name><![CDATA[${rootName.replace(/[<>&]/g,'')}]]></name>\n`+
+      `<open>1</open>\n`+
+      [...styleXmls].join('\n')+'\n'+
+      allFolders+'\n'+
+      '</Document>\n'+
+      '</kml>';
     zip.file('doc.kml', kml);
 
-    // ── Generate the .kmz blob ─────────────────────────────────────
+    // ── Generate the .kmz blob ────────────────────────────────────
     btn.innerHTML = '⏳ Сжатие…';
     const blob = await zip.generateAsync({
       type:'blob',
@@ -5923,7 +6048,10 @@ window.exportKMZ = async function(){
 
     // Save (FSA picker first, fallback to legacy download)
     const stamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,16);
-    const filename = `ekcelo_export_${stamp}.kmz`;
+    // Filename also uses the root name when available — e.g. "Соколова52.kmz"
+    // is more meaningful than "ekcelo_export_2026-04-30T12-00.kmz".
+    const safeRoot = rootName.replace(/[^\wа-яА-ЯёЁ-]+/g,'_').replace(/^_+|_+$/g,'') || 'ekcelo_export';
+    const filename = `${safeRoot}_${stamp}.kmz`;
     if(typeof window.showSaveFilePicker === 'function'){
       try {
         const handle = await window.showSaveFilePicker({
