@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.25</title>
+<title>EkceloFoto v2.9.26</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -458,32 +458,31 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 /* ── INFO CARDS (v61) ─────────────────────────────────────────────
    Multiple draggable cards with thin connector lines back to the
    click point. Replaces L.popup for cad/KML hits + coords display. */
-.info-card{position:absolute;background:rgba(13,15,20,0.88);border:1px solid var(--border);border-radius:7px;
+.info-card{position:absolute;background:rgba(13,15,20,0.88);border:1px solid var(--border);border-radius:6px;
   font-family:'JetBrains Mono',monospace;color:var(--text);box-shadow:0 6px 22px rgba(0,0,0,.65);
-  backdrop-filter:blur(4px);min-width:200px;max-width:260px;overflow:hidden;animation:pop-in .15s ease both}
+  backdrop-filter:blur(4px);min-width:180px;max-width:260px;overflow:hidden;animation:pop-in .15s ease both}
 .info-card.dragging{box-shadow:0 12px 32px rgba(0,0,0,.8);border-color:#00ff66;background:rgba(13,15,20,0.95)}
-.info-card .ic-header{display:flex;align-items:center;gap:6px;padding:5px 7px 5px 10px;
+/* v64: tighter header. Copy mini-button (.ic-icobtn) sits before the close X. */
+.info-card .ic-header{display:flex;align-items:center;gap:4px;padding:3px 4px 3px 8px;
   background:rgba(255,255,255,.04);border-bottom:1px solid var(--border);cursor:move;user-select:none}
-.info-card .ic-header.ic-zu{background:rgba(0,180,50,0.13);border-bottom-color:rgba(0,180,50,.4)}
-.info-card .ic-header.ic-oks{background:rgba(160,32,240,0.14);border-bottom-color:rgba(160,32,240,.4)}
-.info-card .ic-header.ic-exp{background:rgba(71,200,255,0.13);border-bottom-color:rgba(71,200,255,.4)}
-.info-card .ic-title{flex:1;font-size:10.5px;font-weight:700;color:#fff;letter-spacing:.2px}
-.info-card .ic-close{background:transparent;border:none;color:#888;font-size:14px;cursor:pointer;padding:0 4px;line-height:1}
-.info-card .ic-close:hover{color:#fff}
-.info-card .ic-body{padding:7px 9px 9px;font-size:10.5px;line-height:1.4}
-.info-card .ic-coords-row{display:flex;align-items:center;gap:4px;margin-bottom:6px}
-.info-card .ic-coords{flex:1;background:rgba(255,255,255,.07);padding:3px 6px;border-radius:3px;
-  font-size:10.5px;color:var(--accent2);font-family:inherit;letter-spacing:.3px}
-.info-card .ic-copy{background:transparent;border:1px solid var(--border);border-radius:3px;
-  color:var(--muted);font-size:10px;padding:2px 6px;cursor:pointer;font-family:inherit;line-height:1;
-  transition:all .12s;flex-shrink:0}
-.info-card .ic-copy:hover{color:var(--accent);border-color:var(--accent)}
-.info-card .ic-copy.flashed{color:var(--accent);border-color:var(--accent);background:rgba(255,149,0,.12)}
-.info-card .ic-copy-bottom{display:block;width:100%;margin-top:5px;padding:4px 6px;font-size:10px;text-align:center}
-.info-card .ic-name{font-size:11px;font-weight:600;color:#fff;margin-bottom:3px;line-height:1.35;word-break:break-word}
-.info-card .ic-desc{font-size:10px;color:#cfd2d6;line-height:1.45;word-break:break-word;opacity:.92}
-.info-card .ic-action{display:block;width:100%;border:none;border-radius:4px;padding:5px 8px;
-  font-family:inherit;font-size:10.5px;font-weight:700;cursor:pointer;margin-top:5px;transition:filter .1s}
+.info-card .ic-header.ic-zu{background:rgba(0,180,50,0.16);border-bottom-color:rgba(0,180,50,.4)}
+.info-card .ic-header.ic-oks{background:rgba(160,32,240,0.16);border-bottom-color:rgba(160,32,240,.4)}
+.info-card .ic-header.ic-exp{background:rgba(71,200,255,0.16);border-bottom-color:rgba(71,200,255,.4)}
+.info-card .ic-title{flex:1;font-size:10.5px;font-weight:700;color:#fff;letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Header mini-buttons: copy (⎘) and close (×). Same compact size, no border to keep the bar slim. */
+.info-card .ic-icobtn,.info-card .ic-close{background:transparent;border:none;color:#9ba0a8;font-size:12px;cursor:pointer;padding:1px 4px;line-height:1;border-radius:3px;flex-shrink:0;transition:color .12s,background .12s}
+.info-card .ic-icobtn:hover{color:var(--accent);background:rgba(255,149,0,.12)}
+.info-card .ic-icobtn.flashed{color:#6cd96c;background:rgba(108,217,108,.18)}
+.info-card .ic-close{font-size:14px}
+.info-card .ic-close:hover{color:#fff;background:rgba(255,255,255,.08)}
+/* v64: minimal body padding */
+.info-card .ic-body{padding:5px 7px 6px;font-size:10.5px;line-height:1.35}
+.info-card .ic-coords{display:block;background:rgba(255,255,255,.07);padding:3px 6px;border-radius:3px;
+  font-size:10.5px;color:var(--accent2);font-family:inherit;letter-spacing:.3px;margin-bottom:4px;text-align:center}
+.info-card .ic-name{font-size:11px;font-weight:600;color:#fff;margin-bottom:2px;line-height:1.3;word-break:break-word}
+.info-card .ic-desc{font-size:10px;color:#cfd2d6;line-height:1.4;word-break:break-word;opacity:.92}
+.info-card .ic-action{display:block;width:100%;border:none;border-radius:3px;padding:4px 8px;
+  font-family:inherit;font-size:10.5px;font-weight:700;cursor:pointer;margin-top:4px;transition:filter .1s}
 .info-card .ic-action:hover{filter:brightness(1.12)}
 .info-card .ic-orange{background:#ff9500;color:#fff}
 .info-card .ic-cyan{background:#47c8ff;color:#0d0f14}
@@ -617,7 +616,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.25</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.26</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -2349,21 +2348,64 @@ function closeAllInfoCards(){
   if(_connectorSvg) _connectorSvg.innerHTML = '';
 }
 
-// Hit-test: return all objects (cad placemarks + parsed-KML placemarks) whose
-// geometry contains/is at the given latlng. Reuses `_gatherMarkers` so it sees
-// exactly what the markers panel sees.
+// Hit-test: return objects whose geometry contains the click.
+// v64 changes:
+//   • For POINTS, hit-radius is now measured in PIXELS (18 px) instead of
+//     degrees. Pixel space matches the user's visual perception — they expect
+//     to hit "the dot they see", not "anything within 11 m". This is essential
+//     in dense clusters of explanation pins where multiple sit within a tile.
+//   • For POINTS, return only the NEAREST one — clicking inside a "пирог" of
+//     overlapping pins should give exactly one card, not five.
+//   • POLYGONS still use ray-casting (point-in-ring) — no change needed there.
 function _hitTestAllAtPoint(latlng){
   const hits = [];
   if(typeof _gatherMarkers !== 'function') return hits;
   const buckets = _gatherMarkers();
-  for(const grp of ['zu','oks','exp']){
+  // Polygon hits — keep all (a click may legitimately be inside multiple)
+  for(const grp of ['zu','oks']){
     for(const m of buckets[grp]){
       if(_hitTestMarker(m, latlng.lat, latlng.lng)){
         hits.push({kind: grp, marker: m});
       }
     }
   }
+  // Point hits (exp, plus any cad/KML Point objects that bucketed into zu/oks
+  // by classifier) — measure pixel distance, keep only the closest within 18 px.
+  const PX_RADIUS = 18;
+  let bestPoint = null, bestDist = Infinity;
+  const clickPt = map.latLngToContainerPoint(latlng);
+  for(const grp of ['zu','oks','exp']){
+    for(const m of buckets[grp]){
+      const ll = _markerPointLatLng(m);
+      if(!ll) continue;
+      const pt = map.latLngToContainerPoint(ll);
+      const d = Math.hypot(pt.x - clickPt.x, pt.y - clickPt.y);
+      if(d < PX_RADIUS && d < bestDist){
+        // Skip if already counted as polygon (those have a different geom path)
+        const alreadyPolygon = hits.some(h => h.marker.id === m.id);
+        if(alreadyPolygon) continue;
+        bestPoint = {kind: grp, marker: m};
+        bestDist = d;
+      }
+    }
+  }
+  if(bestPoint) hits.push(bestPoint);
   return hits;
+}
+
+// Return [lat, lon] for a marker IF its underlying geometry is a Point
+// (otherwise null — polygons are handled by the polygon-hit path).
+function _markerPointLatLng(m){
+  if(!m || !m.pmRef) return null;
+  if(m.source === 'cad'){
+    const g = m.pmRef.geom;
+    if(g?.type === 'Point'){ const [lon, lat] = g.coordinates; return [lat, lon]; }
+    return null;
+  }
+  if(m.pmRef.type === 'Point' && m.pmRef.coords){
+    return m.pmRef.coords;  // already [lat, lon]
+  }
+  return null;
 }
 
 // Open cards. If no hits → single "Координаты" card (just the click point).
@@ -2382,15 +2424,20 @@ function showInfoCardsAt(latlng, hits){
 }
 
 // Compute the initial pixel offset (dx, dy) for card index i out of total N.
-// Cards fan out clockwise around the anchor at radius R, so they don't overlap.
+// Cards fan out around the anchor at a radius scaled to the count — more cards
+// need more room. v64: minimum radius 200 px (was 160) so the anchor + thread
+// stays clearly visible even with the typically wide ~260 px cards.
 function _initialCardOffset(idx, total){
-  // v62: radius 130 → 160 so the anchor dot stays visible between cards.
-  const R = 160;
-  const startAngle = -Math.PI * 0.7;
-  const endAngle   =  Math.PI * 0.7;
+  // Scale radius with count: 1 card = 200, 2 = 220, 3+ = 240+. Caps at 360.
+  const R = Math.min(360, 200 + Math.max(0, total - 1) * 20);
+  // Wider fan when there are more cards — distributes them around almost a full
+  // circle so no two overlap. With ≤3 cards we keep a 180° upper-arc.
+  const span = total <= 3 ? Math.PI * 1.0 : Math.PI * 1.6;
+  const startAngle = -span / 2 - Math.PI/2;   // top-center start
+  const endAngle   =  span / 2 - Math.PI/2;
   const t = total > 1 ? (idx / (total - 1)) : 0.5;
   const a = startAngle + t * (endAngle - startAngle);
-  return { dx: Math.cos(a) * R, dy: Math.sin(a) * R - 60 };
+  return { dx: Math.cos(a) * R, dy: Math.sin(a) * R };
 }
 
 function _createInfoCard(payload, anchorLL, idx, total){
@@ -2500,9 +2547,9 @@ function _redrawConnectors(){
     // v62: bright green (was #e8ff47 yellow). Yellow conflicted visually with
     // photo-GPS markers (yellow dots) — user couldn't tell click-anchor from photos.
     line.setAttribute('stroke', '#00ff66');
-    line.setAttribute('stroke-width', '1');
-    line.setAttribute('stroke-opacity', '0.65');
-    line.setAttribute('stroke-dasharray', '3,3');
+    line.setAttribute('stroke-width', '2');
+    line.setAttribute('stroke-opacity', '0.7');
+    line.setAttribute('stroke-dasharray', '4,3');
     _connectorSvg.appendChild(line);
     if(!drewAnchor){
       const dot = document.createElementNS('http://www.w3.org/2000/svg','circle');
@@ -2519,27 +2566,26 @@ function _redrawConnectors(){
 }
 
 // ── Card renderers ─────────────────────────────────────────────────
-// Compact coords card with copy buttons (Task 6).
-// No "🗺" icon, smaller fields, copy-icon next to coords.
+// Compact coords card.
+// v64: copy icon moved into the header (mini-button before close); minimal body.
 function _renderCoordsCard(lat, lng, cardId){
   const ll = `${(+lat).toFixed(6)}, ${(+lng).toFixed(6)}`;
+  const llEsc = ll.replace(/'/g,"\\'");
   return (
     `<div class="ic-header">`+
       `<span class="ic-title">📍 Координаты</span>`+
+      `<button class="ic-icobtn" title="Копировать координаты" onclick="_copyToClip('${llEsc}', this)">⎘</button>`+
       `<button class="ic-close" title="Закрыть">×</button>`+
     `</div>`+
     `<div class="ic-body">`+
-      `<div class="ic-coords-row">`+
-        `<code class="ic-coords">${ll}</code>`+
-        `<button class="ic-copy" title="Копировать координаты" onclick="_copyToClip('${ll}', this)">⎘</button>`+
-      `</div>`+
+      `<code class="ic-coords">${ll}</code>`+
       `<button class="ic-action ic-orange" onclick="queryNSPDAtPoint()" title="Запросить кадастр в этой точке">📍 Запросить кадастр</button>`+
-      `<button class="ic-action ic-cyan"   onclick="startExplanationPoint(${+lat},${+lng})" title="Добавить точку-пояснение">💬 Добавить пояснение</button>`+
+      `<button class="ic-action ic-cyan"   onclick="startExplanationPoint(${+lat},${+lng})" title="Добавить пояснение">💬 Добавить пояснение</button>`+
     `</div>`
   );
 }
 
-// Object card: name + cadnum + description, with copy-text icon (Task 6).
+// Object card — copy mini-button in header, minimal body.
 function _renderObjectCard(hit, cardId){
   const m = hit.marker;
   const groupTitle = hit.kind === 'zu'  ? 'Земельный участок'
@@ -2551,16 +2597,16 @@ function _renderObjectCard(hit, cardId){
   const safeName = _escapeHtml(m.name || '(без названия)');
   const safeDesc = _escapeHtml(m.desc || '');
   const fullText = `${m.name || ''}${m.desc ? '\n' + m.desc : ''}`;
-  const fullTextEsc = fullText.replace(/'/g,"\\'").replace(/\n/g,'\\n');
+  const fullTextEsc = fullText.replace(/'/g,"\\'").replace(/\n/g,'\\n').replace(/"/g,'&quot;');
   return (
     `<div class="ic-header ${groupClass}">`+
       `<span class="ic-title">${groupTitle}</span>`+
+      `<button class="ic-icobtn" title="Копировать текст" onclick="_copyToClip('${fullTextEsc}', this)">⎘</button>`+
       `<button class="ic-close" title="Закрыть">×</button>`+
     `</div>`+
     `<div class="ic-body">`+
       `<div class="ic-name">${safeName}</div>`+
       (safeDesc ? `<div class="ic-desc">${safeDesc}</div>` : '')+
-      `<button class="ic-copy ic-copy-bottom" title="Копировать текст" onclick="_copyToClip('${fullTextEsc}', this)">⎘ Копировать</button>`+
     `</div>`
   );
 }
@@ -3626,29 +3672,18 @@ function _flyToMarker(m){
 window.activateMarkersAtLatLng = function(latlng){
   if(_activeSidebarTab !== 'marks') return;
   if(!latlng) return;
-  const buckets = _gatherMarkers();
   document.querySelectorAll('.mark-item').forEach(el => el.classList.remove('active'));
-
-  // Track the FIRST matched row per group — we need to scroll each group's own
-  // scrollable body independently. Browsers nest scrollIntoView through every
-  // scrolling ancestor, so calling it on rows in different .marks-group-body
-  // containers correctly affects each container without interfering.
+  // v64: use the SAME hit set the info-cards use, so the highlighted rows in
+  // Метки always match the open cards. _hitTestAllAtPoint returns nearest-only
+  // for points + every overlapping polygon.
+  const hits = _hitTestAllAtPoint(latlng);
   const firstByGroup = { zu: null, oks: null, exp: null };
-  for(const grp of ['zu','oks','exp']){
-    for(const m of buckets[grp]){
-      if(!_hitTestMarker(m, latlng.lat, latlng.lng)) continue;
-      const row = document.querySelector(`.mark-item[data-mark-id="${CSS.escape(m.id)}"]`);
-      if(row){
-        row.classList.add('active');
-        if(!firstByGroup[grp]) firstByGroup[grp] = row;
-      }
-    }
+  for(const h of hits){
+    const row = document.querySelector(`.mark-item[data-mark-id="${CSS.escape(h.marker.id)}"]`);
+    if(!row) continue;
+    row.classList.add('active');
+    if(!firstByGroup[h.kind]) firstByGroup[h.kind] = row;
   }
-
-  // Scroll the first matched row of EACH group into view. Use a custom helper
-  // (instead of scrollIntoView) that scrolls ONLY the .marks-group-body — never
-  // bubbling up to the page-level scroll. This avoids accidentally scrolling
-  // the sidebar or window when the markers panel is short.
   for(const grp of ['zu','oks','exp']){
     const row = firstByGroup[grp];
     if(row) _scrollRowIntoGroupBody(row);
@@ -3690,16 +3725,26 @@ function _scrollRowIntoGroupBody(row){
 function _hitTestMarker(m, clickLat, clickLon){
   if(!m || !m.pmRef) return false;
   const pm = m.pmRef;
-  // Cad placemark — geom is GeoJSON, coordinates [lon, lat]
+  // Helper: is a point [lat, lon] within 18 pixels of the click in screen space?
+  // v64: replaces the previous 0.0001° (~11 m) tolerance which over-matched in
+  // dense pin clusters. Falls back to degree-based when map isn't ready.
+  const pointHit = (lat, lon) => {
+    if(typeof map === 'undefined' || !map.latLngToContainerPoint){
+      return Math.abs(lat - clickLat) < 0.0001 && Math.abs(lon - clickLon) < 0.0001;
+    }
+    const click = map.latLngToContainerPoint([clickLat, clickLon]);
+    const target = map.latLngToContainerPoint([lat, lon]);
+    return Math.hypot(click.x - target.x, click.y - target.y) < 18;
+  };
   if(m.source === 'cad'){
     const g = pm.geom;
     if(!g) return false;
     if(g.type === 'Point'){
       const [lon, lat] = g.coordinates;
-      return Math.abs(lat - clickLat) < 0.0001 && Math.abs(lon - clickLon) < 0.0001;
+      return pointHit(lat, lon);
     }
     if(g.type === 'Polygon'){
-      const ring = (g.coordinates[0] || []).map(([lon, lat]) => [lat, lon]); // → [[lat,lon],…]
+      const ring = (g.coordinates[0] || []).map(([lon, lat]) => [lat, lon]);
       return _pointInRing(clickLat, clickLon, ring);
     }
     if(g.type === 'MultiPolygon'){
@@ -3711,10 +3756,9 @@ function _hitTestMarker(m, clickLat, clickLon){
     }
     return false;
   }
-  // Parsed KML placemark — coords are already [lat, lon] for Point, [[lat,lon],…] for Polygon
   if(pm.type === 'Point'){
     const [lat, lon] = pm.coords;
-    return Math.abs(lat - clickLat) < 0.0001 && Math.abs(lon - clickLon) < 0.0001;
+    return pointHit(lat, lon);
   }
   if(pm.type === 'Polygon' && pm.coords?.length){
     return _pointInRing(clickLat, clickLon, pm.coords);
