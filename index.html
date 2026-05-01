@@ -193,6 +193,29 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .del-btn{position:absolute;top:4px;right:4px;width:17px;height:17px;background:rgba(13,15,20,.8);border:1px solid var(--border);border-radius:50%;color:var(--muted);font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,color .15s;padding:0;line-height:1;z-index:3}
 .photo-item:hover .del-btn{opacity:1}
 .del-btn:hover{color:var(--danger);border-color:var(--danger)}
+/* ── Move-to-folder feature ───────────────────────────────────── */
+.photo-move-btn{position:absolute;top:4px;right:24px;width:17px;height:17px;background:rgba(13,15,20,.8);border:1px solid var(--border);border-radius:50%;color:var(--muted);font-size:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,color .15s,border-color .15s;padding:0;line-height:1;z-index:3}
+.photo-item:hover .photo-move-btn{opacity:1}
+.photo-move-btn:hover{color:#47c8ff;border-color:#47c8ff}
+#lb-move-btn{background:none;border:none;cursor:pointer;padding:1px 4px;border-radius:3px;color:var(--muted);font-size:13px;line-height:1;transition:color .12s,background .12s;display:none}
+#lb-move-btn.visible{display:inline-flex;align-items:center}
+#lb-move-btn:hover{color:#47c8ff;background:rgba(71,200,255,.12)}
+#lb-move-panel{display:none;padding:10px 12px 12px;font-family:'JetBrains Mono',monospace}
+#lb-move-panel.visible{display:block}
+#lb-move-panel .lmp-title{font-size:10px;font-weight:700;color:#47c8ff;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+#lb-move-panel .lmp-filename{font-size:11px;color:var(--text);background:rgba(255,255,255,.06);border-radius:4px;padding:5px 8px;margin-bottom:8px;word-break:break-all;border:1px solid var(--border)}
+#lb-move-panel .lmp-hint{font-size:10px;color:var(--muted);line-height:1.5;margin-bottom:10px}
+#lb-move-panel .lmp-hint em{color:#47c8ff;font-style:normal}
+#lb-move-panel .lmp-root-needed{font-size:10px;color:#ff9500;background:rgba(255,149,0,.08);border:1px solid rgba(255,149,0,.25);border-radius:4px;padding:6px 8px;margin-bottom:8px;display:none}
+#lb-move-panel .lmp-root-needed.visible{display:block}
+#lb-move-panel .lmp-cancel-btn{background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;cursor:pointer;padding:4px 10px;font-family:'JetBrains Mono',monospace;transition:background .12s}
+#lb-move-panel .lmp-cancel-btn:hover{background:rgba(255,255,255,.12)}
+/* Folder tree in move mode */
+#folder-tree-panel.move-mode .ftree-title{color:#47c8ff}
+#folder-tree-panel.move-mode .fnode-row{cursor:pointer;transition:background .1s,border .1s}
+#folder-tree-panel.move-mode .fnode-row:hover{background:rgba(71,200,255,.15) !important;border-radius:4px}
+#folder-tree-panel.move-mode .fnode-row::after{content:'→';font-size:9px;color:#47c8ff;margin-left:4px;opacity:.7}
+#folder-tree-panel.move-mode .ftree-header{background:rgba(71,200,255,.08);border-bottom:1px solid rgba(71,200,255,.2)}
 #no-photos{padding:20px 14px;text-align:center;color:var(--muted);font-size:11px;line-height:1.7}
 
 /* YANDEX DIALOG */
@@ -830,9 +853,18 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
         <button id="lb-copy-name-btn" title="Копировать имя" onclick="copyToClipboard(photos[activeIdx]?.name||'')">
           <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
         </button>
+        <button id="lb-move-btn" title="Переместить файл в папку на диске" onclick="startPhotoMove(activeIdx)">📂→</button>
         <button id="lb-close-bar" onclick="event.stopPropagation();closeLightbox()">&#215;</button>
       </div>
       <div id="lb-section-label">Геолокация и съёмка</div>
+      <!-- Move-to-folder panel (replaces img+info when move mode active) -->
+      <div id="lb-move-panel">
+        <div class="lmp-title">📂 Перемещение фото в папку</div>
+        <div class="lmp-filename" id="lmp-filename-text"></div>
+        <div class="lmp-root-needed" id="lmp-root-needed">⚠ Потребуется выбрать корневую папку с фотографиями (даст доступ на чтение/запись)</div>
+        <div class="lmp-hint">Выберите папку в окне <em>«Структура объекта»</em> ↙<br/>— файл переместится в неё на диске</div>
+        <button class="lmp-cancel-btn" onclick="cancelPhotoMove()">✖ Отмена</button>
+      </div>
       <div id="lb-img-wrap"><img id="lb-img" src="" alt=""/></div>
       <div id="lb-zoom-bar">
         <button class="lbz-btn" onclick="lbZoomOut()">&#8722;</button>
@@ -2739,6 +2771,7 @@ async function triggerFolderUpload(){
       const dh=await window.showDirectoryPicker({mode:'read'});
       _savePathHint(_LS_PATH_PHOTO, dh.name);
       _captureFirstSessionName('photo', dh.name);
+      _photoRootDirHandle = dh; // save for potential move operations
       showToast('⏳ Сканирование…','info',6000);
       const{photos:pe,kmls:ke}=await collectFilesFromHandle(dh,'',dh.name);
       for(const k of ke)await loadKMLFromFile(k.file,k.name);
@@ -2904,8 +2937,9 @@ function renderFolderNodes(nodes,container,depth){
     });
 
     row.appendChild(toggle);row.appendChild(icon);row.appendChild(label);row.appendChild(count);row.appendChild(del);
-    // П2: click to activate folder filter
+    // П2: click to activate folder filter OR execute move in move-mode
     row.addEventListener('click',()=>{
+      if(_moveModePhotoIdx!==null){executePhotoMove(node.path);return;}
       if(selectedFolderPath===node.path){clearFolderFilter();}
       else{setFolderFilter(node.path);}
     });
@@ -3874,6 +3908,148 @@ function _pointInRing(lat, lon, ring){
 }
 
 
+// ═══ MOVE PHOTO TO FOLDER (File System Access API) ═══════════════
+// Works in Chrome/Edge on Win10. Requires user to grant readwrite access
+// to the root photo directory (once per session).
+let _moveModePhotoIdx = null;  // photo index being moved, null = not in move mode
+let _photoRootDirHandle = null; // FileSystemDirectoryHandle to photo root
+
+function startPhotoMove(idx){
+  const p=photos[idx];
+  if(!p||p.isRemote){showToast('Перемещение доступно только для локальных фото','warn');return;}
+
+  const hasTree=Object.keys(buildFolderTree()).length>0;
+  if(!hasTree){showToast('Нет папок в «Структура объекта» — создайте папки сначала','warn',5000);return;}
+
+  _moveModePhotoIdx=idx;
+
+  // Expand & highlight folder tree
+  const treePanel=document.getElementById('folder-tree-panel');
+  treePanel.classList.add('visible','move-mode');
+  folderTreeIsOpen=true;
+  updateFolderTreePanel();
+
+  // Show move panel in lightbox, hide normal content
+  document.getElementById('lb-section-label').textContent='📂 Перемещение фото в папку';
+  document.getElementById('lb-move-panel').classList.add('visible');
+  document.getElementById('lmp-filename-text').textContent=p.name;
+  // Show hint about root dir if we don't have a handle yet
+  document.getElementById('lmp-root-needed').classList.toggle('visible',!_photoRootDirHandle);
+  document.getElementById('lb-img-wrap').style.display='none';
+  document.getElementById('lb-zoom-bar').style.display='none';
+  document.getElementById('lb-info').style.display='none';
+  document.getElementById('lb-move-btn').style.display='none';
+}
+
+function cancelPhotoMove(){
+  _moveModePhotoIdx=null;
+  document.getElementById('folder-tree-panel').classList.remove('move-mode');
+  document.getElementById('lb-section-label').textContent='Геолокация и съёмка';
+  document.getElementById('lb-move-panel').classList.remove('visible');
+  document.getElementById('lb-img-wrap').style.display='';
+  document.getElementById('lb-zoom-bar').style.display='';
+  document.getElementById('lb-info').style.display='';
+  const lbMoveBtn=document.getElementById('lb-move-btn');
+  lbMoveBtn.style.display='';
+  if(activeIdx!=null&&!photos[activeIdx]?.isRemote)lbMoveBtn.classList.add('visible');
+  updateFolderTreePanel();
+}
+
+async function executePhotoMove(targetLocPath){
+  if(_moveModePhotoIdx===null)return;
+  const idx=_moveModePhotoIdx;
+  const p=photos[idx];
+  if(!p)return;
+
+  // Check FSA support
+  if(typeof window.showDirectoryPicker!=='function'){
+    showToast('⚠ Браузер не поддерживает File System Access API. Используйте Chrome/Edge.','error',8000);
+    return;
+  }
+
+  // Acquire (or re-acquire) root directory handle with readwrite
+  if(!_photoRootDirHandle){
+    try{
+      showToast('Выберите корневую папку с фотографиями…','info',5000);
+      _photoRootDirHandle=await window.showDirectoryPicker({mode:'readwrite'});
+    }catch(e){
+      if(e.name!=='AbortError')showToast('⚠ Отменено или нет доступа к папке','warn',4000);
+      return;
+    }
+  }
+
+  // Ensure we still have readwrite permission (may be revoked after sleep)
+  try{
+    const perm=await _photoRootDirHandle.requestPermission({mode:'readwrite'});
+    if(perm!=='granted'){
+      showToast('⚠ Нет прав записи в папку. Выберите папку заново.','error',5000);
+      _photoRootDirHandle=null;
+      return;
+    }
+  }catch(e){
+    _photoRootDirHandle=null;
+    showToast('⚠ Нет доступа к папке. Выберите заново.','error',5000);
+    return;
+  }
+
+  // Prevent moving to same folder
+  if(p.locPath===targetLocPath){
+    showToast('Файл уже находится в этой папке','warn');
+    cancelPhotoMove();
+    return;
+  }
+
+  try{
+    // ── 1. Navigate/create target directory ──────────────────────
+    let targetDir=_photoRootDirHandle;
+    for(const part of targetLocPath.split('/').filter(Boolean)){
+      targetDir=await targetDir.getDirectoryHandle(part,{create:true});
+    }
+
+    // ── 2. Write file to target ───────────────────────────────────
+    const blob=p.file; // File object (available for all local photos)
+    const targetFH=await targetDir.getFileHandle(p.name,{create:true});
+    const writable=await targetFH.createWritable();
+    await writable.write(blob);
+    await writable.close();
+
+    // ── 3. Delete source file ─────────────────────────────────────
+    // Navigate to source directory (p.locPath is relative to root handle)
+    let sourceDir=_photoRootDirHandle;
+    const sourceParts=(p.locPath||'').split('/').filter(Boolean);
+    for(const part of sourceParts){
+      try{sourceDir=await sourceDir.getDirectoryHandle(part);}
+      catch(_){sourceDir=null;break;}
+    }
+    if(sourceDir){
+      try{await sourceDir.removeEntry(p.name);}
+      catch(e){showToast(`⚠ Файл скопирован, но удалить оригинал не удалось: ${e.message}`,'warn',7000);}
+    }else{
+      showToast('⚠ Файл скопирован, но исходная папка не найдена в выбранном корне','warn',6000);
+    }
+
+    // ── 4. Update photo state in app ──────────────────────────────
+    p.locPath=targetLocPath;
+
+    showToast(`✅ ${p.name} → ${targetLocPath}`,'success',5000);
+    cancelPhotoMove();
+    updateFolderTreePanel();
+    renderList();
+    // Re-open lightbox to show updated locPath
+    openLightbox(idx,p.lat!=null?L.latLng(p.lat,p.lon):null);
+
+  }catch(e){
+    console.error('[ekcelo move]',e);
+    // If root handle is bad — reset so user can re-pick
+    if(e.name==='NotFoundError'||e.name==='NotAllowedError'){
+      _photoRootDirHandle=null;
+      showToast(`⚠ Ошибка доступа: ${e.message}. Попробуйте ещё раз.`,'error',7000);
+    }else{
+      showToast(`⚠ Ошибка перемещения: ${e.message}`,'error',7000);
+    }
+  }
+}
+
 function renderList(){
   const list=document.getElementById('photo-list');
   list.innerHTML='';
@@ -3947,6 +4123,13 @@ function renderPhotoItem(i,container,isDragCandidate=false){
   const del=document.createElement('button');del.className='del-btn';del.innerHTML='&#215;';
   del.addEventListener('click',ev=>{ev.stopPropagation();deletePhoto(i);});
 
+  // Move-to-folder button (local photos only)
+  if(!p.isRemote){
+    const mvBtn=document.createElement('button');mvBtn.className='photo-move-btn';mvBtn.title='Переместить файл в папку на диске';mvBtn.innerHTML='📂';
+    mvBtn.addEventListener('click',ev=>{ev.stopPropagation();openLightbox(i,p.lat!=null?L.latLng(p.lat,p.lon):null).then(()=>startPhotoMove(i));});
+    item.appendChild(mvBtn);
+  }
+
   item.appendChild(thumb);item.appendChild(meta);item.appendChild(del);
   container.appendChild(item);
 }
@@ -3988,6 +4171,9 @@ async function openLightbox(idx,latlng){
   document.getElementById('lb-zoom-val').textContent='100%';
   document.getElementById('lb-filename-text').textContent=p.name;
   document.getElementById('lb-filename-text').title=p.name;
+  // Show move button only for local (disk) photos
+  const lbMoveBtn=document.getElementById('lb-move-btn');
+  lbMoveBtn.classList.toggle('visible',!p.isRemote);
   document.getElementById('lb-tbody').innerHTML=buildRows(p);
   document.getElementById('lb-card').classList.remove('gps-active');
   const lb=document.getElementById('lightbox');
@@ -4141,6 +4327,7 @@ let lbManualPos=false; // set when user drags, prevents map auto-reposition
 })();
 
 function closeLightbox(){
+  if(_moveModePhotoIdx!==null)cancelPhotoMove();
   document.getElementById('lightbox').classList.remove('visible');
   document.getElementById('lb-card').classList.remove('gps-active');
   document.querySelectorAll('.photo-item').forEach(el=>el.classList.remove('active'));
