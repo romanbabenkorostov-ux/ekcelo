@@ -1435,14 +1435,76 @@ async function queryNSPDAtPoint(){
 
   cadastrePopup.openOn(map);
 
-  // After popup opens, scroll the popup pane so top of content is visible
-  // (important when result list is long)
+  // After autopan settles, shift any info-cards that overlap the popup area.
   setTimeout(() => {
     const popupEl = cadastrePopup.getElement?.();
     if(popupEl) popupEl.scrollTop = 0;
-  }, 80);
+    _shiftCardsAwayFromPopup();
+  }, 280);
 
   setTimeout(updateCadastreCacheInfo, 2000);
+}
+
+// Shift floating info-cards so they don't overlap the currently open Leaflet popup.
+// Cards are nudged toward whichever screen quadrant has the most free space.
+function _shiftCardsAwayFromPopup(){
+  // Find the visible Leaflet popup wrapper
+  const mw = document.getElementById('map-wrap');
+  if(!mw || _infoCards.size === 0) return;
+  const popEl = mw.querySelector('.leaflet-popup');
+  if(!popEl) return;
+
+  const popR  = popEl.getBoundingClientRect();
+  const mwR   = mw.getBoundingClientRect();
+  // Popup rect relative to map-wrap
+  const pLeft   = popR.left   - mwR.left;
+  const pTop    = popR.top    - mwR.top;
+  const pRight  = popR.right  - mwR.left;
+  const pBottom = popR.bottom - mwR.top;
+  const MARGIN  = 12;
+
+  _infoCards.forEach(entry => {
+    const el = entry.el;
+    let cx = parseInt(el.style.left, 10) || 0;
+    let cy = parseInt(el.style.top,  10) || 0;
+    const cw = el.offsetWidth  || 240;
+    const ch = el.offsetHeight || 120;
+
+    // Check overlap (with small margin)
+    const overlapX = cx < pRight  + MARGIN && cx + cw > pLeft   - MARGIN;
+    const overlapY = cy < pBottom + MARGIN && cy + ch > pTop    - MARGIN;
+    if(!overlapX || !overlapY) return; // no collision — leave alone
+
+    // Choose the axis with the smallest required shift
+    const shiftRight  = pRight  + MARGIN - cx;
+    const shiftLeft   = (cx + cw) - (pLeft - MARGIN);
+    const shiftDown   = pBottom + MARGIN - cy;
+    const shiftUp     = (cy + ch) - (pTop  - MARGIN);
+
+    const bestShift = Math.min(shiftRight, shiftLeft, shiftDown, shiftUp);
+    const GRIP = 32;
+    const W = mwR.width, H = mwR.height;
+
+    if(bestShift === shiftLeft){
+      cx = pLeft - MARGIN - cw;
+    } else if(bestShift === shiftRight){
+      cx = pRight + MARGIN;
+    } else if(bestShift === shiftUp){
+      cy = pTop - MARGIN - ch;
+    } else {
+      cy = pBottom + MARGIN;
+    }
+    // Allow going partially off-screen (consistent with drag policy)
+    cx = Math.max(-(cw - GRIP), Math.min(W - GRIP, cx));
+    cy = Math.max(-GRIP, Math.min(H - GRIP, cy));
+
+    el.style.left = cx + 'px';
+    el.style.top  = cy + 'px';
+    const ap = map.latLngToContainerPoint(entry.anchorLL);
+    entry.dx = cx - ap.x;
+    entry.dy = cy - ap.y;
+  });
+  _redrawConnectors();
 }
 
 function _findCadNum(props){
@@ -2059,7 +2121,8 @@ function startContourEditor(geom, type, cadNum, prefillDesc){
   _refreshMidpoints();
   _showEditorToolbar();
 
-  try { map.fitBounds(polygon.getBounds(), {padding:[60,60], maxZoom:21}); } catch(_){}
+  // Do NOT auto-fitBounds — user should be free to pan along the contour
+  // to inspect and edit it before saving. (fitBounds was removed in v2.9.29)
   showToast('✏ Тяните точки, ПКМ → удалить, кликните 🔵 чтобы добавить','info',4500);
 }
 
@@ -2669,8 +2732,11 @@ function _attachInfoCardDrag(el, entry){
     const mw = document.getElementById('map-wrap');
     const W = mw.offsetWidth, H = mw.offsetHeight;
     const cw = el.offsetWidth, ch = el.offsetHeight;
-    const nx = Math.max(0, Math.min(W - cw, ox + (e.clientX - sx)));
-    const ny = Math.max(0, Math.min(H - ch, oy + (e.clientY - sy)));
+    // Allow dragging partially off-screen so user can clear space for other windows.
+    // Minimum 32px of the card header must remain visible (so card can be dragged back).
+    const GRIP = 32;
+    const nx = Math.max(-(cw - GRIP), Math.min(W - GRIP, ox + (e.clientX - sx)));
+    const ny = Math.max(-GRIP, Math.min(H - GRIP, oy + (e.clientY - sy)));
     el.style.left = nx + 'px';
     el.style.top  = ny + 'px';
     // Update entry's pixel-delta-from-anchor so it survives map move
