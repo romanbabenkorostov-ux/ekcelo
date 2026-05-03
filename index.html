@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.28</title>
+<title>EkceloFoto v2.9.29</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -665,7 +665,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.28</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.29</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -683,6 +683,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
       <button onclick="closeUploadMenu();showGDrivePanel()">📁 Google Drive (папка)</button>
       <hr/>
       <button onclick="closeUploadMenu();pickKMLViaMenu()">🗺 Добавить KML вручную…</button>
+      <button onclick="closeUploadMenu();pickKMZViaMenu()">📦 Добавить KMZ (Google Earth)…</button>
       <button onclick="closeUploadMenu();pickXlsxCatalog()">📋 Загрузить кад.номера (XLSX)…</button>
       <!-- Path hints (Task 1): persistent reminders of last opened locations.
            Browsers don't expose absolute paths; we show the file/folder NAME so the
@@ -692,7 +693,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
   </div>
   <input type="file" id="file-input"            multiple accept="image/jpeg,image/jpg,.jpg,.jpeg"/>
   <input type="file" id="folder-input-fallback" multiple accept="image/jpeg,image/jpg,.jpg,.jpeg" webkitdirectory/>
-  <input type="file" id="kml-file-input"        multiple accept=".kml"/>
+  <input type="file" id="kml-file-input"        multiple accept=".kml,.kmz"/>
   <input type="file" id="xlsx-file-input"       accept=".xlsx,.xls" style="display:none" onchange="onXlsxFileChosen(this)"/>
   <label id="auto-save-label" title="Авто-запись EXIF при навигации">
     <input type="checkbox" id="auto-save-cb" onchange="onAutoSaveCbChange(this)"/>
@@ -1415,7 +1416,32 @@ async function queryNSPDAtPoint(){
     });
   }
   html += '</div>';
-  L.popup({maxWidth:380}).setLatLng(window.lastClickedPoint).setContent(html).openOn(map);
+
+  // ── Positioning: ensure the popup is fully visible ─────────────
+  // Sidebar is ~280px wide (left); timeline ~70px tall (bottom).
+  // autoPanPaddingTopLeft/BottomRight tell Leaflet to keep the popup
+  // inside those insets — so it never hides behind the sidebar or
+  // behind the "Координаты" floating card.
+  const sidebarW = (document.getElementById('sidebar')?.offsetWidth || 280) + 16;
+  const timelineH = (document.getElementById('timeline')?.offsetHeight || 60) + 16;
+  const cadastrePopup = L.popup({
+    maxWidth: 400,
+    autoPan: true,
+    autoPanPaddingTopLeft:     L.point(sidebarW, 60),
+    autoPanPaddingBottomRight: L.point(80, timelineH + 60),
+    keepInView: true,
+    offset: L.point(0, -8),
+  }).setLatLng(window.lastClickedPoint).setContent(html);
+
+  cadastrePopup.openOn(map);
+
+  // After popup opens, scroll the popup pane so top of content is visible
+  // (important when result list is long)
+  setTimeout(() => {
+    const popupEl = cadastrePopup.getElement?.();
+    if(popupEl) popupEl.scrollTop = 0;
+  }, 80);
+
   setTimeout(updateCadastreCacheInfo, 2000);
 }
 
@@ -2859,7 +2885,7 @@ async function triggerFolderUpload(){
       _photoRootDirHandle = dh; // save for potential move operations
       showToast('⏳ Сканирование…','info',6000);
       const{photos:pe,kmls:ke}=await collectFilesFromHandle(dh,'',dh.name);
-      for(const k of ke)await loadKMLFromFile(k.file,k.name);
+      for(const k of ke){if(k.isKmz)await loadKMZFromFile(k.file,k.name);else await loadKMLFromFile(k.file,k.name);}
       if(pe.length)await handleFileEntries(pe,dh.name);
       else if(!ke.length)showToast('Файлов не найдено','warn');
     }catch(e){if(e.name!=='AbortError')document.getElementById('folder-input-fallback').click();}
@@ -2871,7 +2897,8 @@ async function collectFilesFromHandle(dh,relPath,rootName){
   for await(const[name,entry]of dh.entries()){
     if(entry.kind==='file'){
       if(/\.jpe?g$/i.test(name)){const f=await entry.getFile();photos.push({file:f,locPath:relPath,fileHandle:entry});}
-      else if(/\.kml$/i.test(name)){const f=await entry.getFile();kmls.push({file:f,name,relPath});}
+      else if(/\.kml$/i.test(name)){const f=await entry.getFile();kmls.push({file:f,name,relPath,isKmz:false});}
+      else if(/\.kmz$/i.test(name)){const f=await entry.getFile();kmls.push({file:f,name,relPath,isKmz:true});}
     }else if(entry.kind==='directory'){
       const sub=await collectFilesFromHandle(entry,relPath?`${relPath}/${name}`:name,rootName);
       photos.push(...sub.photos);kmls.push(...sub.kmls);
@@ -2883,9 +2910,9 @@ async function collectFilesFromHandle(dh,relPath,rootName){
 function triggerFileUpload(){document.getElementById('file-input').click();}
 document.getElementById('file-input').addEventListener('change',e=>{const ents=[...(e.target.files||[])].map(f=>({file:f,locPath:deriveFolderPath(f,''),fileHandle:null}));handleFileEntries(ents,'');e.target.value='';});
 document.getElementById('folder-input-fallback').addEventListener('change',e=>{const files=[...(e.target.files||[])];if(!files.length)return;const rn=(files[0].webkitRelativePath||'').split('/')[0]||'';if(rn){_captureFirstSessionName('photo',rn);_savePathHint(_LS_PATH_PHOTO,rn);}handleFileEntries(files.map(f=>({file:f,locPath:deriveFolderPath(f,rn),fileHandle:null})),rn);e.target.value='';});
-document.getElementById('kml-file-input').addEventListener('change',async e=>{for(const f of e.target.files||[]){_captureFirstSessionName('kml',f.name);await loadKMLFromFile(f,f.name);}e.target.value='';});
+document.getElementById('kml-file-input').addEventListener('change',async e=>{for(const f of e.target.files||[]){_captureFirstSessionName('kml',f.name);if(/\.kmz$/i.test(f.name))await loadKMZFromFile(f,f.name);else await loadKMLFromFile(f,f.name);}e.target.value='';});
 document.getElementById('map-wrap').addEventListener('dragover',e=>e.preventDefault());
-document.getElementById('map-wrap').addEventListener('drop',e=>{e.preventDefault();const fs=[...e.dataTransfer.files];const js=fs.filter(f=>/jpe?g/i.test(f.type||f.name));const ks=fs.filter(f=>/\.kml$/i.test(f.name));if(js.length)handleFileEntries(js.map(f=>({file:f,locPath:'',fileHandle:null})),'');ks.forEach(f=>loadKMLFromFile(f,f.name));});
+document.getElementById('map-wrap').addEventListener('drop',e=>{e.preventDefault();const fs=[...e.dataTransfer.files];const js=fs.filter(f=>/jpe?g/i.test(f.type||f.name));const ks=fs.filter(f=>/\.kml$/i.test(f.name));const kzs=fs.filter(f=>/\.kmz$/i.test(f.name));if(js.length)handleFileEntries(js.map(f=>({file:f,locPath:'',fileHandle:null})),'');ks.forEach(f=>loadKMLFromFile(f,f.name));kzs.forEach(f=>loadKMZFromFile(f,f.name));});
 
 async function handleFileEntries(entries,rootName){
   if(!entries.length)return;
@@ -3265,6 +3292,100 @@ async function loadKMLFromFile(file,displayName,handle){
     await _loadKMLFromText(text, displayName||file.name, handle||null);
   } catch(e){showToast(`❌ KML: ${e.message}`,'error',5000);}
 }
+
+// ── KMZ import ────────────────────────────────────────────────────
+// KMZ is a ZIP archive containing doc.kml (or other .kml) plus optional
+// ground overlays and photos. We use the already-loaded JSZip library.
+async function loadKMZFromFile(file, displayName){
+  if(typeof JSZip === 'undefined'){
+    showToast('⚠ JSZip не загружен — KMZ недоступен','error',4000);
+    return;
+  }
+  try{
+    showToast(`⏳ Читаем KMZ: ${displayName||file.name}…`,'info',5000);
+    const buf = await file.arrayBuffer();
+    const zip = await JSZip.loadAsync(buf);
+
+    // 1. Find the root KML (Google Earth convention: doc.kml first, else first .kml)
+    const kmlFiles = Object.keys(zip.files).filter(n => /\.kml$/i.test(n) && !zip.files[n].dir);
+    if(!kmlFiles.length){
+      showToast(`❌ KMZ не содержит .kml файлов: ${displayName}`,'error',5000);
+      return;
+    }
+    // Prefer "doc.kml" at root, then shortest path
+    const kmlName = kmlFiles.find(n => /^doc\.kml$/i.test(n.split('/').pop()))
+                 || kmlFiles.sort((a,b) => a.length - b.length)[0];
+    const kmlText = await zip.files[kmlName].async('string');
+
+    // 2. Extract embedded photos referenced in the KML (GroundOverlay / PhotoOverlay / href)
+    //    and register them as blob URLs so relative src= paths resolve inside the app.
+    const _kmzBlobMap = {};  // filename → blob URL
+    const imgFiles = Object.keys(zip.files).filter(n =>
+      !zip.files[n].dir && /\.(jpe?g|png|gif|webp)$/i.test(n)
+    );
+    for(const imgPath of imgFiles){
+      const blob = await zip.files[imgPath].async('blob');
+      const blobUrl = URL.createObjectURL(blob);
+      _kmzBlobMap[imgPath] = blobUrl;
+      // Also store by basename so relative href="photo.jpg" works
+      _kmzBlobMap[imgPath.split('/').pop()] = blobUrl;
+    }
+
+    // 3. Patch KML text: replace relative image hrefs with blob URLs
+    let patchedKML = kmlText;
+    for(const [name, blobUrl] of Object.entries(_kmzBlobMap)){
+      // Replace <href>name</href> with blob URL (handles both basename and full path)
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      patchedKML = patchedKML.replace(
+        new RegExp(`(<href>)${escaped}(</href>)`, 'gi'),
+        `$1${blobUrl}$2`
+      );
+    }
+
+    // 4. Load the patched KML as usual
+    const kmzDisplayName = (displayName||file.name).replace(/\.kmz$/i,'');
+    await _loadKMLFromText(patchedKML, kmzDisplayName, null);
+
+    // 5. Load any embedded JPEG photos with GPS as photo markers
+    const photoEntries = [];
+    for(const imgPath of imgFiles){
+      if(!/\.jpe?g$/i.test(imgPath)) continue;
+      const blob = await zip.files[imgPath].async('blob');
+      const f = new File([blob], imgPath.split('/').pop(), {type:'image/jpeg'});
+      photoEntries.push({file:f, locPath:'', fileHandle:null});
+    }
+    if(photoEntries.length){
+      await handleFileEntries(photoEntries, kmzDisplayName);
+      showToast(`📸 KMZ: извлечено ${photoEntries.length} фото из архива`,'info',3000);
+    }
+
+  } catch(e){
+    console.error('[kmz]', e);
+    showToast(`❌ KMZ: ${e.message}`,'error',6000);
+  }
+}
+
+// FSA-aware KMZ menu picker
+window.pickKMZViaMenu = async function(){
+  if(_fsaSupported){
+    try{
+      const handles = await window.showOpenFilePicker({
+        types:[{description:'KMZ (Google Earth)', accept:{'application/vnd.google-earth.kmz':['.kmz']}}],
+        multiple: true,
+      });
+      for(const h of handles){
+        const f = await h.getFile();
+        _captureFirstSessionName('kml', f.name);
+        await loadKMZFromFile(f, f.name);
+      }
+      return;
+    } catch(e){
+      if(e?.name === 'AbortError') return;
+    }
+  }
+  // Fallback: reuse kml-file-input (already accepts .kmz)
+  document.getElementById('kml-file-input').click();
+};
 
 // FSA-aware menu picker for KML — gives writable handle so saves go to the same file
 window.pickKMLViaMenu = async function(){
