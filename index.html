@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.30</title>
+<title>EkceloFoto v2.9.31</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -197,9 +197,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .photo-move-btn{position:absolute;top:4px;right:24px;width:17px;height:17px;background:rgba(13,15,20,.8);border:1px solid var(--border);border-radius:50%;color:var(--muted);font-size:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,color .15s,border-color .15s;padding:0;line-height:1;z-index:3}
 .photo-item:hover .photo-move-btn{opacity:1}
 .photo-move-btn:hover{color:#47c8ff;border-color:#47c8ff}
-#lb-move-btn{background:none;border:none;cursor:pointer;padding:1px 5px;border-radius:3px;color:var(--muted);font-size:12px;line-height:1;transition:color .12s,background .12s;display:none;flex-shrink:0}
-#lb-move-btn.visible{display:inline-flex;align-items:center}
+#lb-move-btn{background:none;border:none;cursor:pointer;padding:2px 4px;border-radius:3px;color:var(--muted);line-height:1;transition:color .12s,background .12s;display:none;flex-shrink:0;align-items:center}
+#lb-move-btn.visible{display:inline-flex}
 #lb-move-btn:hover{color:#47c8ff;background:rgba(71,200,255,.12)}
+#lb-move-btn svg{display:block}
 #lb-move-panel{display:none;padding:10px 12px 12px;font-family:'JetBrains Mono',monospace}
 #lb-move-panel.visible{display:block}
 #lb-move-panel .lmp-title{font-size:10px;font-weight:700;color:#47c8ff;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
@@ -252,6 +253,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .leaflet-marker-icon.marker-dim{opacity:0.2!important}
 /* Leaflet's default .leaflet-div-icon has background:#fff; border:1px solid #666 — causes white squares */
 .leaflet-div-icon{background:transparent!important;border:none!important}
+/* Also hide broken-image placeholder from default Leaflet marker (no marker-icon.png in SPA) */
+.leaflet-marker-icon:not([src]):not([style*='background-image']),.leaflet-marker-shadow{display:none!important}
 
 /* MANUAL GPS PANEL */
 #manual-gps-panel{display:none;position:absolute;bottom:136px;right:12px;z-index:800;width:280px;background:var(--surface);border:1px solid rgba(71,200,255,.4);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.7);padding:12px 14px;font-family:'JetBrains Mono',monospace}
@@ -659,7 +662,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.30</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.31</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -854,7 +857,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
         <button id="lb-copy-name-btn" title="Копировать имя" onclick="copyToClipboard(photos[activeIdx]?.name||'')">
           <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
         </button>
-        <button id="lb-move-btn" title="Переместить файл в папку на диске" onclick="startPhotoMove(activeIdx)">📂→</button>
+        <button id="lb-move-btn" title="Переместить файл в папку на диске" onclick="startPhotoMove(activeIdx)"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6a2 2 0 0 1 2-2h3.17a2 2 0 0 1 1.42.59L9.83 6H16a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6z"/><path d="M11 11l2 2-2 2"/><line x1="7" y1="13" x2="13" y2="13"/></svg></button>
         <button id="lb-close-bar" onclick="event.stopPropagation();closeLightbox()">&#215;</button>
       </div>
       <div id="lb-section-label">Геолокация и съёмка</div>
@@ -1041,6 +1044,9 @@ function clearCadastreCache(){navigator.serviceWorker?.controller?.postMessage('
 
 // ═══ MAP ══════════════════════════════════════════════════════════
 const map=L.map('map',{center:[55.75,37.61],zoom:5,zoomControl:true,maxZoom:22});
+// Prevent Leaflet from trying to load missing marker-icon.png → white squares in SPA
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({iconUrl:'', shadowUrl:'', iconRetinaUrl:''});
 map.attributionControl.setPrefix(false);
 L.control.scale({imperial:false,metric:true,position:'bottomleft'}).addTo(map);
 const TILES={
@@ -4369,7 +4375,7 @@ function renderPhotoItem(i,container,isDragCandidate=false){
     const mvBtn=document.createElement('button');
     mvBtn.className='photo-move-btn';
     mvBtn.title='Переместить файл в папку на диске';
-    mvBtn.textContent='📂';
+    mvBtn.innerHTML='<svg width="9" height="9" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6a2 2 0 0 1 2-2h2.83a2 2 0 0 1 1.41.59L9.5 6H16a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6z"/><path d="M11 11l2 1.5-2 1.5"/><line x1="7" y1="12.5" x2="13" y2="12.5"/></svg>';
     mvBtn.addEventListener('click',async ev=>{
       ev.stopPropagation();
       await openLightbox(i, p.lat!=null?L.latLng(p.lat,p.lon):null);
@@ -4419,9 +4425,9 @@ async function openLightbox(idx,latlng){
   document.getElementById('lb-zoom-val').textContent='100%';
   document.getElementById('lb-filename-text').textContent=p.name;
   document.getElementById('lb-filename-text').title=p.name;
-  // Move button: only for local photos (FSA-movable)
+  // Move button: show for all local photos that have a file blob (disk or KMZ-extracted)
   const _lbMoveBtn = document.getElementById('lb-move-btn');
-  _lbMoveBtn.classList.toggle('visible', !p.isRemote && p.sourceType!=='kmz');
+  _lbMoveBtn.classList.toggle('visible', !p.isRemote && !!p.file);
   document.getElementById('lb-tbody').innerHTML=buildRows(p);
   document.getElementById('lb-card').classList.remove('gps-active');
   const lb=document.getElementById('lightbox');
