@@ -3269,6 +3269,7 @@ async function loadKMZFromFile(file, displayName){
     }
     if(photoAdded>0){
       updateStats(); renderList(); fitMapToPhotos(); updateTimelineData();
+      updateFolderTreePanel();
       showToast(`📸 KMZ: извлечено ${photoAdded} фото`, 'success', 4000);
     }
 
@@ -3344,6 +3345,13 @@ function _extractKMZPhotoPlacemarks(kmlText, blobMap, sourceLabel){
       node = node.parentElement;
     }
     if(pathParts.length) locPath = pathParts.join('/');
+
+    // Normalize locPath: strip leading "photo container" folder names (same
+    // rule as cleanPhotoPath in export), so round-trip is lossless.
+    // "Фотографии/Ростов_62/кв.4а" → "Ростов_62/кв.4а"
+    const _PHOTO_FOLDER_SKIP = /^(фото|фотографии|фотография|foto|photos?)$/i;
+    const normalizedParts = locPath.split('/').filter(s => s.trim() && !_PHOTO_FOLDER_SKIP.test(s.trim()));
+    locPath = normalizedParts.join('/');
 
     // Get blob for File-like object
     let fileBlob = null;
@@ -4196,7 +4204,12 @@ function renderPhotoItem(i,container,isDragCandidate=false){
     `<div class="photo-coords">${p.lat!==null?`${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`:'нет GPS'}</div>`+
     `<span class="gps-badge ${p.lat!==null?'gps-ok':'gps-no'}">${p.lat!==null?'GPS':'нет GPS'}</span>`;
   if(p.dateMismatch){const dm=document.createElement('span');dm.className='date-mismatch-badge';dm.textContent='⚠ дата';meta.appendChild(dm);}
-  if(p.locPath){const lb=document.createElement('span');lb.className='loc-badge';lb.title=p.locPath;lb.textContent='📁 '+p.locPath.split('/').pop();meta.appendChild(lb);}
+  if(p.locPath){
+    const _BP_SKIP=/^(фото|фотографии|фотография|foto|photos?)$/i;
+    const _bparts=p.locPath.split('/').filter(Boolean);
+    if(_bparts.length>1&&_BP_SKIP.test(_bparts[0]))_bparts.shift();
+    const lb=document.createElement('span');lb.className='loc-badge';lb.title=_bparts.map(s=>s.replace(/_/g,' ')).join(' / ');lb.textContent='📁 '+_bparts[_bparts.length-1].replace(/_/g,' ');meta.appendChild(lb);
+  }
   if(p.lat===null){
     const gb=document.createElement('button');gb.className='gps-manual-btn';
     gb.textContent=manualModePhotoIndex===i?'📍 Режим активен…':'📍 Указать GPS';
@@ -4269,7 +4282,15 @@ function buildRows(p){
   else rows.push(`<tr><td style="color:var(--muted);font-size:10px;width:92px">Угол съёмки</td><td><button class="gps-set-btn" onclick="enterGPSFromLightbox()">${ICON.compass} Установить</button></td></tr>`);
   if(p.altitude!=null)addRow('Высота',p.altitude.toFixed(1)+' м');
   addRow('Дата съёмки',p.date?formatDate(p.date):null);
-  if(p.locPath)addRow('Объект',p.locPath.split('/').join(' / '));
+  if(p.locPath){
+    // Display label: drop the root "container" segment (e.g. "Фотографии") if still
+    // present, replace underscores with spaces in every segment for readability.
+    const _LOC_SKIP = /^(фото|фотографии|фотография|foto|photos?)$/i;
+    const displayParts = p.locPath.split('/').filter(Boolean);
+    if(displayParts.length > 1 && _LOC_SKIP.test(displayParts[0])) displayParts.shift();
+    const displayLoc = displayParts.map(s => s.replace(/_/g,' ')).join(' / ');
+    addRow('Объект', displayLoc);
+  }
   if(p.dateMismatch)rows.push(`<tr><td colspan="2" style="font-size:9px;color:var(--warn);font-family:'JetBrains Mono',monospace;padding:3px 0">⚠ Дата файла ≠ дата съёмки</td></tr>`);
   const gpp=p.experimentData;
   if(gpp?.experiment){rows.push(`<tr><td colspan="2" style="background:rgba(232,255,71,.08);padding:5px 8px 4px;font-weight:700;color:var(--accent);font-size:10px;text-transform:uppercase;font-family:'JetBrains Mono',monospace;border-radius:4px">📋 Данные опыта</td></tr>`);const exp=gpp.experiment;if(exp.doc)addRow('Номер',exp.doc);if(exp.crop)addRow('Культура',exp.crop);if(exp.dt)addRow('Дата',exp.dt);}
@@ -6259,10 +6280,11 @@ window.exportKMZ = async function(){
       }
       const itemsPart = node.items.join('\n');
       const inner = childParts.join('\n') + (childParts.length && itemsPart ? '\n' : '') + itemsPart;
-      // Top-level "Фотографии" folder is always emitted; nested folders only if name given
       if(name == null) return inner;
+      // Replace underscores with spaces in KMZ folder names for readability
+      const folderDisplayName = name.replace(/_/g,' ');
       return `<Folder>`+
-        `<name><![CDATA[${name}]]></name>`+
+        `<name><![CDATA[${folderDisplayName}]]></name>`+
         `<open>0</open>`+
         inner+
         `</Folder>`;
