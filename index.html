@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.29</title>
+<title>EkceloFoto v2.9.28</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -90,9 +90,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .ftree-actions{display:flex;gap:4px}
 .ftree-action-btn{background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted);font-size:10px;padding:2px 6px;cursor:pointer;font-family:'JetBrains Mono',monospace;transition:all .12s}
 .ftree-action-btn:hover{border-color:var(--accent2);color:var(--accent2)}
-/* Filter button lights up when filter is active */
-.ftree-action-btn.filter-active{border-color:var(--accent);color:var(--accent);background:rgba(232,255,71,.12);font-weight:700}
-.ftree-action-btn.filter-active:hover{background:rgba(232,255,71,.22)}
 #folder-tree-content{max-height:200px;overflow-y:auto;padding:3px 0}
 #folder-tree-content::-webkit-scrollbar{width:4px}
 #folder-tree-content::-webkit-scrollbar-thumb{background:#2a3247;border-radius:2px}
@@ -196,29 +193,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .del-btn{position:absolute;top:4px;right:4px;width:17px;height:17px;background:rgba(13,15,20,.8);border:1px solid var(--border);border-radius:50%;color:var(--muted);font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,color .15s;padding:0;line-height:1;z-index:3}
 .photo-item:hover .del-btn{opacity:1}
 .del-btn:hover{color:var(--danger);border-color:var(--danger)}
-/* ── Move-to-folder feature ───────────────────────────────────── */
-.photo-move-btn{position:absolute;top:4px;right:24px;width:17px;height:17px;background:rgba(13,15,20,.8);border:1px solid var(--border);border-radius:50%;color:var(--muted);font-size:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,color .15s,border-color .15s;padding:0;line-height:1;z-index:3}
-.photo-item:hover .photo-move-btn{opacity:1}
-.photo-move-btn:hover{color:#47c8ff;border-color:#47c8ff}
-#lb-move-btn{background:none;border:none;cursor:pointer;padding:1px 4px;border-radius:3px;color:var(--muted);font-size:13px;line-height:1;transition:color .12s,background .12s;display:none}
-#lb-move-btn.visible{display:inline-flex;align-items:center}
-#lb-move-btn:hover{color:#47c8ff;background:rgba(71,200,255,.12)}
-#lb-move-panel{display:none;padding:10px 12px 12px;font-family:'JetBrains Mono',monospace}
-#lb-move-panel.visible{display:block}
-#lb-move-panel .lmp-title{font-size:10px;font-weight:700;color:#47c8ff;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
-#lb-move-panel .lmp-filename{font-size:11px;color:var(--text);background:rgba(255,255,255,.06);border-radius:4px;padding:5px 8px;margin-bottom:8px;word-break:break-all;border:1px solid var(--border)}
-#lb-move-panel .lmp-hint{font-size:10px;color:var(--muted);line-height:1.5;margin-bottom:10px}
-#lb-move-panel .lmp-hint em{color:#47c8ff;font-style:normal}
-#lb-move-panel .lmp-root-needed{font-size:10px;color:#ff9500;background:rgba(255,149,0,.08);border:1px solid rgba(255,149,0,.25);border-radius:4px;padding:6px 8px;margin-bottom:8px;display:none}
-#lb-move-panel .lmp-root-needed.visible{display:block}
-#lb-move-panel .lmp-cancel-btn{background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;cursor:pointer;padding:4px 10px;font-family:'JetBrains Mono',monospace;transition:background .12s}
-#lb-move-panel .lmp-cancel-btn:hover{background:rgba(255,255,255,.12)}
-/* Folder tree in move mode */
-#folder-tree-panel.move-mode .ftree-title{color:#47c8ff}
-#folder-tree-panel.move-mode .fnode-row{cursor:pointer;transition:background .1s,border .1s}
-#folder-tree-panel.move-mode .fnode-row:hover{background:rgba(71,200,255,.15) !important;border-radius:4px}
-#folder-tree-panel.move-mode .fnode-row::after{content:'→';font-size:9px;color:#47c8ff;margin-left:4px;opacity:.7}
-#folder-tree-panel.move-mode .ftree-header{background:rgba(71,200,255,.08);border-bottom:1px solid rgba(71,200,255,.2)}
 #no-photos{padding:20px 14px;text-align:center;color:var(--muted);font-size:11px;line-height:1.7}
 
 /* YANDEX DIALOG */
@@ -638,9 +612,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #contour-edit-finish:hover{filter:brightness(1.1)}
 #contour-edit-revert{background:#444;color:#fff}
 #contour-edit-cancel{background:transparent;color:#aaa;border:1px solid #555 !important}
-/* Snapping indicator dot in the editor */
-#snap-indicator{display:none;position:absolute;pointer-events:none;z-index:10500;border-radius:50%;border:2px solid #47c8ff;background:rgba(71,200,255,.25);width:18px;height:18px;transform:translate(-50%,-50%);transition:opacity .1s}
-#snap-indicator.visible{display:block}
 .edit-vertex{cursor:move !important}
 .edit-midpoint{cursor:crosshair !important}
 /* Explanation-point pin: a tall cyan teardrop, clearly distinct from edit vertices and photo dots */
@@ -665,7 +636,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.29</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.28</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -817,7 +788,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
       </div>
       <div class="ftree-actions" onclick="event.stopPropagation()">
         <button class="ftree-action-btn" onclick="createRootFolder()" title="Создать новую папку">+ папка</button>
-        <button id="ftree-filter-btn" class="ftree-action-btn" onclick="clearFolderFilter()" title="Сбросить фильтр папки">× фильтр</button>
+        <button class="ftree-action-btn" onclick="clearFolderFilter()" title="Сбросить фильтр папки">× фильтр</button>
       </div>
     </div>
     <div id="folder-tree-content"></div>
@@ -860,18 +831,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
         <button id="lb-copy-name-btn" title="Копировать имя" onclick="copyToClipboard(photos[activeIdx]?.name||'')">
           <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
         </button>
-        <button id="lb-move-btn" title="Переместить файл в папку на диске" onclick="startPhotoMove(activeIdx)">📂→</button>
         <button id="lb-close-bar" onclick="event.stopPropagation();closeLightbox()">&#215;</button>
       </div>
       <div id="lb-section-label">Геолокация и съёмка</div>
-      <!-- Move-to-folder panel (replaces img+info when move mode active) -->
-      <div id="lb-move-panel">
-        <div class="lmp-title">📂 Перемещение фото в папку</div>
-        <div class="lmp-filename" id="lmp-filename-text"></div>
-        <div class="lmp-root-needed" id="lmp-root-needed">⚠ Потребуется выбрать корневую папку с фотографиями (даст доступ на чтение/запись)</div>
-        <div class="lmp-hint">Выберите папку в окне <em>«Структура объекта»</em> ↙<br/>— файл переместится в неё на диске</div>
-        <button class="lmp-cancel-btn" onclick="cancelPhotoMove()">✖ Отмена</button>
-      </div>
       <div id="lb-img-wrap"><img id="lb-img" src="" alt=""/></div>
       <div id="lb-zoom-bar">
         <button class="lbz-btn" onclick="lbZoomOut()">&#8722;</button>
@@ -1417,94 +1379,28 @@ async function queryNSPDAtPoint(){
   }
   html += '</div>';
 
-  // ── Positioning: ensure the popup is fully visible ─────────────
-  // Sidebar is ~280px wide (left); timeline ~70px tall (bottom).
-  // autoPanPaddingTopLeft/BottomRight tell Leaflet to keep the popup
-  // inside those insets — so it never hides behind the sidebar or
-  // behind the "Координаты" floating card.
-  const sidebarW = (document.getElementById('sidebar')?.offsetWidth || 280) + 16;
-  const timelineH = (document.getElementById('timeline')?.offsetHeight || 60) + 16;
-  const cadastrePopup = L.popup({
-    maxWidth: 400,
-    autoPan: true,
-    autoPanPaddingTopLeft:     L.point(sidebarW, 60),
-    autoPanPaddingBottomRight: L.point(80, timelineH + 60),
-    keepInView: true,
-    offset: L.point(0, -8),
-  }).setLatLng(window.lastClickedPoint).setContent(html);
+  // ── Pre-pan so popup lands inside visible area; then open with autoPan:false
+  // to prevent the "spring-back" when user pans the map to inspect a tile boundary.
+  const _mwEl     = document.getElementById('map-wrap');
+  const _sidebarW = (document.getElementById('sidebar')?.offsetWidth || 280) + 20;
+  const _tlH      = (document.getElementById('timeline')?.offsetHeight || 60) + 20;
+  const _W  = _mwEl?.offsetWidth  || window.innerWidth;
+  const _H  = _mwEl?.offsetHeight || window.innerHeight;
+  const _PW = 400, _PH = 200; // conservative popup size estimate
+  const _cp = map.latLngToContainerPoint(window.lastClickedPoint);
+  let _px = _cp.x - _PW / 2, _py = _cp.y - _PH - 24;
+  let _panX = 0, _panY = 0;
+  if (_px < _sidebarW + 8)          _panX = _sidebarW + 8 - _px;
+  if (_px + _PW > _W - 8)           _panX = _W - 8 - _PW - _px;
+  if (_py < 56)                      _panY = 56 - _py;
+  if (_py + _PH > _H - _tlH)        _panY = _H - _tlH - _PH - _py;
+  if (_panX || _panY) map.panBy([-_panX, -_panY], {animate: false, noMoveStart: true});
 
-  cadastrePopup.openOn(map);
-
-  // After autopan settles, shift any info-cards that overlap the popup area.
-  setTimeout(() => {
-    const popupEl = cadastrePopup.getElement?.();
-    if(popupEl) popupEl.scrollTop = 0;
-    _shiftCardsAwayFromPopup();
-  }, 280);
+  const _cadPopup = L.popup({maxWidth: 400, autoPan: false, keepInView: false, offset: L.point(0, -8)})
+    .setLatLng(window.lastClickedPoint).setContent(html);
+  _cadPopup.openOn(map);
 
   setTimeout(updateCadastreCacheInfo, 2000);
-}
-
-// Shift floating info-cards so they don't overlap the currently open Leaflet popup.
-// Cards are nudged toward whichever screen quadrant has the most free space.
-function _shiftCardsAwayFromPopup(){
-  // Find the visible Leaflet popup wrapper
-  const mw = document.getElementById('map-wrap');
-  if(!mw || _infoCards.size === 0) return;
-  const popEl = mw.querySelector('.leaflet-popup');
-  if(!popEl) return;
-
-  const popR  = popEl.getBoundingClientRect();
-  const mwR   = mw.getBoundingClientRect();
-  // Popup rect relative to map-wrap
-  const pLeft   = popR.left   - mwR.left;
-  const pTop    = popR.top    - mwR.top;
-  const pRight  = popR.right  - mwR.left;
-  const pBottom = popR.bottom - mwR.top;
-  const MARGIN  = 12;
-
-  _infoCards.forEach(entry => {
-    const el = entry.el;
-    let cx = parseInt(el.style.left, 10) || 0;
-    let cy = parseInt(el.style.top,  10) || 0;
-    const cw = el.offsetWidth  || 240;
-    const ch = el.offsetHeight || 120;
-
-    // Check overlap (with small margin)
-    const overlapX = cx < pRight  + MARGIN && cx + cw > pLeft   - MARGIN;
-    const overlapY = cy < pBottom + MARGIN && cy + ch > pTop    - MARGIN;
-    if(!overlapX || !overlapY) return; // no collision — leave alone
-
-    // Choose the axis with the smallest required shift
-    const shiftRight  = pRight  + MARGIN - cx;
-    const shiftLeft   = (cx + cw) - (pLeft - MARGIN);
-    const shiftDown   = pBottom + MARGIN - cy;
-    const shiftUp     = (cy + ch) - (pTop  - MARGIN);
-
-    const bestShift = Math.min(shiftRight, shiftLeft, shiftDown, shiftUp);
-    const GRIP = 32;
-    const W = mwR.width, H = mwR.height;
-
-    if(bestShift === shiftLeft){
-      cx = pLeft - MARGIN - cw;
-    } else if(bestShift === shiftRight){
-      cx = pRight + MARGIN;
-    } else if(bestShift === shiftUp){
-      cy = pTop - MARGIN - ch;
-    } else {
-      cy = pBottom + MARGIN;
-    }
-    // Allow going partially off-screen (consistent with drag policy)
-    cx = Math.max(-(cw - GRIP), Math.min(W - GRIP, cx));
-    cy = Math.max(-GRIP, Math.min(H - GRIP, cy));
-
-    el.style.left = cx + 'px';
-    el.style.top  = cy + 'px';
-    const ap = map.latLngToContainerPoint(entry.anchorLL);
-    entry.dx = cx - ap.x;
-    entry.dy = cy - ap.y;
-  });
-  _redrawConnectors();
 }
 
 function _findCadNum(props){
@@ -2121,8 +2017,7 @@ function startContourEditor(geom, type, cadNum, prefillDesc){
   _refreshMidpoints();
   _showEditorToolbar();
 
-  // Do NOT auto-fitBounds — user should be free to pan along the contour
-  // to inspect and edit it before saving. (fitBounds was removed in v2.9.29)
+  try { map.fitBounds(polygon.getBounds(), {padding:[60,60], maxZoom:21}); } catch(_){}
   showToast('✏ Тяните точки, ПКМ → удалить, кликните 🔵 чтобы добавить','info',4500);
 }
 
@@ -2150,97 +2045,18 @@ function _vertexDragStart(e, marker){
   // Hide midpoints during drag (they re-render once on drop)
   _ce.midpoints.forEach(m => map.removeLayer(m));
   _ce.midpoints = [];
-
-  // Ensure snap indicator exists in map container
-  let snapEl = document.getElementById('snap-indicator');
-  if(!snapEl){
-    snapEl = document.createElement('div');
-    snapEl.id = 'snap-indicator';
-    document.getElementById('map-wrap').appendChild(snapEl);
-  }
-
   const move = ev => {
-    const snap = _findSnapTarget(ev.latlng);
-    const ll = snap ? snap.latlng : ev.latlng;
-    marker.setLatLng(ll);
+    marker.setLatLng(ev.latlng);
     _syncPolygonFromVertices();
-    // Show/hide snap indicator
-    if(snap){
-      const pt = map.latLngToContainerPoint(ll);
-      snapEl.style.left = pt.x + 'px';
-      snapEl.style.top  = pt.y + 'px';
-      snapEl.classList.add('visible');
-    } else {
-      snapEl.classList.remove('visible');
-    }
   };
   const up = () => {
     map.off('mousemove', move);
     map.off('mouseup',   up);
     map.dragging.enable();
-    snapEl.classList.remove('visible');
     _refreshMidpoints();
   };
   map.on('mousemove', move);
   map.on('mouseup',   up);
-}
-
-// ── Snap-to-adjacent-contour helpers ──────────────────────────────
-// _SNAP_PX: distance in screen pixels within which we snap to adjacent contour.
-const _SNAP_PX = 12;
-
-function _getAdjacentContourFeatures(){
-  const verts = [];  // [{latlng}]
-  const edges  = [];  // [{a:LatLng, b:LatLng}]
-  if(typeof kmlLayers === 'undefined') return {verts, edges};
-  for(const layer of kmlLayers){
-    if(!layer.visible) continue;
-    layer.layerGroup.eachLayer(lyr => {
-      if(typeof lyr.getLatLngs !== 'function') return;
-      if(_ce && lyr === _ce.polygon) return; // skip self
-      const raw = lyr.getLatLngs();
-      const rings = (Array.isArray(raw) && raw.length && Array.isArray(raw[0])) ? raw : [raw];
-      for(const ring of rings){
-        if(!ring || !ring.length) continue;
-        const flat = ring[0] instanceof L.LatLng ? ring : ring.flat ? ring.flat(Infinity) : ring;
-        for(let i=0; i<flat.length; i++){
-          if(!(flat[i] instanceof L.LatLng)) continue;
-          verts.push({latlng: flat[i]});
-          const next = flat[(i+1)%flat.length];
-          if(next instanceof L.LatLng) edges.push({a: flat[i], b: next});
-        }
-      }
-    });
-  }
-  return {verts, edges};
-}
-
-// Returns {latlng} of snap target or null.
-function _findSnapTarget(latlng){
-  const {verts, edges} = _getAdjacentContourFeatures();
-  if(!verts.length && !edges.length) return null;
-  const origin = map.latLngToContainerPoint(latlng);
-  let bestDist = _SNAP_PX + 1, bestLL = null;
-  // 1. Snap to vertex (priority)
-  for(const {latlng: vll} of verts){
-    const pt = map.latLngToContainerPoint(vll);
-    const d  = Math.hypot(pt.x - origin.x, pt.y - origin.y);
-    if(d < bestDist){ bestDist = d; bestLL = vll; }
-  }
-  if(bestLL) return {latlng: bestLL};
-  // 2. Snap to nearest point on edge
-  for(const {a, b} of edges){
-    const pa = map.latLngToContainerPoint(a);
-    const pb = map.latLngToContainerPoint(b);
-    const dx = pb.x - pa.x, dy = pb.y - pa.y;
-    const len2 = dx*dx + dy*dy;
-    if(len2 === 0) continue;
-    const t = Math.max(0, Math.min(1, ((origin.x-pa.x)*dx + (origin.y-pa.y)*dy) / len2));
-    const cx = pa.x + t*dx, cy = pa.y + t*dy;
-    const d  = Math.hypot(cx - origin.x, cy - origin.y);
-    if(d < bestDist){ bestDist = d; bestLL = map.containerPointToLatLng(L.point(cx, cy)); }
-  }
-  return bestLL ? {latlng: bestLL} : null;
 }
 
 function _syncPolygonFromVertices(){
@@ -2732,11 +2548,8 @@ function _attachInfoCardDrag(el, entry){
     const mw = document.getElementById('map-wrap');
     const W = mw.offsetWidth, H = mw.offsetHeight;
     const cw = el.offsetWidth, ch = el.offsetHeight;
-    // Allow dragging partially off-screen so user can clear space for other windows.
-    // Minimum 32px of the card header must remain visible (so card can be dragged back).
-    const GRIP = 32;
-    const nx = Math.max(-(cw - GRIP), Math.min(W - GRIP, ox + (e.clientX - sx)));
-    const ny = Math.max(-GRIP, Math.min(H - GRIP, oy + (e.clientY - sy)));
+    const nx = Math.max(0, Math.min(W - cw, ox + (e.clientX - sx)));
+    const ny = Math.max(0, Math.min(H - ch, oy + (e.clientY - sy)));
     el.style.left = nx + 'px';
     el.style.top  = ny + 'px';
     // Update entry's pixel-delta-from-anchor so it survives map move
@@ -2948,10 +2761,9 @@ async function triggerFolderUpload(){
       const dh=await window.showDirectoryPicker({mode:'read'});
       _savePathHint(_LS_PATH_PHOTO, dh.name);
       _captureFirstSessionName('photo', dh.name);
-      _photoRootDirHandle = dh; // save for potential move operations
       showToast('⏳ Сканирование…','info',6000);
       const{photos:pe,kmls:ke}=await collectFilesFromHandle(dh,'',dh.name);
-      for(const k of ke){if(k.isKmz)await loadKMZFromFile(k.file,k.name);else await loadKMLFromFile(k.file,k.name);}
+      for(const k of ke)await loadKMLFromFile(k.file,k.name);
       if(pe.length)await handleFileEntries(pe,dh.name);
       else if(!ke.length)showToast('Файлов не найдено','warn');
     }catch(e){if(e.name!=='AbortError')document.getElementById('folder-input-fallback').click();}
@@ -2963,8 +2775,7 @@ async function collectFilesFromHandle(dh,relPath,rootName){
   for await(const[name,entry]of dh.entries()){
     if(entry.kind==='file'){
       if(/\.jpe?g$/i.test(name)){const f=await entry.getFile();photos.push({file:f,locPath:relPath,fileHandle:entry});}
-      else if(/\.kml$/i.test(name)){const f=await entry.getFile();kmls.push({file:f,name,relPath,isKmz:false});}
-      else if(/\.kmz$/i.test(name)){const f=await entry.getFile();kmls.push({file:f,name,relPath,isKmz:true});}
+      else if(/\.kml$/i.test(name)){const f=await entry.getFile();kmls.push({file:f,name,relPath});}
     }else if(entry.kind==='directory'){
       const sub=await collectFilesFromHandle(entry,relPath?`${relPath}/${name}`:name,rootName);
       photos.push(...sub.photos);kmls.push(...sub.kmls);
@@ -3115,9 +2926,8 @@ function renderFolderNodes(nodes,container,depth){
     });
 
     row.appendChild(toggle);row.appendChild(icon);row.appendChild(label);row.appendChild(count);row.appendChild(del);
-    // П2: click to activate folder filter OR execute move in move-mode
+    // П2: click to activate folder filter
     row.addEventListener('click',()=>{
-      if(_moveModePhotoIdx!==null){executePhotoMove(node.path);return;}
       if(selectedFolderPath===node.path){clearFolderFilter();}
       else{setFolderFilter(node.path);}
     });
@@ -3131,9 +2941,6 @@ function setFolderFilter(path){
   selectedFolderPath=path;
   document.getElementById('folder-filter-name').textContent=path.split('/').pop();
   document.getElementById('folder-filter-banner').classList.add('visible');
-  // Light up the filter button
-  const fb=document.getElementById('ftree-filter-btn');
-  if(fb)fb.classList.add('filter-active');
   updateFolderTreePanel();
   renderList();
   renderTimeline();
@@ -3143,9 +2950,6 @@ function setFolderFilter(path){
 function clearFolderFilter(){
   selectedFolderPath=null;
   document.getElementById('folder-filter-banner').classList.remove('visible');
-  // Dim the filter button
-  const fb=document.getElementById('ftree-filter-btn');
-  if(fb)fb.classList.remove('filter-active');
   updateFolderTreePanel();
   renderList();
   renderTimeline();
@@ -3359,81 +3163,228 @@ async function loadKMLFromFile(file,displayName,handle){
   } catch(e){showToast(`❌ KML: ${e.message}`,'error',5000);}
 }
 
-// ── KMZ import ────────────────────────────────────────────────────
-// KMZ is a ZIP archive containing doc.kml (or other .kml) plus optional
-// ground overlays and photos. We use the already-loaded JSZip library.
+// ═══ KMZ IMPORT ════════════════════════════════════════════════════
+// KMZ is a ZIP archive (KML 2.2) containing doc.kml + media files.
+// Photo placemarks — Point + description with <img src="images/..."> —
+// are converted to app photo entries (GPS + thumbnail) instead of map markers.
+// This ensures round-trip fidelity: import→edit→export→import produces identical result.
+
+// Thread-local blob map: filename → blob:// URL (valid for this page session only)
+let _kmzActiveBlobMap = {};
+
 async function loadKMZFromFile(file, displayName){
   if(typeof JSZip === 'undefined'){
     showToast('⚠ JSZip не загружен — KMZ недоступен','error',4000);
     return;
   }
+  const label = displayName || file.name;
   try{
-    showToast(`⏳ Читаем KMZ: ${displayName||file.name}…`,'info',5000);
+    showToast(`⏳ Читаем KMZ: ${label}…`, 'info', 6000);
     const buf = await file.arrayBuffer();
-    const zip = await JSZip.loadAsync(buf);
+    const zip  = await JSZip.loadAsync(buf);
 
-    // 1. Find the root KML (Google Earth convention: doc.kml first, else first .kml)
+    // ── 1. Find the root KML ──────────────────────────────────────
     const kmlFiles = Object.keys(zip.files).filter(n => /\.kml$/i.test(n) && !zip.files[n].dir);
     if(!kmlFiles.length){
-      showToast(`❌ KMZ не содержит .kml файлов: ${displayName}`,'error',5000);
-      return;
+      showToast(`❌ KMZ не содержит .kml: ${label}`, 'error', 5000); return;
     }
-    // Prefer "doc.kml" at root, then shortest path
+    // Prefer doc.kml at root, then shortest path
     const kmlName = kmlFiles.find(n => /^doc\.kml$/i.test(n.split('/').pop()))
-                 || kmlFiles.sort((a,b) => a.length - b.length)[0];
+                 || kmlFiles.sort((a,b)=>a.length-b.length)[0];
     const kmlText = await zip.files[kmlName].async('string');
 
-    // 2. Extract embedded photos referenced in the KML (GroundOverlay / PhotoOverlay / href)
-    //    and register them as blob URLs so relative src= paths resolve inside the app.
-    const _kmzBlobMap = {};  // filename → blob URL
-    const imgFiles = Object.keys(zip.files).filter(n =>
+    // ── 2. Build blob map for ALL media files ─────────────────────
+    const blobMap = {};
+    const mediaFiles = Object.keys(zip.files).filter(n =>
       !zip.files[n].dir && /\.(jpe?g|png|gif|webp)$/i.test(n)
     );
-    for(const imgPath of imgFiles){
-      const blob = await zip.files[imgPath].async('blob');
-      const blobUrl = URL.createObjectURL(blob);
-      _kmzBlobMap[imgPath] = blobUrl;
-      // Also store by basename so relative href="photo.jpg" works
-      _kmzBlobMap[imgPath.split('/').pop()] = blobUrl;
+    for(const mp of mediaFiles){
+      const blob = await zip.files[mp].async('blob');
+      const mime = /\.png$/i.test(mp)?'image/png':/\.gif$/i.test(mp)?'image/gif':'image/jpeg';
+      const typed = new Blob([await blob.arrayBuffer()], {type: mime});
+      const blobUrl = URL.createObjectURL(typed);
+      blobMap[mp] = blobUrl;
+      blobMap[mp.split('/').pop()] = blobUrl; // also index by basename
     }
+    _kmzActiveBlobMap = blobMap;
 
-    // 3. Patch KML text: replace relative image hrefs with blob URLs
-    let patchedKML = kmlText;
-    for(const [name, blobUrl] of Object.entries(_kmzBlobMap)){
-      // Replace <href>name</href> with blob URL (handles both basename and full path)
-      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // ── 3. Detect photo placemarks BEFORE patching KML ───────────
+    // Photo placemark = Point + description containing <img src="images/...">
+    // We extract them as app photos, then remove them from the KML so
+    // they don't appear as annotation markers on the map.
+    const kmzPhotos = _extractKMZPhotoPlacemarks(kmlText, blobMap, label);
+
+    // ── 4. Strip photo placemarks from KML + patch remaining hrefs ─
+    let patchedKML = _stripKMZPhotoPlacemarks(kmlText);
+    // Patch remaining relative hrefs (GroundOverlay icons etc.)
+    for(const [name, blobUrl] of Object.entries(blobMap)){
+      const esc = name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
       patchedKML = patchedKML.replace(
-        new RegExp(`(<href>)${escaped}(</href>)`, 'gi'),
+        new RegExp(`(<href>)${esc}(</href>)`,'gi'),
         `$1${blobUrl}$2`
       );
     }
 
-    // 4. Load the patched KML as usual
-    const kmzDisplayName = (displayName||file.name).replace(/\.kmz$/i,'');
-    await _loadKMLFromText(patchedKML, kmzDisplayName, null);
+    // ── 5. Load KML layer (contours, annotations, etc.) ───────────
+    const kmzLabel = label.replace(/\.kmz$/i,'');
+    await _loadKMLFromText(patchedKML, kmzLabel, null);
 
-    // 5. Load any embedded JPEG photos with GPS as photo markers
-    const photoEntries = [];
-    for(const imgPath of imgFiles){
-      if(!/\.jpe?g$/i.test(imgPath)) continue;
-      const blob = await zip.files[imgPath].async('blob');
-      const f = new File([blob], imgPath.split('/').pop(), {type:'image/jpeg'});
-      photoEntries.push({file:f, locPath:'', fileHandle:null});
+    // ── 6. Register extracted photo placemarks as app photos ──────
+    let photoAdded = 0;
+    for(const kp of kmzPhotos){
+      // Resolve actual Blob for this photo from the zip (for thumbnail + File ref)
+      let fileBlob = null;
+      const zipImgKey = Object.keys(zip.files).find(k =>
+        !zip.files[k].dir && k.endsWith(kp._imgFilename)
+      );
+      if(zipImgKey){
+        const rawBlob = await zip.files[zipImgKey].async('blob');
+        fileBlob = new Blob([await rawBlob.arrayBuffer()], {type:'image/jpeg'});
+      }
+      const blobUrl = fileBlob ? URL.createObjectURL(fileBlob) : kp.blobUrl;
+
+      const photoObj = {
+        name:       kp.name,
+        size:       fileBlob?.size || 0,
+        displayUrl: blobUrl,
+        thumbUrl:   blobUrl,
+        lat:        kp.lat,
+        lon:        kp.lon,
+        bearing:    kp.bearing,
+        altitude:   null,
+        date:       kp.date || '',
+        isRemote:   false,
+        file:       fileBlob ? new File([fileBlob], kp.name, {type:'image/jpeg'}) : null,
+        fileHandle: null,
+        locPath:    kp.locPath || '',
+        dateMismatch: false,
+        sourceType: 'kmz',
+        experimentData: null,
+      };
+      if(photoObj.date) photoObj.dateObj = parsePhotoDate(photoObj.date);
+      if(!photos.find(p=>p.name===kp.name&&p.sourceType==='kmz')){
+        addPhoto(photoObj);
+        photoAdded++;
+      }
     }
-    if(photoEntries.length){
-      await handleFileEntries(photoEntries, kmzDisplayName);
-      showToast(`📸 KMZ: извлечено ${photoEntries.length} фото из архива`,'info',3000);
+    if(photoAdded>0){
+      updateStats(); renderList(); fitMapToPhotos(); updateTimelineData();
+      showToast(`📸 KMZ: извлечено ${photoAdded} фото`, 'success', 4000);
     }
 
+    _kmzActiveBlobMap = {};
   } catch(e){
     console.error('[kmz]', e);
-    showToast(`❌ KMZ: ${e.message}`,'error',6000);
+    showToast(`❌ KMZ: ${e.message}`, 'error', 6000);
+    _kmzActiveBlobMap = {};
   }
+}
+
+// Detect photo placemarks: Point + description with <img src="images/FILENAME">
+function _extractKMZPhotoPlacemarks(kmlText, blobMap, sourceLabel){
+  const results = [];
+  let dom;
+  try{ dom = new DOMParser().parseFromString(kmlText,'application/xml'); } catch(e){ return results; }
+  const pms = dom.getElementsByTagName('Placemark');
+  for(const pm of pms){
+    // Must have a Point
+    const ptEl = pm.getElementsByTagName('Point')[0];
+    if(!ptEl) continue;
+    const coordEl = ptEl.getElementsByTagName('coordinates')[0];
+    if(!coordEl) continue;
+    const coordParts = coordEl.textContent.trim().split(',');
+    const lon = parseFloat(coordParts[0]), lat = parseFloat(coordParts[1]);
+    if(isNaN(lat)||isNaN(lon)) continue;
+
+    // Description must contain <img src="images/...">
+    const descEl = pm.getElementsByTagName('description')[0];
+    if(!descEl) continue;
+    const rawDesc = descEl.textContent || descEl.innerHTML || '';
+    const imgMatch = rawDesc.match(/<img[^>]+src=["']?images\/([^"'\s>]+)["']?/i);
+    if(!imgMatch) continue;
+
+    const imgFilename = imgMatch[1]; // e.g. "photo_0080.jpg"
+
+    // Resolve blob URL (try with "images/" prefix and bare name)
+    const blobUrl = blobMap['images/'+imgFilename]
+                 || blobMap[imgFilename]
+                 || null;
+
+    // Extract name
+    const nameEl = pm.getElementsByTagName('name')[0];
+    const rawName = nameEl?.textContent?.trim() || imgFilename;
+
+    // Extract date: prefer <TimeStamp><when>, fallback "Снято: DATE" in description
+    let date = '';
+    const tsEl = pm.getElementsByTagName('TimeStamp')[0] ||
+                 pm.getElementsByTagName('timestamp')[0];
+    if(tsEl){
+      const whenEl = tsEl.getElementsByTagName('when')[0];
+      if(whenEl) date = whenEl.textContent.trim();
+    }
+    if(!date){
+      const mDate = rawDesc.match(/Снято:\s*([0-9T:\-Z.+]+)/i);
+      if(mDate) date = mDate[1].trim();
+    }
+
+    // Extract bearing from description "Направление: NNN°" (if any)
+    let bearing = null;
+    const mBear = rawDesc.match(/Направление[^:]*:\s*([\d.]+)/i);
+    if(mBear) bearing = parseFloat(mBear[1]);
+
+    // Extract folder path from the KML folder structure (parent <Folder> names)
+    let locPath = '';
+    let node = pm.parentElement;
+    const pathParts = [];
+    while(node && node.tagName !== 'Document'){
+      if(node.tagName === 'Folder'){
+        const fn = node.getElementsByTagName('name')[0];
+        if(fn && fn.parentElement===node) pathParts.unshift(fn.textContent.trim());
+      }
+      node = node.parentElement;
+    }
+    if(pathParts.length) locPath = pathParts.join('/');
+
+    // Get blob for File-like object
+    let fileBlob = null;
+    if(blobUrl){
+      // We'll use the blob URL — the actual Blob is fetched lazily only if needed
+      fileBlob = null; // will be set below
+    }
+
+    results.push({
+      name:     rawName,
+      blobUrl:  blobUrl || '',
+      lat, lon, bearing, date,
+      locPath,
+      size: 0,
+      fileBlob: null, // placeholder; resolved in loadKMZFromFile
+      _imgFilename: imgFilename,
+    });
+  }
+  return results;
+}
+
+// Remove photo Placemarks from KML text so they don't show as map markers
+function _stripKMZPhotoPlacemarks(kmlText){
+  // Parse, remove, serialize
+  let dom;
+  try{ dom = new DOMParser().parseFromString(kmlText,'application/xml'); } catch(e){ return kmlText; }
+  const toRemove = [];
+  for(const pm of dom.getElementsByTagName('Placemark')){
+    if(!pm.getElementsByTagName('Point')[0]) continue;
+    const descEl = pm.getElementsByTagName('description')[0];
+    if(!descEl) continue;
+    const raw = descEl.textContent || descEl.innerHTML || '';
+    if(/<img[^>]+src=["']?images\//i.test(raw)) toRemove.push(pm);
+  }
+  toRemove.forEach(pm => pm.parentElement?.removeChild(pm));
+  return new XMLSerializer().serializeToString(dom);
 }
 
 // FSA-aware KMZ menu picker
 window.pickKMZViaMenu = async function(){
-  if(_fsaSupported){
+  if(typeof window.showOpenFilePicker === 'function'){
     try{
       const handles = await window.showOpenFilePicker({
         types:[{description:'KMZ (Google Earth)', accept:{'application/vnd.google-earth.kmz':['.kmz']}}],
@@ -3445,11 +3396,8 @@ window.pickKMZViaMenu = async function(){
         await loadKMZFromFile(f, f.name);
       }
       return;
-    } catch(e){
-      if(e?.name === 'AbortError') return;
-    }
+    } catch(e){ if(e?.name==='AbortError') return; }
   }
-  // Fallback: reuse kml-file-input (already accepts .kmz)
   document.getElementById('kml-file-input').click();
 };
 
@@ -4186,162 +4134,6 @@ function _pointInRing(lat, lon, ring){
 }
 
 
-// ═══ MOVE PHOTO TO FOLDER (File System Access API) ═══════════════
-// Works in Chrome/Edge on Win10. Requires user to grant readwrite access
-// to the root photo directory (once per session).
-let _moveModePhotoIdx = null;  // photo index being moved, null = not in move mode
-let _photoRootDirHandle = null; // FileSystemDirectoryHandle to photo root
-
-function startPhotoMove(idx){
-  const p=photos[idx];
-  if(!p||p.isRemote){showToast('Перемещение доступно только для локальных фото','warn');return;}
-
-  const hasTree=Object.keys(buildFolderTree()).length>0;
-  if(!hasTree){showToast('Нет папок в «Структура объекта» — создайте папки сначала','warn',5000);return;}
-
-  _moveModePhotoIdx=idx;
-
-  // Expand & highlight folder tree
-  const treePanel=document.getElementById('folder-tree-panel');
-  treePanel.classList.add('visible','move-mode');
-  folderTreeIsOpen=true;
-  updateFolderTreePanel();
-
-  // Show move panel in lightbox, hide normal content
-  document.getElementById('lb-section-label').textContent='📂 Перемещение фото в папку';
-  document.getElementById('lb-move-panel').classList.add('visible');
-  document.getElementById('lmp-filename-text').textContent=p.name;
-  // Show hint about root dir if we don't have a handle yet
-  document.getElementById('lmp-root-needed').classList.toggle('visible',!_photoRootDirHandle);
-  document.getElementById('lb-img-wrap').style.display='none';
-  document.getElementById('lb-zoom-bar').style.display='none';
-  document.getElementById('lb-info').style.display='none';
-  document.getElementById('lb-move-btn').style.display='none';
-}
-
-function cancelPhotoMove(){
-  _moveModePhotoIdx=null;
-  document.getElementById('folder-tree-panel').classList.remove('move-mode');
-  document.getElementById('lb-section-label').textContent='Геолокация и съёмка';
-  document.getElementById('lb-move-panel').classList.remove('visible');
-  document.getElementById('lb-img-wrap').style.display='';
-  document.getElementById('lb-zoom-bar').style.display='';
-  document.getElementById('lb-info').style.display='';
-  const lbMoveBtn=document.getElementById('lb-move-btn');
-  lbMoveBtn.style.display='';
-  if(activeIdx!=null&&!photos[activeIdx]?.isRemote)lbMoveBtn.classList.add('visible');
-  updateFolderTreePanel();
-}
-
-async function executePhotoMove(targetLocPath){
-  if(_moveModePhotoIdx===null)return;
-  const idx=_moveModePhotoIdx;
-  const p=photos[idx];
-  if(!p)return;
-
-  // Check FSA support
-  if(typeof window.showDirectoryPicker!=='function'){
-    showToast('⚠ Браузер не поддерживает File System Access API. Используйте Chrome/Edge.','error',8000);
-    return;
-  }
-
-  // Acquire (or re-acquire) root directory handle with readwrite
-  if(!_photoRootDirHandle){
-    try{
-      showToast('Выберите корневую папку с фотографиями…','info',5000);
-      _photoRootDirHandle=await window.showDirectoryPicker({mode:'readwrite'});
-    }catch(e){
-      if(e.name!=='AbortError')showToast('⚠ Отменено или нет доступа к папке','warn',4000);
-      return;
-    }
-  }
-
-  // Ensure we still have readwrite permission (may be revoked after sleep)
-  try{
-    const perm=await _photoRootDirHandle.requestPermission({mode:'readwrite'});
-    if(perm!=='granted'){
-      showToast('⚠ Нет прав записи в папку. Выберите папку заново.','error',5000);
-      _photoRootDirHandle=null;
-      return;
-    }
-  }catch(e){
-    _photoRootDirHandle=null;
-    showToast('⚠ Нет доступа к папке. Выберите заново.','error',5000);
-    return;
-  }
-
-  // Prevent moving to same folder
-  if(p.locPath===targetLocPath){
-    showToast('Файл уже находится в этой папке','warn');
-    cancelPhotoMove();
-    return;
-  }
-
-  try{
-    // ── 1. Navigate/create target directory ──────────────────────
-    let targetDir=_photoRootDirHandle;
-    for(const part of targetLocPath.split('/').filter(Boolean)){
-      targetDir=await targetDir.getDirectoryHandle(part,{create:true});
-    }
-
-    // ── 2. Write file to target and VERIFY before delete ──────────
-    const blob=p.file; // File object (available for all local photos)
-    const targetFH=await targetDir.getFileHandle(p.name,{create:true});
-    const writable=await targetFH.createWritable();
-    await writable.write(blob);
-    await writable.close();
-
-    // ── 3. Verify: read back written file and check size ──────────
-    let verified=false;
-    try{
-      const writtenFile=await targetFH.getFile();
-      verified=(writtenFile.size===blob.size);
-    }catch(e){verified=false;}
-    if(!verified){
-      // Try to clean up the partial/bad file
-      try{await targetDir.removeEntry(p.name);}catch(_){}
-      showToast('⚠ Ошибка записи — файл не скопирован, источник не тронут','error',7000);
-      cancelPhotoMove();
-      return;
-    }
-
-    // ── 4. Delete source file (ONLY after successful write+verify) ─
-    // Navigate to source directory (p.locPath is relative to root handle)
-    let sourceDir=_photoRootDirHandle;
-    const sourceParts=(p.locPath||'').split('/').filter(Boolean);
-    for(const part of sourceParts){
-      try{sourceDir=await sourceDir.getDirectoryHandle(part);}
-      catch(_){sourceDir=null;break;}
-    }
-    if(sourceDir){
-      try{await sourceDir.removeEntry(p.name);}
-      catch(e){showToast(`⚠ Файл скопирован (проверен), но удалить оригинал не удалось: ${e.message}`,'warn',7000);}
-    }else{
-      showToast('⚠ Файл скопирован и проверен, но исходная папка не найдена в выбранном корне','warn',6000);
-    }
-
-    // ── 5. Update photo state in app ──────────────────────────────
-    p.locPath=targetLocPath;
-
-    showToast(`✅ ${p.name} → ${targetLocPath}`,'success',5000);
-    cancelPhotoMove();
-    updateFolderTreePanel();
-    renderList();
-    // Re-open lightbox to show updated locPath
-    openLightbox(idx,p.lat!=null?L.latLng(p.lat,p.lon):null);
-
-  }catch(e){
-    console.error('[ekcelo move]',e);
-    // If root handle is bad — reset so user can re-pick
-    if(e.name==='NotFoundError'||e.name==='NotAllowedError'){
-      _photoRootDirHandle=null;
-      showToast(`⚠ Ошибка доступа: ${e.message}. Попробуйте ещё раз.`,'error',7000);
-    }else{
-      showToast(`⚠ Ошибка перемещения: ${e.message}`,'error',7000);
-    }
-  }
-}
-
 function renderList(){
   const list=document.getElementById('photo-list');
   list.innerHTML='';
@@ -4352,19 +4144,12 @@ function renderList(){
 
   if(selectedFolderPath){
     // П2+П3: filter sidebar to selected folder + subfolders
-    // Exact folder photos first, then subfolders (by date within each group)
-    const exactIndices=mainIndices.filter(i=>photos[i].locPath===selectedFolderPath);
-    const subIndices=mainIndices.filter(i=>isPhotoInSelectedFolder(photos[i])&&photos[i].locPath!==selectedFolderPath);
-    exactIndices.sort((a,b)=>getSortTs(photos[a])-getSortTs(photos[b]));
-    subIndices.sort((a,b)=>getSortTs(photos[a])-getSortTs(photos[b]));
-    mainIndices=[...exactIndices,...subIndices];
+    mainIndices=mainIndices.filter(i=>isPhotoInSelectedFolder(photos[i]));
     // Show unassigned local photos for drag-and-drop into the selected folder
     unassignedIndices=[...photos.keys()].filter(i=>!photos[i].locPath&&!photos[i].isRemote);
   }
 
-  if(!selectedFolderPath){
-    mainIndices=mainIndices.sort((a,b)=>getSortTs(photos[a])-getSortTs(photos[b]));
-  }
+  mainIndices=mainIndices.sort((a,b)=>getSortTs(photos[a])-getSortTs(photos[b]));
 
   if(!mainIndices.length&&!unassignedIndices.length){
     const el=document.createElement('div');
@@ -4422,13 +4207,6 @@ function renderPhotoItem(i,container,isDragCandidate=false){
   const del=document.createElement('button');del.className='del-btn';del.innerHTML='&#215;';
   del.addEventListener('click',ev=>{ev.stopPropagation();deletePhoto(i);});
 
-  // Move-to-folder button (local photos only)
-  if(!p.isRemote){
-    const mvBtn=document.createElement('button');mvBtn.className='photo-move-btn';mvBtn.title='Переместить файл в папку на диске';mvBtn.innerHTML='📂';
-    mvBtn.addEventListener('click',async ev=>{ev.stopPropagation();await openLightbox(i,p.lat!=null?L.latLng(p.lat,p.lon):null);startPhotoMove(i);});
-    item.appendChild(mvBtn);
-  }
-
   item.appendChild(thumb);item.appendChild(meta);item.appendChild(del);
   container.appendChild(item);
 }
@@ -4470,9 +4248,6 @@ async function openLightbox(idx,latlng){
   document.getElementById('lb-zoom-val').textContent='100%';
   document.getElementById('lb-filename-text').textContent=p.name;
   document.getElementById('lb-filename-text').title=p.name;
-  // Show move button only for local (disk) photos
-  const lbMoveBtn=document.getElementById('lb-move-btn');
-  lbMoveBtn.classList.toggle('visible',!p.isRemote);
   document.getElementById('lb-tbody').innerHTML=buildRows(p);
   document.getElementById('lb-card').classList.remove('gps-active');
   const lb=document.getElementById('lightbox');
@@ -4626,7 +4401,6 @@ let lbManualPos=false; // set when user drags, prevents map auto-reposition
 })();
 
 function closeLightbox(){
-  if(_moveModePhotoIdx!==null)cancelPhotoMove();
   document.getElementById('lightbox').classList.remove('visible');
   document.getElementById('lb-card').classList.remove('gps-active');
   document.querySelectorAll('.photo-item').forEach(el=>el.classList.remove('active'));
