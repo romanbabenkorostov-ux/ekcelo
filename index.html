@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.31</title>
+<title>EkceloFoto v2.9.32</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -251,10 +251,18 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 
 /* Dimmed map marker when folder filter active */
 .leaflet-marker-icon.marker-dim{opacity:0.2!important}
-/* Leaflet's default .leaflet-div-icon has background:#fff; border:1px solid #666 — causes white squares */
+/* Leaflet default div-icon white background fix */
 .leaflet-div-icon{background:transparent!important;border:none!important}
-/* Also hide broken-image placeholder from default Leaflet marker (no marker-icon.png in SPA) */
-.leaflet-marker-icon:not([src]):not([style*='background-image']),.leaflet-marker-shadow{display:none!important}
+/* ── Mobile screen warning ─────────────────────────────────────── */
+#mobile-warn{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:99999;align-items:center;justify-content:center;padding:20px}
+#mobile-warn.visible{display:flex}
+#mobile-warn-box{background:#161b2e;border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:28px 24px;max-width:360px;text-align:center;font-family:'JetBrains Mono',monospace}
+#mobile-warn-box h2{font-size:17px;color:#e8ff47;margin:0 0 12px}
+#mobile-warn-box p{font-size:12px;color:#b0b8cc;line-height:1.6;margin:0 0 20px}
+#mobile-warn-box .mw-btns{display:flex;flex-direction:column;gap:10px}
+#mobile-warn-box button{border:none;border-radius:8px;padding:10px 16px;font-family:inherit;font-size:12px;cursor:pointer;font-weight:700}
+#mw-open-btn{background:#e8ff47;color:#0d0f14}
+#mw-full-btn{background:rgba(255,255,255,.08);color:#e0e0e0;border:1px solid rgba(255,255,255,.15)!important}
 
 /* MANUAL GPS PANEL */
 #manual-gps-panel{display:none;position:absolute;bottom:136px;right:12px;z-index:800;width:280px;background:var(--surface);border:1px solid rgba(71,200,255,.4);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.7);padding:12px 14px;font-family:'JetBrains Mono',monospace}
@@ -662,7 +670,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.31</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.32</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -690,7 +698,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
   </div>
   <input type="file" id="file-input"            multiple accept="image/jpeg,image/jpg,.jpg,.jpeg"/>
   <input type="file" id="folder-input-fallback" multiple accept="image/jpeg,image/jpg,.jpg,.jpeg" webkitdirectory/>
-  <input type="file" id="kml-file-input"        multiple accept=".kml,.kmz"/>
+  <input type="file" id="kml-file-input"        multiple accept=".kml"/>
+  <input type="file" id="kmz-file-input"        multiple accept=".kmz"/>
   <input type="file" id="xlsx-file-input"       accept=".xlsx,.xls" style="display:none" onchange="onXlsxFileChosen(this)"/>
   <label id="auto-save-label" title="Авто-запись EXIF при навигации">
     <input type="checkbox" id="auto-save-cb" onchange="onAutoSaveCbChange(this)"/>
@@ -1044,9 +1053,9 @@ function clearCadastreCache(){navigator.serviceWorker?.controller?.postMessage('
 
 // ═══ MAP ══════════════════════════════════════════════════════════
 const map=L.map('map',{center:[55.75,37.61],zoom:5,zoomControl:true,maxZoom:22});
-// Prevent Leaflet from trying to load missing marker-icon.png → white squares in SPA
+// Prevent "white squares": stop Leaflet from loading missing marker-icon.png in SPA context.
+// Deleting _getIconUrl is enough — mergeOptions with empty strings breaks divIcon too.
 delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({iconUrl:'', shadowUrl:'', iconRetinaUrl:''});
 map.attributionControl.setPrefix(false);
 L.control.scale({imperial:false,metric:true,position:'bottomleft'}).addTo(map);
 const TILES={
@@ -2827,6 +2836,7 @@ function triggerFileUpload(){document.getElementById('file-input').click();}
 document.getElementById('file-input').addEventListener('change',e=>{const ents=[...(e.target.files||[])].map(f=>({file:f,locPath:deriveFolderPath(f,''),fileHandle:null}));handleFileEntries(ents,'');e.target.value='';});
 document.getElementById('folder-input-fallback').addEventListener('change',e=>{const files=[...(e.target.files||[])];if(!files.length)return;const rn=(files[0].webkitRelativePath||'').split('/')[0]||'';if(rn){_captureFirstSessionName('photo',rn);_savePathHint(_LS_PATH_PHOTO,rn);}handleFileEntries(files.map(f=>({file:f,locPath:deriveFolderPath(f,rn),fileHandle:null})),rn);e.target.value='';});
 document.getElementById('kml-file-input').addEventListener('change',async e=>{for(const f of e.target.files||[]){_captureFirstSessionName('kml',f.name);if(/\.kmz$/i.test(f.name))await loadKMZFromFile(f,f.name);else await loadKMLFromFile(f,f.name);}e.target.value='';});
+document.getElementById('kmz-file-input').addEventListener('change',async e=>{for(const f of e.target.files||[]){_captureFirstSessionName('kml',f.name);await loadKMZFromFile(f,f.name);}e.target.value='';});
 document.getElementById('map-wrap').addEventListener('dragover',e=>e.preventDefault());
 document.getElementById('map-wrap').addEventListener('drop',e=>{e.preventDefault();const fs=[...e.dataTransfer.files];const js=fs.filter(f=>/jpe?g/i.test(f.type||f.name));const ks=fs.filter(f=>/\.kml$/i.test(f.name));const kzs=fs.filter(f=>/\.kmz$/i.test(f.name));if(js.length)handleFileEntries(js.map(f=>({file:f,locPath:'',fileHandle:null})),'');ks.forEach(f=>loadKMLFromFile(f,f.name));kzs.forEach(f=>loadKMZFromFile(f,f.name));});
 
@@ -3212,7 +3222,84 @@ async function loadKMLFromFile(file,displayName,handle){
 // Thread-local blob map: filename → blob:// URL (valid for this page session only)
 let _kmzActiveBlobMap = {};
 
-async function loadKMZFromFile(file, displayName){
+// ── KMZ from remote URL (Yandex Disk / Google Drive / S3 / direct) ──
+// Shows a dialog: "Download to local folder?" before fetching.
+// If user picks a folder — saves photos with EXIF-patched GPS/date/bearing,
+// and KML objects as separate .kml files under that folder.
+async function loadKMZFromUrl(url, displayName){
+  const label = displayName || url.split('/').pop().split('?')[0] || 'remote.kmz';
+
+  // Check if we have a local photo root from a previous session
+  const hasLocalRoot = !!_photoRootDirHandle;
+  const choice = await _showKmzDownloadDialog(label, hasLocalRoot);
+  // choice: 'folder' | 'existing' | 'skip'
+  if(choice === null) return; // user cancelled
+
+  showToast(`⏳ Загружаем KMZ: ${label}…`, 'info', 8000);
+  let blob;
+  try{
+    // Resolve Yandex/Google Drive public links via proxy
+    let fetchUrl = url;
+    const rType = detectRemoteType(url);
+    if(rType === 'yandex') fetchUrl = await resolveYandexHref(url);
+    else if(rType === 'gdrive'){
+      const id = extractGdriveId(url);
+      if(id) fetchUrl = `https://drive.google.com/uc?export=download&id=${id}`;
+    }
+    const resp = await fetchTimeout(proxyUrl(fetchUrl), 60000);
+    if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    blob = await resp.blob();
+  }catch(e){
+    showToast(`❌ Не удалось загрузить KMZ: ${e.message}`, 'error', 7000);
+    return;
+  }
+
+  const file = new File([blob], label, {type:'application/vnd.google-earth.kmz'});
+
+  // If user wants to save locally — pick dir and write files
+  let localRootDir = null;
+  if(choice === 'folder'){
+    try{
+      localRootDir = await window.showDirectoryPicker({mode:'readwrite'});
+    }catch(e){ if(e?.name!=='AbortError') showToast('⚠ Папка не выбрана — продолжаем без сохранения','warn'); }
+  } else if(choice === 'existing' && hasLocalRoot){
+    localRootDir = _photoRootDirHandle;
+    // Confirm writable
+    try{ const p = await localRootDir.requestPermission({mode:'readwrite'}); if(p!=='granted') localRootDir=null; }catch(_){ localRootDir=null; }
+  }
+
+  // Load into app
+  await loadKMZFromFile(file, label, localRootDir);
+}
+
+// Dialog: ask user where to save KMZ contents.
+// Returns Promise<'folder'|'existing'|'skip'|null>
+function _showKmzDownloadDialog(label, hasExisting){
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:99990;display:flex;align-items:center;justify-content:center;padding:20px';
+    const FONT = "font-family:'JetBrains Mono',monospace";
+    overlay.innerHTML=`
+      <div style="background:#161b2e;border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:26px 22px;max-width:380px;${FONT}">
+        <div style="font-size:14px;font-weight:700;color:#e8ff47;margin-bottom:10px">📦 Импорт KMZ из сети</div>
+        <div style="font-size:11px;color:#b0b8cc;margin-bottom:16px;line-height:1.6"><b style="color:#fff">${label}</b><br>Хотите сохранить фотографии и объекты на локальный диск?<br><span style="color:#888;font-size:10px">GPS, дата, азимут будут вписаны в EXIF фотографий.</span></div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${hasExisting?`<button id="_kmzd_existing" style="background:rgba(71,200,255,.15);border:1px solid rgba(71,200,255,.4);color:#47c8ff;border-radius:7px;padding:8px 12px;cursor:pointer;font-size:11px;${FONT}">📂 Добавить в текущую папку с фото</button>`:''}
+          <button id="_kmzd_folder" style="background:rgba(232,255,71,.12);border:1px solid rgba(232,255,71,.35);color:#e8ff47;border-radius:7px;padding:8px 12px;cursor:pointer;font-size:11px;${FONT}">🗂 Указать папку для сохранения…</button>
+          <button id="_kmzd_skip" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);color:#999;border-radius:7px;padding:8px 12px;cursor:pointer;font-size:11px;${FONT}">⏩ Не скачивать KMZ локально</button>
+          <button id="_kmzd_cancel" style="background:none;border:none;color:#666;font-size:10px;cursor:pointer;margin-top:2px;${FONT}">Отмена</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const close = v => { overlay.remove(); resolve(v); };
+    overlay.querySelector('#_kmzd_folder')?.addEventListener('click',()=>close('folder'));
+    overlay.querySelector('#_kmzd_skip')?.addEventListener('click',()=>close('skip'));
+    overlay.querySelector('#_kmzd_cancel')?.addEventListener('click',()=>close(null));
+    overlay.querySelector('#_kmzd_existing')?.addEventListener('click',()=>close('existing'));
+  });
+}
+
+async function loadKMZFromFile(file, displayName, localRootDir=null){
   if(typeof JSZip === 'undefined'){
     showToast('⚠ JSZip не загружен — KMZ недоступен','error',4000);
     return;
@@ -3313,6 +3400,11 @@ async function loadKMZFromFile(file, displayName){
       updateStats(); renderList(); fitMapToPhotos(); updateTimelineData();
       updateFolderTreePanel();
       showToast(`📸 KMZ: извлечено ${photoAdded} фото`, 'success', 4000);
+    }
+
+    // ── 7. Save to local folder (if requested) ────────────────────
+    if(localRootDir){
+      await _saveKMZToLocalFolder(localRootDir, kmzLabel, zip, mediaFiles, blobMap, kmzPhotos, patchedKML);
     }
 
     _kmzActiveBlobMap = {};
@@ -3448,8 +3540,83 @@ window.pickKMZViaMenu = async function(){
       return;
     } catch(e){ if(e?.name==='AbortError') return; }
   }
-  document.getElementById('kml-file-input').click();
+  document.getElementById('kmz-file-input').click(); // separate input — opens only .kmz
 };
+
+// Save extracted KMZ content to a local folder:
+//   <rootDir>/<kmzLabel>/Фотографии/<locPath>/<filename>.jpg  (EXIF-patched)
+//   <rootDir>/<kmzLabel>/Объекты/<kmzLabel>.kml
+async function _saveKMZToLocalFolder(rootDir, kmzLabel, zip, mediaFiles, blobMap, kmzPhotos, kmlText){
+  if(!rootDir) return;
+  showToast('💾 Сохраняем на диск…', 'info', 10000);
+  try{
+    // Create <kmzLabel> folder
+    const baseDir = await rootDir.getDirectoryHandle(kmzLabel, {create:true});
+
+    // ── Photos ──────────────────────────────────────────────────
+    const photoDir = await baseDir.getDirectoryHandle('Фотографии', {create:true});
+    let saved = 0;
+    for(const kp of kmzPhotos){
+      // Navigate/create locPath subfolders
+      const locParts = (kp.locPath||'').split('/').filter(Boolean);
+      let targetDir = photoDir;
+      for(const seg of locParts) targetDir = await targetDir.getDirectoryHandle(seg, {create:true});
+
+      // Get raw JPEG bytes from ZIP
+      const zipKey = mediaFiles.find(k => k.endsWith(kp._imgFilename));
+      if(!zipKey) continue;
+      const rawBytes = await zip.files[zipKey].async('uint8array');
+
+      // Patch EXIF if GPS/date/bearing present and not yet in file
+      let finalBytes = rawBytes;
+      if((kp.lat != null || kp.date) && typeof piexif !== 'undefined'){
+        try{
+          const b64 = 'data:image/jpeg;base64,' + btoa(String.fromCharCode(...rawBytes));
+          let exifObj; try{ exifObj = piexif.load(b64); }catch(_){ exifObj={'0th':{},'Exif':{},'GPS':{},'1st':{}}; }
+          if(!exifObj.GPS) exifObj.GPS = {};
+          // Write GPS if available and not already present
+          if(kp.lat != null && !exifObj.GPS[piexif.GPSIFD.GPSLatitude]){
+            const toD = v => { const abs=Math.abs(v),d=Math.floor(abs),m=Math.floor((abs-d)*60),s=((abs-d)*60-m)*60*100; return [[d,1],[m,1],[Math.round(s),100]]; };
+            exifObj.GPS[piexif.GPSIFD.GPSLatitude] = toD(kp.lat);
+            exifObj.GPS[piexif.GPSIFD.GPSLatitudeRef] = kp.lat>=0?'N':'S';
+            exifObj.GPS[piexif.GPSIFD.GPSLongitude] = toD(kp.lon);
+            exifObj.GPS[piexif.GPSIFD.GPSLongitudeRef] = kp.lon>=0?'E':'W';
+          }
+          if(kp.bearing != null && !exifObj.GPS[piexif.GPSIFD.GPSImgDirection]){
+            exifObj.GPS[piexif.GPSIFD.GPSImgDirection] = [Math.round(kp.bearing*100), 100];
+            exifObj.GPS[piexif.GPSIFD.GPSImgDirectionRef] = 'T';
+          }
+          if(kp.date && !exifObj['Exif']?.[piexif.ExifIFD.DateTimeOriginal]){
+            if(!exifObj.Exif) exifObj.Exif = {};
+            // DateTimeOriginal format: "YYYY:MM:DD HH:MM:SS"
+            const dt = kp.date.replace('T',' ').replace(/\.\d+Z?$/,'').replace(/-/g,':').slice(0,19);
+            exifObj.Exif[piexif.ExifIFD.DateTimeOriginal] = dt;
+          }
+          const patched = piexif.insert(piexif.dump(exifObj), b64);
+          const raw2 = atob(patched.split(',')[1]);
+          finalBytes = new Uint8Array(raw2.length);
+          for(let i=0;i<raw2.length;i++) finalBytes[i]=raw2.charCodeAt(i);
+        }catch(e){ console.warn('[exif patch]', e); }
+      }
+
+      const fh = await targetDir.getFileHandle(kp.name, {create:true});
+      const wr = await fh.createWritable(); await wr.write(finalBytes); await wr.close();
+      saved++;
+    }
+
+    // ── KML objects ─────────────────────────────────────────────
+    const objDir = await baseDir.getDirectoryHandle('Объекты', {create:true});
+    const kmlFH = await objDir.getFileHandle(`${kmzLabel}.kml`, {create:true});
+    const kmlWr = await kmlFH.createWritable();
+    await kmlWr.write(new TextEncoder().encode(kmlText));
+    await kmlWr.close();
+
+    showToast(`✅ Сохранено: ${saved} фото + KML объекты → ${kmzLabel}/`, 'success', 6000);
+  }catch(e){
+    console.error('[kmz save]', e);
+    showToast(`⚠ Ошибка сохранения на диск: ${e.message}`, 'warn', 7000);
+  }
+}
 
 // FSA-aware menu picker for KML — gives writable handle so saves go to the same file
 window.pickKMLViaMenu = async function(){
@@ -4764,7 +4931,13 @@ async function loadSingleRemotePhoto(viewUrl,customName){const type=detectRemote
 function updateShareButton(){document.getElementById('share-btn').style.display=remotePhotos.length?'':'none';}
 function copyShareLink(){const base=window.location.origin+window.location.pathname;const params=new URLSearchParams();remotePhotos.slice(0,10).forEach((p,i)=>{params.set(`photo${i+1}`,p.originalUrl);if(p.name)params.set(`name${i+1}`,p.name);});navigator.clipboard.writeText(`${base}?${params}`).then(()=>showToast('📋 Скопировано!','success')).catch(()=>showToast('Ошибка','error'));}
 async function loadPhotosFromUrl(){const params=new URLSearchParams(window.location.search);const su=params.get('photo');if(su){await loadSingleRemotePhoto(su,params.get('name')||'');fitMapToPhotos();return;}const plist=[];for(const[k,v]of params.entries()){const m=k.match(/^photo(\d+)$/);if(m)plist.push({n:+m[1],url:v,name:params.get(`name${m[1]}`)||''});}if(plist.length){plist.sort((a,b)=>a.n-b.n);for(const p of plist)await loadSingleRemotePhoto(p.url,p.name);fitMapToPhotos();}}
-window.addEventListener('load',()=>{updateShareButton();loadPhotosFromUrl();initTimeline();});
+window.addEventListener('load',()=>{
+  updateShareButton();loadPhotosFromUrl();initTimeline();
+  // Mobile screen warning
+  if(window.innerWidth < 1024){
+    document.getElementById('mobile-warn').classList.add('visible');
+  }
+});
 
 // ═══ MANUAL GPS ════════════════════════════════════════════════════
 let manualGPSActive=false,manualModePhotoIndex=null,manualInputMode='map';
@@ -7273,5 +7446,15 @@ queueMicrotask(() => {
   try { localStorage.removeItem(_LS_KML_KEY); } catch(_){}
 });
 </script>
+  <div id="mobile-warn">
+    <div id="mobile-warn-box">
+      <h2>📱 Маленький экран</h2>
+      <p>Приложение оптимизировано для экранов от <b>1024&nbsp;px</b>.<br>На телефоне некоторые функции (редактор контуров, перемещение файлов, панель структуры) будут неудобны.</p>
+      <div class="mw-btns">
+        <button id="mw-open-btn" onclick="document.getElementById('mobile-warn').classList.remove('visible')">Всё равно открыть</button>
+        <button id="mw-full-btn" onclick="document.documentElement.requestFullscreen?.();document.getElementById('mobile-warn').classList.remove('visible')">🔲 Полный экран (landscape)</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
