@@ -46,7 +46,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .upload-hints .uh-ico{flex-shrink:0;font-size:10px}
 .upload-hints .uh-lbl{flex-shrink:0;color:var(--accent2);font-weight:700;min-width:34px}
 .upload-hints .uh-val{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px;opacity:.85}
-#file-input,#folder-input-fallback,#kml-file-input{display:none}
+#file-input,#folder-input-fallback,#kml-file-input,#kmz-file-input{display:none}
 #auto-save-label{display:flex;align-items:center;gap:6px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);white-space:nowrap;padding:5px 8px;border:1px solid var(--border);border-radius:var(--r);transition:border-color .15s,color .15s;user-select:none;flex-shrink:0}
 #auto-save-label:hover{border-color:var(--accent);color:var(--accent)}
 #auto-save-label input{accent-color:var(--accent);cursor:pointer;width:13px;height:13px}
@@ -234,7 +234,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #map-wrap{position:relative;overflow:hidden}
 #map{width:100%;height:100%;background:#0d1117}
 .leaflet-container{background:#0d1117 !important}
-.leaflet-tile{filter:brightness(.72) saturate(.65)}
+.leaflet-tile{filter:brightness(.72) saturate(.65);margin-right:-1px;margin-bottom:-1px}
 .leaflet-control-zoom a{background:var(--surface) !important;color:var(--text) !important;border-color:var(--border) !important}
 .leaflet-control-zoom a:hover{background:var(--border) !important}
 .leaflet-control-attribution{background:rgba(13,15,20,.7) !important;color:var(--muted) !important;font-size:10px !important}
