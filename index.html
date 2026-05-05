@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.34</title>
+<title>EkceloFoto v2.9.35</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -60,23 +60,23 @@
   --bg: #f0ede8;
   --surface: #ffffff;
   --surface2: #f5f3ef;
-  --border: #d6d2ca;
+  --border: #dedad3;
   --border2: #e8e4de;
-  --accent: #b89400;
-  --accent-dim: rgba(184,148,0,.14);
-  --accent2: #0066b3;
-  --accent2-dim: rgba(0,102,179,.12);
-  --text: #050403;
-  --text2: #1a1815;
-  --muted: #3a3631;
-  --danger: #c52818;
-  --warn: #9a4a05;
-  --shadow: 0 8px 32px rgba(0,0,0,.18);
-  --shadow-sm: 0 2px 8px rgba(0,0,0,.12);
+  --accent: #c8a800;
+  --accent-dim: rgba(200,168,0,.10);
+  --accent2: #0077cc;
+  --accent2-dim: rgba(0,119,204,.10);
+  --text: #0a0907;
+  --text2: #252220;
+  --muted: #48443e;
+  --danger: #d93025;
+  --warn: #b45309;
+  --shadow: 0 8px 32px rgba(0,0,0,.12);
+  --shadow-sm: 0 2px 8px rgba(0,0,0,.08);
   --map-filter: brightness(1) saturate(1);
   --map-bg: #f2efe9;
-  --scroll-thumb: #a09c93;
-  --scroll-track: #e8e4de;
+  --scroll-thumb: #b0aca4;
+  --scroll-track: #f0ede8;
 }
 
 /* ── SYSTEM (auto) ───────────────────────────────────────────────── */
@@ -88,34 +88,28 @@
     --bg: #f0ede8;
     --surface: #ffffff;
     --surface2: #f5f3ef;
-    --border: #d6d2ca;
+    --border: #dedad3;
     --border2: #e8e4de;
-    --accent: #b89400;
-    --accent-dim: rgba(184,148,0,.14);
-    --accent2: #0066b3;
-    --accent2-dim: rgba(0,102,179,.12);
-    --text: #050403;
-    --text2: #1a1815;
-    --muted: #3a3631;
-    --danger: #c52818;
-    --warn: #9a4a05;
-    --shadow: 0 8px 32px rgba(0,0,0,.18);
-    --shadow-sm: 0 2px 8px rgba(0,0,0,.12);
+    --accent: #c8a800;
+    --accent-dim: rgba(200,168,0,.10);
+    --accent2: #0077cc;
+    --accent2-dim: rgba(0,119,204,.10);
+    --text: #0a0907;
+    --text2: #252220;
+    --muted: #48443e;
+    --danger: #d93025;
+    --warn: #b45309;
+    --shadow: 0 8px 32px rgba(0,0,0,.12);
+    --shadow-sm: 0 2px 8px rgba(0,0,0,.08);
     --map-filter: brightness(1) saturate(1);
     --map-bg: #f2efe9;
-    --scroll-thumb: #a09c93;
-    --scroll-track: #e8e4de;
+    --scroll-thumb: #c8c4bc;
+    --scroll-track: #f0ede8;
   }
 }
 
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;overflow:hidden;
-  /* v2.9.34: slightly condensed character width for the whole UI.
-     letter-spacing -.15px tightens character pairs without breaking glyph rendering;
-     font-stretch 95% nudges variable fonts (Syne supports it) toward semicondensed. */
-  letter-spacing:-.15px;font-stretch:95%;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
-/* Monospace blocks should stay un-stretched so columns align in code/coords. */
-code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;overflow:hidden}
 
 /* ── THEME SWITCHER BUTTON ───────────────────────────────────────── */
 #theme-switcher {
@@ -139,7 +133,7 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size:12px;
+  font-size: 12px;
   color: var(--muted);
   transition: background .15s, color .15s;
   line-height: 1;
@@ -158,7 +152,7 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 #header{grid-column:1/-1;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;padding:0 12px;z-index:9000;position:relative;box-shadow:var(--shadow-sm)}
 #logo{font-size:17px;font-weight:800;letter-spacing:-.5px;color:var(--accent);white-space:nowrap;display:flex;align-items:baseline;gap:0}
 #logo span{color:var(--text)}
-#logo small{font-size:10px;font-weight:400;color:var(--muted);font-family:'JetBrains Mono',monospace;letter-spacing:0;margin-left:3px;vertical-align:middle}
+#logo small{font-size:9px;font-weight:400;color:var(--muted);font-family:'JetBrains Mono',monospace;letter-spacing:0;margin-left:3px;vertical-align:middle}
 #header-sep{width:1px;height:22px;background:var(--border);flex-shrink:0;margin:0 2px}
 #invite-btn{display:none;align-items:center;gap:7px;background:var(--accent2);color:#0d0f14;border:none;border-radius:var(--r);padding:6px 12px;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer;text-decoration:none;white-space:nowrap}
 .upload-wrap{position:relative;flex-shrink:0}
@@ -169,14 +163,14 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 #upload-menu button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:transparent;border:none;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;padding:8px 14px;cursor:pointer;transition:background .1s}
 #upload-menu button:hover{background:var(--accent-dim)}
 #upload-menu hr{border:none;border-top:1px solid var(--border);margin:3px 0}
-.upload-hints{display:none;padding:8px 14px;border-top:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);background:var(--surface2);line-height:1.5}
-.upload-hints .uh-title{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px;opacity:.7}
-.upload-hints .uh-row{display:flex;gap:5px;align-items:flex-start;margin-bottom:2px;overflow:hidden;width:100%;text-align:left;background:transparent;border:1px solid transparent;border-radius:3px;padding:3px 5px;font-family:inherit;font-size:10px;color:var(--muted);cursor:pointer;transition:all .12s}
+.upload-hints{display:none;padding:8px 14px;border-top:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--muted);background:var(--surface2);line-height:1.5}
+.upload-hints .uh-title{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px;opacity:.7}
+.upload-hints .uh-row{display:flex;gap:5px;align-items:flex-start;margin-bottom:2px;overflow:hidden;width:100%;text-align:left;background:transparent;border:1px solid transparent;border-radius:3px;padding:3px 5px;font-family:inherit;font-size:9.5px;color:var(--muted);cursor:pointer;transition:all .12s}
 .upload-hints .uh-clickable:hover{border-color:var(--accent2);background:var(--accent2-dim);color:var(--text)}
 .upload-hints .uh-clickable:hover .uh-val{color:var(--accent2)}
 .upload-hints .uh-ico{flex-shrink:0;font-size:10px}
 .upload-hints .uh-lbl{flex-shrink:0;color:var(--accent2);font-weight:700;min-width:34px}
-.upload-hints .uh-val{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;opacity:.85}
+.upload-hints .uh-val{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px;opacity:.85}
 #file-input,#folder-input-fallback,#kml-file-input,#kmz-file-input{display:none}
 #auto-save-label{display:flex;align-items:center;gap:5px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);white-space:nowrap;padding:4px 7px;border:1px solid var(--border);border-radius:var(--r);transition:border-color .15s,color .15s,background .15s;user-select:none;flex-shrink:0}
 #auto-save-label:hover{border-color:var(--accent);color:var(--text)}
@@ -191,7 +185,7 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 #stats{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);margin-left:auto;display:flex;gap:6px;align-items:center;flex-shrink:0}
 .stat{display:flex;flex-direction:row;align-items:center;gap:3px}
 .stat-val{color:var(--text);font-weight:600;font-size:12px}
-.stat-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+.stat-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
 .stat-toggle{cursor:pointer;padding:3px 8px;border-radius:4px;border:1px solid transparent;transition:background .15s,border-color .15s;min-width:44px;text-align:center}
 .stat-toggle:hover{background:var(--accent-dim);border-color:var(--border)}
 .stat-toggle.off .stat-val{opacity:.35}
@@ -210,7 +204,7 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 #gd-btn{background:var(--accent2);color:#0d0f14;border:none;border-radius:var(--r);padding:5px 10px;font-family:'Syne',sans-serif;font-weight:700;font-size:11px;cursor:pointer;white-space:nowrap}
 #gd-btn:disabled{opacity:.4;cursor:not-allowed}
 #gd-key{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:10px;padding:5px 8px;outline:none;margin-top:5px;width:100%}
-#gd-status{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);margin-top:5px;min-height:13px;line-height:1.4}
+#gd-status{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);margin-top:5px;min-height:13px;line-height:1.4}
 
 /* FOLDER TREE */
 #folder-tree-panel{flex-shrink:0;border-bottom:1px solid var(--border);display:none}
@@ -228,11 +222,11 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 .fnode-row:hover{background:var(--accent-dim)}
 .fnode-row.selected{background:var(--accent-dim);border-color:var(--accent)}
 .fnode-row.drag-over{background:var(--accent2-dim);border-color:var(--accent2);border-style:dashed}
-.fnode-toggle{font-size:10px;color:var(--muted);width:13px;text-align:center;flex-shrink:0;transition:transform .15s}
+.fnode-toggle{font-size:9px;color:var(--muted);width:13px;text-align:center;flex-shrink:0;transition:transform .15s}
 .fnode-toggle.open{transform:rotate(90deg)}
 .fnode-icon{font-size:12px;flex-shrink:0}
 .fnode-label{font-size:11px;font-family:'JetBrains Mono',monospace;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fnode-count{font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace;flex-shrink:0;background:rgba(255,255,255,.06);border-radius:3px;padding:0 4px}
+.fnode-count{font-size:9px;color:var(--muted);font-family:'JetBrains Mono',monospace;flex-shrink:0;background:rgba(255,255,255,.06);border-radius:3px;padding:0 4px}
 .fnode-del{opacity:0;background:transparent;border:none;color:var(--muted);font-size:11px;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0;transition:opacity .1s,color .1s}
 .fnode-row:hover .fnode-del{opacity:1}
 .fnode-del:hover{color:var(--danger)}
@@ -241,11 +235,11 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 #folder-filter-banner{display:none;flex-shrink:0;background:var(--accent-dim);border-bottom:1px solid var(--accent);padding:5px 10px;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:10px}
 #folder-filter-banner.visible{display:flex}
 #folder-filter-name{color:var(--accent);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
-#folder-filter-reset{background:transparent;border:1px solid var(--accent);border-radius:3px;color:var(--accent);font-size:10px;padding:2px 7px;cursor:pointer;font-family:'JetBrains Mono',monospace;white-space:nowrap;transition:all .12s}
+#folder-filter-reset{background:transparent;border:1px solid var(--accent);border-radius:3px;color:var(--accent);font-size:9px;padding:2px 7px;cursor:pointer;font-family:'JetBrains Mono',monospace;white-space:nowrap;transition:all .12s}
 #folder-filter-reset:hover{background:var(--accent-dim)}
 
 /* Unassigned section separator in photo list */
-.unassigned-header{padding:5px 8px 3px;font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace;border-top:1px solid var(--border);margin-top:4px;flex-shrink:0}
+.unassigned-header{padding:5px 8px 3px;font-size:9px;color:var(--muted);font-family:'JetBrains Mono',monospace;border-top:1px solid var(--border);margin-top:4px;flex-shrink:0}
 .photo-item.unassigned-drag{opacity:.6;border-style:dashed}
 
 #load-progress{position:fixed;top:0;left:0;right:0;height:3px;z-index:9999;pointer-events:none;opacity:0;transition:opacity .2s}
@@ -275,7 +269,7 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 .marks-group.collapsed{flex:0 0 auto}
 .marks-group-header{display:flex;align-items:center;gap:6px;padding:7px 10px;background:var(--surface2);border-bottom:1px solid var(--border);cursor:pointer;user-select:none;flex-shrink:0;transition:background .12s}
 .marks-group-header:hover{background:var(--accent-dim)}
-.marks-group-header > span:first-child{font-size:10px;color:var(--muted);width:10px}
+.marks-group-header > span:first-child{font-size:9px;color:var(--muted);width:10px}
 .mg-master-cb{margin:0 6px 0 0;flex-shrink:0;accent-color:var(--accent2);cursor:pointer;width:13px;height:13px}
 .mg-master-cb:disabled{opacity:.35;cursor:not-allowed}
 .mg-icon{font-size:12px;width:14px;text-align:center;display:inline-block}
@@ -311,23 +305,23 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 .thumb.loading{background:linear-gradient(90deg,var(--border) 25%,#2a3450 50%,var(--border) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .photo-meta{flex:1;min-width:0;padding-top:2px;pointer-events:none}
-.photo-name{font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
-.photo-coords{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);margin-top:2px;line-height:1.5}
-.gps-badge{font-size:10px;padding:1px 4px;border-radius:3px;font-family:'JetBrains Mono',monospace;margin-top:3px;display:inline-block}
+.photo-name{font-size:8px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
+.photo-coords{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--muted);margin-top:2px;line-height:1.5}
+.gps-badge{font-size:8px;padding:1px 4px;border-radius:3px;font-family:'JetBrains Mono',monospace;margin-top:3px;display:inline-block}
 .gps-ok{background:rgba(100,160,0,.15);color:#3a6800}
 [data-theme="dark"] .gps-ok,[data-theme="system"] .gps-ok{background:rgba(232,255,71,.15);color:var(--accent)}
 .gps-no{background:rgba(200,0,0,.12);color:#aa0000}
 [data-theme="dark"] .gps-no,[data-theme="system"] .gps-no{background:rgba(255,92,92,.12);color:var(--danger)}
-.date-mismatch-badge{display:inline-flex;align-items:center;gap:3px;margin-top:3px;margin-left:3px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);border-radius:3px;color:var(--warn);font-size:10px;font-family:'JetBrains Mono',monospace;padding:1px 5px;vertical-align:middle}
-.loc-badge{font-size:10px;padding:1px 4px;border-radius:3px;font-family:'JetBrains Mono',monospace;margin-top:3px;display:inline-block;background:rgba(71,200,255,.1);color:var(--accent2);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+.date-mismatch-badge{display:inline-flex;align-items:center;gap:3px;margin-top:3px;margin-left:3px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);border-radius:3px;color:var(--warn);font-size:8px;font-family:'JetBrains Mono',monospace;padding:1px 5px;vertical-align:middle}
+.loc-badge{font-size:8px;padding:1px 4px;border-radius:3px;font-family:'JetBrains Mono',monospace;margin-top:3px;display:inline-block;background:rgba(71,200,255,.1);color:var(--accent2);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
 /* GPS button: pointer-events:all so stopPropagation works */
-.gps-manual-btn{display:block;margin-top:5px;background:var(--accent2-dim);border:1px solid var(--accent2);border-radius:4px;color:var(--accent2);font-size:10px;font-family:'JetBrains Mono',monospace;padding:3px 6px;cursor:pointer;transition:all .15s;text-align:left;pointer-events:auto;position:relative;z-index:2}
+.gps-manual-btn{display:block;margin-top:5px;background:var(--accent2-dim);border:1px solid var(--accent2);border-radius:4px;color:var(--accent2);font-size:9px;font-family:'JetBrains Mono',monospace;padding:3px 6px;cursor:pointer;transition:all .15s;text-align:left;pointer-events:auto;position:relative;z-index:2}
 .gps-manual-btn:hover{filter:brightness(1.1)}
 .del-btn{position:absolute;top:4px;right:4px;width:17px;height:17px;background:var(--surface);border:1px solid var(--border);border-radius:50%;color:var(--muted);font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,color .15s;padding:0;line-height:1;z-index:3}
 .photo-item:hover .del-btn{opacity:1}
 .del-btn:hover{color:var(--danger);border-color:var(--danger)}
 /* ── Photo move-to-folder feature ───────────────────────────────── */
-.photo-move-btn{position:absolute;top:4px;right:24px;width:17px;height:17px;background:var(--surface);border:1px solid var(--border);border-radius:50%;color:var(--muted);font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,color .15s,border-color .15s;padding:0;line-height:1;z-index:3}
+.photo-move-btn{position:absolute;top:4px;right:24px;width:17px;height:17px;background:var(--surface);border:1px solid var(--border);border-radius:50%;color:var(--muted);font-size:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,color .15s,border-color .15s;padding:0;line-height:1;z-index:3}
 .photo-item:hover .photo-move-btn{opacity:1}
 .photo-move-btn:hover{color:#47c8ff;border-color:#47c8ff}
 #lb-move-btn{background:var(--surface2);border:1px solid var(--accent2);border-radius:4px;cursor:pointer;padding:3px 5px;color:var(--accent2);line-height:1;transition:color .12s,background .12s;display:none;flex-shrink:0;align-items:center;justify-content:center}
@@ -354,7 +348,7 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 #yandex-dialog{display:none;position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.65);align-items:center;justify-content:center}
 #yandex-dialog.open{display:flex}
 .dialog-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px 24px;width:420px;box-shadow:var(--shadow);animation:pop-in .2s ease both}
-.dialog-title{font-weight:700;font-size:13px;margin-bottom:14px;color:var(--accent2)}
+.dialog-title{font-weight:700;font-size:15px;margin-bottom:14px;color:var(--accent2)}
 .dialog-input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;padding:8px 10px;outline:none;margin-bottom:10px}
 .dialog-input:focus{border-color:var(--accent2)}
 .dialog-hint{font-size:10px;color:var(--muted);margin-bottom:14px;font-family:'JetBrains Mono',monospace;line-height:1.5}
@@ -368,17 +362,30 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 #map-wrap{position:relative;overflow:hidden}
 #map{width:100%;height:100%;background:var(--map-bg);transition:background .3s}
 .leaflet-container{background:var(--map-bg) !important}
-/* ── TILE SEAM FIX (v2.9.34) ──────────────────────────────────────
-   We learned the hard way (v2.9.30-33) that overlap-based fixes
-   (margin:-1px, width:257px, transform:scale(1.02), translateZ(0))
-   make seams WORSE on most zoom/DPR combinations. They shift tiles
-   by fractional pixels relative to Leaflet's integer translate3d
-   positions, opening the very gap they tried to close.
-   The reliable approach used in the v2.9.18 baseline: filter ON
-   THE TILE (not the pane), no transform on pane, no per-tile width
-   override. The pane background matches OSM tile edge color so any
-   genuinely sub-pixel hairline (rare) reads as the tile color, not
-   white. Per theme: dark uses #0d1117, light uses #f2efe9.
+/* ── TILE SEAM FIX (v2.9.35, definitive) ──────────────────────────
+   PROBLEM HISTORY:
+     v2.9.30  filter on .leaflet-div-icon — wrong target
+     v2.9.31  delete L.Icon.Default._getIconUrl — fixed unrelated thing
+     v2.9.32  mergeOptions {iconUrl:''} — broke photo markers, reverted
+     v2.9.33  width:257px + margin:-1px + transform:scale(1.02) on pane —
+              CATASTROPHICALLY broken at z>maxNativeZoom: when Leaflet
+              upscales (z19 native → z22 displayed), each tile-slot is
+              2048×2048 px on screen. The hardcoded `width:257px !important`
+              shrinks the tile bitmap to 257 px square inside a 2048-px slot,
+              leaving 1791 px of map-pane background visible. That's the
+              giant white quadrants the user sees on z22.
+     v2.9.34  removed overlap + filter on tile + bg on pane — correct in
+              principle but apparently didn't reach the user's deployed file.
+   THE BASELINE-PROVEN APPROACH (v2.9.18, no seams ever):
+     One rule: filter on .leaflet-tile (per-tile, not per-pane).
+     Background of pane matches tile color so any sub-pixel hairline reads
+     as the tile color, not white.
+     NOTHING ELSE. No transform on pane. No width/margin override.
+     Leaflet positions tiles via translate3d() with integer pixel values;
+     the browser renders adjacent tiles edge-to-edge.
+   At z>maxNativeZoom the upscaled tiles are also positioned by
+   translate3d() at integer slot-corners, so no inter-tile gaps appear
+   regardless of magnification.
    ──────────────────────────────────────────────────────────────── */
 .leaflet-tile-pane{ background: var(--map-bg); }
 .leaflet-tile{ filter: var(--map-filter); }
@@ -390,7 +397,7 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 #map-hint{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;pointer-events:none;z-index:500;transition:opacity .4s}
 #map-hint.hidden{opacity:0}
 .hint-icon{font-size:44px;opacity:.16}
-.hint-text{font-size:13px;color:var(--muted);text-align:center;line-height:1.7}
+.hint-text{font-size:14px;color:var(--muted);text-align:center;line-height:1.7}
 #map-wrap.gps-picking{cursor:crosshair}
 #map-wrap.gps-picking .leaflet-container{cursor:crosshair !important}
 #gps-hint-overlay{display:none;position:absolute;top:60px;left:50%;transform:translateX(-50%);z-index:650;background:var(--accent2-dim);border:1px solid var(--accent2);border-radius:8px;color:var(--accent2);font-size:13px;font-family:'JetBrains Mono',monospace;padding:8px 18px;pointer-events:none;white-space:nowrap}
@@ -419,16 +426,16 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 .mgps-mode-btn{flex:1;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-size:10px;font-family:'JetBrains Mono',monospace;padding:5px 4px;cursor:pointer;transition:all .15s;text-align:center}
 .mgps-mode-btn.active{border-color:var(--accent2);color:var(--accent2);background:rgba(71,200,255,.08)}
 #mgps-coord-input-wrap{display:none;margin-bottom:8px}
-#mgps-coord-field{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:10px;padding:5px 8px;outline:none;margin-bottom:5px}
+#mgps-coord-field{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:9px;padding:5px 8px;outline:none;margin-bottom:5px}
 #mgps-coord-field:focus{border-color:var(--accent2)}
 #mgps-coord-field::placeholder{color:var(--muted)}
 #mgps-coord-apply{width:100%;background:rgba(71,200,255,.15);border:1px solid rgba(71,200,255,.4);border-radius:var(--r);color:var(--accent2);font-family:'JetBrains Mono',monospace;font-size:10px;padding:5px;cursor:pointer}
 #mgps-coord-apply:hover{background:rgba(71,200,255,.25)}
-#mgps-coords-display{font-size:10px;color:var(--muted);margin-bottom:8px;min-height:14px}
+#mgps-coords-display{font-size:9px;color:var(--muted);margin-bottom:8px;min-height:14px}
 #mgps-coords-display.set{color:var(--accent)}
 #mgps-bearing-wrap{display:none;margin-bottom:10px}
 #mgps-bearing-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
-#mgps-bearing-label span:first-child{font-size:10px;color:var(--muted)}
+#mgps-bearing-label span:first-child{font-size:9px;color:var(--muted)}
 #mgps-bearing-val{font-size:18px;font-weight:700;color:var(--accent);font-family:'Syne',sans-serif}
 #mgps-bearing{width:100%;accent-color:var(--accent);cursor:pointer;height:4px}
 #mgps-actions{display:flex;gap:6px;margin-top:2px}
@@ -457,7 +464,7 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 #lb-copy-name-btn{flex-shrink:0;background:transparent;border:none;color:var(--muted);cursor:pointer;padding:2px;border-radius:3px;line-height:1;transition:color .12s}
 #lb-copy-name-btn:hover{color:var(--accent)}
 #lb-copy-name-btn svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-#lb-section-label{padding:4px 11px 5px;font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:6px}
+#lb-section-label{padding:4px 11px 5px;font-size:9px;font-family:'JetBrains Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:6px}
 #lb-section-label-text{flex:1}
 #lb-close-bar{flex-shrink:0;width:22px;height:22px;background:rgba(0,0,0,.5);border:none;border-radius:50%;color:#fff;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s}
 #lb-close-bar:hover{background:rgba(255,92,92,.75)}
@@ -466,9 +473,9 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 #lb-zoom-bar{display:flex;align-items:center;gap:5px;padding:3px 8px;background:var(--surface2);border-top:1px solid var(--border)}
 .lbz-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:3px;width:20px;height:20px;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
 .lbz-btn:hover{border-color:var(--accent);color:var(--accent)}
-#lb-zoom-val{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);min-width:34px;text-align:center}
+#lb-zoom-val{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);min-width:34px;text-align:center}
 .lbz-sep{flex:1}
-#lb-fullscreen-btn{background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text);border-radius:3px;height:20px;padding:0 8px;font-size:10px;font-family:'JetBrains Mono',monospace;cursor:pointer;transition:all .15s}
+#lb-fullscreen-btn{background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text);border-radius:3px;height:20px;padding:0 8px;font-size:9px;font-family:'JetBrains Mono',monospace;cursor:pointer;transition:all .15s}
 #lb-fullscreen-btn:hover{border-color:var(--accent2);color:var(--accent2)}
 #lb-info{padding:7px 11px 8px;max-height:280px;overflow-y:auto}
 #lb-info::-webkit-scrollbar{width:4px}
@@ -482,7 +489,7 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 .gps-icon-btn svg{width:15px;height:15px}
 .gps-icon-btn:hover{border-color:var(--accent2);color:var(--accent2);background:var(--accent2-dim)}
 .gps-icon-btn svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.gps-set-btn{display:inline-flex;align-items:center;gap:5px;background:rgba(71,200,255,.1);border:1px solid rgba(71,200,255,.3);border-radius:4px;color:var(--accent2);font-size:10px;font-family:'JetBrains Mono',monospace;padding:3px 8px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.gps-set-btn{display:inline-flex;align-items:center;gap:5px;background:rgba(71,200,255,.1);border:1px solid rgba(71,200,255,.3);border-radius:4px;color:var(--accent2);font-size:9px;font-family:'JetBrains Mono',monospace;padding:3px 8px;cursor:pointer;transition:all .15s;white-space:nowrap}
 .gps-set-btn:hover{background:rgba(71,200,255,.22)}
 #lb-nav{display:flex;gap:6px;margin-top:8px}
 .lb-nav-btn{flex:1;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-size:11px;font-family:'JetBrains Mono',monospace;padding:5px;cursor:pointer;transition:all .15s}
@@ -495,7 +502,7 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 #fit-btn:hover{border-color:var(--accent);color:var(--accent)}
 #kml-wrap{position:absolute;top:12px;right:223px;z-index:601;display:none;gap:4px;align-items:center}
 #kml-wrap.has-layers{display:flex}
-#kml-eye-btn{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:7px 11px;font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text);cursor:pointer;transition:all .15s;line-height:1;box-shadow:var(--shadow-sm)}
+#kml-eye-btn{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:7px 11px;font-family:'JetBrains Mono',monospace;font-size:15px;color:var(--text);cursor:pointer;transition:all .15s;line-height:1;box-shadow:var(--shadow-sm)}
 #kml-eye-btn:hover{border-color:var(--accent2)}
 #kml-eye-btn.all-on{border-color:var(--accent2);color:var(--accent2);background:var(--accent2-dim)}
 #kml-eye-btn.all-off{opacity:.45}
@@ -508,7 +515,7 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 .kml-layer-item:hover{background:var(--surface2)}
 .kml-layer-item input[type=checkbox]{accent-color:var(--accent2);cursor:pointer;width:13px;height:13px;flex-shrink:0}
 .kml-layer-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
-.kml-layer-count{font-size:10px;color:var(--muted);flex-shrink:0}
+.kml-layer-count{font-size:9px;color:var(--muted);flex-shrink:0}
 .kml-layer-del{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:0 2px;flex-shrink:0;opacity:0;transition:opacity .1s,color .1s}
 .kml-layer-item:hover .kml-layer-del{opacity:1}
 .kml-layer-del:hover{color:var(--danger)}
@@ -521,7 +528,7 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 #cadastre-btn.active{background:rgba(255,149,0,.12)}
 #cadastre-dropdown{display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--surface);border:1px solid rgba(255,149,0,.4);border-radius:var(--r);box-shadow:var(--shadow);min-width:230px;padding:6px 0;z-index:3000;animation:pop-in .15s ease both}
 #cadastre-dropdown.open{display:block}
-.cad-group{padding:5px 12px 4px;font-size:10px;color:rgba(255,149,0,.65);text-transform:uppercase;letter-spacing:.5px;font-family:'JetBrains Mono',monospace;border-top:1px solid var(--border);margin-top:2px}
+.cad-group{padding:5px 12px 4px;font-size:9px;color:rgba(255,149,0,.65);text-transform:uppercase;letter-spacing:.5px;font-family:'JetBrains Mono',monospace;border-top:1px solid var(--border);margin-top:2px}
 .cad-group:first-child{border-top:none;margin-top:0}
 .cad-layer-item{display:flex;align-items:center;gap:8px;padding:5px 12px;cursor:pointer;transition:background .1s;font-family:'JetBrains Mono',monospace;font-size:11px}
 .cad-layer-item:hover{background:var(--surface2)}
@@ -547,7 +554,7 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 #map.bg-white-mode .leaflet-map-pane,#map.bg-white-mode .leaflet-pane,
 #map.bg-white-mode .leaflet-tile-pane{background:#ffffff!important}
 #cadastre-opacity{display:none}
-#cadastre-cache-info{position:absolute;top:80px;right:110px;z-index:600;display:none;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:3px 8px;cursor:pointer}
+#cadastre-cache-info{position:absolute;top:80px;right:110px;z-index:600;display:none;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:3px 8px;cursor:pointer}
 #cadastre-cache-info.visible{display:block}
 #cadastre-cache-info:hover{color:var(--accent2)}
 #progress-bar{position:absolute;bottom:0;left:0;height:2px;background:var(--accent);transition:width .2s;z-index:600;border-radius:0 2px 2px 0}
@@ -578,7 +585,7 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 .timeline-dot.folder-match{background:#22c55e !important;box-shadow:0 0 10px #22c55e !important;transform:translateY(-50%) scale(1.5) !important;z-index:16}
 .timeline-dot.folder-dim{background:#252b3a !important;opacity:.35;box-shadow:none !important;transform:translateY(-50%) scale(0.8) !important;z-index:8}
 .timeline-dot.active-dot{background:#ff3c3c !important;border-color:#fff !important;transform:translateY(-50%) scale(1.7) !important;box-shadow:0 0 12px #ff3c3c !important;z-index:20}
-.timeline-labels{display:flex;justify-content:space-between;margin-top:3px;font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace}
+.timeline-labels{display:flex;justify-content:space-between;margin-top:3px;font-size:9px;color:var(--muted);font-family:'JetBrains Mono',monospace}
 
 /* FULLSCREEN VIEWER */
 #viewer{display:none;position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:9999;align-items:center;justify-content:center;overflow:hidden}
@@ -603,13 +610,13 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 /* Item 2: GPS action buttons in info bar */
 #viewer-info-bar{position:fixed;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.85));padding:16px 24px 14px;display:flex;align-items:flex-end;justify-content:center;gap:22px;pointer-events:none;z-index:10002;font-family:'JetBrains Mono',monospace;font-size:13px;color:rgba(255,255,255,.9);flex-wrap:wrap}
 .viewer-info-item{display:flex;align-items:center;gap:6px}
-.viewer-info-icon{font-size:13px;opacity:.8}
+.viewer-info-icon{font-size:15px;opacity:.8}
 .viewer-gps-btn{pointer-events:all;display:inline-flex;align-items:center;gap:6px;background:rgba(160,32,240,.25);border:1px solid rgba(160,32,240,.6);border-radius:6px;color:#d070ff;font-family:'JetBrains Mono',monospace;font-size:11px;padding:5px 12px;cursor:pointer;transition:background .12s}
 .viewer-gps-btn:hover{background:rgba(160,32,240,.45)}
 
 /* CADASTRAL SEARCH PANEL (top of sidebar) */
 #cad-panel{flex-shrink:0;border-bottom:1px solid var(--border);padding:8px 10px 7px;background:var(--surface)}
-#cad-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-family:'JetBrains Mono',monospace;margin-bottom:5px}
+#cad-label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-family:'JetBrains Mono',monospace;margin-bottom:5px}
 #cad-row{display:flex;gap:5px;align-items:center}
 #cad-input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;padding:5px 8px;outline:none}
 #cad-input:focus{border-color:#a020f0}
@@ -620,14 +627,14 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 #cad-save-btn{display:none;align-items:center;justify-content:center;width:28px;height:28px;background:rgba(232,255,71,.1);border:1px solid rgba(232,255,71,.35);border-radius:var(--r);color:var(--accent);cursor:pointer;transition:all .15s;flex-shrink:0;padding:0}
 #cad-save-btn:hover{background:rgba(232,255,71,.25)}
 #cad-save-btn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-#cad-status{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);margin-top:5px;min-height:12px;line-height:1.4}
+#cad-status{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);margin-top:5px;min-height:12px;line-height:1.4}
 #cad-suggest{margin-top:5px;background:var(--surface);border:1px solid var(--accent2);border-radius:var(--r);max-height:240px;overflow-y:auto;font-family:'JetBrains Mono',monospace}
-.cad-suggest-item{padding:6px 9px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);font-size:10px;line-height:1.35;display:flex;flex-direction:column;gap:2px}
+.cad-suggest-item{padding:6px 9px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);font-size:10.5px;line-height:1.35;display:flex;flex-direction:column;gap:2px}
 .cad-suggest-item:last-child{border-bottom:none}
 .cad-suggest-item:hover{background:var(--accent-dim)}
 .cad-suggest-item .cs-cad{color:var(--accent);font-weight:700}
 .cad-suggest-item .cs-name{color:var(--text);opacity:.85;font-size:10px}
-.cad-suggest-item .cs-src{color:var(--muted);font-size:10px;font-style:italic}
+.cad-suggest-item .cs-src{color:var(--muted);font-size:9px;font-style:italic}
 /* Folder tree at bottom of sidebar */
 #folder-tree-panel{flex-shrink:0;border-top:1px solid var(--border);display:none;order:99}
 #folder-tree-panel.visible{display:block}
@@ -639,36 +646,39 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 /* ── INFO CARDS (v61) ─────────────────────────────────────────────
    Multiple draggable cards with thin connector lines back to the
    click point. Replaces L.popup for cad/KML hits + coords display. */
-/* Info-cards: theme-aware bg/text in all themes (v2.9.34).
-   • Removed duplicate hardcoded color rules from earlier dark-only era.
-   • Font sizes compacted into a 10-12 px range (≤3 pt span as requested).
-   • Drop-shadow uses theme token; light theme has its own subtle shadow. */
+/* Info-cards: force readable bg/text in all themes */
 .info-card{position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:8px;
   font-family:'JetBrains Mono',monospace;color:var(--text);box-shadow:var(--shadow);
-  backdrop-filter:blur(6px);min-width:180px;max-width:260px;overflow:hidden;animation:pop-in .15s ease both;
-  letter-spacing:-.1px}
-.info-card.dragging{box-shadow:var(--shadow);border-color:#00ff66}
-.info-card .ic-header{display:flex;align-items:center;gap:4px;padding:3px 4px 3px 8px;
-  background:var(--surface2);border-bottom:1px solid var(--border);cursor:move;user-select:none}
-.info-card .ic-header.ic-zu{background:rgba(0,180,50,0.18);border-bottom-color:rgba(0,180,50,.5)}
-.info-card .ic-header.ic-oks{background:rgba(160,32,240,0.18);border-bottom-color:rgba(160,32,240,.5)}
-.info-card .ic-header.ic-exp{background:rgba(71,200,255,0.18);border-bottom-color:rgba(71,200,255,.5)}
-.info-card .ic-title{flex:1;font-size:11px;font-weight:700;color:var(--text);letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.info-card .ic-icobtn,.info-card .ic-close{background:transparent;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:1px 4px;line-height:1;border-radius:3px;flex-shrink:0;transition:color .12s,background .12s}
-.info-card .ic-icobtn:hover{color:var(--accent);background:var(--accent-dim)}
-.info-card .ic-icobtn.flashed{color:#6cd96c;background:rgba(108,217,108,.18)}
-.info-card .ic-close{font-size:13px}
-.info-card .ic-close:hover{color:var(--text);background:var(--surface2)}
-.info-card .ic-body{padding:5px 7px 6px;font-size:11px;line-height:1.35;color:var(--text)}
-.info-card .ic-coords{display:block;background:var(--surface2);padding:3px 6px;border-radius:3px;
-  font-size:11px;color:var(--accent2);font-family:inherit;letter-spacing:.2px;margin-bottom:4px;text-align:center}
+  backdrop-filter:blur(6px);min-width:180px;max-width:260px;overflow:hidden;animation:pop-in .15s ease both}
+.info-card .ic-title{flex:1;font-size:10.5px;font-weight:700;color:var(--text);letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.info-card .ic-body{padding:5px 7px 6px;font-size:10.5px;line-height:1.35;color:var(--text)}
 .info-card .ic-name{font-size:11px;font-weight:600;color:var(--text);margin-bottom:2px;line-height:1.3;word-break:break-word}
 .info-card .ic-desc{font-size:10px;color:var(--text2);line-height:1.4;word-break:break-word}
+.info-card.dragging{box-shadow:0 12px 32px rgba(0,0,0,.8);border-color:#00ff66;background:rgba(13,15,20,0.95)}
+/* v64: tighter header. Copy mini-button (.ic-icobtn) sits before the close X. */
+.info-card .ic-header{display:flex;align-items:center;gap:4px;padding:3px 4px 3px 8px;
+  background:var(--surface2);border-bottom:1px solid var(--border);cursor:move;user-select:none}
+.info-card .ic-header.ic-zu{background:rgba(0,180,50,0.16);border-bottom-color:rgba(0,180,50,.4)}
+.info-card .ic-header.ic-oks{background:rgba(160,32,240,0.16);border-bottom-color:rgba(160,32,240,.4)}
+.info-card .ic-header.ic-exp{background:rgba(71,200,255,0.16);border-bottom-color:rgba(71,200,255,.4)}
+.info-card .ic-title{flex:1;font-size:10.5px;font-weight:700;color:#fff;letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Header mini-buttons: copy (⎘) and close (×). Same compact size, no border to keep the bar slim. */
+.info-card .ic-icobtn,.info-card .ic-close{background:transparent;border:none;color:#9ba0a8;font-size:12px;cursor:pointer;padding:1px 4px;line-height:1;border-radius:3px;flex-shrink:0;transition:color .12s,background .12s}
+.info-card .ic-icobtn:hover{color:var(--accent);background:rgba(255,149,0,.12)}
+.info-card .ic-icobtn.flashed{color:#6cd96c;background:rgba(108,217,108,.18)}
+.info-card .ic-close{font-size:14px}
+.info-card .ic-close:hover{color:#fff;background:rgba(255,255,255,.08)}
+/* v64: minimal body padding */
+.info-card .ic-body{padding:5px 7px 6px;font-size:10.5px;line-height:1.35}
+.info-card .ic-coords{display:block;background:var(--surface2);padding:3px 6px;border-radius:3px;
+  font-size:10.5px;color:var(--accent2);font-family:inherit;letter-spacing:.3px;margin-bottom:4px;text-align:center}
+.info-card .ic-name{font-size:11px;font-weight:600;color:#fff;margin-bottom:2px;line-height:1.3;word-break:break-word}
+.info-card .ic-desc{font-size:10px;color:#cfd2d6;line-height:1.4;word-break:break-word;opacity:.92}
 .info-card .ic-action{display:block;width:100%;border:none;border-radius:3px;padding:4px 8px;
-  font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;margin-top:4px;transition:filter .1s}
+  font-family:inherit;font-size:10.5px;font-weight:700;cursor:pointer;margin-top:4px;transition:filter .1s}
 .info-card .ic-action:hover{filter:brightness(1.12)}
-.info-card .ic-orange{background:var(--accent);color:var(--bg)}
-.info-card .ic-cyan{background:var(--accent2);color:var(--bg)}
+.info-card .ic-orange{background:#ff9500;color:#fff}
+.info-card .ic-cyan{background:#47c8ff;color:#0d0f14}
 .cad-tip-section{padding:6px 9px;line-height:1.5}
 .cad-tip-section+.cad-tip-section{border-top:1px solid rgba(255,255,255,.08)}
 /* Cad tip sections: use theme surface vars for readability in light mode */
@@ -708,7 +718,7 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 #dup-modal{display:none;position:fixed;inset:0;z-index:10700;background:rgba(0,0,0,.7);backdrop-filter:blur(3px);align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace}
 #dup-modal.open{display:flex}
 #dup-modal .dm-card{background:var(--surface);border:1px solid var(--accent);border-radius:8px;padding:18px 22px;min-width:380px;max-width:520px;box-shadow:var(--shadow);color:var(--text)}
-#dup-modal h3{margin:0 0 12px;font-size:13px;color:var(--accent);font-weight:700}
+#dup-modal h3{margin:0 0 12px;font-size:14px;color:var(--accent);font-weight:700}
 #dup-modal .dm-body{font-size:11px;line-height:1.55;margin-bottom:14px}
 #dup-modal .dm-info{background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:10px 12px}
 #dup-modal .dm-pmname{color:var(--accent2);font-weight:600;display:inline-block;margin:3px 0}
@@ -722,7 +732,7 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 #dup-modal .dm-force{border-color:var(--accent);color:var(--accent)}
 #dup-modal .dm-force:hover{background:rgba(255,149,0,.1)}
 #save-info-modal .sim-card{background:var(--surface);border:1px solid var(--accent2);border-radius:8px;padding:18px 22px;min-width:340px;max-width:480px;box-shadow:var(--shadow);color:var(--text)}
-#save-info-modal h3{margin:0 0 12px;font-size:13px;color:var(--accent2);font-weight:700}
+#save-info-modal h3{margin:0 0 12px;font-size:14px;color:var(--accent2);font-weight:700}
 #save-info-modal .sim-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:8px 0 4px}
 #save-info-modal #sim-path{display:block;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:8px 10px;font-size:11px;color:var(--text);word-break:break-all;line-height:1.4}
 #save-info-modal .sim-hint{font-size:10px;color:var(--muted);margin:8px 0 14px;line-height:1.5}
@@ -734,9 +744,9 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 #save-info-modal #sim-close{background:transparent}
 #save-info-modal .sim-ico{font-size:13px}
 #kml-save-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px 22px 18px;width:400px;max-width:96vw;box-shadow:var(--shadow);font-family:'JetBrains Mono',monospace;font-size:12px}
-#kml-save-card h3{margin:0 0 14px;font-size:13px;font-weight:700;color:var(--accent);letter-spacing:-.3px}
+#kml-save-card h3{margin:0 0 14px;font-size:14px;font-weight:700;color:var(--accent);letter-spacing:-.3px}
 .kd-field{margin-bottom:10px}
-.kd-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+.kd-label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
 .kd-input{width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;padding:6px 9px;outline:none}
 .kd-input:focus{border-color:var(--accent)}
 .kd-dest-group{margin:12px 0 14px}
@@ -768,8 +778,8 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 .kd-dd-item{padding:7px 10px;cursor:pointer;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;border-bottom:1px solid var(--border);transition:background .1s;line-height:1.4}
 .kd-dd-name{font-size:11px;color:var(--text);font-weight:600}
 .kd-dd-cnt{color:var(--accent);font-weight:700}
-.kd-dd-fn{font-size:10px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.kd-dd-path{font-size:10px;margin-top:3px;font-style:italic}
+.kd-dd-fn{font-size:9.5px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kd-dd-path{font-size:9px;margin-top:3px;font-style:italic}
 .kd-dd-fsa{color:#6cd96c}
 .kd-dd-leg{color:var(--muted)}
 .kd-dd-item:last-child{border-bottom:none}
@@ -778,32 +788,32 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 .kd-dd-empty{padding:10px;color:var(--muted);font-size:10px;font-style:italic;text-align:center}
 #kd-file-btn{margin-top:5px;background:rgba(255,255,255,.07);border:1px solid var(--border);border-radius:var(--r);color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:10px;padding:5px 10px;cursor:pointer;transition:all .12s}
 #kd-file-btn:hover{border-color:var(--accent2);color:var(--accent2)}
-#kd-file-name{font-size:10px;color:var(--muted);margin-top:3px;min-height:12px}
+#kd-file-name{font-size:9px;color:var(--muted);margin-top:3px;min-height:12px}
 .kd-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
 .kd-btn{border-radius:var(--r);padding:7px 16px;font-family:'JetBrains Mono',monospace;font-size:11px;cursor:pointer;transition:all .15s;border:1px solid var(--border);background:var(--surface);color:var(--text)}
 .kd-btn:hover{border-color:var(--accent2)}
 .kd-btn.primary{background:var(--accent);border-color:var(--accent);color:#000;font-weight:700}
-/* Manual contour editor toolbar — fixed bottom-of-map bar (theme-aware in v2.9.34) */
-#contour-edit-bar{display:none;position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:10400;background:var(--surface);border:1px solid var(--accent2);border-radius:8px;padding:9px 14px;gap:10px;align-items:center;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);box-shadow:var(--shadow);backdrop-filter:blur(6px);max-width:calc(100vw - 24px);flex-wrap:wrap;justify-content:center}
+/* Manual contour editor toolbar — fixed bottom-of-map bar */
+#contour-edit-bar{display:none;position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:10400;background:rgba(13,15,20,0.96);border:1px solid var(--accent2);border-radius:8px;padding:9px 14px;gap:10px;align-items:center;font-family:'JetBrains Mono',monospace;font-size:11px;color:#fff;box-shadow:0 6px 18px rgba(0,0,0,0.5);backdrop-filter:blur(6px);max-width:calc(100vw - 24px);flex-wrap:wrap;justify-content:center}
 #contour-edit-bar.visible{display:flex}
 /* XLSX save bar — anchored to right side, above the centred contour-edit bar.
    Persistent (auto-shows after first centroid write, dismissible via × button). */
-#xlsx-save-bar{display:none;position:fixed;bottom:18px;right:18px;z-index:10399;background:var(--surface);border:1px solid #6cd96c;border-radius:8px;padding:8px 12px;gap:8px;align-items:center;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);box-shadow:var(--shadow);backdrop-filter:blur(6px);max-width:calc(100vw - 24px);flex-wrap:wrap}
+#xlsx-save-bar{display:none;position:fixed;bottom:18px;right:18px;z-index:10399;background:rgba(13,15,20,0.96);border:1px solid #6cd96c;border-radius:8px;padding:8px 12px;gap:8px;align-items:center;font-family:'JetBrains Mono',monospace;font-size:11px;color:#fff;box-shadow:0 6px 18px rgba(0,0,0,0.5);backdrop-filter:blur(6px);max-width:calc(100vw - 24px);flex-wrap:wrap}
 #xlsx-save-bar.visible{display:flex}
 #xlsx-save-bar #xlsx-save-status{font-weight:700;color:#6cd96c;margin-right:4px}
-#xlsx-save-bar button{border:none;border-radius:5px;padding:5px 10px;font-weight:700;cursor:pointer;font-family:inherit;font-size:11px;background:var(--surface2);color:var(--text);border:1px solid var(--border);transition:background .12s,border-color .12s}
-#xlsx-save-bar button:hover{border-color:#6cd96c;background:var(--surface2);filter:brightness(1.05)}
-#xlsx-save-bar #xlsx-save-new{background:#6cd96c;color:var(--bg);border-color:#6cd96c}
+#xlsx-save-bar button{border:none;border-radius:5px;padding:5px 10px;font-weight:700;cursor:pointer;font-family:inherit;font-size:10.5px;background:#1a1d24;color:#fff;border:1px solid #2a2d34;transition:background .12s,border-color .12s}
+#xlsx-save-bar button:hover{border-color:#6cd96c;background:#252830}
+#xlsx-save-bar #xlsx-save-new{background:#6cd96c;color:#0d0f14;border-color:#6cd96c}
 #xlsx-save-bar #xlsx-save-new:hover{filter:brightness(1.1)}
-#xlsx-save-bar #xlsx-save-close{background:transparent;color:var(--muted);border:none;font-size:13px;padding:2px 6px}
-#xlsx-save-bar #xlsx-save-close:hover{color:var(--text)}
+#xlsx-save-bar #xlsx-save-close{background:transparent;color:#888;border:none;font-size:14px;padding:2px 6px}
+#xlsx-save-bar #xlsx-save-close:hover{color:#fff}
 #contour-edit-bar button{border:none;border-radius:5px;padding:6px 12px;font-weight:700;cursor:pointer;font-family:inherit;font-size:11px}
-#contour-edit-finish{background:var(--accent);color:var(--bg)}
+#contour-edit-finish{background:var(--accent);color:#0d0f14}
 #contour-edit-finish:hover{filter:brightness(1.1)}
-#contour-edit-revert{background:var(--surface2);color:var(--text);border:1px solid var(--border) !important}
-#contour-edit-cancel{background:transparent;color:var(--muted);border:1px solid var(--border) !important}
-#contour-shift-btn{background:var(--accent2-dim);color:var(--accent2);border:1px solid var(--accent2)!important}
-#contour-shift-btn.active{background:var(--accent2);color:var(--bg);border-color:var(--accent2)!important}
+#contour-edit-revert{background:#444;color:#fff}
+#contour-edit-cancel{background:transparent;color:#aaa;border:1px solid #555 !important}
+#contour-shift-btn{background:rgba(71,200,255,.15);color:#47c8ff;border:1px solid rgba(71,200,255,.4)!important}
+#contour-shift-btn.active{background:rgba(71,200,255,.35);color:#fff;border-color:#47c8ff!important}
 .contour-shift-mode .leaflet-container{cursor:grab!important}
 .contour-shift-mode .leaflet-container:active{cursor:grabbing!important}
 .edit-vertex{cursor:move !important}
@@ -830,7 +840,7 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.34</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.35</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -936,7 +946,7 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
 
   <!-- Active folder filter banner -->
   <div id="folder-filter-banner">
-    <span style="color:var(--muted);font-size:10px">📂</span>
+    <span style="color:var(--muted);font-size:9px">📂</span>
     <span id="folder-filter-name"></span>
     <button id="folder-filter-reset" onclick="clearFolderFilter()">× сбросить</button>
   </div>
@@ -1087,7 +1097,7 @@ code,kbd,pre,.mono,[class*="ic-coords"],[class*="ftree"]{font-stretch:normal}
       <label class="cad-layer-item"><input type="checkbox" id="cad-cb-zu"    onchange="onCadLayerChange()"/><span class="cad-layer-label">Зем.участки</span></label>
       <label class="cad-layer-item"><input type="checkbox" id="cad-cb-kv"    onchange="onCadLayerChange()"/><span class="cad-layer-label">Кад.кварталы</span></label>
       <div class="cad-group">Прозрачность</div>
-      <div style="display:flex;align-items:center;gap:7px;padding:4px 12px 6px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted)">
+      <div style="display:flex;align-items:center;gap:7px;padding:4px 12px 6px;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted)">
         <input type="range" min="10" max="100" value="70" id="cadastre-range" style="width:90px;accent-color:#ff9500" oninput="setCadastreOpacity(this.value)"/>
         <span id="cadastre-pct">70%</span>
       </div>
@@ -2693,10 +2703,11 @@ function toggleLayer(){
 
 map.on('click',function(e){
   if(manualGPSActive){handleMapClickForGPS(e);return;}
-  // v2.9.34: while a contour is being edited (_ce is set in startContourEditor),
-  // map clicks are reserved for the editor — adding/moving vertices, finishing,
-  // etc. Suppress the info-card pipeline so the user isn't bombarded with
-  // "Координаты"/object cards every time they click on the map to extend a polygon.
+  // v2.9.35: suppress info-card pipeline while a contour is being edited.
+  // _ce is set in startContourEditor, cleared in _disposeContourEditor.
+  // Without this guard, every click during edit (drag-to-add-vertex, ПКМ, etc.)
+  // also fires the coords/objects card pipeline — visual noise that blocks the
+  // edit gestures. Mirrors the same pattern in the polygon-layer handlers below.
   if(typeof _ce !== 'undefined' && _ce) return;
   closeLightbox();
   window.lastClickedPoint=e.latlng;
@@ -3529,7 +3540,8 @@ function renderKMLOnMap(parsed){
         // point — don't open info cards or switch sidebar tab. Mirrors the
         // top-level map.on('click') guard.
         if(manualGPSActive){ handleMapClickForGPS(e); return; }
-        // v2.9.34: also suppressed while a contour is being edited.
+        // v2.9.35: also suppressed while a contour is being edited — same
+        // rationale as the top-level guard, prevents card-spam during edit.
         if(typeof _ce !== 'undefined' && _ce) return;
         window.lastClickedPoint = e.latlng;
         const direct = _markerForLeafletLayer(layer);
@@ -3619,7 +3631,7 @@ function _showKmzDownloadDialog(label, hasExisting){
     const FONT = "font-family:'JetBrains Mono',monospace";
     overlay.innerHTML=`
       <div style="background:#161b2e;border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:26px 22px;max-width:380px;${FONT}">
-        <div style="font-size:13px;font-weight:700;color:#e8ff47;margin-bottom:10px">📦 Импорт KMZ из сети</div>
+        <div style="font-size:14px;font-weight:700;color:#e8ff47;margin-bottom:10px">📦 Импорт KMZ из сети</div>
         <div style="font-size:11px;color:#b0b8cc;margin-bottom:16px;line-height:1.6"><b style="color:#fff">${label}</b><br>Хотите сохранить фотографии и объекты на локальный диск?<br><span style="color:#888;font-size:10px">GPS, дата, азимут будут вписаны в EXIF фотографий.</span></div>
         <div style="display:flex;flex-direction:column;gap:8px">
           ${hasExisting?`<button id="_kmzd_existing" style="background:rgba(71,200,255,.15);border:1px solid rgba(71,200,255,.4);color:#47c8ff;border-radius:7px;padding:8px 12px;cursor:pointer;font-size:11px;${FONT}">📂 Добавить в текущую папку с фото</button>`:''}
@@ -4874,7 +4886,7 @@ function renderPhotoItem(i,container,isDragCandidate=false){
     // Has GPS but no bearing — show compact "Установить угол" button
     const bb=document.createElement('button');
     bb.className='gps-manual-btn';
-    bb.style.cssText='margin-top:3px;padding:2px 6px;font-size:10px;';
+    bb.style.cssText='margin-top:3px;padding:2px 6px;font-size:8px;';
     bb.textContent='🧭 Установить угол';
     bb.title='Установить угол съёмки';
     bb.addEventListener('click',ev=>{
@@ -4975,7 +4987,7 @@ function buildRows(p){
     const displayLoc = displayParts.map(s => s.replace(/_/g,' ')).join(' / ');
     addRow('Объект', displayLoc);
   }
-  if(p.dateMismatch)rows.push(`<tr><td colspan="2" style="font-size:10px;color:var(--warn);font-family:'JetBrains Mono',monospace;padding:3px 0">⚠ Дата файла ≠ дата съёмки</td></tr>`);
+  if(p.dateMismatch)rows.push(`<tr><td colspan="2" style="font-size:9px;color:var(--warn);font-family:'JetBrains Mono',monospace;padding:3px 0">⚠ Дата файла ≠ дата съёмки</td></tr>`);
   const gpp=p.experimentData;
   if(gpp?.experiment){rows.push(`<tr><td colspan="2" style="background:rgba(232,255,71,.08);padding:5px 8px 4px;font-weight:700;color:var(--accent);font-size:10px;text-transform:uppercase;font-family:'JetBrains Mono',monospace;border-radius:4px">📋 Данные опыта</td></tr>`);const exp=gpp.experiment;if(exp.doc)addRow('Номер',exp.doc);if(exp.crop)addRow('Культура',exp.crop);if(exp.dt)addRow('Дата',exp.dt);}
   return rows.join('');
@@ -5568,10 +5580,10 @@ function _showCadFallback(cadNum) {
   const nspdUrl = `https://nspd.gov.ru/map?thematic=PKK&cadnum=${encodeURIComponent(cadNum)}`;
   const statusEl = document.getElementById('cad-status');
   statusEl.innerHTML = `\u274c <span style="color:var(--danger)">Не найдено.</span> `+
-    `<span style="color:var(--muted);font-size:10px">Кадастровые API Росреестра блокируют запросы не с российских IP. `+
+    `<span style="color:var(--muted);font-size:9px">Кадастровые API Росреестра блокируют запросы не с российских IP. `+
     `Откройте вручную: </span>`+
-    `<a href="${pkkUrl}" target="_blank" style="color:#d070ff;font-size:10px;font-family:JetBrains Mono,monospace">ПКК↗</a> `+
-    `<a href="${nspdUrl}" target="_blank" style="color:var(--accent2);font-size:10px;font-family:JetBrains Mono,monospace">НСПД↗</a>`;
+    `<a href="${pkkUrl}" target="_blank" style="color:#d070ff;font-size:9px;font-family:JetBrains Mono,monospace">ПКК↗</a> `+
+    `<a href="${nspdUrl}" target="_blank" style="color:var(--accent2);font-size:9px;font-family:JetBrains Mono,monospace">НСПД↗</a>`;
 }
 
 async function _firstOf(promises) {
@@ -5742,7 +5754,8 @@ function _attachCadEvents(layer, cadNum, type, lines) {
     // v66: when "Указать GPS" is active, the click anchors a photo — info-card
     // pipeline is bypassed (and so is the auto-switch to Метки tab).
     if(manualGPSActive){ handleMapClickForGPS(e); return; }
-    // v2.9.34: also suppressed while a contour is being edited.
+    // v2.9.35: also suppressed during contour-edit so vertex-add gestures
+    // (mid-segment 🔵 click) don't also pop a coords card.
     if(typeof _ce !== 'undefined' && _ce) return;
     window.lastClickedPoint = e.latlng;
     const direct = _markerForLeafletLayer(layer);
