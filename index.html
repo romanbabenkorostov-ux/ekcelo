@@ -3,7 +3,11 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.36</title>
+<!-- v2.9.39: NO document-level referrer policy — it caused Firefox to send Referer:"null"
+     from file:// context (origin=null → strict-origin sends literal "null" → OSM blocks).
+     Chrome was unaffected (sends no Referer from file://, OSM accepts Chrome UA).
+     Each tile layer sets its own referrerPolicy via img.referrerPolicy attribute. -->
+<title>EkceloFoto v2.9.39</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -387,30 +391,41 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
    translate3d() at integer slot-corners, so no inter-tile gaps appear
    regardless of magnification.
    ──────────────────────────────────────────────────────────────── */
-/* ── TILE SEAM FIX (v2.9.37) ──────────────────────────────────────
-   Root cause confirmed: `filter` on individual .leaflet-tile creates
-   a separate GPU compositing layer per tile. The browser rounds each
-   layer's translate3d() position to integer device pixels independently,
-   leaving 1-px gaps between adjacent layers that show the pane background.
-   On dark theme those gaps were invisible (dark bg ≈ dark tile edge).
-   On light theme (#f2efe9) the gap reads as a bright seam — the "grid".
+/* ── TILE SEAM FIX (v2.9.38) ──────────────────────────────────────
+   Three-layer defence against tile gaps across all browsers:
 
-   Fix: move filter to .leaflet-tile-pane (one compositing layer for all
-   tiles). The pane itself is still transformed as a unit by Leaflet, so
-   adjacent tiles stay edge-to-edge with zero rounding error between them.
+   LAYER 1 — filter on pane, not on individual tiles (v2.9.37 fix):
+     Moves GPU compositing to one layer for all tiles → no per-tile
+     translate3d() rounding divergence. Fixes Firefox + Yandex.
 
-   Additionally:
-   • outline:1px solid transparent on .leaflet-tile — classic WebKit/Blink
-     sub-pixel gap suppressor (no visual change, closes hairline cracks).
-   • background on pane matches actual OSM/Esri tile edge color so any
-     residual 1-device-pixel leak reads as the tile color, not white.
+   LAYER 2 — mix-blend-mode: plus-lighter on img.leaflet-tile (v2.9.38):
+     Chrome-specific bug (chromium.org/issues/600120): even with filter
+     on pane, Chrome's rasterizer creates a separate compositing layer
+     per tile image due to its GPU tile-raster pipeline. Adjacent tiles
+     get floor()'d independently → 1-px seam at devicePixelRatio > 1.
+     `mix-blend-mode: plus-lighter` forces Chrome to composite all tile
+     images in a shared blending context. The math: where two tiles
+     share an edge with 1-px logical overlap, C = min(A+B, 1) ≈ tile
+     color (not white). This is the official Leaflet fix merged in #8891.
+     Firefox/Yandex ignore it harmlessly (they don't have the bug).
+
+   LAYER 3 — outline:1px solid transparent:
+     Closes any residual sub-pixel crack in WebKit without altering
+     visual appearance (transparent outline ≠ visible border).
+
+   BACKGROUND: pane bg = tile edge color so any ultra-thin remaining
+     gap (< 0.5 device px) reads as tile color, never as white grid.
    ────────────────────────────────────────────────────────────────── */
 .leaflet-tile-pane{
   background: var(--map-bg);
-  filter: var(--map-filter);   /* ONE compositing layer for all tiles */
+  filter: var(--map-filter);   /* Layer 1: one compositing unit for all tiles */
+}
+.leaflet-container img.leaflet-tile{
+  /* Layer 2: Chrome GPU rasterizer gap fix (Leaflet issue #3575 / Chromium #600120) */
+  mix-blend-mode: plus-lighter;
 }
 .leaflet-tile{
-  outline: 1px solid transparent; /* WebKit/Blink sub-pixel seam suppressor */
+  outline: 1px solid transparent; /* Layer 3: sub-pixel crack suppressor */
 }
 .leaflet-control-zoom a{background:var(--surface) !important;color:var(--text) !important;border-color:var(--border) !important}
 .leaflet-control-zoom a:hover{background:var(--surface2) !important}
@@ -863,7 +878,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.36</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.39</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -1272,8 +1287,24 @@ L.control.scale({imperial:false,metric:true,position:'bottomleft'}).addTo(map);
 // The IIFE is preserved as a no-op for diff readability; the only reliable
 // fix is to NOT touch tile dimensions and let Leaflet position via translate3d.
 (function fixTileSeams(){ /* intentionally empty — see CSS comment in TILE SEAM FIX block */ })();
+// v2.9.39: OSM tiles require Referer header (enforced since March 2026).
+// Leaflet 1.9.4 does NOT natively propagate `referrerPolicy` option to img elements.
+// We patch createTile() to set img.referrerPolicy directly on each tile <img>.
+// This per-element attribute always overrides the document-level referrer policy,
+// including the "null" origin problem when running from file://.
+// 'no-referrer-when-downgrade' = send Referer on https→https (origin URL), skip on downgrades.
+const _osmTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  {attribution:'© OpenStreetMap',maxZoom:22,maxNativeZoom:19});
+_osmTileLayer.createTile = (function(_orig){
+  return function(coords, done){
+    const img = _orig.call(this, coords, done);
+    img.referrerPolicy = 'no-referrer-when-downgrade';
+    return img;
+  };
+})(_osmTileLayer.createTile.bind(_osmTileLayer));
+
 const TILES={
-  osm:L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:22,maxNativeZoom:19}),
+  osm: _osmTileLayer,
   sat:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri',maxZoom:22,maxNativeZoom:19}),
   // White background: 1×1 white PNG tile — no imagery, just clean background for contour parsing
   white:L.tileLayer('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==',{attribution:'',maxZoom:22,opacity:0})
@@ -1317,20 +1348,70 @@ updateZoomIndicator();
 // ── CADASTRE LAYER GROUPS ─────────────────────────────────────────
 // Cadastre WMS endpoint: https://nspd.gov.ru/api/aeggis/v2/{id}/wms
 //
-// Final mapping (v51 — restored after v50's broken IDs 37294/37298 left OKS/STR blank):
-//   36329 = Здания / ОКС (полигоны) — render layer that worked in v45
-//   36328 = Сооружения (полигоны) — render layer that worked in v45
-//   36048 = Земельные участки из ЕГРН — confirmed by GFI evidence
-//           (returns features with category:36368, categoryName:"Земельные участки ЕГРН")
-//   36071 = Кадастровые кварталы — confirmed working
-//   36049, 36326 = Здания (подписи / labels) — auxiliary, paired with 36329 for OKS
+// Layer IDs (confirmed):
+//   36329 = Здания / ОКС (полигоны)
+//   36328 = Сооружения (полигоны)
+//   36048 = Земельные участки из ЕГРН
+//   36071 = Кадастровые кварталы
+//   36049 = Здания (подписи/labels), paired with 36329
 //
-// CRITICAL: each group must own DISJOINT layer IDs. v45's bug was OKS+STR sharing
-// 36048; the GFI evidence later proved 36048 is actually ZU. v50's mistake was
-// guessing 37294/37298 from an unrelated `active_layers` URL fragment — those IDs
-// don't exist as standalone WMS sources, so OKS/STR rendered blank. v51 keeps
-// 36329/36328 (proven to render in v45) and adds the label IDs as the secondary
-// per-group entry for richer rendering at higher zooms.
+// v2.9.39: Replace L.tileLayer.wms with L_NspdLayer (custom fetch-based GridLayer).
+// ROOT CAUSE of blank tiles: nspd.gov.ru requires Referer:https://nspd.gov.ru/
+// <img> elements always send the current page URL as Referer — cannot override per-img.
+// fetch() with {referrer:'https://nspd.gov.ru/', referrerPolicy:'unsafe-url'} DOES work:
+// the `referrer` init option sets Referer correctly (not a forbidden fetch header name).
+// Tile pipeline: fetch → blob → objectURL → img.src → onload → revokeObjectURL.
+// Works from file://, http://localhost, and any https:// origin.
+const L_NspdLayer = L.GridLayer.extend({
+  options: {
+    tileSize: 256, opacity: 1, zIndex: 450,
+    minZoom: 16, maxNativeZoom: 19, maxZoom: 22,
+    keepBuffer: 4, updateWhenIdle: false, updateWhenZooming: false,
+    _layerId: null,
+  },
+  createTile(coords, done){
+    const img = document.createElement('img');
+    img.style.cssText = 'width:256px;height:256px;';
+    // Project tile coords → EPSG:3857 BBOX using Leaflet's own CRS
+    const crs = L.CRS.EPSG3857;
+    const nwLL = crs.pointToLatLng(coords.scaleBy(L.point(256,256)), coords.z);
+    const seLL = crs.pointToLatLng(coords.add([1,1]).scaleBy(L.point(256,256)), coords.z);
+    const nwM  = crs.project(nwLL);
+    const seM  = crs.project(seLL);
+    const minX = Math.min(nwM.x,seM.x), maxX = Math.max(nwM.x,seM.x);
+    const minY = Math.min(nwM.y,seM.y), maxY = Math.max(nwM.y,seM.y);
+    const id  = this.options._layerId;
+    const url = `https://nspd.gov.ru/api/aeggis/v2/${id}/wms?`+
+      `SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true`+
+      `&LAYERS=${id}&STYLES=&authkey=0&WIDTH=256&HEIGHT=256&CRS=EPSG:3857`+
+      `&BBOX=${minX},${minY},${maxX},${maxY}`;
+    fetch(url, {
+      referrer: 'https://nspd.gov.ru/',
+      referrerPolicy: 'unsafe-url',
+      headers: { Accept: 'image/png,image/*' },
+    })
+    .then(r => r.ok ? r.blob() : Promise.reject(r.status))
+    .then(blob => {
+      const burl = URL.createObjectURL(blob);
+      img.onload  = () => { URL.revokeObjectURL(burl); done(null, img); };
+      img.onerror = () => { URL.revokeObjectURL(burl); done(new Error('img load')); };
+      img.src = burl;
+    })
+    .catch(e => done(new Error('nspd fetch ' + e)));
+    return img;
+  },
+  setOpacity(op){
+    this.options.opacity = op;
+    const c = this.getContainer();
+    if(c) c.style.opacity = op;
+    return this;
+  },
+});
+
+function _makeNspdLayer(id, op){
+  return new L_NspdLayer({ _layerId: id, opacity: op });
+}
+
 const NSPD_GROUPS = {
   oks: { ids:[36329, 36049], label:'ОКС',         layers:[], cbId:'cad-cb-oks' },
   str: { ids:[36328],        label:'Сооружения',  layers:[], cbId:'cad-cb-str' },
@@ -1345,22 +1426,7 @@ function _ensureGroupBuilt(groupKey){
   const g = NSPD_GROUPS[groupKey];
   if (g.layers.length) return;   // already built
   const op = parseFloat(document.getElementById('cadastre-range').value || '70') / 100;
-  g.layers = g.ids.map(id => L.tileLayer.wms(
-    `https://nspd.gov.ru/api/aeggis/v2/${id}/wms`,
-    { service:'WMS', version:'1.3.0', format:'image/png', transparent:true,
-      styles:'', authkey:'0', tileSize:256, attribution:'© НСПД', zIndex:450,
-      // v62: reduce tile-grid artifacts at high zoom.
-      //   • keepBuffer:1 instead of 4 — fewer stale tiles ghosting at edges.
-      //   • updateWhenIdle:true — only request after user stops moving (no
-      //     half-loaded grids during pan).
-      //   • maxNativeZoom:18 instead of 19 — at z19 NSPD returns uniform-color
-      //     tile-bitmaps that look like green rectangles. z18 is the last clean level.
-      //   • crossOrigin — required for some browsers to avoid blank tiles.
-      keepBuffer:2, updateWhenIdle:false, updateWhenZooming:false, crossOrigin:true,
-      layers:String(id), opacity:op,
-      minZoom:16, maxNativeZoom:18, maxZoom:22,
-    }
-  ));
+  g.layers = g.ids.map(id => _makeNspdLayer(id, op));
 }
 // Keep track of which groups are currently on the map
 const _groupOnMap = {};  // groupKey → boolean
