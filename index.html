@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.35</title>
+<title>EkceloFoto v2.9.36</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -362,7 +362,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #map-wrap{position:relative;overflow:hidden}
 #map{width:100%;height:100%;background:var(--map-bg);transition:background .3s}
 .leaflet-container{background:var(--map-bg) !important}
-/* ── TILE SEAM FIX (v2.9.35, definitive) ──────────────────────────
+/* ── TILE SEAM FIX (v2.9.36, definitive) ──────────────────────────
    PROBLEM HISTORY:
      v2.9.30  filter on .leaflet-div-icon — wrong target
      v2.9.31  delete L.Icon.Default._getIconUrl — fixed unrelated thing
@@ -840,7 +840,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.35</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.36</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -1240,45 +1240,15 @@ delete L.Icon.Default.prototype._getIconUrl;
 map.attributionControl.setPrefix(false);
 L.control.scale({imperial:false,metric:true,position:'bottomleft'}).addTo(map);
 
-// ── TILE SEAM FIX ──────────────────────────────────────────────────
-// Leaflet sets tile width/height inline via style.width/height="256px" AFTER
-// the tile loads, overriding any CSS width rule (even !important).
-// Solution: listen to every tileload event and force 257×257 + negative margin
-// directly on the element's style so it wins over Leaflet's inline value.
-// Also apply to existing tiles on layer add via a MutationObserver on tile-pane.
-(function fixTileSeams(){
-  function patchTile(img){
-    img.style.setProperty('width','257px','important');
-    img.style.setProperty('height','257px','important');
-    img.style.setProperty('margin-right','-1px','important');
-    img.style.setProperty('margin-bottom','-1px','important');
-    img.style.removeProperty('outline');
-  }
-  // Patch via Leaflet tileload event on each layer as it's added
-  map.on('layeradd', function(e){
-    const layer = e.layer;
-    if(layer && layer.on){
-      layer.on('tileload', function(te){ patchTile(te.tile); });
-      // Also patch already-loaded tiles
-      const pane = document.querySelector('.leaflet-tile-pane');
-      if(pane) pane.querySelectorAll('img.leaflet-tile').forEach(patchTile);
-    }
-  });
-  // MutationObserver catches tiles added to DOM before tileload fires
-  const mo = new MutationObserver(mutations => {
-    mutations.forEach(m => m.addedNodes.forEach(n => {
-      if(n.nodeType===1){
-        if(n.classList?.contains('leaflet-tile')) patchTile(n);
-        n.querySelectorAll?.('.leaflet-tile').forEach(patchTile);
-      }
-    }));
-  });
-  // Start observing once map container is ready
-  requestAnimationFrame(()=>{
-    const pane = document.querySelector('.leaflet-tile-pane');
-    if(pane) mo.observe(pane, {childList:true, subtree:true});
-  });
-})();
+// ── TILE SEAM FIX (v2.9.36) ────────────────────────────────────────
+// Earlier (v2.9.33) attempt forced width:257px + margin:-1px on every tile
+// via tileload + MutationObserver, the JS-level twin of the broken CSS rule.
+// At z > maxNativeZoom Leaflet upscales each tile slot to 2048×2048 px;
+// hardcoded 257×257 inline shrinks the bitmap inside the slot, leaving giant
+// rectangles of pane background visible — the white grid the user reported.
+// The IIFE is preserved as a no-op for diff readability; the only reliable
+// fix is to NOT touch tile dimensions and let Leaflet position via translate3d.
+(function fixTileSeams(){ /* intentionally empty — see CSS comment in TILE SEAM FIX block */ })();
 const TILES={
   osm:L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:22,maxNativeZoom:19}),
   sat:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri',maxZoom:22,maxNativeZoom:19}),
@@ -2703,7 +2673,7 @@ function toggleLayer(){
 
 map.on('click',function(e){
   if(manualGPSActive){handleMapClickForGPS(e);return;}
-  // v2.9.35: suppress info-card pipeline while a contour is being edited.
+  // v2.9.36: suppress info-card pipeline while a contour is being edited.
   // _ce is set in startContourEditor, cleared in _disposeContourEditor.
   // Without this guard, every click during edit (drag-to-add-vertex, ПКМ, etc.)
   // also fires the coords/objects card pipeline — visual noise that blocks the
@@ -3540,7 +3510,7 @@ function renderKMLOnMap(parsed){
         // point — don't open info cards or switch sidebar tab. Mirrors the
         // top-level map.on('click') guard.
         if(manualGPSActive){ handleMapClickForGPS(e); return; }
-        // v2.9.35: also suppressed while a contour is being edited — same
+        // v2.9.36: also suppressed while a contour is being edited — same
         // rationale as the top-level guard, prevents card-spam during edit.
         if(typeof _ce !== 'undefined' && _ce) return;
         window.lastClickedPoint = e.latlng;
@@ -5754,7 +5724,7 @@ function _attachCadEvents(layer, cadNum, type, lines) {
     // v66: when "Указать GPS" is active, the click anchors a photo — info-card
     // pipeline is bypassed (and so is the auto-switch to Метки tab).
     if(manualGPSActive){ handleMapClickForGPS(e); return; }
-    // v2.9.35: also suppressed during contour-edit so vertex-add gestures
+    // v2.9.36: also suppressed during contour-edit so vertex-add gestures
     // (mid-segment 🔵 click) don't also pop a coords card.
     if(typeof _ce !== 'undefined' && _ce) return;
     window.lastClickedPoint = e.latlng;
