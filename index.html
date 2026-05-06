@@ -7,7 +7,7 @@
      from file:// context (origin=null → strict-origin sends literal "null" → OSM blocks).
      Chrome was unaffected (sends no Referer from file://, OSM accepts Chrome UA).
      Each tile layer sets its own referrerPolicy via img.referrerPolicy attribute. -->
-<title>EkceloFoto v2.9.39</title>
+<title>EkceloFoto v2.9.45</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -418,10 +418,15 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
    ────────────────────────────────────────────────────────────────── */
 .leaflet-tile-pane{
   background: var(--map-bg);
-  filter: var(--map-filter);   /* Layer 1: one compositing unit for all tiles */
+  filter: var(--map-filter);        /* Layer 1: one compositing unit for all tiles */
+  will-change: transform;           /* Chrome: force single GPU layer for entire pane */
+  transform: translateZ(0);         /* Chrome: promote to compositing layer immediately */
+  isolation: isolate;               /* Contain blending context within this pane */
 }
 .leaflet-container img.leaflet-tile{
-  /* Layer 2: Chrome GPU rasterizer gap fix (Leaflet issue #3575 / Chromium #600120) */
+  /* Layer 2: Chrome GPU rasterizer gap fix (Leaflet #3575 / Chromium #600120).
+     plus-lighter math: adjacent tiles share edge → C=min(A+B,1)≈tile color, not white.
+     Works because isolation:isolate on the pane creates a shared blending context. */
   mix-blend-mode: plus-lighter;
 }
 .leaflet-tile{
@@ -429,9 +434,15 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 }
 .leaflet-control-zoom a{background:var(--surface) !important;color:var(--text) !important;border-color:var(--border) !important}
 .leaflet-control-zoom a:hover{background:var(--surface2) !important}
-.leaflet-control-attribution{background:rgba(var(--bg-rgb,13,15,20),.75) !important;color:var(--muted) !important;font-size:10px !important}
+.leaflet-control-attribution{background:rgba(var(--bg-rgb,13,15,20),.75) !important;color:var(--muted) !important;font-size:10px !important;z-index:540 !important}
 .leaflet-control-attribution a{color:var(--muted) !important}
-.leaflet-control-scale-line{background:var(--surface) !important;border-color:var(--border) !important;color:var(--muted) !important;font-family:'JetBrains Mono',monospace !important;font-size:10px !important;opacity:.85}
+[data-theme="light"] .leaflet-control-attribution,
+[data-theme="system"] .leaflet-control-attribution{background:rgba(255,255,255,.82) !important;color:#444 !important}
+[data-theme="light"] .leaflet-control-attribution a,
+[data-theme="system"] .leaflet-control-attribution a{color:#333 !important}
+.leaflet-control-scale{opacity:.92}
+.leaflet-control-scale-line{background:rgba(var(--bg-rgb,13,15,20),.72) !important;border:2px solid var(--text) !important;border-top:none !important;color:var(--text) !important;font-family:'JetBrains Mono',monospace !important;font-size:10px !important;font-weight:700 !important;padding:1px 4px !important;backdrop-filter:blur(3px)}
+[data-theme="light"] .leaflet-control-scale-line,[data-theme="system"] .leaflet-control-scale-line{background:rgba(255,255,255,.78) !important;border-color:#222 !important;color:#111 !important}
 #map-hint{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;pointer-events:none;z-index:500;transition:opacity .4s}
 #map-hint.hidden{opacity:0}
 .hint-icon{font-size:44px;opacity:.16}
@@ -598,32 +609,72 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #progress-bar{position:absolute;bottom:0;left:0;height:2px;background:var(--accent);transition:width .2s;z-index:600;border-radius:0 2px 2px 0}
 
 /* TOAST */
-#toast{position:absolute;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 16px;font-size:12px;white-space:nowrap;z-index:900;transition:transform .3s cubic-bezier(.34,1.56,.64,1),opacity .3s;opacity:0;pointer-events:none;box-shadow:var(--shadow)}
+#toast{position:absolute;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 16px;font-size:12px;font-weight:600;white-space:nowrap;z-index:900;transition:transform .3s cubic-bezier(.34,1.56,.64,1),opacity .3s;opacity:0;pointer-events:none;box-shadow:var(--shadow);color:var(--text)}
+[data-theme="light"] #toast,[data-theme="system"] #toast{background:#fff;border-color:#aaa;box-shadow:0 4px 16px rgba(0,0,0,.22);color:#111 !important}
 #toast.show{transform:translateX(-50%) translateY(0);opacity:1}
 
 /* TIMELINE */
-#timeline{position:absolute;bottom:0;left:0;right:0;height:136px;background:var(--surface);border-top:1px solid var(--border);z-index:550;padding:8px 16px 6px;display:none;flex-direction:column;box-shadow:0 -4px 16px rgba(0,0,0,.15)}
+
+/* Timeline: always pointer cursor, never resize/pointer/pointer */
+#timeline *{cursor:pointer !important}
+#timeline .timeline-dot.folder-dim{cursor:default !important}
+#timeline{position:absolute;bottom:0;left:0;right:0;height:100px;background:var(--surface);border-top:1px solid var(--border);z-index:550;padding:6px 16px 2px;display:none;flex-direction:column;box-shadow:0 -4px 16px rgba(0,0,0,.15)}
+/* Scale ruler: lift above timeline when visible */
+.timeline-open .leaflet-bottom.leaflet-left{bottom:104px;transition:bottom .2s}
+/* Attribution stays at natural bottom position (inside timeline area).
+   photo-date-strip overlays it at the same vertical level. */
 #timeline.visible{display:flex}
 .timeline-header{display:flex;align-items:center;gap:10px;margin-bottom:6px;font-family:'Syne',sans-serif;font-weight:700}
 .timeline-header>span:first-child{color:var(--accent);font-size:13px;white-space:nowrap}
 #timeline-mode{display:flex;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:6px;padding:2px;font-family:'JetBrains Mono',monospace;flex-shrink:0}
 .timeline-mode-btn{padding:3px 10px;border-radius:4px;cursor:pointer;transition:all .15s;font-size:10px;white-space:nowrap}
 .timeline-mode-btn.active{background:var(--accent);color:#0d0f14;font-weight:700}
-#range-display{flex:1;text-align:center;background:rgba(232,255,71,.12);border:1px solid rgba(232,255,71,.3);border-radius:4px;padding:2px 8px;font-family:'JetBrains Mono',monospace;font-size:11px;white-space:nowrap;overflow:hidden;min-width:0}
+#range-display{flex:1;text-align:center;background:rgba(232,255,71,.12);border:1px solid rgba(232,255,71,.3);border-radius:4px;padding:2px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:400;white-space:nowrap;overflow:hidden;min-width:0}
 #timeline-reset{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:var(--r);padding:4px 10px;font-size:10px;cursor:pointer;flex-shrink:0}
 #timeline-reset:hover{border-color:var(--accent);color:var(--accent)}
-.timeline-track{position:relative;height:34px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:col-resize;box-shadow:inset 0 1px 4px rgba(0,0,0,.2)}
+.timeline-track{position:relative;height:36px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;box-shadow:inset 0 1px 4px rgba(0,0,0,.2);overflow:hidden}
 .timeline-selected-bar{position:absolute;top:5px;bottom:5px;background:var(--accent);opacity:.22;border-radius:4px;pointer-events:none}
-.timeline-handle{position:absolute;top:-4px;width:22px;height:42px;background:#fff;border:3px solid var(--accent);border-radius:6px;cursor:ew-resize;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px -2px rgba(232,255,71,.7);z-index:20;user-select:none;transform:translateX(-50%)}
+.timeline-handle{position:absolute;top:0px;width:18px;height:36px;background:#fff;border:2px solid var(--accent);border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px -1px rgba(232,255,71,.6);z-index:20;user-select:none;transform:translateX(-50%)}
 .timeline-handle.start::before{content:'◀';font-size:12px;color:#0d0f14}
 .timeline-handle.end::before{content:'▶';font-size:12px;color:#0d0f14}
 /* Timeline dots: normal, in-range, folder-match, folder-dim, active */
-.timeline-dot{position:absolute;top:50%;width:7px;height:7px;background:#505870;border:1.5px solid #0d0f14;border-radius:50%;transform:translateY(-50%);z-index:10;pointer-events:none}
-.timeline-dot.in-range{background:#e8ff47;box-shadow:0 0 4px var(--accent);transform:translateY(-50%) scale(1.3);z-index:12}
-.timeline-dot.folder-match{background:#22c55e !important;box-shadow:0 0 10px #22c55e !important;transform:translateY(-50%) scale(1.5) !important;z-index:16}
+.timeline-dot::before{content:'';position:absolute;inset:-8px;border-radius:50%}
+.timeline-dot{position:absolute;top:68%;width:8px;height:8px;background:#505870;border:1.5px solid rgba(255,255,255,.25);border-radius:50%;transform:translateY(-50%);z-index:10;pointer-events:auto;cursor:pointer;transition:transform .1s}
+/* Alternating up/down offset — set via JS on odd-indexed dots */
+.timeline-dot.odd{top:32%}
+.timeline-dot.in-range{background:#e8ff47;border-color:rgba(0,0,0,.3);transform:translateY(-50%);z-index:12}
+.timeline-dot.odd.in-range{top:32%}
+.timeline-dot.folder-match{background:#22c55e !important;border-color:rgba(0,0,0,.3) !important;transform:translateY(-50%) !important;box-shadow:none !important;z-index:16}
+.timeline-dot.odd.folder-match{top:32% !important}
 .timeline-dot.folder-dim{background:#252b3a !important;opacity:.35;box-shadow:none !important;transform:translateY(-50%) scale(0.8) !important;z-index:8}
-.timeline-dot.active-dot{background:#ff3c3c !important;border-color:#fff !important;transform:translateY(-50%) scale(1.7) !important;box-shadow:0 0 12px #ff3c3c !important;z-index:20}
-.timeline-labels{display:flex;justify-content:space-between;margin-top:3px;font-size:9px;color:var(--muted);font-family:'JetBrains Mono',monospace}
+.timeline-dot.odd.folder-dim{top:32% !important}
+.timeline-dot.active-dot{background:#ff3c3c !important;border-color:#fff !important;transform:translateY(-50%) scale(1.6) !important;box-shadow:none !important;z-index:20;top:68%}
+.timeline-dot.odd.active-dot{top:32% !important}
+/* Photo date strip — absolute on #map, aligned under active dot on track.
+   Sits in the Leaflet attribution row space (bottom:0). JS sets left: to dot X. */
+#photo-date-strip{
+  position:absolute;bottom:2px;left:50%;
+  transform:translateX(-50%);
+  z-index:555;
+  display:none;
+  background:rgba(13,15,20,0.80);
+  border:none;
+  border-radius:4px;
+  padding:1px 8px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:12px;font-weight:400;
+  color:#e8ff47;
+  letter-spacing:.3px;
+  white-space:nowrap;
+  pointer-events:none;
+  backdrop-filter:blur(4px);
+  line-height:1.5;
+  max-width:calc(100% - 32px)}  /* clamp from edges */
+#photo-date-strip.visible{display:block}
+[data-theme="light"] #photo-date-strip,
+[data-theme="system"] #photo-date-strip{
+  background:rgba(240,237,232,0.90);
+  color:#111}
 
 /* FULLSCREEN VIEWER */
 #viewer{display:none;position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:9999;align-items:center;justify-content:center;overflow:hidden}
@@ -699,19 +750,21 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .info-card .ic-header.ic-zu{background:rgba(0,180,50,0.16);border-bottom-color:rgba(0,180,50,.4)}
 .info-card .ic-header.ic-oks{background:rgba(160,32,240,0.16);border-bottom-color:rgba(160,32,240,.4)}
 .info-card .ic-header.ic-exp{background:rgba(71,200,255,0.16);border-bottom-color:rgba(71,200,255,.4)}
-.info-card .ic-title{flex:1;font-size:10.5px;font-weight:700;color:#fff;letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.info-card .ic-title{flex:1;font-size:10.5px;font-weight:700;color:var(--text);letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* Header mini-buttons: copy (⎘) and close (×). Same compact size, no border to keep the bar slim. */
-.info-card .ic-icobtn,.info-card .ic-close{background:transparent;border:none;color:#9ba0a8;font-size:12px;cursor:pointer;padding:1px 4px;line-height:1;border-radius:3px;flex-shrink:0;transition:color .12s,background .12s}
+.info-card .ic-icobtn,.info-card .ic-close{background:transparent;border:none;color:var(--muted);font-size:13px;cursor:pointer;padding:2px 4px;line-height:1;border-radius:3px;flex-shrink:0;transition:color .12s,background .12s;display:inline-flex;align-items:center;justify-content:center}
+.info-card .ic-edit{padding:2px 5px;color:var(--text2)}
+.info-card .ic-edit:hover{color:var(--accent);background:rgba(128,128,128,.12)}
 .info-card .ic-icobtn:hover{color:var(--accent);background:rgba(255,149,0,.12)}
 .info-card .ic-icobtn.flashed{color:#6cd96c;background:rgba(108,217,108,.18)}
 .info-card .ic-close{font-size:14px}
-.info-card .ic-close:hover{color:#fff;background:rgba(255,255,255,.08)}
+.info-card .ic-close:hover{color:var(--text);background:rgba(128,128,128,.15)}
 /* v64: minimal body padding */
 .info-card .ic-body{padding:5px 7px 6px;font-size:10.5px;line-height:1.35}
 .info-card .ic-coords{display:block;background:var(--surface2);padding:3px 6px;border-radius:3px;
   font-size:10.5px;color:var(--accent2);font-family:inherit;letter-spacing:.3px;margin-bottom:4px;text-align:center}
-.info-card .ic-name{font-size:11px;font-weight:600;color:#fff;margin-bottom:2px;line-height:1.3;word-break:break-word}
-.info-card .ic-desc{font-size:10px;color:#cfd2d6;line-height:1.4;word-break:break-word;opacity:.92}
+.info-card .ic-name{font-size:11px;font-weight:600;color:var(--text);margin-bottom:2px;line-height:1.3;word-break:break-word}
+.info-card .ic-desc{font-size:10px;color:var(--text2);line-height:1.4;word-break:break-word}
 .info-card .ic-action{display:block;width:100%;border:none;border-radius:3px;padding:4px 8px;
   font-family:inherit;font-size:10.5px;font-weight:700;cursor:pointer;margin-top:4px;transition:filter .1s}
 .info-card .ic-action:hover{filter:brightness(1.12)}
@@ -730,6 +783,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .cad-tip-row{display:flex;gap:5px;font-size:10px}
 .cad-tip-key{color:var(--muted);white-space:nowrap}
 .cad-tip-val{color:var(--text);word-break:break-word}
+[data-theme="light"] .cad-tip-key,
+[data-theme="system"] .cad-tip-key{color:#666}
+[data-theme="light"] .cad-tip-val,
+[data-theme="system"] .cad-tip-val{color:#111}
 .cad-tip-title{font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px}
 .cad-tip-zu .cad-tip-title{color:#d070ff}
 .cad-tip-oks .cad-tip-title{color:#40e080}
@@ -738,6 +795,47 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .cad-tip-key{color:var(--muted);white-space:nowrap}
 .cad-tip-val{color:var(--text);word-break:break-word}
 #cad-tooltip-wrap{background:var(--surface);border:1px solid var(--border);border-radius:7px;overflow:hidden;box-shadow:var(--shadow)}
+[data-theme="light"] #cad-tooltip-wrap,
+[data-theme="system"] #cad-tooltip-wrap{background:#fff;border-color:#bbb;box-shadow:0 4px 16px rgba(0,0,0,.2)}
+/* Light theme: neon cad-tip colors → readable dark tones */
+[data-theme="light"] .cad-tip-zu .cad-tip-title,
+[data-theme="system"] .cad-tip-zu .cad-tip-title{color:#8800cc}
+[data-theme="light"] .cad-tip-oks .cad-tip-title,
+[data-theme="system"] .cad-tip-oks .cad-tip-title{color:#007730}
+/* Light theme: ic-header colored backgrounds need dark text for contrast */
+[data-theme="light"] .info-card,
+[data-theme="system"] .info-card{background:#fff !important;border-color:#bbb !important;box-shadow:0 4px 20px rgba(0,0,0,.18) !important}
+[data-theme="light"] .info-card .ic-header.ic-zu,
+[data-theme="system"] .info-card .ic-header.ic-zu{background:rgba(0,140,40,0.13);border-bottom-color:rgba(0,140,40,.35)}
+[data-theme="light"] .info-card .ic-header.ic-oks,
+[data-theme="system"] .info-card .ic-header.ic-oks{background:rgba(130,0,200,0.13);border-bottom-color:rgba(130,0,200,.35)}
+[data-theme="light"] .info-card .ic-header.ic-exp,
+[data-theme="system"] .info-card .ic-header.ic-exp{background:rgba(0,100,200,0.13);border-bottom-color:rgba(0,100,200,.35)}
+/* Leaflet popup: use theme surface so it's readable in light mode */
+.leaflet-popup-content-wrapper{background:var(--surface)!important;color:var(--text)!important;box-shadow:var(--shadow)!important}
+.leaflet-popup-tip{background:var(--surface)!important}
+.leaflet-popup-content-wrapper a{color:var(--accent2)!important}
+[data-theme="light"] .leaflet-popup-content-wrapper,
+[data-theme="system"] .leaflet-popup-content-wrapper{background:#fff!important;color:#111!important;border:1px solid #ccc}
+[data-theme="light"] .leaflet-popup-tip,
+[data-theme="system"] .leaflet-popup-tip{background:#fff!important}
+[data-theme="light"] .leaflet-popup-content-wrapper a,
+[data-theme="system"] .leaflet-popup-content-wrapper a{color:#1a5fb4!important}
+/* Light/system: info-card dragging state should use theme surface */
+[data-theme="light"] .info-card.dragging,
+[data-theme="system"] .info-card.dragging{background:var(--surface)!important}
+/* Light/system: timeline elements contrast */
+[data-theme="light"] .timeline-handle.start::before,
+[data-theme="light"] .timeline-handle.end::before,
+[data-theme="system"] .timeline-handle.start::before,
+[data-theme="system"] .timeline-handle.end::before{color:#222}
+[data-theme="light"] .timeline-dot,
+[data-theme="system"] .timeline-dot{background:#7a8298;border-color:rgba(0,0,0,.25)}
+[data-theme="light"] .timeline-dot.in-range,
+[data-theme="system"] .timeline-dot.in-range{background:var(--accent);box-shadow:none}
+/* Light/system: cad-tooltip sections */
+[data-theme="light"] .cad-tip-section,
+[data-theme="system"] .cad-tip-section{border-top-color:rgba(0,0,0,.1)}
 
 ::-webkit-scrollbar{width:6px}
 ::-webkit-scrollbar-track{background:var(--scroll-track)}
@@ -878,7 +976,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.39</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.45</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -1160,12 +1258,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
       <div id="handle-start" class="timeline-handle start" style="left:0%"></div>
       <div id="handle-end"   class="timeline-handle end"   style="left:100%"></div>
     </div>
-    <div class="timeline-labels">
-      <span id="min-date-label"></span>
-      <span id="max-date-label"></span>
-    </div>
   </div>
   <div id="toast"></div>
+  <div id="photo-date-strip">—</div>
 </div>
 
 <!-- KML SAVE DIALOG -->
@@ -3080,8 +3175,13 @@ function _renderCoordsCard(lat, lng, cardId){
 }
 
 // Object card — copy mini-button in header, minimal body.
+// Global registry: markerId → marker object, for edit handlers
+window._cardMarkerRegistry = window._cardMarkerRegistry || new Map();
+
 function _renderObjectCard(hit, cardId){
   const m = hit.marker;
+  // Register marker so edit buttons can access it directly (not via re-search)
+  if(m.id) window._cardMarkerRegistry.set(m.id, m);
   const groupTitle = hit.kind === 'zu'  ? 'Земельный участок'
                   :  hit.kind === 'oks' ? 'ОКС / Сооружение'
                   :                       'Пояснение';
@@ -3092,9 +3192,16 @@ function _renderObjectCard(hit, cardId){
   const safeDesc = _escapeHtml(m.desc || '');
   const fullText = `${m.name || ''}${m.desc ? '\n' + m.desc : ''}`;
   const fullTextEsc = fullText.replace(/'/g,"\\'").replace(/\n/g,'\\n').replace(/"/g,'&quot;');
+  const mIdEsc = (m.id||'').replace(/'/g,"\\'");
+  // Edit button: ✏ contour editor for ZU/OKS, coord editor for EXP — sits LEFT of copy ⎘
+  const _pencilSvg=`<svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;transform:rotate(-45deg)"><path d="M9.5 2L12 4.5L5 11.5H2.5V9L9.5 2Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M7.5 3.5L10.5 6.5" stroke="currentColor" stroke-width="1.5"/></svg>`;
+  const editBtn = (hit.kind==='zu'||hit.kind==='oks')
+    ? `<button class="ic-icobtn ic-edit" title="Редактировать контур" onclick="_editContourFromCard('${mIdEsc}')">${_pencilSvg}</button>`
+    : `<button class="ic-icobtn ic-edit" title="Редактировать координату" onclick="_editExpCoordFromCard('${mIdEsc}')">${_pencilSvg}</button>`;
   return (
     `<div class="ic-header ${groupClass}">`+
       `<span class="ic-title">${groupTitle}</span>`+
+      editBtn+
       `<button class="ic-icobtn" title="Копировать текст" onclick="_copyToClip('${fullTextEsc}', this)">⎘</button>`+
       `<button class="ic-close" title="Закрыть">×</button>`+
     `</div>`+
@@ -3107,6 +3214,77 @@ function _renderObjectCard(hit, cardId){
 
 // Copy helper used by all info-card buttons. Briefly flashes the button to
 // confirm the action.
+// Edit-contour handler called from info-card ✏ button (ZU / OKS)
+window._editContourFromCard = function(markerId){
+  if(!markerId) return;
+  // Look up marker directly from registry (avoids stale re-search by id)
+  let m = window._cardMarkerRegistry?.get(markerId);
+  if(!m){
+    // Fallback: re-search _gatherMarkers
+    const buckets = typeof _gatherMarkers === 'function' ? _gatherMarkers() : null;
+    if(buckets){
+      for(const grp of ['zu','oks']){
+        const found = buckets[grp].find(x => x.id === markerId);
+        if(found){ m = found; break; }
+      }
+    }
+  }
+  if(!m){ showToast('Объект не найден','warn',2000); return; }
+
+  // Determine cadastre type for styling
+  const grp = (m.type==='zu') ? 'zu'
+            : (m.id?.includes(':zu:') || m.id?.startsWith('zu')) ? 'zu'
+            : 'oks';
+  const cadNum = m.cadNum || m.name || '';
+  const pm = m.pmRef;
+
+  // ── Source 1: cadPlacemarks (saved contours) — pm.geom is GeoJSON [lon,lat] ──
+  if(pm?.geom){
+    const geom = pm.geom;
+    closeAllInfoCards();
+    if(geom.type === 'Polygon'){
+      startContourEditor(geom, grp, cadNum, '');
+    } else if(geom.type === 'MultiPolygon' && geom.coordinates?.[0]){
+      startContourEditor({type:'Polygon', coordinates:geom.coordinates[0]}, grp, cadNum, '');
+    } else {
+      showToast('Тип геометрии не поддерживается: '+geom.type,'warn',3000);
+    }
+    return;
+  }
+
+  // ── Source 2: parsedData.placemarks (KML files) — pm.coords is [[lat,lon],...] ──
+  // Convert Leaflet-format coords [[lat,lon]] → GeoJSON Polygon [[lon,lat]]
+  if(pm?.coords && pm.type !== 'Point'){
+    const ring = Array.isArray(pm.coords[0]) ? pm.coords : [pm.coords];
+    // ring is [[lat,lon],...]; GeoJSON needs [[lon,lat],...]
+    const geoRing = ring.map(pt => Array.isArray(pt) ? [pt[1], pt[0]] : pt);
+    // Close ring if not closed
+    if(geoRing.length > 1){
+      const f = geoRing[0], l = geoRing[geoRing.length-1];
+      if(f[0] !== l[0] || f[1] !== l[1]) geoRing.push([...f]);
+    }
+    const geom = {type:'Polygon', coordinates:[geoRing]};
+    closeAllInfoCards();
+    startContourEditor(geom, grp, cadNum, '');
+    return;
+  }
+
+  showToast('Нет геометрии для редактирования','warn',3000);
+};
+
+// Edit-coord handler called from info-card ✏ button (Пояснение / EXP)
+window._editExpCoordFromCard = function(markerId){
+  if(!markerId) return;
+  const buckets = typeof _gatherMarkers === 'function' ? _gatherMarkers() : null;
+  if(!buckets) return;
+  const m = buckets.exp?.find(x => x.id === markerId);
+  if(!m || !m.pmRef) { showToast('Объект не найден','warn',2000); return; }
+  closeAllInfoCards();
+  const coords = m.pmRef.coords || (m.pmRef.geom?.type==='Point' ? [m.pmRef.geom.coordinates[1], m.pmRef.geom.coordinates[0]] : null);
+  if(!coords){ showToast('Нет координат для редактирования','warn',3000); return; }
+  startExplanationPoint(coords[0], coords[1]);
+};
+
 window._copyToClip = function(text, btn){
   const fallback = () => {
     const ta = document.createElement('textarea');
@@ -5430,10 +5608,10 @@ function updateMarkerOpacities(){
 
 function updateTimelineData(){
   datedPhotosGlobal=photos.filter(p=>p.dateObj instanceof Date).sort((a,b)=>a.dateObj-b.dateObj);
-  if(!datedPhotosGlobal.length){document.getElementById('timeline').classList.remove('visible');return;}
+  if(!datedPhotosGlobal.length){document.getElementById('timeline').classList.remove('visible');document.getElementById('map').classList.remove('timeline-open');return;}
   minDateGlobal=datedPhotosGlobal[0].dateObj;maxDateGlobal=datedPhotosGlobal.at(-1).dateObj;
   filterStart=new Date(minDateGlobal);filterEnd=new Date(maxDateGlobal);
-  document.getElementById('timeline').classList.add('visible');
+  document.getElementById('timeline').classList.add('visible');document.getElementById('map').classList.add('timeline-open');
   renderTimeline();
 }
 
@@ -5447,17 +5625,27 @@ function renderTimeline(){
   const track=document.getElementById('timeline-track');
   track.querySelectorAll('.timeline-dot').forEach(d=>d.remove());
 
+  let dotIdx=0;
   datedPhotosGlobal.forEach(p=>{
     if(timelineMode==='zoom'&&(p.dateObj<filterStart||p.dateObj>filterEnd))return;
     const pct=dur?((p.dateObj-displayStart)/dur)*100:50;
-    const dot=document.createElement('div');dot.className='timeline-dot';
+    const dot=document.createElement('div');
+    dot.className='timeline-dot'+(dotIdx%2===1?' odd':'');
     dot.style.left=`${Math.max(2,Math.min(98,pct))}%`;dot.title=formatDate(p.dateObj);
+    dot._photo=p; // attach photo ref for click handler
+    dot.addEventListener('click', e=>{
+      e.stopPropagation(); // prevent track click from also firing
+      const ph=dot._photo;if(!ph)return;
+      const idx=photos.findIndex(x=>x===ph);
+      if(idx>=0){if(ph.lat!=null)map.setView([ph.lat,ph.lon],Math.max(map.getZoom(),19),{animate:true});openLightbox(idx,ph.lat!=null?L.latLng(ph.lat,ph.lon):null);highlightTimelineDot(ph);}
+    });
     // П2: folder filter dims non-folder dots
     if(selectedFolderPath){
       if(isPhotoInSelectedFolder(p))dot.classList.add('folder-match');
       else dot.classList.add('folder-dim');
     } else if(isPhotoInRange(p)){dot.classList.add('in-range');}
     track.appendChild(dot);
+    dotIdx++;
   });
 
   const sp=timelineMode==='zoom'?0:(dur?(filterStart-minDateGlobal)/(maxDateGlobal-minDateGlobal)*100:0);
@@ -5465,23 +5653,69 @@ function renderTimeline(){
   document.getElementById('handle-start').style.left=`${Math.max(0,Math.min(100,sp))}%`;
   document.getElementById('handle-end').style.left=`${Math.max(0,Math.min(100,ep))}%`;
   updateSelectedBar();
-  document.getElementById('min-date-label').textContent=fmt2(displayStart);
-  document.getElementById('max-date-label').textContent=fmt2(displayEnd);
-  document.getElementById('range-display').innerHTML=`<b>${fmt2(filterStart)}</b> — <b>${fmt2(filterEnd)}</b>`;
+  document.getElementById('range-display').innerHTML=`${fmt2(filterStart)} — ${fmt2(filterEnd)}`;
+  // Clamp dots to stay between handle edges (not under handle icons, HW=11px each side)
+  _clampDotsToHandles();
+  // Re-apply active dot after full re-render
+  if(window._lastHighlightedPhoto) highlightTimelineDot(window._lastHighlightedPhoto);
+}
+
+function _clampDotsToHandles(){
+  const trackEl=document.getElementById('timeline-track');
+  if(!trackEl) return;
+  const tw=trackEl.getBoundingClientRect().width||trackEl.offsetWidth||800;
+  const HW=11; // half handle width px
+  const hwPct=(HW/tw)*100;
+  const sH=parseFloat(document.getElementById('handle-start').style.left)||0;
+  const eH=parseFloat(document.getElementById('handle-end').style.left)||100;
+  const minP=sH+hwPct, maxP=eH-hwPct;
+  trackEl.querySelectorAll('.timeline-dot').forEach(dot=>{
+    let p=parseFloat(dot.style.left)||0;
+    dot.style.left=Math.max(minP,Math.min(maxP,p))+'%';
+  });
 }
 
 function updateSelectedBar(){const s=parseFloat(document.getElementById('handle-start').style.left)||0,e=parseFloat(document.getElementById('handle-end').style.left)||100;const bar=document.getElementById('selected-bar');bar.style.left=`${s}%`;bar.style.width=`${e-s}%`;}
 
 function highlightTimelineDot(photo){
+  if(photo?.dateObj) window._lastHighlightedPhoto=photo; // persist across mode switch
   document.querySelectorAll('.timeline-dot').forEach(d=>d.classList.remove('active-dot'));
-  if(!photo?.dateObj||!minDateGlobal)return;
+  const strip=document.getElementById('photo-date-strip');
+  if(!photo?.dateObj||!minDateGlobal){
+    if(strip) strip.classList.remove('visible');
+    return;
+  }
   const ds=timelineMode==='zoom'?filterStart:minDateGlobal;
   const de=timelineMode==='zoom'?filterEnd:maxDateGlobal;
   const dur=de-ds;if(!dur)return;
   const pct=((photo.dateObj-ds)/dur)*100;
   let best=null,bestD=Infinity;
-  document.querySelectorAll('.timeline-dot').forEach(dot=>{const d=Math.abs(+dot.style.left.replace('%','')-pct);if(d<bestD){bestD=d;best=dot;}});
+  document.querySelectorAll('.timeline-dot').forEach(dot=>{
+    const d=Math.abs(+dot.style.left.replace('%','')-pct);
+    if(d<bestD){bestD=d;best=dot;}
+  });
   best?.classList.add('active-dot');
+  // Position photo-date-strip under the active dot in the attribution row
+  if(strip){
+    const p=n=>String(n).padStart(2,'0');
+    const d=photo.dateObj;
+    strip.textContent=`${p(d.getDate())}.${p(d.getMonth()+1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+    strip.classList.add('visible');
+    // Align under active dot: map left + track left + dot% * track width
+    const track=document.getElementById('timeline-track');
+    const mapEl=document.getElementById('map');
+    if(track&&mapEl){
+      const tr=track.getBoundingClientRect(),mr=mapEl.getBoundingClientRect();
+      const dotX=tr.left-mr.left+((best?parseFloat(best.style.left):pct)/100)*tr.width;
+      // Centre strip under dot, then clamp so it stays fully within map bounds
+      const sw=strip.offsetWidth||120; // strip width (may be 0 before first paint)
+      const margin=8;
+      const ideal=dotX-sw/2;
+      const clamped=Math.max(margin, Math.min(mr.width-sw-margin, ideal));
+      strip.style.left=clamped+'px';
+      strip.style.transform='none'; // we do manual clamping, not CSS transform
+    }
+  }
 }
 
 function initTimeline(){
@@ -5490,11 +5724,11 @@ function initTimeline(){
   let dragging=null;
 
   document.querySelectorAll('.timeline-mode-btn').forEach(btn=>{
-    btn.addEventListener('click',()=>{timelineMode=btn.dataset.mode;document.querySelectorAll('.timeline-mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode===timelineMode));renderTimeline();});
+    btn.addEventListener('click',()=>{timelineMode=btn.dataset.mode;document.querySelectorAll('.timeline-mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode===timelineMode));renderTimeline();if(window._lastHighlightedPhoto) highlightTimelineDot(window._lastHighlightedPhoto);});
   });
 
   function startDrag(e,type){e.preventDefault();dragging=type;document.addEventListener('mousemove',doDrag);document.addEventListener('mouseup',stopDrag);}
-  function doDrag(e){if(!dragging)return;const rect=track.getBoundingClientRect();let pct=((e.clientX-rect.left)/rect.width)*100;if(dragging==='start'){pct=Math.max(0,Math.min(+endH.style.left.replace('%','')||100,pct));startH.style.left=pct+'%';}else{pct=Math.max(+startH.style.left.replace('%','')||0,Math.min(100,pct));endH.style.left=pct+'%';}updateSelectedBar();}
+  function doDrag(e){if(!dragging)return;const rect=track.getBoundingClientRect();const HW=11;const minP=(HW/rect.width)*100,maxP=100-(HW/rect.width)*100;let pct=((e.clientX-rect.left)/rect.width)*100;if(dragging==='start'){pct=Math.max(minP,Math.min(+endH.style.left.replace('%','')||maxP,pct));startH.style.left=pct+'%';}else{pct=Math.max(+startH.style.left.replace('%','')||minP,Math.min(maxP,pct));endH.style.left=pct+'%';}updateSelectedBar();}
   function stopDrag(){if(!dragging)return;document.removeEventListener('mousemove',doDrag);document.removeEventListener('mouseup',stopDrag);const base=timelineMode==='zoom'?+filterStart:+minDateGlobal;const dur=timelineMode==='zoom'?filterEnd-filterStart:maxDateGlobal-minDateGlobal;const sp=+startH.style.left.replace('%','')||0,ep=+endH.style.left.replace('%','')||100;filterStart=new Date(base+(sp/100)*dur);filterEnd=new Date(base+(ep/100)*dur);if(filterStart>filterEnd)[filterStart,filterEnd]=[filterEnd,filterStart];renderTimeline();renderList();updateMarkerOpacities();dragging=null;}
 
   startH.addEventListener('mousedown',e=>startDrag(e,'start'));
@@ -5518,6 +5752,9 @@ function resetTimelineFilter(){
   timelineMode='full';
   document.querySelectorAll('.timeline-mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode==='full'));
   clearFolderFilter();  // also reset folder filter
+  // Reset photo-date-strip
+  const strip=document.getElementById('photo-date-strip');
+  if(strip) strip.classList.remove('visible');
 }
 
 // ═══ CADASTRAL SEARCH ══════════════════════════════════════════════
