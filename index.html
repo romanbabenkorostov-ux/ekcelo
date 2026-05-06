@@ -7,7 +7,7 @@
      from file:// context (origin=null → strict-origin sends literal "null" → OSM blocks).
      Chrome was unaffected (sends no Referer from file://, OSM accepts Chrome UA).
      Each tile layer sets its own referrerPolicy via img.referrerPolicy attribute. -->
-<title>EkceloFoto v2.9.45</title>
+<title>EkceloFoto v2.9.46</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -441,7 +441,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 [data-theme="light"] .leaflet-control-attribution a,
 [data-theme="system"] .leaflet-control-attribution a{color:#333 !important}
 .leaflet-control-scale{opacity:.92}
-.leaflet-control-scale-line{background:rgba(var(--bg-rgb,13,15,20),.72) !important;border:2px solid var(--text) !important;border-top:none !important;color:var(--text) !important;font-family:'JetBrains Mono',monospace !important;font-size:10px !important;font-weight:700 !important;padding:1px 4px !important;backdrop-filter:blur(3px)}
+.leaflet-control-scale-line{background:rgba(var(--bg-rgb,13,15,20),.72) !important;border:2px solid var(--text) !important;border-top:none !important;color:var(--text) !important;font-family:'JetBrains Mono',monospace !important;font-size:10px !important;font-weight:400 !important;padding:1px 4px !important;backdrop-filter:blur(3px)}
 [data-theme="light"] .leaflet-control-scale-line,[data-theme="system"] .leaflet-control-scale-line{background:rgba(255,255,255,.78) !important;border-color:#222 !important;color:#111 !important}
 #map-hint{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;pointer-events:none;z-index:500;transition:opacity .4s}
 #map-hint.hidden{opacity:0}
@@ -570,6 +570,23 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .kml-layer-del:hover{color:var(--danger)}
 #kml-dropdown hr{border:none;border-top:1px solid var(--border);margin:3px 0}
 /* ZOOM INDICATOR */
+
+/* ── RULER TOOL ──────────────────────────────────────────────────── */
+#ruler-display{position:absolute;z-index:600;pointer-events:none;display:none;
+  font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:400;
+  color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.9);white-space:nowrap}
+#ruler-display.visible{display:flex;align-items:center;gap:6px}
+#ruler-close{pointer-events:auto;background:rgba(0,0,0,.55);border:none;
+  color:#fff;cursor:pointer;border-radius:50%;width:20px;height:20px;
+  display:flex;align-items:center;justify-content:center;font-size:13px;line-height:1;padding:0}
+#ruler-close:hover{background:rgba(255,60,60,.7)}
+[data-theme="light"] #ruler-display,[data-theme="system"] #ruler-display{color:#111;text-shadow:0 1px 3px rgba(255,255,255,.9)}
+[data-theme="light"] #ruler-close,[data-theme="system"] #ruler-close{background:rgba(255,255,255,.75);color:#111}
+#ruler-btn{background:var(--surface);border:1px solid var(--border);color:var(--text);
+  padding:0 10px;height:28px;border-radius:5px;cursor:pointer;font-size:11px;
+  font-family:'JetBrains Mono',monospace;white-space:nowrap;transition:all .12s}
+#ruler-btn:hover{background:var(--surface2)}
+#ruler-btn.active{background:var(--accent);color:#0d0f14;border-color:var(--accent)}
 #zoom-indicator{position:absolute;top:96px;left:10px;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent);pointer-events:none;letter-spacing:.5px;backdrop-filter:blur(4px);opacity:.9;box-shadow:var(--shadow-sm)}
 #cad-wrap{position:absolute;top:12px;right:110px;z-index:601}
 #cadastre-btn{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 11px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);cursor:pointer;transition:all .15s;white-space:nowrap;box-shadow:var(--shadow-sm)}
@@ -638,7 +655,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .timeline-handle.start::before{content:'◀';font-size:12px;color:#0d0f14}
 .timeline-handle.end::before{content:'▶';font-size:12px;color:#0d0f14}
 /* Timeline dots: normal, in-range, folder-match, folder-dim, active */
-.timeline-dot::before{content:'';position:absolute;inset:-8px;border-radius:50%}
+.timeline-dot::before{content:'';position:absolute;inset:-4px;border-radius:50%}
 .timeline-dot{position:absolute;top:68%;width:8px;height:8px;background:#505870;border:1.5px solid rgba(255,255,255,.25);border-radius:50%;transform:translateY(-50%);z-index:10;pointer-events:auto;cursor:pointer;transition:transform .1s}
 /* Alternating up/down offset — set via JS on odd-indexed dots */
 .timeline-dot.odd{top:32%}
@@ -648,8 +665,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .timeline-dot.odd.folder-match{top:32% !important}
 .timeline-dot.folder-dim{background:#252b3a !important;opacity:.35;box-shadow:none !important;transform:translateY(-50%) scale(0.8) !important;z-index:8}
 .timeline-dot.odd.folder-dim{top:32% !important}
-.timeline-dot.active-dot{background:#ff3c3c !important;border-color:#fff !important;transform:translateY(-50%) scale(1.6) !important;box-shadow:none !important;z-index:20;top:68%}
-.timeline-dot.odd.active-dot{top:32% !important}
+.timeline-dot.active-dot{background:#ff3c3c !important;border-color:#fff !important;transform:translateY(-50%) scale(1.2) !important;box-shadow:none !important;z-index:20;top:68%}
+.timeline-dot.odd.active-dot{top:32% !important;transform:translateY(-50%) scale(1.2) !important}
 /* Photo date strip — absolute on #map, aligned under active dot on track.
    Sits in the Leaflet attribution row space (bottom:0). JS sets left: to dot X. */
 #photo-date-strip{
@@ -976,7 +993,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.45</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.46</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -1216,6 +1233,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
   <!-- Zoom indicator -->
   <div id="zoom-indicator">z</div>
 
+  <button id="ruler-btn" onclick="toggleRuler()" title="Измерить расстояние между двумя точками">📏 Линейка</button>
   <button id="fit-btn"      onclick="fitMapToPhotos()">⊟ По объектам</button>
   <div id="kml-wrap">
     <!-- v58: master visibility toggle moved to the stats panel (#stat-kml-toggle)
@@ -1255,12 +1273,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     </div>
     <div id="timeline-track" class="timeline-track">
       <div id="selected-bar" class="timeline-selected-bar"></div>
-      <div id="handle-start" class="timeline-handle start" style="left:0%"></div>
-      <div id="handle-end"   class="timeline-handle end"   style="left:100%"></div>
+      <div id="handle-start" class="timeline-handle start" style="left:1.5%"></div>
+      <div id="handle-end"   class="timeline-handle end"   style="left:98.5%"></div>
     </div>
   </div>
   <div id="toast"></div>
   <div id="photo-date-strip">—</div>
+  <div id="ruler-display"><span id="ruler-text"></span><button id="ruler-close" onclick="closeRuler()" title="Закрыть">×</button></div>
 </div>
 
 <!-- KML SAVE DIALOG -->
@@ -5590,6 +5609,122 @@ async function writeEXIFWithGPS(){
   exitManualGPSMode(true);
 }
 
+
+// ═══════════════════════════════════════════════════════════════════
+// RULER TOOL — measure distance between two map points
+// Click: place first point → click again: place second point, show distance.
+// Blue dashed line on map, distance overlay on map (not a popup window).
+// Closes with ×, Escape, or clicking Линейка button again.
+// ═══════════════════════════════════════════════════════════════════
+let _rulerActive = false;
+let _rulerPt1 = null;   // L.LatLng
+let _rulerPt2 = null;
+let _rulerLine = null;  // L.Polyline
+let _rulerMarker1 = null;
+let _rulerMarker2 = null;
+
+function toggleRuler(){
+  if(_rulerActive) closeRuler();
+  else startRuler();
+}
+
+function startRuler(){
+  _rulerActive = true;
+  _rulerPt1 = _rulerPt2 = null;
+  document.getElementById('ruler-btn')?.classList.add('active');
+  map.getContainer().style.cursor = 'crosshair';
+  showToast('📏 Кликните первую точку','info',2500);
+}
+
+function closeRuler(){
+  _rulerActive = false;
+  _rulerPt1 = _rulerPt2 = null;
+  document.getElementById('ruler-btn')?.classList.remove('active');
+  map.getContainer().style.cursor = '';
+  if(_rulerLine){ map.removeLayer(_rulerLine); _rulerLine = null; }
+  if(_rulerMarker1){ map.removeLayer(_rulerMarker1); _rulerMarker1 = null; }
+  if(_rulerMarker2){ map.removeLayer(_rulerMarker2); _rulerMarker2 = null; }
+  const disp = document.getElementById('ruler-display');
+  if(disp) disp.classList.remove('visible');
+}
+
+function _rulerFormatDist(m){
+  if(m < 2000) return `${Math.round(m)} м`;
+  return `${(m/1000).toFixed(1)} км`;
+}
+
+function _rulerOnClick(e){
+  if(!_rulerActive) return;
+  if(!_rulerPt1){
+    _rulerPt1 = e.latlng;
+    // Small dot marker
+    const dotIcon = L.divIcon({className:'',html:'<div style="width:10px;height:10px;background:#3b82f6;border:2px solid #fff;border-radius:50%;margin:-5px 0 0 -5px;box-shadow:0 0 4px rgba(59,130,246,.9)"></div>',iconSize:[0,0]});
+    _rulerMarker1 = L.marker(_rulerPt1, {icon: dotIcon, interactive: false}).addTo(map);
+    showToast('📏 Кликните вторую точку','info',2500);
+  } else {
+    _rulerPt2 = e.latlng;
+    const dist = _rulerPt1.distanceTo(_rulerPt2); // metres, Haversine
+
+    // Blue dashed polyline
+    if(_rulerLine) map.removeLayer(_rulerLine);
+    const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+    _rulerLine = L.polyline([_rulerPt1, _rulerPt2], {
+      color: isDark ? '#60a5fa' : '#1d4ed8',
+      weight: 2.5,
+      dashArray: '8 6',
+      opacity: 1,
+      interactive: false,
+    }).addTo(map);
+
+    const dotIcon2 = L.divIcon({className:'',html:'<div style="width:10px;height:10px;background:#3b82f6;border:2px solid #fff;border-radius:50%;margin:-5px 0 0 -5px;box-shadow:0 0 4px rgba(59,130,246,.9)"></div>',iconSize:[0,0]});
+    if(_rulerMarker2) map.removeLayer(_rulerMarker2);
+    _rulerMarker2 = L.marker(_rulerPt2, {icon: dotIcon2, interactive: false}).addTo(map);
+
+    // Position distance label at midpoint of line on screen
+    const mid = L.latLng((+_rulerPt1.lat + +_rulerPt2.lat)/2, (+_rulerPt1.lng + +_rulerPt2.lng)/2);
+    const midPx = map.latLngToContainerPoint(mid);
+    const mapEl = document.getElementById('map');
+    const mr = mapEl ? mapEl.getBoundingClientRect() : {left:0,top:0};
+    const disp = document.getElementById('ruler-display');
+    const txt  = document.getElementById('ruler-text');
+    if(disp && txt){
+      txt.textContent = _rulerFormatDist(dist);
+      disp.style.left = midPx.x + 'px';
+      disp.style.top  = midPx.y + 'px';
+      disp.style.transform = 'translate(-50%,-150%)';
+      disp.classList.add('visible');
+    }
+
+    // Ready for next measurement from pt2, or close
+    _rulerPt1 = _rulerPt2;
+    _rulerPt2 = null;
+    if(_rulerMarker1) map.removeLayer(_rulerMarker1);
+    _rulerMarker1 = _rulerMarker2;
+    _rulerMarker2 = null;
+    showToast('📏 Кликните следующую точку или × для закрытия','info',2000);
+  }
+}
+
+// Update label position on map pan/zoom
+map.on('move zoom', ()=>{
+  if(!_rulerActive || !_rulerPt1 || !_rulerLine) return;
+  const lls = _rulerLine.getLatLngs();
+  if(lls.length < 2) return;
+  const mid = L.latLng((lls[0].lat+lls[1].lat)/2, (lls[0].lng+lls[1].lng)/2);
+  const midPx = map.latLngToContainerPoint(mid);
+  const disp = document.getElementById('ruler-display');
+  if(disp && disp.classList.contains('visible')){
+    disp.style.left = midPx.x + 'px';
+    disp.style.top  = midPx.y + 'px';
+  }
+});
+
+// Close on Escape
+document.addEventListener('keydown', e=>{ if(e.key==='Escape' && _rulerActive) closeRuler(); });
+
+// Wire into map click — AFTER map is ready
+map.on('click', _rulerOnClick);
+
 // ═══ TIMELINE ══════════════════════════════════════════════════════
 let filterStart=null,filterEnd=null,minDateGlobal=null,maxDateGlobal=null,datedPhotosGlobal=[];
 function parsePhotoDate(d){if(!d)return null;if(d instanceof Date)return new Date(d);const m=String(d).match(/(\d{4})[:\-](\d{2})[:\-](\d{2})[T\s](\d{2})[:\-](\d{2})[:\-](\d{2})/);return m?new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+m[6]):null;}
@@ -5650,8 +5785,8 @@ function renderTimeline(){
 
   const sp=timelineMode==='zoom'?0:(dur?(filterStart-minDateGlobal)/(maxDateGlobal-minDateGlobal)*100:0);
   const ep=timelineMode==='zoom'?100:(dur?(filterEnd-minDateGlobal)/(maxDateGlobal-minDateGlobal)*100:100);
-  document.getElementById('handle-start').style.left=`${Math.max(0,Math.min(100,sp))}%`;
-  document.getElementById('handle-end').style.left=`${Math.max(0,Math.min(100,ep))}%`;
+  document.getElementById('handle-start').style.left=`${Math.max(1.5,Math.min(98.5,sp))}%`;
+  document.getElementById('handle-end').style.left=`${Math.max(1.5,Math.min(98.5,ep))}%`;
   updateSelectedBar();
   document.getElementById('range-display').innerHTML=`${fmt2(filterStart)} — ${fmt2(filterEnd)}`;
   // Clamp dots to stay between handle edges (not under handle icons, HW=11px each side)
@@ -6120,7 +6255,7 @@ function _cadToKML(cadNum, type, geom, lines) {
   const bABGR = type==='zu' ? 'ff007f00' : 'ff7f007f';   // border: opaque green (zu) / purple (oks)
   const fABGR = type==='zu' ? '33007f00' : '337f007f';   // fill: 20% opacity (zu green / oks purple)
   const sid   = `cad_${type}_${cadNum.replace(/:/g,'_')}`;
-  const desc  = lines.map(([k,v])=>`${k}: ${v}`).join('; ');
+  const desc  = [['Кадастровый номер', cadNum], ...lines].map(([k,v])=>`${k}: ${v}`).join('; ');
   const gkml  = geom.type==='Point'
     ? `<Point><coordinates>${cs}</coordinates></Point>`
     : `<Polygon><outerBoundaryIs><LinearRing><coordinates>${cs}</coordinates></LinearRing></outerBoundaryIs></Polygon>`;
@@ -7194,7 +7329,15 @@ window.exportKMZ = async function(){
         if(seenSig.has(s)) continue;
         seenSig.add(s);
         if(pm.parts?.style)     styleXmls.add(pm.parts.style);
-        if(pm.parts?.placemark) buckets[cat].push(pm.parts.placemark);
+        if(pm.parts?.placemark){
+          // Ensure <name> is human-readable: prefix with type label + cadNum
+          const typeLabel = cat==='zu' ? 'ЗУ' : 'ОКС';
+          const enriched = pm.parts.placemark.replace(
+            /<name><!\[CDATA\[(.*?)\]\]><\/name>/,
+            (_, n) => `<name><![CDATA[${typeLabel} ${(n||'').trim()||pm.cadNum||''}]]></name>`
+          );
+          buckets[cat].push(enriched);
+        }
       }
     }
 
@@ -7371,7 +7514,21 @@ window.exportKMZ = async function(){
 
 // Convert a parsed KML placemark back to KML XML for re-emission
 function _pmToKMLXml(name, desc, sid, pm){
-  const safeName = _escapeXml(name||'');
+  // If name is empty (externally loaded KML where <name> was blank),
+  // derive a meaningful name from the description text.
+  // Strategy: look for a cadastral number pattern first (NN:NN:...:NN),
+  // then take the first meaningful sentence from desc.
+  let resolvedName = (name || '').trim();
+  if(!resolvedName && desc){
+    const cadMatch = desc.match(/\d{2}:\d{2}:\d{7}:\d+/);
+    if(cadMatch){
+      resolvedName = cadMatch[0];
+    } else {
+      // Take text up to first ' / ' or '; ' or first 60 chars, whichever comes first
+      resolvedName = desc.replace(/\s+/g,' ').split(/\s*[\/;·]\s*/)[0].trim().slice(0,60);
+    }
+  }
+  const safeName = _escapeXml(resolvedName || '');
   const safeDesc = desc ? `<description><![CDATA[${desc}]]></description>` : '';
   const styleRef = `<styleUrl>#${sid}</styleUrl>`;
   let geom = '';
