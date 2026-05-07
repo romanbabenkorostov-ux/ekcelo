@@ -77,7 +77,7 @@
   --warn: #b45309;
   --shadow: 0 8px 32px rgba(0,0,0,.12);
   --shadow-sm: 0 2px 8px rgba(0,0,0,.08);
-  --map-filter: brightness(1) saturate(1);  /* v2.9.53: restore v2.9.38 value (was brightness(1.001) which broke plus-lighter compositing) */
+  --map-filter: brightness(1) saturate(1);  /* v2.9.53: restore exact v2.9.38 value (was brightness(1.001) — too close to identity, Blink may collapse the pane filter layer, breaking plus-lighter compositing) */
   --map-bg: #ede9e3;  /* matches OSM/Esri tile edge color → seams invisible */
   --scroll-thumb: #b0aca4;
   --scroll-track: #f0ede8;
@@ -105,7 +105,7 @@
     --warn: #b45309;
     --shadow: 0 8px 32px rgba(0,0,0,.12);
     --shadow-sm: 0 2px 8px rgba(0,0,0,.08);
-    --map-filter: brightness(1) saturate(1);  /* v2.9.53: restore v2.9.38 value (was brightness(1.001) which broke plus-lighter compositing) */
+    --map-filter: brightness(1) saturate(1);  /* v2.9.53: restore exact v2.9.38 value (was brightness(1.001) — too close to identity, Blink may collapse the pane filter layer, breaking plus-lighter compositing) */
     --map-bg: #ede9e3;  /* matches OSM/Esri tile edge color → seams invisible */
     --scroll-thumb: #c8c4bc;
     --scroll-track: #f0ede8;
@@ -391,24 +391,21 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
    translate3d() at integer slot-corners, so no inter-tile gaps appear
    regardless of magnification.
    ──────────────────────────────────────────────────────────────── */
-/* ── TILE SEAM FIX (v2.9.53 = v2.9.38 baseline restored) ──────────
-   v2.9.52 regression diagnosis:
-     The CSS block below is identical to v2.9.38 — three-layer defence
-     works as designed. The break in v2.9.52 was NOT here, but in the
-     `--map-filter` CSS variable on light/system themes:
-       v2.9.38 used: brightness(1) saturate(1)  ← works
-       v2.9.52 used: brightness(1.001)          ← breaks plus-lighter
-     `brightness(1.001)` is so close to identity that the renderer can
-     skip / collapse the pane's filter layer in some Blink builds. Once
-     the pane filter layer is gone, mix-blend-mode on each tile <img>
-     no longer has the shared filtered context to blend within → tiles
-     get composited individually → 1-px floor()-rounded seams reappear
-     as the white grid. Restoring saturate(1) keeps the filter list at
-     length 2 (brightness + saturate) which Blink does not collapse.
-   v2.9.53 fix: revert --map-filter to brightness(1) saturate(1).
-                ALL CSS rules below kept intact from v2.9.38 / v2.9.52.
+/* ── TILE SEAM FIX (v2.9.53 — restoring v2.9.38 working baseline) ──
+   Three-layer defence (unchanged from working v2.9.38):
 
-   Three-layer defence (unchanged since v2.9.38, working):
+   v2.9.52 broke tile seams via TWO independent regressions:
+     1) --map-filter: brightness(1.001) — too close to identity, Blink
+        may collapse the pane's filter compositing layer, defeating the
+        whole purpose of LAYER 1 below. Restored to v2.9.38 value
+        `brightness(1) saturate(1)` in [data-theme=light/system].
+     2) L_NspdLayer.createTile() set img.style.cssText with inline
+        width/height. Inline style on <img> (as opposed to width/height
+        attributes) splits the tile into its own paint phase in Blink,
+        breaking the plus-lighter shared compositing context. Switched
+        to img.width/img.height attributes (matches native TileLayer).
+
+   v2.9.53 restores all three layers below to their v2.9.38 form.
 
    LAYER 1 — filter on pane, not on individual tiles (v2.9.37 fix):
      Moves GPU compositing to one layer for all tiles → no per-tile
@@ -1510,7 +1507,18 @@ const L_NspdLayer = L.GridLayer.extend({
   },
   createTile(coords, done){
     const img = document.createElement('img');
-    img.style.cssText = 'width:256px;height:256px;';
+    // v2.9.53: use width/height ATTRIBUTES (not inline style cssText).
+    // Reason: img.style.cssText = 'width:256px;height:256px;' wipes any future
+    // inline styles Leaflet's _initTile() would set. More importantly, an img
+    // with inline width/height in `style` is treated by Blink as a styled
+    // element with its own paint phase, which can prevent the parent pane's
+    // mix-blend-mode: plus-lighter compositing trick from working — Blink
+    // splits it into a separate compositing layer. Plain HTML width/height
+    // attributes are the natural-size hints; Leaflet's CSS rule
+    // `.leaflet-container img.leaflet-tile { mix-blend-mode: plus-lighter }`
+    // applies cleanly without inline-style interference.
+    img.width = 256;
+    img.height = 256;
     // Project tile coords → EPSG:3857 BBOX using Leaflet's own CRS
     const crs = L.CRS.EPSG3857;
     const nwLL = crs.pointToLatLng(coords.scaleBy(L.point(256,256)), coords.z);
