@@ -5644,16 +5644,51 @@ async function writeEXIFWithGPS(){
 // • Click 3+ → shifts pair: pt2 becomes new pt1, new line to click point
 // • Right-click or Escape → close ruler
 // ═══════════════════════════════════════════════════════════════════
-let _rulerActive = false;
-let _rulerPt1    = null;   // L.LatLng — "from" point
-let _rulerMarker1 = null;  // blue dot at pt1
-let _rulerLine    = null;  // current dashed segment
-let _rulerMarker2 = null;  // blue dot at pt2
-let _rulerAllLines = [];   // all previous segments (kept visible)
-let _rulerAllDots  = [];   // all dots except current pt1
+let _rulerActive  = false;
+let _rulerPt1     = null;   // L.LatLng — start of current segment
+let _rulerPt2     = null;   // L.LatLng — end of current segment (null until 2nd click)
+let _rulerMark1   = null;   // draggable marker at pt1
+let _rulerMark2   = null;   // draggable marker at pt2
+let _rulerLine    = null;   // dashed polyline between pt1 and pt2
 
-const _rulerDotHtml = '<div style="width:10px;height:10px;background:#3b82f6;border:2px solid #fff;border-radius:50%;margin:-5px 0 0 -5px;box-shadow:0 0 3px rgba(59,130,246,.8)"></div>';
-const _rulerDotIcon = () => L.divIcon({className:'', html:_rulerDotHtml, iconSize:[0,0]});
+// Dot icon: larger for easier drag, cursor:move
+function _rulerDotIcon(label){
+  const col = '#3b82f6';
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:14px;height:14px;background:${col};border:2.5px solid #fff;`+
+          `border-radius:50%;margin:-7px 0 0 -7px;box-shadow:0 0 5px rgba(59,130,246,.9);`+
+          `cursor:move;display:flex;align-items:center;justify-content:center;`+
+          `font-size:8px;color:#fff;font-weight:700">${label||''}</div>`,
+    iconSize: [0,0],
+  });
+}
+
+function _rulerRedraw(){
+  if(!_rulerPt1 || !_rulerPt2) return;
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  if(_rulerLine){ try{ map.removeLayer(_rulerLine); }catch(_){} }
+  _rulerLine = L.polyline([_rulerPt1, _rulerPt2], {
+    color: isDark ? '#60a5fa' : '#1d4ed8',
+    weight: 2.5, dashArray: '8 6', opacity: 1, interactive: false,
+  }).addTo(map);
+  _rulerPlaceLabel(_rulerPt1, _rulerPt2);
+}
+
+function _rulerMakeDraggable(marker, isStart){
+  marker.on('dragstart', ()=>{ map.dragging.disable(); });
+  marker.on('drag', ()=>{
+    const ll = marker.getLatLng();
+    if(isStart) _rulerPt1 = ll; else _rulerPt2 = ll;
+    _rulerRedraw();
+  });
+  marker.on('dragend', ()=>{
+    map.dragging.enable();
+    const ll = marker.getLatLng();
+    if(isStart) _rulerPt1 = ll; else _rulerPt2 = ll;
+    _rulerRedraw();
+  });
+}
 
 function toggleRuler(){
   if(_rulerActive) closeRuler();
@@ -5661,14 +5696,13 @@ function toggleRuler(){
 }
 
 function _rulerSetScaleState(on){
-  // Reflect ruler active state on the scale-line widget (bottom-left indicator)
   const sc = document.querySelector('.leaflet-control-scale');
   if(sc) sc.classList.toggle('ruler-on', on);
 }
 
 function startRuler(){
   _rulerActive = true;
-  _rulerPt1 = null;
+  _rulerPt1 = _rulerPt2 = null;
   document.getElementById('ruler-btn')?.classList.add('active');
   _rulerSetScaleState(true);
   map.getContainer().style.cursor = 'crosshair';
@@ -5681,12 +5715,11 @@ function closeRuler(){
   document.getElementById('ruler-btn')?.classList.remove('active');
   _rulerSetScaleState(false);
   map.getContainer().style.cursor = '';
-  // Remove all markers and lines
-  [_rulerMarker1, _rulerMarker2, _rulerLine, ..._rulerAllLines, ..._rulerAllDots]
-    .forEach(l => { try{ if(l) map.removeLayer(l); }catch(_){} });
-  _rulerMarker1 = _rulerMarker2 = _rulerLine = null;
-  _rulerAllLines = []; _rulerAllDots = [];
-  _rulerPt1 = null;
+  [_rulerMark1, _rulerMark2, _rulerLine].forEach(l=>{
+    try{ if(l) map.removeLayer(l); }catch(_){}
+  });
+  _rulerMark1 = _rulerMark2 = _rulerLine = null;
+  _rulerPt1 = _rulerPt2 = null;
   const disp = document.getElementById('ruler-display');
   if(disp) disp.classList.remove('visible');
 }
@@ -5703,7 +5736,6 @@ function _rulerPlaceLabel(pt1, pt2){
   const txt  = document.getElementById('ruler-text');
   if(!disp || !txt) return;
   txt.textContent = _rulerFormatDist(pt1.distanceTo(pt2));
-  // Clamp label inside map
   const mapEl = document.getElementById('map');
   const mw = mapEl ? mapEl.offsetWidth  : 800;
   const mh = mapEl ? mapEl.offsetHeight : 600;
@@ -5720,29 +5752,44 @@ function _rulerPlaceLabel(pt1, pt2){
 
 function _rulerOnClick(e){
   if(!_rulerActive) return;
+
   if(!_rulerPt1){
-    // First point
+    // First click → place start dot
     _rulerPt1 = e.latlng;
-    if(_rulerMarker1) map.removeLayer(_rulerMarker1);
-    _rulerMarker1 = L.marker(_rulerPt1, {icon:_rulerDotIcon(), interactive:false}).addTo(map);
-  } else {
-    const pt2 = e.latlng;
-    const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
-    // Remove previous segment and its start dot (keep only latest measurement)
-    if(_rulerLine){ try{ map.removeLayer(_rulerLine); }catch(_){} _rulerLine = null; }
-    if(_rulerMarker1){ try{ map.removeLayer(_rulerMarker1); }catch(_){} _rulerMarker1 = null; }
-    // Draw new segment
-    _rulerLine = L.polyline([_rulerPt1, pt2], {
-      color: isDark ? '#60a5fa' : '#1d4ed8',
-      weight: 2.5, dashArray: '8 6', opacity: 1, interactive: false,
+    if(_rulerMark1){ try{ map.removeLayer(_rulerMark1); }catch(_){} }
+    _rulerMark1 = L.marker(_rulerPt1, {
+      icon: _rulerDotIcon('A'), draggable: true, interactive: true, zIndexOffset: 1000,
     }).addTo(map);
-    // Dot at pt2 (becomes pt1 on next click)
-    const m2 = L.marker(pt2, {icon:_rulerDotIcon(), interactive:false}).addTo(map);
-    _rulerMarker1 = m2; // this dot is now "current pt1"
-    // Show distance label
-    _rulerPlaceLabel(_rulerPt1, pt2);
-    // Advance pt1 → pt2 for next segment
-    _rulerPt1 = pt2;
+    _rulerMakeDraggable(_rulerMark1, true);
+
+  } else if(!_rulerPt2){
+    // Second click → place end dot + draw segment
+    _rulerPt2 = e.latlng;
+    if(_rulerMark2){ try{ map.removeLayer(_rulerMark2); }catch(_){} }
+    _rulerMark2 = L.marker(_rulerPt2, {
+      icon: _rulerDotIcon('B'), draggable: true, interactive: true, zIndexOffset: 1000,
+    }).addTo(map);
+    _rulerMakeDraggable(_rulerMark2, false);
+    _rulerRedraw();
+
+  } else {
+    // Third+ click → move segment: old end becomes new start, new click is new end
+    // Remove old start marker, promote end→start
+    if(_rulerMark1){ try{ map.removeLayer(_rulerMark1); }catch(_){} _rulerMark1 = null; }
+    _rulerPt1 = _rulerPt2;
+    _rulerMark1 = _rulerMark2;
+    _rulerMark2 = null;
+    // Update icon to 'A'
+    _rulerMark1.setIcon(_rulerDotIcon('A'));
+    _rulerMakeDraggable(_rulerMark1, true);
+
+    // New end point
+    _rulerPt2 = e.latlng;
+    _rulerMark2 = L.marker(_rulerPt2, {
+      icon: _rulerDotIcon('B'), draggable: true, interactive: true, zIndexOffset: 1000,
+    }).addTo(map);
+    _rulerMakeDraggable(_rulerMark2, false);
+    _rulerRedraw();
   }
 }
 
@@ -5752,19 +5799,13 @@ function _rulerOnRightClick(e){
   closeRuler();
 }
 
-// Update label position on map pan/zoom
+// Update label on map pan/zoom
 map.on('move zoom', ()=>{
-  if(!_rulerActive || !_rulerPt1 || !_rulerLine) return;
-  const lls = _rulerLine.getLatLngs();
-  if(lls.length < 2) return;
-  // find pt before current pt1 (last archived line's end)
-  const fromPt = lls[0];
-  const toPt   = lls[1];
-  _rulerPlaceLabel(fromPt, toPt);
+  if(!_rulerActive || !_rulerPt1 || !_rulerPt2) return;
+  _rulerPlaceLabel(_rulerPt1, _rulerPt2);
 });
 
-// Escape and right-click close
-document.addEventListener('keydown', e=>{ if(e.key==='Escape' && _rulerActive){ closeRuler(); } });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape' && _rulerActive) closeRuler(); });
 map.on('contextmenu', _rulerOnRightClick);
 map.on('click', _rulerOnClick);
 
