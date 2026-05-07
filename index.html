@@ -7,7 +7,7 @@
      from file:// context (origin=null → strict-origin sends literal "null" → OSM blocks).
      Chrome was unaffected (sends no Referer from file://, OSM accepts Chrome UA).
      Each tile layer sets its own referrerPolicy via img.referrerPolicy attribute. -->
-<title>EkceloFoto v2.9.53</title>
+<title>EkceloFoto v2.9.54</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -975,7 +975,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.53</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.54</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -2864,9 +2864,40 @@ function toggleLayer(){
   }
 }
 
+// v2.9.54: track mouse-down position so click-after-drag doesn't trigger
+// the "Координаты" card. Without this, panning the map (mousedown → drag →
+// mouseup) ALWAYS ends with a synthetic `click` from Leaflet, which then
+// opens a coords card at the release point — exactly the bug the user
+// reported. Threshold = 5 px (covers tiny hand jitter on touchpads).
+let _mapDownPt = null;
+let _mapDragMoved = false;
+const _MAP_CLICK_TOLERANCE_PX = 5;
+map.on('mousedown', function(e){
+  if(!e.containerPoint) return;
+  _mapDownPt = e.containerPoint.clone();
+  _mapDragMoved = false;
+});
+map.on('mousemove', function(e){
+  if(!_mapDownPt || !e.containerPoint) return;
+  const dx = e.containerPoint.x - _mapDownPt.x;
+  const dy = e.containerPoint.y - _mapDownPt.y;
+  if(dx*dx + dy*dy > _MAP_CLICK_TOLERANCE_PX*_MAP_CLICK_TOLERANCE_PX){
+    _mapDragMoved = true;
+  }
+});
+map.on('mouseup', function(){
+  // Reset on next animation frame so the synthetic click that follows mouseup
+  // can still read _mapDragMoved correctly. After the click handler has had
+  // its chance to run, both flags are cleared to prevent stale state.
+  setTimeout(() => { _mapDownPt = null; _mapDragMoved = false; }, 0);
+});
+
 map.on('click',function(e){
   if(_rulerActive) return; // ruler handles its own clicks via separate listener
   if(manualGPSActive){handleMapClickForGPS(e);return;}
+  // v2.9.54: cursor moved between mousedown and mouseup → user was panning,
+  // not clicking — do NOT open the coords card. Flag is auto-reset in mouseup.
+  if(_mapDragMoved){ return; }
   // v2.9.36: suppress info-card pipeline while a contour is being edited.
   // _ce is set in startContourEditor, cleared in _disposeContourEditor.
   // Without this guard, every click during edit (drag-to-add-vertex, ПКМ, etc.)
@@ -7283,13 +7314,41 @@ function _kdConfirmInner(st){
     renderKMLDropdown();
     showToast(`✅ Записано в «${tgt.docName||tgt.filename}»`,'success',3000);
   } else if(_kdDest==='new'){
-    if(lyr) lyr.addTo(map);
+    // v2.9.54: register the new KML in kmlLayers so it appears in Метки
+    // AND can be exported to KMZ. Without this, lyr.addTo(map) only made it
+    // visible on the map but not part of any tracked layer — exportKMZ()
+    // iterates kmlLayers[*].cadPlacemarks → reported "Нечего экспортировать".
     const docName = name || cadNum || 'Контур';
-    const xml = _buildKMLDocument([styleXml],[placemarkXml], docName);
     const fname = `${cadNum.replace(/:/g,'_')||'kontur'}.kml`;
-    // Try FSA save dialog → user picks where; falls back to legacy download.
-    _saveKMLPickFolder(xml, fname);
+    const xml = _buildKMLDocument([styleXml],[placemarkXml], docName);
+    const lg = L.featureGroup();
+    if(lyr){ lyr.addTo(lg); }
+    lg.addTo(map);
+    const newEntry = {
+      filename: fname,
+      docName,
+      layerGroup: lg,
+      visible: true,
+      placemarkCount: 1,
+      parsedData: { docName, placemarks: [] },
+      cadPlacemarks: [{
+        cadNum, type:safeType, geom, lines:linesForTooltip, parts:cleanParts,
+        _leafletLayer: lyr || null,
+        _parentGroup:  lg,
+        _visible:      true,
+      }],
+      kmlText: xml,
+      handle: null,
+    };
+    kmlLayers.push(newEntry);
+    // Persist the file to disk and capture FSA handle for future re-saves.
+    _saveKMLPickFolderAndCapture(xml, fname, newEntry);
+    saveKMLLayersToStorage();
+    if(typeof updateKMLButton === 'function') updateKMLButton();
+    if(typeof renderKMLDropdown === 'function') renderKMLDropdown();
+    if(typeof renderMarksList === 'function' && _activeSidebarTab === 'marks') renderMarksList();
     _maybeOfferCentroidWriteback(cadNum, geom);
+    showToast(`✅ Создан слой «${docName}»`,'success',3000);
   } else if(_kdDest==='disk'){
     if(!_kdDiskKMLText){ showToast('Файл не выбран','warn',3000); _kdPendingGeom=null; return; }
     if(lyr) lyr.addTo(map);
@@ -7299,6 +7358,50 @@ function _kdConfirmInner(st){
     } else {
       _downloadBlob(updated, _kdDiskFilename||'updated.kml');
     }
+    // v2.9.54: also register in kmlLayers if not already tracked, so the
+    // contour appears in Метки and in KMZ export. We check by filename to
+    // avoid double-registering when the user dozapisivaet to an already-open layer.
+    const _existing = (kmlLayers||[]).find(l =>
+      l.filename === _kdDiskFilename || (l.handle && _kdDiskHandle && l.handle === _kdDiskHandle)
+    );
+    if(_existing){
+      // Append placemark to the already-tracked layer
+      if(!_existing.cadPlacemarks) _existing.cadPlacemarks = [];
+      _existing.cadPlacemarks.push({
+        cadNum, type:safeType, geom, lines:linesForTooltip, parts:cleanParts,
+        _leafletLayer: lyr || null,
+        _parentGroup:  _existing.layerGroup,
+        _visible:      true,
+      });
+      _existing.placemarkCount = (_existing.placemarkCount||0) + 1;
+      _existing.kmlText = updated;
+      if(lyr && _existing.layerGroup) lyr.addTo(_existing.layerGroup);
+    } else {
+      // Create a fresh layer entry for the disk file we just appended to
+      const lg = L.featureGroup();
+      if(lyr){ lyr.addTo(lg); }
+      lg.addTo(map);
+      kmlLayers.push({
+        filename: _kdDiskFilename || 'updated.kml',
+        docName: (name || cadNum || _kdDiskFilename || 'Контуры'),
+        layerGroup: lg,
+        visible: true,
+        placemarkCount: 1,
+        parsedData: { docName: _kdDiskFilename, placemarks: [] },
+        cadPlacemarks: [{
+          cadNum, type:safeType, geom, lines:linesForTooltip, parts:cleanParts,
+          _leafletLayer: lyr || null,
+          _parentGroup:  lg,
+          _visible:      true,
+        }],
+        kmlText: updated,
+        handle: _kdDiskHandle || null,
+      });
+    }
+    saveKMLLayersToStorage();
+    if(typeof updateKMLButton === 'function') updateKMLButton();
+    if(typeof renderKMLDropdown === 'function') renderKMLDropdown();
+    if(typeof renderMarksList === 'function' && _activeSidebarTab === 'marks') renderMarksList();
     _maybeOfferCentroidWriteback(cadNum, geom);
     showToast(`✅ Дозаписано в «${_kdDiskFilename}»`,'success',3000);
   }
