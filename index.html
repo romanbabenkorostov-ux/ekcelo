@@ -7,7 +7,7 @@
      from file:// context (origin=null → strict-origin sends literal "null" → OSM blocks).
      Chrome was unaffected (sends no Referer from file://, OSM accepts Chrome UA).
      Each tile layer sets its own referrerPolicy via img.referrerPolicy attribute. -->
-<title>EkceloFoto v2.9.51</title>
+<title>EkceloFoto v2.9.52</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -398,7 +398,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
      Moves GPU compositing to one layer for all tiles → no per-tile
      translate3d() rounding divergence. Fixes Firefox + Yandex.
 
-   LAYER 2 — mix-blend-mode: plus-lighter on img.leaflet-tile (v2.9.38):
+   LAYER 2 — mix-blend-mode: plus-lighter on img.leaflet-tile (v2.9.38, confirmed v2.9.51):
      Chrome-specific bug (chromium.org/issues/600120): even with filter
      on pane, Chrome's rasterizer creates a separate compositing layer
      per tile image due to its GPU tile-raster pipeline. Adjacent tiles
@@ -418,19 +418,20 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
    ────────────────────────────────────────────────────────────────── */
 .leaflet-tile-pane{
   background: var(--map-bg);
-  filter: var(--map-filter);        /* Layer 1: one compositing unit for all tiles */
-  will-change: transform;           /* Chrome: force single GPU layer for entire pane */
-  transform: translateZ(0);         /* Chrome: promote to compositing layer immediately */
-  isolation: isolate;               /* Contain blending context within this pane */
+  filter: var(--map-filter);  /* One GPU compositing layer for ALL tiles.
+     filter already creates a stacking context — NO will-change/translateZ/isolation needed.
+     Those extras cause Blink (Chrome/Yandex) to create too many nested GPU layers
+     → GPU rasterization failure → white squares. Keep only filter. */
 }
 .leaflet-container img.leaflet-tile{
-  /* Layer 2: Chrome GPU rasterizer gap fix (Leaflet #3575 / Chromium #600120).
-     plus-lighter math: adjacent tiles share edge → C=min(A+B,1)≈tile color, not white.
-     Works because isolation:isolate on the pane creates a shared blending context. */
+  /* Chrome/Yandex seam fix (Leaflet #3575 / Chromium #600120):
+     mix-blend-mode: plus-lighter makes Blink composite tile <img> elements in a shared
+     blending context within the filtered pane → no 1px gaps between tiles.
+     filter on parent already creates the stacking context this needs. */
   mix-blend-mode: plus-lighter;
 }
 .leaflet-tile{
-  outline: 1px solid transparent; /* Layer 3: sub-pixel crack suppressor */
+  outline: 1px solid transparent; /* WebKit/Blink sub-pixel crack suppressor */
 }
 .leaflet-control-zoom a{background:var(--surface) !important;color:var(--text) !important;border-color:var(--border) !important}
 .leaflet-control-zoom a:hover{background:var(--surface2) !important}
@@ -996,7 +997,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.51</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.52</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
