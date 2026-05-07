@@ -394,6 +394,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 /* ── TILE SEAM FIX (v2.9.53 — restoring v2.9.38 working baseline) ──
    Three-layer defence (unchanged from working v2.9.38):
 
+   ⚠️  IMPORTANT: A "white grid between tiles" symptom that ONLY appears on
+   GitHub Pages / HTTPS hosting (and NOT from local file://) is a DIFFERENT
+   bug — OSM 403r tile blocking, not a CSS compositing seam. See the
+   `_patchReferrerPolicy` patch in JS (search for "OSM/Esri tile layers +
+   per-img referrerPolicy"). Both fixes coexist; CSS is for sub-pixel seams,
+   the JS patch is for OSM tile usage policy compliance.
+
    v2.9.52 broke tile seams via TWO independent regressions:
      1) --map-filter: brightness(1.001) — too close to identity, Blink
         may collapse the pane's filter compositing layer, defeating the
@@ -1431,17 +1438,65 @@ L.control.scale({imperial:false,metric:true,position:'bottomleft'}).addTo(map);
 // rectangles of pane background visible — the white grid the user reported.
 // The IIFE is preserved as a no-op for diff readability; the only reliable
 // fix is to NOT touch tile dimensions and let Leaflet position via translate3d.
+// ── OSM/Esri tile layers + per-img referrerPolicy patch (v2.9.53) ─────
+// CRITICAL FIX for "white grid between tiles" on GitHub Pages / HTTPS hosting.
+//
+// PROBLEM: Since March 2026 OSM enforces tile usage policy:
+//   https://operations.osmfoundation.org/policies/tiles/
+//   https://wiki.openstreetmap.org/wiki/Referer
+// When browser sends NO Referer header (or one OSM blacklists), tile.openstreetmap.org
+// returns HTTP 200 with a PNG image saying "403r Access blocked. Referer is required".
+// That blocked-tile PNG has a near-white background → renders AS A WHITE GRID
+// between the tiles that DID load successfully. NOT a CSS-seam issue, even though
+// it looks identical. Random ~50% of tiles get blocked under brownout enforcement.
+//
+// SYMPTOM: White-grid bug appears on github.io HTTPS hosting but NOT from local Win10.
+//   Win10 file:// → Chrome sends NO Referer → OSM lets it through (legacy fallback).
+//   GitHub Pages https → browser default policy may strip / send wrong Referer →
+//   OSM treats it as a scraper signal → 403r tile.
+//
+// FIX: Per-img referrerPolicy='strict-origin-when-cross-origin'. Per OSM official
+// list of compliant policies (osm.wiki/Referer), this sends `Referer: https://yoursite/`
+// (origin only, no path) which is OSM-policy compliant. Per-img setting overrides
+// document-level Referrer-Policy and works from any context (file://, http, https).
+// Same patch applies to Esri (cheap insurance — they don't enforce, but identical
+// code path keeps maintenance simple).
+//
+// Why we DON'T set it on the L.tileLayer({referrerPolicy:...}) options:
+//   Leaflet 1.9.4 simply IGNORES that option (no-op) — only post-1.9.4 PR #9883
+//   makes it work natively. Patching createTile() bypasses the version dependency.
+//
+// Why we DON'T use <meta name="referrer"> at document level:
+//   v2.9.39 retrospective (bugfix_summary_v2936_to_v2939.md) — that broke Firefox
+//   from file:// (origin=null → Referer:"null" → OSM rejects). Per-img scoped.
+
 (function fixTileSeams(){ /* intentionally empty — see CSS comment in TILE SEAM FIX block */ })();
-// OSM tileLayer — no createTile patch needed.
-// Setting referrerPolicy on img caused white tiles in Chrome/Yandex when opening
-// from file:// (no-referrer-when-downgrade = no Referer → OSM 403 → blank tile).
-// Browser default referrer behavior (no-referrer-when-downgrade) from https:// works fine.
-const _osmTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-  {attribution:'© OpenStreetMap',maxZoom:22,maxNativeZoom:19});
+
+// Helper: patch a TileLayer's createTile to set img.referrerPolicy on every tile.
+function _patchReferrerPolicy(tileLayer, policy){
+  const _orig = tileLayer.createTile.bind(tileLayer);
+  tileLayer.createTile = function(coords, done){
+    const img = _orig(coords, done);
+    if (img && img.tagName === 'IMG') img.referrerPolicy = policy;
+    return img;
+  };
+  return tileLayer;
+}
+
+const _osmTileLayer = _patchReferrerPolicy(
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    {attribution:'© OpenStreetMap',maxZoom:22,maxNativeZoom:19}),
+  'strict-origin-when-cross-origin'
+);
+const _satTileLayer = _patchReferrerPolicy(
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    {attribution:'© Esri',maxZoom:22,maxNativeZoom:19}),
+  'strict-origin-when-cross-origin'
+);
 
 const TILES={
   osm: _osmTileLayer,
-  sat:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri',maxZoom:22,maxNativeZoom:19}),
+  sat: _satTileLayer,
   // White background: 1×1 white PNG tile — no imagery, just clean background for contour parsing
   white:L.tileLayer('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==',{attribution:'',maxZoom:22,opacity:0})
 };
