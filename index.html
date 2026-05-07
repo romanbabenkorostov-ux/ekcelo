@@ -77,7 +77,7 @@
   --warn: #b45309;
   --shadow: 0 8px 32px rgba(0,0,0,.12);
   --shadow-sm: 0 2px 8px rgba(0,0,0,.08);
-  --map-filter: brightness(1) saturate(1);
+  --map-filter: brightness(1.001);  /* non-trivial: forces Chromium compositing layer */
   --map-bg: #ede9e3;  /* matches OSM/Esri tile edge color → seams invisible */
   --scroll-thumb: #b0aca4;
   --scroll-track: #f0ede8;
@@ -105,7 +105,7 @@
     --warn: #b45309;
     --shadow: 0 8px 32px rgba(0,0,0,.12);
     --shadow-sm: 0 2px 8px rgba(0,0,0,.08);
-    --map-filter: brightness(1) saturate(1);
+    --map-filter: brightness(1.001);  /* non-trivial filter → Chromium compositing layer */
     --map-bg: #ede9e3;  /* matches OSM/Esri tile edge color → seams invisible */
     --scroll-thumb: #c8c4bc;
     --scroll-track: #f0ede8;
@@ -1419,21 +1419,12 @@ L.control.scale({imperial:false,metric:true,position:'bottomleft'}).addTo(map);
 // The IIFE is preserved as a no-op for diff readability; the only reliable
 // fix is to NOT touch tile dimensions and let Leaflet position via translate3d.
 (function fixTileSeams(){ /* intentionally empty — see CSS comment in TILE SEAM FIX block */ })();
-// v2.9.39: OSM tiles require Referer header (enforced since March 2026).
-// Leaflet 1.9.4 does NOT natively propagate `referrerPolicy` option to img elements.
-// We patch createTile() to set img.referrerPolicy directly on each tile <img>.
-// This per-element attribute always overrides the document-level referrer policy,
-// including the "null" origin problem when running from file://.
-// 'no-referrer-when-downgrade' = send Referer on https→https (origin URL), skip on downgrades.
+// OSM tileLayer — no createTile patch needed.
+// Setting referrerPolicy on img caused white tiles in Chrome/Yandex when opening
+// from file:// (no-referrer-when-downgrade = no Referer → OSM 403 → blank tile).
+// Browser default referrer behavior (no-referrer-when-downgrade) from https:// works fine.
 const _osmTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
   {attribution:'© OpenStreetMap',maxZoom:22,maxNativeZoom:19});
-_osmTileLayer.createTile = (function(_orig){
-  return function(coords, done){
-    const img = _orig.call(this, coords, done);
-    img.referrerPolicy = 'no-referrer-when-downgrade';
-    return img;
-  };
-})(_osmTileLayer.createTile.bind(_osmTileLayer));
 
 const TILES={
   osm: _osmTileLayer,
