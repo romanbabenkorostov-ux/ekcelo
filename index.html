@@ -7,7 +7,7 @@
      from file:// context (origin=null → strict-origin sends literal "null" → OSM blocks).
      Chrome was unaffected (sends no Referer from file://, OSM accepts Chrome UA).
      Each tile layer sets its own referrerPolicy via img.referrerPolicy attribute. -->
-<title>EkceloFoto v2.9.46</title>
+<title>EkceloFoto v2.9.51</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -441,7 +441,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 [data-theme="light"] .leaflet-control-attribution a,
 [data-theme="system"] .leaflet-control-attribution a{color:#333 !important}
 .leaflet-control-scale{opacity:.92}
-.leaflet-control-scale-line{background:rgba(var(--bg-rgb,13,15,20),.72) !important;border:2px solid var(--text) !important;border-top:none !important;color:var(--text) !important;font-family:'JetBrains Mono',monospace !important;font-size:10px !important;font-weight:400 !important;padding:1px 4px !important;backdrop-filter:blur(3px)}
+.leaflet-control-scale-line{background:rgba(var(--bg-rgb,13,15,20),.72) !important;border:2px solid var(--text) !important;border-top:none !important;color:var(--text) !important;font-family:'JetBrains Mono',monospace !important;font-size:10px !important;font-weight:400 !important;padding:1px 4px !important;backdrop-filter:blur(3px);cursor:pointer !important;pointer-events:auto !important;user-select:none !important}
+.leaflet-control-scale-line:hover{opacity:.75}
+.leaflet-control-scale.ruler-on .leaflet-control-scale-line{border-color:var(--accent) !important;color:var(--accent) !important;background:rgba(232,255,71,.12) !important}
 [data-theme="light"] .leaflet-control-scale-line,[data-theme="system"] .leaflet-control-scale-line{background:rgba(255,255,255,.78) !important;border-color:#222 !important;color:#111 !important}
 #map-hint{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;pointer-events:none;z-index:500;transition:opacity .4s}
 #map-hint.hidden{opacity:0}
@@ -575,16 +577,16 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #ruler-display{position:absolute;z-index:600;pointer-events:none;display:none;
   font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:400;
   color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.9);white-space:nowrap}
-#ruler-display.visible{display:flex;align-items:center;gap:6px}
+#ruler-display.visible{display:flex;align-items:center;gap:6px;pointer-events:auto}
 #ruler-close{pointer-events:auto;background:rgba(0,0,0,.55);border:none;
   color:#fff;cursor:pointer;border-radius:50%;width:20px;height:20px;
   display:flex;align-items:center;justify-content:center;font-size:13px;line-height:1;padding:0}
 #ruler-close:hover{background:rgba(255,60,60,.7)}
 [data-theme="light"] #ruler-display,[data-theme="system"] #ruler-display{color:#111;text-shadow:0 1px 3px rgba(255,255,255,.9)}
 [data-theme="light"] #ruler-close,[data-theme="system"] #ruler-close{background:rgba(255,255,255,.75);color:#111}
-#ruler-btn{background:var(--surface);border:1px solid var(--border);color:var(--text);
-  padding:0 10px;height:28px;border-radius:5px;cursor:pointer;font-size:11px;
-  font-family:'JetBrains Mono',monospace;white-space:nowrap;transition:all .12s}
+#ruler-btn{position:absolute;top:12px;right:490px;z-index:600;background:var(--surface);border:1px solid var(--border);color:var(--text);
+  padding:6px 11px;height:auto;border-radius:var(--r);cursor:pointer;font-size:11px;
+  font-family:'JetBrains Mono',monospace;white-space:nowrap;transition:all .15s;box-shadow:var(--shadow-sm)}
 #ruler-btn:hover{background:var(--surface2)}
 #ruler-btn.active{background:var(--accent);color:#0d0f14;border-color:var(--accent)}
 #zoom-indicator{position:absolute;top:96px;left:10px;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent);pointer-events:none;letter-spacing:.5px;backdrop-filter:blur(4px);opacity:.9;box-shadow:var(--shadow-sm)}
@@ -650,10 +652,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #timeline-reset{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:var(--r);padding:4px 10px;font-size:10px;cursor:pointer;flex-shrink:0}
 #timeline-reset:hover{border-color:var(--accent);color:var(--accent)}
 .timeline-track{position:relative;height:36px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;box-shadow:inset 0 1px 4px rgba(0,0,0,.2);overflow:hidden}
-.timeline-selected-bar{position:absolute;top:5px;bottom:5px;background:var(--accent);opacity:.22;border-radius:4px;pointer-events:none}
-.timeline-handle{position:absolute;top:0px;width:18px;height:36px;background:#fff;border:2px solid var(--accent);border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px -1px rgba(232,255,71,.6);z-index:20;user-select:none;transform:translateX(-50%)}
-.timeline-handle.start::before{content:'◀';font-size:12px;color:#0d0f14}
-.timeline-handle.end::before{content:'▶';font-size:12px;color:#0d0f14}
+.timeline-selected-bar{position:absolute;top:6px;bottom:6px;background:var(--accent);opacity:.22;border-radius:3px;pointer-events:none}
+.timeline-handle{position:absolute;top:4px;width:16px;height:28px;background:#fff;border:2px solid var(--accent);border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 6px -1px rgba(232,255,71,.5);z-index:20;user-select:none;transform:translateX(-50%)}
+.timeline-handle.start::before{content:'◀';font-size:10px;color:#0d0f14}
+.timeline-handle.end::before{content:'▶';font-size:10px;color:#0d0f14}
 /* Timeline dots: normal, in-range, folder-match, folder-dim, active */
 .timeline-dot::before{content:'';position:absolute;inset:-4px;border-radius:50%}
 .timeline-dot{position:absolute;top:68%;width:8px;height:8px;background:#505870;border:1.5px solid rgba(255,255,255,.25);border-radius:50%;transform:translateY(-50%);z-index:10;pointer-events:auto;cursor:pointer;transition:transform .1s}
@@ -878,6 +880,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #dup-modal .dm-info code{display:block;margin-top:6px;background:rgba(255,255,255,.04);padding:5px 7px;border-radius:3px;font-size:10px;color:var(--muted);word-break:break-all}
 #dup-modal .dm-actions{display:flex;flex-direction:column;gap:6px}
 #dup-modal .dm-btn{padding:8px 14px;border:1px solid var(--border);border-radius:5px;background:var(--bg);color:var(--text);font-family:inherit;font-size:11px;cursor:pointer;transition:all .15s;text-align:left}
+.dm-btn.dm-overwrite{background:rgba(34,197,94,.15);border-color:rgba(34,197,94,.6);color:#22c55e}
 #dup-modal .dm-cancel{border-color:#6cd96c;color:#6cd96c}
 #dup-modal .dm-cancel:hover{background:rgba(108,217,108,.1)}
 #dup-modal .dm-edit{border-color:var(--accent2);color:var(--accent2)}
@@ -993,7 +996,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.46</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.51</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -1391,6 +1394,20 @@ const map=L.map('map',{center:[55.75,37.61],zoom:5,zoomControl:true,maxZoom:22})
 delete L.Icon.Default.prototype._getIconUrl;
 map.attributionControl.setPrefix(false);
 L.control.scale({imperial:false,metric:true,position:'bottomleft'}).addTo(map);
+// Wire scale-line (bottom-left distance indicator) to toggle ruler
+// Uses MutationObserver because the scale DOM is created asynchronously by Leaflet
+(function _wireScaleClick(){
+  function _attach(){
+    const sl = document.querySelector('.leaflet-control-scale-line');
+    if(!sl){ setTimeout(_attach, 100); return; }
+    sl.addEventListener('click', function(e){
+      e.stopPropagation();
+      toggleRuler();
+    });
+    sl.title = 'Кликните чтобы включить/выключить линейку измерения';
+  }
+  _attach();
+})();
 
 // ── TILE SEAM FIX (v2.9.36) ────────────────────────────────────────
 // Earlier (v2.9.33) attempt forced width:257px + margin:-1px on every tile
@@ -2491,7 +2508,10 @@ function startContourEditor(geom, type, cadNum, prefillDesc){
     polygon, vertices:[], midpoints:[],
     type, cadNum:cadNum||'', prefillDesc:prefillDesc||'',
     originalLL: ll.map(p=>p.slice()),  // deep copy for "revert" support
-    photosWereVisible
+    photosWereVisible,
+    // v2.9.47: source marker reference — set by _editContourFromCard so that
+    // on save we know which existing cadPlacemark to REPLACE instead of adding a copy.
+    sourceMarker: null,
   };
   ll.forEach((p,i) => _ce.vertices.push(_makeVertexMarker(p, i)));
   _refreshMidpoints();
@@ -2875,6 +2895,7 @@ function toggleLayer(){
 }
 
 map.on('click',function(e){
+  if(_rulerActive) return; // ruler handles its own clicks via separate listener
   if(manualGPSActive){handleMapClickForGPS(e);return;}
   // v2.9.36: suppress info-card pipeline while a contour is being edited.
   // _ce is set in startContourEditor, cleared in _disposeContourEditor.
@@ -3261,23 +3282,23 @@ window._editContourFromCard = function(markerId){
   if(pm?.geom){
     const geom = pm.geom;
     closeAllInfoCards();
-    if(geom.type === 'Polygon'){
-      startContourEditor(geom, grp, cadNum, '');
-    } else if(geom.type === 'MultiPolygon' && geom.coordinates?.[0]){
-      startContourEditor({type:'Polygon', coordinates:geom.coordinates[0]}, grp, cadNum, '');
-    } else {
+    const startGeom = (geom.type === 'MultiPolygon' && geom.coordinates?.[0])
+      ? {type:'Polygon', coordinates:geom.coordinates[0]}
+      : geom;
+    if(startGeom.type !== 'Polygon'){
       showToast('Тип геометрии не поддерживается: '+geom.type,'warn',3000);
+      return;
     }
+    startContourEditor(startGeom, grp, cadNum, '');
+    // Store reference to the source marker so save can REPLACE it
+    if(_ce) _ce.sourceMarker = m;
     return;
   }
 
   // ── Source 2: parsedData.placemarks (KML files) — pm.coords is [[lat,lon],...] ──
-  // Convert Leaflet-format coords [[lat,lon]] → GeoJSON Polygon [[lon,lat]]
   if(pm?.coords && pm.type !== 'Point'){
     const ring = Array.isArray(pm.coords[0]) ? pm.coords : [pm.coords];
-    // ring is [[lat,lon],...]; GeoJSON needs [[lon,lat],...]
     const geoRing = ring.map(pt => Array.isArray(pt) ? [pt[1], pt[0]] : pt);
-    // Close ring if not closed
     if(geoRing.length > 1){
       const f = geoRing[0], l = geoRing[geoRing.length-1];
       if(f[0] !== l[0] || f[1] !== l[1]) geoRing.push([...f]);
@@ -3285,6 +3306,7 @@ window._editContourFromCard = function(markerId){
     const geom = {type:'Polygon', coordinates:[geoRing]};
     closeAllInfoCards();
     startContourEditor(geom, grp, cadNum, '');
+    if(_ce) _ce.sourceMarker = m;
     return;
   }
 
@@ -3496,7 +3518,10 @@ async function loadFromGoogleDrive(){
 
 // ═══ PHOTO REGISTRY ═══════════════════════════════════════════════
 function addPhoto(photo){
-  if(photo.date&&!photo.dateObj)photo.dateObj=parsePhotoDate(photo.date);
+  // Ensure dateObj for all sources (local, GDrive, Yandex, URL, KML)
+  if(photo.date && !(photo.dateObj instanceof Date)){
+    photo.dateObj = parsePhotoDate(photo.date) || undefined;
+  }
   if(!photo.dateObj&&photo.file?.lastModified)photo._sortTs=photo.file.lastModified;
   photos.push({marker:null,locPath:'',dateMismatch:false,fileHandle:null,...photo});
   const idx=photos.length-1;
@@ -5611,39 +5636,57 @@ async function writeEXIFWithGPS(){
 
 
 // ═══════════════════════════════════════════════════════════════════
-// RULER TOOL — measure distance between two map points
-// Click: place first point → click again: place second point, show distance.
-// Blue dashed line on map, distance overlay on map (not a popup window).
-// Closes with ×, Escape, or clicking Линейка button again.
+// RULER TOOL v2
+// • Click on #ruler-display (the 📏 label area) → activates ruler
+// • Cursor on map → crosshair while ruler is active
+// • Click 1 on map → first point (blue dot)
+// • Click 2 on map → second point, shows distance, dashed blue line
+// • Click 3+ → shifts pair: pt2 becomes new pt1, new line to click point
+// • Right-click or Escape → close ruler
 // ═══════════════════════════════════════════════════════════════════
 let _rulerActive = false;
-let _rulerPt1 = null;   // L.LatLng
-let _rulerPt2 = null;
-let _rulerLine = null;  // L.Polyline
-let _rulerMarker1 = null;
-let _rulerMarker2 = null;
+let _rulerPt1    = null;   // L.LatLng — "from" point
+let _rulerMarker1 = null;  // blue dot at pt1
+let _rulerLine    = null;  // current dashed segment
+let _rulerMarker2 = null;  // blue dot at pt2
+let _rulerAllLines = [];   // all previous segments (kept visible)
+let _rulerAllDots  = [];   // all dots except current pt1
+
+const _rulerDotHtml = '<div style="width:10px;height:10px;background:#3b82f6;border:2px solid #fff;border-radius:50%;margin:-5px 0 0 -5px;box-shadow:0 0 3px rgba(59,130,246,.8)"></div>';
+const _rulerDotIcon = () => L.divIcon({className:'', html:_rulerDotHtml, iconSize:[0,0]});
 
 function toggleRuler(){
   if(_rulerActive) closeRuler();
   else startRuler();
 }
 
+function _rulerSetScaleState(on){
+  // Reflect ruler active state on the scale-line widget (bottom-left indicator)
+  const sc = document.querySelector('.leaflet-control-scale');
+  if(sc) sc.classList.toggle('ruler-on', on);
+}
+
 function startRuler(){
   _rulerActive = true;
-  _rulerPt1 = _rulerPt2 = null;
+  _rulerPt1 = null;
   document.getElementById('ruler-btn')?.classList.add('active');
+  _rulerSetScaleState(true);
   map.getContainer().style.cursor = 'crosshair';
-  showToast('📏 Кликните первую точку','info',2500);
+  map._rulerConsuming = true;
 }
 
 function closeRuler(){
   _rulerActive = false;
-  _rulerPt1 = _rulerPt2 = null;
+  map._rulerConsuming = false;
   document.getElementById('ruler-btn')?.classList.remove('active');
+  _rulerSetScaleState(false);
   map.getContainer().style.cursor = '';
-  if(_rulerLine){ map.removeLayer(_rulerLine); _rulerLine = null; }
-  if(_rulerMarker1){ map.removeLayer(_rulerMarker1); _rulerMarker1 = null; }
-  if(_rulerMarker2){ map.removeLayer(_rulerMarker2); _rulerMarker2 = null; }
+  // Remove all markers and lines
+  [_rulerMarker1, _rulerMarker2, _rulerLine, ..._rulerAllLines, ..._rulerAllDots]
+    .forEach(l => { try{ if(l) map.removeLayer(l); }catch(_){} });
+  _rulerMarker1 = _rulerMarker2 = _rulerLine = null;
+  _rulerAllLines = []; _rulerAllDots = [];
+  _rulerPt1 = null;
   const disp = document.getElementById('ruler-display');
   if(disp) disp.classList.remove('visible');
 }
@@ -5653,56 +5696,60 @@ function _rulerFormatDist(m){
   return `${(m/1000).toFixed(1)} км`;
 }
 
+function _rulerPlaceLabel(pt1, pt2){
+  const mid = L.latLng((pt1.lat+pt2.lat)/2, (pt1.lng+pt2.lng)/2);
+  const midPx = map.latLngToContainerPoint(mid);
+  const disp = document.getElementById('ruler-display');
+  const txt  = document.getElementById('ruler-text');
+  if(!disp || !txt) return;
+  txt.textContent = _rulerFormatDist(pt1.distanceTo(pt2));
+  // Clamp label inside map
+  const mapEl = document.getElementById('map');
+  const mw = mapEl ? mapEl.offsetWidth  : 800;
+  const mh = mapEl ? mapEl.offsetHeight : 600;
+  const lw = disp.offsetWidth  || 100;
+  const lh = disp.offsetHeight || 28;
+  const margin = 8;
+  const lx = Math.max(margin, Math.min(mw - lw - margin, midPx.x - lw/2));
+  const ly = Math.max(margin, Math.min(mh - lh - margin, midPx.y - lh - 8));
+  disp.style.left = lx + 'px';
+  disp.style.top  = ly + 'px';
+  disp.style.transform = 'none';
+  disp.classList.add('visible');
+}
+
 function _rulerOnClick(e){
   if(!_rulerActive) return;
   if(!_rulerPt1){
+    // First point
     _rulerPt1 = e.latlng;
-    // Small dot marker
-    const dotIcon = L.divIcon({className:'',html:'<div style="width:10px;height:10px;background:#3b82f6;border:2px solid #fff;border-radius:50%;margin:-5px 0 0 -5px;box-shadow:0 0 4px rgba(59,130,246,.9)"></div>',iconSize:[0,0]});
-    _rulerMarker1 = L.marker(_rulerPt1, {icon: dotIcon, interactive: false}).addTo(map);
-    showToast('📏 Кликните вторую точку','info',2500);
-  } else {
-    _rulerPt2 = e.latlng;
-    const dist = _rulerPt1.distanceTo(_rulerPt2); // metres, Haversine
-
-    // Blue dashed polyline
-    if(_rulerLine) map.removeLayer(_rulerLine);
-    const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
-    _rulerLine = L.polyline([_rulerPt1, _rulerPt2], {
-      color: isDark ? '#60a5fa' : '#1d4ed8',
-      weight: 2.5,
-      dashArray: '8 6',
-      opacity: 1,
-      interactive: false,
-    }).addTo(map);
-
-    const dotIcon2 = L.divIcon({className:'',html:'<div style="width:10px;height:10px;background:#3b82f6;border:2px solid #fff;border-radius:50%;margin:-5px 0 0 -5px;box-shadow:0 0 4px rgba(59,130,246,.9)"></div>',iconSize:[0,0]});
-    if(_rulerMarker2) map.removeLayer(_rulerMarker2);
-    _rulerMarker2 = L.marker(_rulerPt2, {icon: dotIcon2, interactive: false}).addTo(map);
-
-    // Position distance label at midpoint of line on screen
-    const mid = L.latLng((+_rulerPt1.lat + +_rulerPt2.lat)/2, (+_rulerPt1.lng + +_rulerPt2.lng)/2);
-    const midPx = map.latLngToContainerPoint(mid);
-    const mapEl = document.getElementById('map');
-    const mr = mapEl ? mapEl.getBoundingClientRect() : {left:0,top:0};
-    const disp = document.getElementById('ruler-display');
-    const txt  = document.getElementById('ruler-text');
-    if(disp && txt){
-      txt.textContent = _rulerFormatDist(dist);
-      disp.style.left = midPx.x + 'px';
-      disp.style.top  = midPx.y + 'px';
-      disp.style.transform = 'translate(-50%,-150%)';
-      disp.classList.add('visible');
-    }
-
-    // Ready for next measurement from pt2, or close
-    _rulerPt1 = _rulerPt2;
-    _rulerPt2 = null;
     if(_rulerMarker1) map.removeLayer(_rulerMarker1);
-    _rulerMarker1 = _rulerMarker2;
-    _rulerMarker2 = null;
-    showToast('📏 Кликните следующую точку или × для закрытия','info',2000);
+    _rulerMarker1 = L.marker(_rulerPt1, {icon:_rulerDotIcon(), interactive:false}).addTo(map);
+  } else {
+    const pt2 = e.latlng;
+    const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+    // Remove previous segment and its start dot (keep only latest measurement)
+    if(_rulerLine){ try{ map.removeLayer(_rulerLine); }catch(_){} _rulerLine = null; }
+    if(_rulerMarker1){ try{ map.removeLayer(_rulerMarker1); }catch(_){} _rulerMarker1 = null; }
+    // Draw new segment
+    _rulerLine = L.polyline([_rulerPt1, pt2], {
+      color: isDark ? '#60a5fa' : '#1d4ed8',
+      weight: 2.5, dashArray: '8 6', opacity: 1, interactive: false,
+    }).addTo(map);
+    // Dot at pt2 (becomes pt1 on next click)
+    const m2 = L.marker(pt2, {icon:_rulerDotIcon(), interactive:false}).addTo(map);
+    _rulerMarker1 = m2; // this dot is now "current pt1"
+    // Show distance label
+    _rulerPlaceLabel(_rulerPt1, pt2);
+    // Advance pt1 → pt2 for next segment
+    _rulerPt1 = pt2;
   }
+}
+
+function _rulerOnRightClick(e){
+  if(!_rulerActive) return;
+  L.DomEvent.preventDefault(e.originalEvent);
+  closeRuler();
 }
 
 // Update label position on map pan/zoom
@@ -5710,23 +5757,32 @@ map.on('move zoom', ()=>{
   if(!_rulerActive || !_rulerPt1 || !_rulerLine) return;
   const lls = _rulerLine.getLatLngs();
   if(lls.length < 2) return;
-  const mid = L.latLng((lls[0].lat+lls[1].lat)/2, (lls[0].lng+lls[1].lng)/2);
-  const midPx = map.latLngToContainerPoint(mid);
+  // find pt before current pt1 (last archived line's end)
+  const fromPt = lls[0];
+  const toPt   = lls[1];
+  _rulerPlaceLabel(fromPt, toPt);
+});
+
+// Escape and right-click close
+document.addEventListener('keydown', e=>{ if(e.key==='Escape' && _rulerActive){ closeRuler(); } });
+map.on('contextmenu', _rulerOnRightClick);
+map.on('click', _rulerOnClick);
+
+// Activate ruler when user clicks on the distance display zone
+document.addEventListener('DOMContentLoaded', ()=>{
   const disp = document.getElementById('ruler-display');
-  if(disp && disp.classList.contains('visible')){
-    disp.style.left = midPx.x + 'px';
-    disp.style.top  = midPx.y + 'px';
+  if(disp){
+    disp.addEventListener('click', e=>{
+      // Only toggle if clicking the display itself (not the × close button)
+      if(e.target.id !== 'ruler-close') toggleRuler();
+    });
   }
 });
 
-// Close on Escape
-document.addEventListener('keydown', e=>{ if(e.key==='Escape' && _rulerActive) closeRuler(); });
-
-// Wire into map click — AFTER map is ready
-map.on('click', _rulerOnClick);
-
 // ═══ TIMELINE ══════════════════════════════════════════════════════
 let filterStart=null,filterEnd=null,minDateGlobal=null,maxDateGlobal=null,datedPhotosGlobal=[];
+let _dotHeld=null;        // photo held by mousedown for wheel-zoom
+let _wheelZoomRadius=null; // ms half-width of wheel-zoom range
 function parsePhotoDate(d){if(!d)return null;if(d instanceof Date)return new Date(d);const m=String(d).match(/(\d{4})[:\-](\d{2})[:\-](\d{2})[T\s](\d{2})[:\-](\d{2})[:\-](\d{2})/);return m?new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+m[6]):null;}
 function parseGPPUserComment(exif){if(!exif?.UserComment)return null;let raw=exif.UserComment;if(typeof raw==='string')raw=new TextEncoder().encode(raw);const pfx=new Uint8Array([0x41,0x53,0x43,0x49,0x49,0x00,0x00,0x00]);let jb;if(raw.length>=8&&raw.slice(0,8).every((b,i)=>b===pfx[i]))jb=raw.slice(8);else jb=raw;try{const d=JSON.parse(new TextDecoder().decode(jb).replace(/\0/g,'').trim());return d?.app==='gpp'&&d.exp?{version:d.v||1,experiment:d.exp}:null;}catch{return null;}}
 function isPhotoInRange(p){if(!p.dateObj||!filterStart||!filterEnd)return true;return p.dateObj>=filterStart&&p.dateObj<=filterEnd;}
@@ -5744,8 +5800,19 @@ function updateMarkerOpacities(){
 function updateTimelineData(){
   datedPhotosGlobal=photos.filter(p=>p.dateObj instanceof Date).sort((a,b)=>a.dateObj-b.dateObj);
   if(!datedPhotosGlobal.length){document.getElementById('timeline').classList.remove('visible');document.getElementById('map').classList.remove('timeline-open');return;}
+  const prevMin=minDateGlobal,prevMax=maxDateGlobal;
   minDateGlobal=datedPhotosGlobal[0].dateObj;maxDateGlobal=datedPhotosGlobal.at(-1).dateObj;
-  filterStart=new Date(minDateGlobal);filterEnd=new Date(maxDateGlobal);
+  // Preserve user's filter selection when adding more photos — only reset if
+  // no filter was set yet or the global date range has expanded.
+  if(!filterStart||!filterEnd||!prevMin||!prevMax
+     ||+minDateGlobal<+prevMin||+maxDateGlobal>+prevMax){
+    // First load or range expanded — reset to full range
+    filterStart=new Date(minDateGlobal);filterEnd=new Date(maxDateGlobal);
+  } else {
+    // Clamp existing filter to new valid range (safety)
+    if(filterStart<minDateGlobal) filterStart=new Date(minDateGlobal);
+    if(filterEnd>maxDateGlobal)   filterEnd=new Date(maxDateGlobal);
+  }
   document.getElementById('timeline').classList.add('visible');document.getElementById('map').classList.add('timeline-open');
   renderTimeline();
 }
@@ -5760,19 +5827,37 @@ function renderTimeline(){
   const track=document.getElementById('timeline-track');
   track.querySelectorAll('.timeline-dot').forEach(d=>d.remove());
 
+  // Safety: if zoom mode filter matches nothing, warn and show all
+  if(timelineMode==='zoom'){
+    const inRange=datedPhotosGlobal.filter(p=>p.dateObj>=filterStart&&p.dateObj<=filterEnd);
+    if(!inRange.length && datedPhotosGlobal.length){
+      // Filter produced zero results — reset to full range silently
+      filterStart=new Date(minDateGlobal);filterEnd=new Date(maxDateGlobal);
+    }
+  }
   let dotIdx=0;
   datedPhotosGlobal.forEach(p=>{
     if(timelineMode==='zoom'&&(p.dateObj<filterStart||p.dateObj>filterEnd))return;
     const pct=dur?((p.dateObj-displayStart)/dur)*100:50;
     const dot=document.createElement('div');
     dot.className='timeline-dot'+(dotIdx%2===1?' odd':'');
-    dot.style.left=`${Math.max(2,Math.min(98,pct))}%`;dot.title=formatDate(p.dateObj);
+    dot.style.left=`${Math.max(3,Math.min(97,pct))}%`;dot.title=formatDate(p.dateObj);
     dot._photo=p; // attach photo ref for click handler
     dot.addEventListener('click', e=>{
       e.stopPropagation(); // prevent track click from also firing
       const ph=dot._photo;if(!ph)return;
       const idx=photos.findIndex(x=>x===ph);
       if(idx>=0){if(ph.lat!=null)map.setView([ph.lat,ph.lon],Math.max(map.getZoom(),19),{animate:true});openLightbox(idx,ph.lat!=null?L.latLng(ph.lat,ph.lon):null);highlightTimelineDot(ph);}
+    });
+    // Hold + wheel → zoom timeline range around this photo
+    dot.addEventListener('mousedown', e=>{
+      _dotHeld = dot._photo || null;
+      if(_dotHeld && _wheelZoomRadius === null){
+        // First activation: radius = half of current displayed range
+        const cur = (filterEnd && filterStart) ? (+filterEnd - +filterStart) : (+maxDateGlobal - +minDateGlobal);
+        _wheelZoomRadius = Math.max(0, cur / 2);
+      }
+      e.stopPropagation();
     });
     // П2: folder filter dims non-folder dots
     if(selectedFolderPath){
@@ -5799,7 +5884,7 @@ function _clampDotsToHandles(){
   const trackEl=document.getElementById('timeline-track');
   if(!trackEl) return;
   const tw=trackEl.getBoundingClientRect().width||trackEl.offsetWidth||800;
-  const HW=11; // half handle width px
+  const HW=13; // half handle width px (handle 16px/2=8 + dot radius 4 + 1px gap)
   const hwPct=(HW/tw)*100;
   const sH=parseFloat(document.getElementById('handle-start').style.left)||0;
   const eH=parseFloat(document.getElementById('handle-end').style.left)||100;
@@ -5859,15 +5944,78 @@ function initTimeline(){
   let dragging=null;
 
   document.querySelectorAll('.timeline-mode-btn').forEach(btn=>{
-    btn.addEventListener('click',()=>{timelineMode=btn.dataset.mode;document.querySelectorAll('.timeline-mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode===timelineMode));renderTimeline();if(window._lastHighlightedPhoto) highlightTimelineDot(window._lastHighlightedPhoto);});
+    btn.addEventListener('click',()=>{
+      timelineMode=btn.dataset.mode;
+      document.querySelectorAll('.timeline-mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode===timelineMode));
+      if(timelineMode==='full'){
+        // Full mode: reset zoom state
+        _wheelZoomRadius=null;
+        filterStart=new Date(minDateGlobal);filterEnd=new Date(maxDateGlobal);
+      } else if(timelineMode==='zoom'){
+        // Entering zoom mode: if filterStart===filterEnd, show full range
+        if(filterStart && filterEnd && +filterStart===+filterEnd){
+          filterStart=new Date(minDateGlobal);filterEnd=new Date(maxDateGlobal);
+        }
+      }
+      renderTimeline();
+      if(window._lastHighlightedPhoto) highlightTimelineDot(window._lastHighlightedPhoto);
+    });
   });
 
   function startDrag(e,type){e.preventDefault();dragging=type;document.addEventListener('mousemove',doDrag);document.addEventListener('mouseup',stopDrag);}
-  function doDrag(e){if(!dragging)return;const rect=track.getBoundingClientRect();const HW=11;const minP=(HW/rect.width)*100,maxP=100-(HW/rect.width)*100;let pct=((e.clientX-rect.left)/rect.width)*100;if(dragging==='start'){pct=Math.max(minP,Math.min(+endH.style.left.replace('%','')||maxP,pct));startH.style.left=pct+'%';}else{pct=Math.max(+startH.style.left.replace('%','')||minP,Math.min(maxP,pct));endH.style.left=pct+'%';}updateSelectedBar();}
+  function doDrag(e){if(!dragging)return;const rect=track.getBoundingClientRect();const HW=13;const minP=(HW/rect.width)*100,maxP=100-(HW/rect.width)*100;let pct=((e.clientX-rect.left)/rect.width)*100;if(dragging==='start'){pct=Math.max(minP,Math.min(+endH.style.left.replace('%','')||maxP,pct));startH.style.left=pct+'%';}else{pct=Math.max(+startH.style.left.replace('%','')||minP,Math.min(maxP,pct));endH.style.left=pct+'%';}updateSelectedBar();}
   function stopDrag(){if(!dragging)return;document.removeEventListener('mousemove',doDrag);document.removeEventListener('mouseup',stopDrag);const base=timelineMode==='zoom'?+filterStart:+minDateGlobal;const dur=timelineMode==='zoom'?filterEnd-filterStart:maxDateGlobal-minDateGlobal;const sp=+startH.style.left.replace('%','')||0,ep=+endH.style.left.replace('%','')||100;filterStart=new Date(base+(sp/100)*dur);filterEnd=new Date(base+(ep/100)*dur);if(filterStart>filterEnd)[filterStart,filterEnd]=[filterEnd,filterStart];renderTimeline();renderList();updateMarkerOpacities();dragging=null;}
 
   startH.addEventListener('mousedown',e=>startDrag(e,'start'));
   endH.addEventListener('mousedown',e=>startDrag(e,'end'));
+
+  // Release dot hold on mouseup anywhere
+  document.addEventListener('mouseup', ()=>{ _dotHeld=null; });
+
+  // Wheel on track while dot held → zoom range around anchor photo
+  track.addEventListener('wheel', e=>{
+    if(!_dotHeld || !_dotHeld.dateObj || !minDateGlobal) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const anchor = +_dotHeld.dateObj;
+    const fullSpan = +maxDateGlobal - +minDateGlobal;
+
+    // Initialize radius from current range if not set
+    if(_wheelZoomRadius === null){
+      _wheelZoomRadius = filterStart && filterEnd
+        ? (+filterEnd - +filterStart) / 2
+        : fullSpan / 2;
+    }
+
+    // Scroll up (deltaY < 0) → shrink; scroll down → expand
+    const factor = e.deltaY < 0 ? 0.75 : 1.33;
+    _wheelZoomRadius = Math.max(0, Math.min(fullSpan, _wheelZoomRadius * factor));
+
+    // Min: show only the anchor photo (radius = 0 → exact ms match)
+    // Use 500ms as practical minimum so at least 1 dot is always visible
+    const minRadius = 500;
+    _wheelZoomRadius = Math.max(minRadius, _wheelZoomRadius);
+
+    // Compute new filter bounds, clamped to global range
+    let newStart = new Date(Math.max(+minDateGlobal, anchor - _wheelZoomRadius));
+    let newEnd   = new Date(Math.min(+maxDateGlobal, anchor + _wheelZoomRadius));
+
+    // If clamped at one edge, shift the other side to preserve radius
+    if(+newStart === +minDateGlobal) newEnd = new Date(Math.min(+maxDateGlobal, +newStart + _wheelZoomRadius * 2));
+    if(+newEnd   === +maxDateGlobal) newStart = new Date(Math.max(+minDateGlobal, +newEnd - _wheelZoomRadius * 2));
+
+    filterStart = newStart;
+    filterEnd   = newEnd;
+
+    // Switch to zoom mode and re-render
+    timelineMode = 'zoom';
+    document.querySelectorAll('.timeline-mode-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.mode === 'zoom')
+    );
+    renderTimeline();
+    highlightTimelineDot(_dotHeld);
+  }, {passive: false});
 
   track.addEventListener('click',e=>{
     if(dragging)return;
@@ -5885,6 +6033,7 @@ function resetTimelineFilter(){
   if(!minDateGlobal)return;
   filterStart=new Date(minDateGlobal);filterEnd=new Date(maxDateGlobal);
   timelineMode='full';
+  _dotHeld=null; _wheelZoomRadius=null; // reset wheel-zoom state
   document.querySelectorAll('.timeline-mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode==='full'));
   clearFolderFilter();  // also reset folder filter
   // Reset photo-date-strip
@@ -6805,9 +6954,10 @@ function kdConfirm(){
   if(_kdDest === 'layer' || _kdDest === 'disk'){
     const dup = _findDuplicate(cadNum, name, desc, geom, _kdDest, _kdLayerIdx);
     if(dup){
-      // Save state needed to resume
-      _kdDuplicatePendingState = { cadNum, name, desc, type, geom, safeType };
-      _showDuplicateDialog(dup);
+      // Carry sourceMarker so 'overwrite' path can remove original
+      const sourceMarker = _ce?.sourceMarker || null;
+      _kdDuplicatePendingState = { cadNum, name, desc, type, geom, safeType, sourceMarker, dup };
+      _showDuplicateDialog(dup, sourceMarker);
       return;  // user will resolve via modal
     }
   }
@@ -6909,6 +7059,7 @@ function _showDuplicateDialog(dup){
           `<div class="dm-info" id="dm-info"></div>`+
         `</div>`+
         `<div class="dm-actions">`+
+          `<button class="dm-btn dm-overwrite" onclick="_dupResolve('overwrite')" style="display:none">Перезаписать объект</button>`+
           `<button class="dm-btn dm-cancel" onclick="_dupResolve('cancel')">Отказ от записи</button>`+
           `<button class="dm-btn dm-edit"   onclick="_dupResolve('edit')">Вернуться к редактированию</button>`+
           `<button class="dm-btn dm-force"  onclick="_dupResolve('force')">Всё равно записать</button>`+
@@ -6921,8 +7072,14 @@ function _showDuplicateDialog(dup){
     `<span class="dm-pmname">${_escapeHtml(dup.placemarkName||'')}</span><br/>`+
     `Причина: <b>${_escapeHtml(dup.reason)}</b><br/>`+
     `<code>${_escapeHtml(dup.conflictText||'')}</code>`;
+  // Show "Перезаписать" button only when editing existing object
+  const overwriteBtn = modal.querySelector('.dm-overwrite');
+  if(sourceMarker && overwriteBtn){
+    overwriteBtn.style.display = '';
+  } else if(overwriteBtn){
+    overwriteBtn.style.display = 'none';
+  }
   modal.classList.add('open');
-  // Default focus on the safest button
   setTimeout(() => modal.querySelector('.dm-cancel')?.focus(), 60);
 }
 
@@ -6942,6 +7099,38 @@ window._dupResolve = function(action){
   }
   if(action === 'force'){
     _kdConfirmInner(st);
+    return;
+  }
+  if(action === 'overwrite'){
+    // Remove the original cadPlacemark (the one being replaced) from its layer
+    const sm = st.sourceMarker;
+    if(sm){
+      for(const layer of kmlLayers){
+        if(!layer.cadPlacemarks) continue;
+        const idx = layer.cadPlacemarks.findIndex(cp =>
+          cp === sm.pmRef || cp.cadNum === sm.cadNum || cp.geom === sm.pmRef?.geom
+        );
+        if(idx >= 0){
+          const cp = layer.cadPlacemarks[idx];
+          // Remove Leaflet layer from map
+          if(cp._leafletLayer) try{ map.removeLayer(cp._leafletLayer); }catch(_){}
+          layer.cadPlacemarks.splice(idx, 1);
+          layer.placemarkCount = Math.max(0, (layer.placemarkCount||1) - 1);
+          // Rebuild kmlText without the old placemark
+          if(layer.kmlText){
+            // Strip old placemark XML by re-assembling from remaining cadPlacemarks
+            const remaining = (layer.cadPlacemarks||[]).map(c => c.parts?.placemark||'');
+            const styles    = [...new Set((layer.cadPlacemarks||[]).map(c => c.parts?.style||'').filter(Boolean))];
+            layer.kmlText = _buildKMLDocument(styles, remaining, layer.docName||layer.filename||'Контуры');
+          }
+          break;
+        }
+      }
+    }
+    // Now save the updated object as a new entry
+    _kdConfirmInner(st);
+    showToast('✅ Объект обновлён','success',3000);
+    return;
   }
 };
 
