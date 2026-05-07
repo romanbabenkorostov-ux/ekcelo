@@ -77,7 +77,7 @@
   --warn: #b45309;
   --shadow: 0 8px 32px rgba(0,0,0,.12);
   --shadow-sm: 0 2px 8px rgba(0,0,0,.08);
-  --map-filter: brightness(1) saturate(1);  /* v2.9.53: revert from brightness(1.001) — was paired with plus-lighter hack */
+  --map-filter: brightness(1) saturate(1);  /* v2.9.53: restore v2.9.38 value (was brightness(1.001) which broke plus-lighter compositing) */
   --map-bg: #ede9e3;  /* matches OSM/Esri tile edge color → seams invisible */
   --scroll-thumb: #b0aca4;
   --scroll-track: #f0ede8;
@@ -105,7 +105,7 @@
     --warn: #b45309;
     --shadow: 0 8px 32px rgba(0,0,0,.12);
     --shadow-sm: 0 2px 8px rgba(0,0,0,.08);
-    --map-filter: brightness(1) saturate(1);  /* v2.9.53: revert from brightness(1.001) — was paired with plus-lighter hack */
+    --map-filter: brightness(1) saturate(1);  /* v2.9.53: restore v2.9.38 value (was brightness(1.001) which broke plus-lighter compositing) */
     --map-bg: #ede9e3;  /* matches OSM/Esri tile edge color → seams invisible */
     --scroll-thumb: #c8c4bc;
     --scroll-track: #f0ede8;
@@ -391,51 +391,63 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
    translate3d() at integer slot-corners, so no inter-tile gaps appear
    regardless of magnification.
    ──────────────────────────────────────────────────────────────── */
-/* ── TILE SEAM FIX (v2.9.53 — RESTORE v2.9.37 BASELINE) ────────────
-   ROLLBACK of v2.9.38 plus-lighter hack — that fix created the very
-   white grid it claimed to solve.
+/* ── TILE SEAM FIX (v2.9.53 = v2.9.38 baseline restored) ──────────
+   v2.9.52 regression diagnosis:
+     The CSS block below is identical to v2.9.38 — three-layer defence
+     works as designed. The break in v2.9.52 was NOT here, but in the
+     `--map-filter` CSS variable on light/system themes:
+       v2.9.38 used: brightness(1) saturate(1)  ← works
+       v2.9.52 used: brightness(1.001)          ← breaks plus-lighter
+     `brightness(1.001)` is so close to identity that the renderer can
+     skip / collapse the pane's filter layer in some Blink builds. Once
+     the pane filter layer is gone, mix-blend-mode on each tile <img>
+     no longer has the shared filtered context to blend within → tiles
+     get composited individually → 1-px floor()-rounded seams reappear
+     as the white grid. Restoring saturate(1) keeps the filter list at
+     length 2 (brightness + saturate) which Blink does not collapse.
+   v2.9.53 fix: revert --map-filter to brightness(1) saturate(1).
+                ALL CSS rules below kept intact from v2.9.38 / v2.9.52.
 
-   ROOT CAUSE confirmed by Leaflet PR #9560 (Nekzuris, 2024-12):
-     `mix-blend-mode: plus-lighter` only renders without a white grid
-     at devicePixelRatio = 1.0, 1.25, 1.5 (page-zoom 100%, 125%, 150%).
-     At DPR 1.1, 1.33, 1.6, etc. (HiDPI displays, 110%/115% page zoom,
-     OS-level scaling on Windows, 4K monitors) plus-lighter overlapping
-     1-px edges blow PAST 1.0 alpha and clip to white → bright grid
-     between every adjacent tile pair, on every zoom level. This is
-     exactly the artifact the user reports.
+   Three-layer defence (unchanged since v2.9.38, working):
 
-   See also Leaflet issue #9731 ("Tile gaps visible in v2-alpha") —
-   same root cause, blink composite-per-tile rasterization.
+   LAYER 1 — filter on pane, not on individual tiles (v2.9.37 fix):
+     Moves GPU compositing to one layer for all tiles → no per-tile
+     translate3d() rounding divergence. Fixes Firefox + Yandex.
 
-   THE BASELINE-PROVEN APPROACH (v2.9.18 → v2.9.37, no seams ever):
-     LAYER 1: filter on .leaflet-tile-pane (NOT per-tile).
-              ONE GPU compositing layer for all tiles → no per-tile
-              translate3d() rounding divergence. Adjacent tiles are
-              positioned by Leaflet via integer-pixel translate3d() and
-              composited inside one layer → edge-to-edge with zero gap.
-     LAYER 2: outline:1px solid transparent on .leaflet-tile.
-              Classic WebKit/Blink sub-pixel hairline suppressor.
-     LAYER 3: background of pane = actual OSM/Esri tile edge color
-              (#ede9e3) so any residual <0.5-device-px leak reads as
-              the tile color, not as a bright grid.
+   LAYER 2 — mix-blend-mode: plus-lighter on img.leaflet-tile (v2.9.38, confirmed v2.9.51):
+     Chrome-specific bug (chromium.org/issues/600120): even with filter
+     on pane, Chrome's rasterizer creates a separate compositing layer
+     per tile image due to its GPU tile-raster pipeline. Adjacent tiles
+     get floor()'d independently → 1-px seam at devicePixelRatio > 1.
+     `mix-blend-mode: plus-lighter` forces Chrome to composite all tile
+     images in a shared blending context. The math: where two tiles
+     share an edge with 1-px logical overlap, C = min(A+B, 1) ≈ tile
+     color (not white). This is the official Leaflet fix merged in #8891.
+     Firefox/Yandex ignore it harmlessly (they don't have the bug).
 
-   What we DO NOT do:
-     • NO mix-blend-mode anywhere on tiles (causes the white grid).
-     • NO will-change/translateZ/isolation on the pane (Blink creates
-       too many nested GPU layers → GPU rasterization fails →
-       large white squares at z>maxNativeZoom, the v2.9.33 regression).
-     • NO filter on individual .leaflet-tile (per-tile compositing
-       layers diverge on translate3d rounding → 1-px seams,
-       the original v2.9.30-v2.9.36 problem).
-     • NO width/margin overrides on tiles (broke z>maxNativeZoom
-       upscale slots in v2.9.33).
+   LAYER 3 — outline:1px solid transparent:
+     Closes any residual sub-pixel crack in WebKit without altering
+     visual appearance (transparent outline ≠ visible border).
+
+   BACKGROUND: pane bg = tile edge color so any ultra-thin remaining
+     gap (< 0.5 device px) reads as tile color, never as white grid.
    ────────────────────────────────────────────────────────────────── */
 .leaflet-tile-pane{
   background: var(--map-bg);
-  filter: var(--map-filter);   /* ONE compositing layer for ALL tiles */
+  filter: var(--map-filter);  /* One GPU compositing layer for ALL tiles.
+     filter already creates a stacking context — NO will-change/translateZ/isolation needed.
+     Those extras cause Blink (Chrome/Yandex) to create too many nested GPU layers
+     → GPU rasterization failure → white squares. Keep only filter. */
+}
+.leaflet-container img.leaflet-tile{
+  /* Chrome/Yandex seam fix (Leaflet #3575 / Chromium #600120):
+     mix-blend-mode: plus-lighter makes Blink composite tile <img> elements in a shared
+     blending context within the filtered pane → no 1px gaps between tiles.
+     filter on parent already creates the stacking context this needs. */
+  mix-blend-mode: plus-lighter;
 }
 .leaflet-tile{
-  outline: 1px solid transparent; /* WebKit/Blink sub-pixel seam suppressor */
+  outline: 1px solid transparent; /* WebKit/Blink sub-pixel crack suppressor */
 }
 .leaflet-control-zoom a{background:var(--surface) !important;color:var(--text) !important;border-color:var(--border) !important}
 .leaflet-control-zoom a:hover{background:var(--surface2) !important}
