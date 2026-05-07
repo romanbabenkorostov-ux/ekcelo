@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>EkceloFoto v2.9.29</title>
+<title>EkceloFoto v2.9.18</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -15,10 +15,6 @@
      This lets us preserve the user's row-1/2/3 formatting when emitting an
      updated workbook with the new "Координаты центра объекта" column. -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
-<!-- JSZip — used for KMZ export (KMZ is a ZIP with doc.kml + media files).
-     ~95KB minified, no dependencies. We don't load until the user clicks
-     "Экспорт в KMZ" — the script tag itself is just ~95KB and parses fast. -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 :root{--bg:#0d0f14;--surface:#161a24;--border:#252b3a;--accent:#e8ff47;--accent2:#47c8ff;--text:#e4e8f0;--muted:#5a6480;--danger:#ff5c5c;--warn:#f59e0b;--r:6px}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -38,25 +34,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #upload-menu button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:transparent;border:none;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;padding:9px 14px;cursor:pointer;transition:background .1s}
 #upload-menu button:hover{background:rgba(255,255,255,.07)}
 #upload-menu hr{border:none;border-top:1px solid var(--border);margin:3px 0}
-.upload-hints{display:none;padding:8px 14px;border-top:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--muted);background:rgba(255,255,255,.025);line-height:1.5}
-.upload-hints .uh-title{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px;opacity:.7}
-.upload-hints .uh-row{display:flex;gap:5px;align-items:flex-start;margin-bottom:2px;overflow:hidden;width:100%;text-align:left;background:transparent;border:1px solid transparent;border-radius:3px;padding:3px 5px;font-family:inherit;font-size:9.5px;color:var(--muted);cursor:pointer;transition:all .12s}
-.upload-hints .uh-clickable:hover{border-color:var(--accent2);background:rgba(71,200,255,.08);color:var(--text)}
-.upload-hints .uh-clickable:hover .uh-val{color:var(--accent2)}
-.upload-hints .uh-ico{flex-shrink:0;font-size:10px}
-.upload-hints .uh-lbl{flex-shrink:0;color:var(--accent2);font-weight:700;min-width:34px}
-.upload-hints .uh-val{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px;opacity:.85}
 #file-input,#folder-input-fallback,#kml-file-input{display:none}
 #auto-save-label{display:flex;align-items:center;gap:6px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);white-space:nowrap;padding:5px 8px;border:1px solid var(--border);border-radius:var(--r);transition:border-color .15s,color .15s;user-select:none;flex-shrink:0}
 #auto-save-label:hover{border-color:var(--accent);color:var(--accent)}
 #auto-save-label input{accent-color:var(--accent);cursor:pointer;width:13px;height:13px}
 #auto-save-label.active-label{border-color:var(--accent);color:var(--accent);background:rgba(232,255,71,.08)}
-/* KMZ export button — same visual language as #auto-save-label so they read as a pair. */
-#kmz-export-btn{display:flex;align-items:center;gap:6px;background:transparent;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);white-space:nowrap;padding:5px 9px;border:1px solid var(--border);border-radius:var(--r);transition:border-color .15s,color .15s,background .15s;cursor:pointer;flex-shrink:0}
-#kmz-export-btn:hover{border-color:#6cd96c;color:#6cd96c;background:rgba(108,217,108,.08)}
-#kmz-export-btn:disabled{opacity:.4;cursor:not-allowed;border-color:var(--border)}
-#kmz-export-btn.busy{border-color:var(--accent);color:var(--accent);background:rgba(255,149,0,.08);animation:pulse-busy 1.2s ease-in-out infinite}
-@keyframes pulse-busy{0%,100%{opacity:.7}50%{opacity:1}}
 #stats{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);margin-left:auto;display:flex;gap:20px}
 .stat{display:flex;flex-direction:column}
 .stat-val{color:var(--text);font-weight:500;font-size:14px}
@@ -90,9 +72,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .ftree-actions{display:flex;gap:4px}
 .ftree-action-btn{background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted);font-size:10px;padding:2px 6px;cursor:pointer;font-family:'JetBrains Mono',monospace;transition:all .12s}
 .ftree-action-btn:hover{border-color:var(--accent2);color:var(--accent2)}
-/* Filter button lights up when filter is active */
-.ftree-action-btn.filter-active{border-color:var(--accent);color:var(--accent);background:rgba(232,255,71,.12);font-weight:700}
-.ftree-action-btn.filter-active:hover{background:rgba(232,255,71,.22)}
 #folder-tree-content{max-height:200px;overflow-y:auto;padding:3px 0}
 #folder-tree-content::-webkit-scrollbar{width:4px}
 #folder-tree-content::-webkit-scrollbar-thumb{background:#2a3247;border-radius:2px}
@@ -126,51 +105,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 
 /* PHOTO LIST */
 #photo-list{flex:1;overflow-y:auto;min-height:0;padding:5px 5px 14px}
-
-/* ── SIDEBAR TABS (Task 4) ─────────────────────────────────────────
-   Switches lower sidebar between photo grid and marker list.
-   Only ONE .sidebar-panel is visible at a time. */
-#sidebar-tabs{display:flex;border-bottom:1px solid var(--border);background:#000;flex-shrink:0}
-#sidebar-tabs .sb-tab{flex:1;background:transparent;border:none;color:#888;font-family:'JetBrains Mono',monospace;font-size:11px;padding:8px 6px;cursor:pointer;border-bottom:2px solid transparent;transition:all .12s;font-weight:600}
-#sidebar-tabs .sb-tab:hover{color:#fff;background:rgba(255,255,255,.04)}
-#sidebar-tabs .sb-tab.active{color:#fff;border-bottom-color:var(--accent);background:rgba(255,149,0,.08)}
-.sidebar-panel{flex:1;overflow-y:auto;min-height:0}
-
-/* ── MARKERS LIST (Task 4) ─────────────────────────────────────────
-   Three vertical sub-groups — Зем.участки / ОКСы / Пояснения — each with its
-   own scrollable area. White text on black background per the user's spec.
-   Differentiation icons: ■ (zu, filled square), ▢ (oks, empty square), ● (exp, dot). */
-#marks-list{display:flex;flex-direction:column;background:#000;color:#fff;font-family:'JetBrains Mono',monospace;padding:0;gap:0}
-.marks-group{display:flex;flex-direction:column;flex:1;min-height:0;border-bottom:1px solid #1a1a1a}
-.marks-group:last-child{border-bottom:none}
-.marks-group.collapsed .marks-group-body{display:none}
-.marks-group.collapsed{flex:0 0 auto}
-.marks-group-header{display:flex;align-items:center;gap:6px;padding:7px 10px;background:#0a0a0a;border-bottom:1px solid #1a1a1a;cursor:pointer;user-select:none;flex-shrink:0;transition:background .12s}
-.marks-group-header:hover{background:#141414}
-.marks-group-header > span:first-child{font-size:9px;color:#888;width:10px}
-.mg-master-cb{margin:0 6px 0 0;flex-shrink:0;accent-color:var(--accent2);cursor:pointer;width:13px;height:13px}
-.mg-master-cb:disabled{opacity:.35;cursor:not-allowed}
-.mg-icon{font-size:12px;width:14px;text-align:center;display:inline-block}
-.mg-icon-zu{color:#3ec870}
-.mg-icon-oks{color:#c180f0}
-.mg-icon-exp{color:#47c8ff}
-.mg-title{flex:1;font-size:11px;font-weight:700;color:#fff}
-.mg-count{font-size:10px;color:#666;background:#181818;padding:1px 6px;border-radius:9px;min-width:18px;text-align:center}
-.marks-group-body{flex:1;overflow-y:auto;min-height:0;padding:2px 0}
-.marks-group-body::-webkit-scrollbar{width:5px}
-.marks-group-body::-webkit-scrollbar-thumb{background:#333}
-.marks-group.collapsed .marks-group-body{display:none}
-
-/* Individual marker entries — checkbox + name + description */
-.mark-item{display:flex;align-items:flex-start;gap:7px;padding:6px 10px;border-bottom:1px solid #0d0d0d;cursor:pointer;transition:background .1s}
-.mark-item:hover{background:#0e0e0e}
-.mark-item.active{background:#1f1407;border-left:2px solid var(--accent);padding-left:8px}
-.mark-item.active .mark-name{color:var(--accent)}
-.mark-item input[type=checkbox]{margin-top:3px;flex-shrink:0;accent-color:var(--accent2);cursor:pointer;width:12px;height:12px}
-.mark-content{flex:1;min-width:0}
-.mark-name{font-size:11px;color:#fff;font-weight:600;line-height:1.3;word-break:break-word}
-.mark-desc{font-size:10px;color:#cfd2d6;margin-top:3px;line-height:1.45;word-break:break-word;opacity:.9}
-.mark-empty{padding:14px 10px;color:#555;font-size:10px;font-style:italic;text-align:center}
 #photo-list::-webkit-scrollbar{width:5px}
 #photo-list::-webkit-scrollbar-thumb{background:#2a3247;border-radius:3px}
 /* П4: full card is clickable */
@@ -196,29 +130,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .del-btn{position:absolute;top:4px;right:4px;width:17px;height:17px;background:rgba(13,15,20,.8);border:1px solid var(--border);border-radius:50%;color:var(--muted);font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,color .15s;padding:0;line-height:1;z-index:3}
 .photo-item:hover .del-btn{opacity:1}
 .del-btn:hover{color:var(--danger);border-color:var(--danger)}
-/* ── Move-to-folder feature ───────────────────────────────────── */
-.photo-move-btn{position:absolute;top:4px;right:24px;width:17px;height:17px;background:rgba(13,15,20,.8);border:1px solid var(--border);border-radius:50%;color:var(--muted);font-size:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,color .15s,border-color .15s;padding:0;line-height:1;z-index:3}
-.photo-item:hover .photo-move-btn{opacity:1}
-.photo-move-btn:hover{color:#47c8ff;border-color:#47c8ff}
-#lb-move-btn{background:none;border:none;cursor:pointer;padding:1px 4px;border-radius:3px;color:var(--muted);font-size:13px;line-height:1;transition:color .12s,background .12s;display:none}
-#lb-move-btn.visible{display:inline-flex;align-items:center}
-#lb-move-btn:hover{color:#47c8ff;background:rgba(71,200,255,.12)}
-#lb-move-panel{display:none;padding:10px 12px 12px;font-family:'JetBrains Mono',monospace}
-#lb-move-panel.visible{display:block}
-#lb-move-panel .lmp-title{font-size:10px;font-weight:700;color:#47c8ff;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
-#lb-move-panel .lmp-filename{font-size:11px;color:var(--text);background:rgba(255,255,255,.06);border-radius:4px;padding:5px 8px;margin-bottom:8px;word-break:break-all;border:1px solid var(--border)}
-#lb-move-panel .lmp-hint{font-size:10px;color:var(--muted);line-height:1.5;margin-bottom:10px}
-#lb-move-panel .lmp-hint em{color:#47c8ff;font-style:normal}
-#lb-move-panel .lmp-root-needed{font-size:10px;color:#ff9500;background:rgba(255,149,0,.08);border:1px solid rgba(255,149,0,.25);border-radius:4px;padding:6px 8px;margin-bottom:8px;display:none}
-#lb-move-panel .lmp-root-needed.visible{display:block}
-#lb-move-panel .lmp-cancel-btn{background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;cursor:pointer;padding:4px 10px;font-family:'JetBrains Mono',monospace;transition:background .12s}
-#lb-move-panel .lmp-cancel-btn:hover{background:rgba(255,255,255,.12)}
-/* Folder tree in move mode */
-#folder-tree-panel.move-mode .ftree-title{color:#47c8ff}
-#folder-tree-panel.move-mode .fnode-row{cursor:pointer;transition:background .1s,border .1s}
-#folder-tree-panel.move-mode .fnode-row:hover{background:rgba(71,200,255,.15) !important;border-radius:4px}
-#folder-tree-panel.move-mode .fnode-row::after{content:'→';font-size:9px;color:#47c8ff;margin-left:4px;opacity:.7}
-#folder-tree-panel.move-mode .ftree-header{background:rgba(71,200,255,.08);border-bottom:1px solid rgba(71,200,255,.2)}
 #no-photos{padding:20px 14px;text-align:center;color:var(--muted);font-size:11px;line-height:1.7}
 
 /* YANDEX DIALOG */
@@ -482,38 +393,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 /* CADASTRAL FLOATING TOOLTIP */
 #cad-tooltip{display:none;position:absolute;z-index:3000;pointer-events:none;max-width:280px;min-width:170px;font-family:'JetBrains Mono',monospace;font-size:11px}
 #cad-tooltip.visible{display:block}
-
-/* ── INFO CARDS (v61) ─────────────────────────────────────────────
-   Multiple draggable cards with thin connector lines back to the
-   click point. Replaces L.popup for cad/KML hits + coords display. */
-.info-card{position:absolute;background:rgba(13,15,20,0.88);border:1px solid var(--border);border-radius:6px;
-  font-family:'JetBrains Mono',monospace;color:var(--text);box-shadow:0 6px 22px rgba(0,0,0,.65);
-  backdrop-filter:blur(4px);min-width:180px;max-width:260px;overflow:hidden;animation:pop-in .15s ease both}
-.info-card.dragging{box-shadow:0 12px 32px rgba(0,0,0,.8);border-color:#00ff66;background:rgba(13,15,20,0.95)}
-/* v64: tighter header. Copy mini-button (.ic-icobtn) sits before the close X. */
-.info-card .ic-header{display:flex;align-items:center;gap:4px;padding:3px 4px 3px 8px;
-  background:rgba(255,255,255,.04);border-bottom:1px solid var(--border);cursor:move;user-select:none}
-.info-card .ic-header.ic-zu{background:rgba(0,180,50,0.16);border-bottom-color:rgba(0,180,50,.4)}
-.info-card .ic-header.ic-oks{background:rgba(160,32,240,0.16);border-bottom-color:rgba(160,32,240,.4)}
-.info-card .ic-header.ic-exp{background:rgba(71,200,255,0.16);border-bottom-color:rgba(71,200,255,.4)}
-.info-card .ic-title{flex:1;font-size:10.5px;font-weight:700;color:#fff;letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-/* Header mini-buttons: copy (⎘) and close (×). Same compact size, no border to keep the bar slim. */
-.info-card .ic-icobtn,.info-card .ic-close{background:transparent;border:none;color:#9ba0a8;font-size:12px;cursor:pointer;padding:1px 4px;line-height:1;border-radius:3px;flex-shrink:0;transition:color .12s,background .12s}
-.info-card .ic-icobtn:hover{color:var(--accent);background:rgba(255,149,0,.12)}
-.info-card .ic-icobtn.flashed{color:#6cd96c;background:rgba(108,217,108,.18)}
-.info-card .ic-close{font-size:14px}
-.info-card .ic-close:hover{color:#fff;background:rgba(255,255,255,.08)}
-/* v64: minimal body padding */
-.info-card .ic-body{padding:5px 7px 6px;font-size:10.5px;line-height:1.35}
-.info-card .ic-coords{display:block;background:rgba(255,255,255,.07);padding:3px 6px;border-radius:3px;
-  font-size:10.5px;color:var(--accent2);font-family:inherit;letter-spacing:.3px;margin-bottom:4px;text-align:center}
-.info-card .ic-name{font-size:11px;font-weight:600;color:#fff;margin-bottom:2px;line-height:1.3;word-break:break-word}
-.info-card .ic-desc{font-size:10px;color:#cfd2d6;line-height:1.4;word-break:break-word;opacity:.92}
-.info-card .ic-action{display:block;width:100%;border:none;border-radius:3px;padding:4px 8px;
-  font-family:inherit;font-size:10.5px;font-weight:700;cursor:pointer;margin-top:4px;transition:filter .1s}
-.info-card .ic-action:hover{filter:brightness(1.12)}
-.info-card .ic-orange{background:#ff9500;color:#fff}
-.info-card .ic-cyan{background:#47c8ff;color:#0d0f14}
 .cad-tip-section{padding:6px 9px;line-height:1.5}
 .cad-tip-section+.cad-tip-section{border-top:1px solid rgba(255,255,255,.08)}
 .cad-tip-zu{background:#1a0b26;border-left:3px solid #a020f0}
@@ -540,24 +419,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
    save dialog so chained interactions stack visually.                         */
 #save-info-modal{display:none;position:fixed;inset:0;z-index:10600;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace}
 #save-info-modal.open{display:flex}
-/* Duplicate-detection dialog (v65) — sits above kml-save-dialog so the user
-   can see context. Same visual language as #save-info-modal. */
-#dup-modal{display:none;position:fixed;inset:0;z-index:10700;background:rgba(0,0,0,.7);backdrop-filter:blur(3px);align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace}
-#dup-modal.open{display:flex}
-#dup-modal .dm-card{background:var(--surface);border:1px solid var(--accent);border-radius:8px;padding:18px 22px;min-width:380px;max-width:520px;box-shadow:0 12px 32px rgba(0,0,0,0.6);color:var(--text)}
-#dup-modal h3{margin:0 0 12px;font-size:14px;color:var(--accent);font-weight:700}
-#dup-modal .dm-body{font-size:11px;line-height:1.55;margin-bottom:14px}
-#dup-modal .dm-info{background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:10px 12px}
-#dup-modal .dm-pmname{color:var(--accent2);font-weight:600;display:inline-block;margin:3px 0}
-#dup-modal .dm-info code{display:block;margin-top:6px;background:rgba(255,255,255,.04);padding:5px 7px;border-radius:3px;font-size:10px;color:var(--muted);word-break:break-all}
-#dup-modal .dm-actions{display:flex;flex-direction:column;gap:6px}
-#dup-modal .dm-btn{padding:8px 14px;border:1px solid var(--border);border-radius:5px;background:var(--bg);color:var(--text);font-family:inherit;font-size:11px;cursor:pointer;transition:all .15s;text-align:left}
-#dup-modal .dm-cancel{border-color:#6cd96c;color:#6cd96c}
-#dup-modal .dm-cancel:hover{background:rgba(108,217,108,.1)}
-#dup-modal .dm-edit{border-color:var(--accent2);color:var(--accent2)}
-#dup-modal .dm-edit:hover{background:rgba(71,200,255,.1)}
-#dup-modal .dm-force{border-color:var(--accent);color:var(--accent)}
-#dup-modal .dm-force:hover{background:rgba(255,149,0,.1)}
 #save-info-modal .sim-card{background:var(--surface);border:1px solid var(--accent2);border-radius:8px;padding:18px 22px;min-width:340px;max-width:480px;box-shadow:0 12px 32px rgba(0,0,0,0.6);color:var(--text)}
 #save-info-modal h3{margin:0 0 12px;font-size:14px;color:var(--accent2);font-weight:700}
 #save-info-modal .sim-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:8px 0 4px}
@@ -601,13 +462,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .kd-dropdown.open .kd-dd-arrow{transform:rotate(180deg)}
 .kd-dd-menu{display:none;position:absolute;top:calc(100% + 2px);left:0;right:0;background:#0d0f14;border:1px solid var(--accent);border-radius:var(--r);max-height:180px;overflow-y:auto;z-index:10510;box-shadow:0 6px 18px rgba(0,0,0,0.5)}
 .kd-dropdown.open .kd-dd-menu{display:block}
-.kd-dd-item{padding:7px 10px;cursor:pointer;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;border-bottom:1px solid rgba(255,255,255,0.05);transition:background .1s;line-height:1.4}
-.kd-dd-name{font-size:11px;color:var(--text);font-weight:600}
-.kd-dd-cnt{color:var(--accent);font-weight:700}
-.kd-dd-fn{font-size:9.5px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.kd-dd-path{font-size:9px;margin-top:3px;font-style:italic}
-.kd-dd-fsa{color:#6cd96c}
-.kd-dd-leg{color:var(--muted)}
+.kd-dd-item{padding:7px 10px;cursor:pointer;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;border-bottom:1px solid rgba(255,255,255,0.05);transition:background .1s}
 .kd-dd-item:last-child{border-bottom:none}
 .kd-dd-item:hover{background:rgba(255,149,0,0.15)}
 .kd-dd-item.selected{background:rgba(255,149,0,0.25);color:var(--accent)}
@@ -638,9 +493,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #contour-edit-finish:hover{filter:brightness(1.1)}
 #contour-edit-revert{background:#444;color:#fff}
 #contour-edit-cancel{background:transparent;color:#aaa;border:1px solid #555 !important}
-/* Snapping indicator dot in the editor */
-#snap-indicator{display:none;position:absolute;pointer-events:none;z-index:10500;border-radius:50%;border:2px solid #47c8ff;background:rgba(71,200,255,.25);width:18px;height:18px;transform:translate(-50%,-50%);transition:opacity .1s}
-#snap-indicator.visible{display:block}
 .edit-vertex{cursor:move !important}
 .edit-midpoint{cursor:crosshair !important}
 /* Explanation-point pin: a tall cyan teardrop, clearly distinct from edit vertices and photo dots */
@@ -665,7 +517,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.29</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.18</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -683,26 +535,17 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
       <button onclick="closeUploadMenu();showGDrivePanel()">📁 Google Drive (папка)</button>
       <hr/>
       <button onclick="closeUploadMenu();pickKMLViaMenu()">🗺 Добавить KML вручную…</button>
-      <button onclick="closeUploadMenu();pickKMZViaMenu()">📦 Добавить KMZ (Google Earth)…</button>
       <button onclick="closeUploadMenu();pickXlsxCatalog()">📋 Загрузить кад.номера (XLSX)…</button>
-      <!-- Path hints (Task 1): persistent reminders of last opened locations.
-           Browsers don't expose absolute paths; we show the file/folder NAME so the
-           user can verify they're working with the right source. Hidden when empty. -->
-      <div id="upload-hints" class="upload-hints"></div>
     </div>
   </div>
   <input type="file" id="file-input"            multiple accept="image/jpeg,image/jpg,.jpg,.jpeg"/>
   <input type="file" id="folder-input-fallback" multiple accept="image/jpeg,image/jpg,.jpg,.jpeg" webkitdirectory/>
-  <input type="file" id="kml-file-input"        multiple accept=".kml,.kmz"/>
+  <input type="file" id="kml-file-input"        multiple accept=".kml"/>
   <input type="file" id="xlsx-file-input"       accept=".xlsx,.xls" style="display:none" onchange="onXlsxFileChosen(this)"/>
   <label id="auto-save-label" title="Авто-запись EXIF при навигации">
     <input type="checkbox" id="auto-save-cb" onchange="onAutoSaveCbChange(this)"/>
     Авто-запись EXIF
   </label>
-  <!-- KMZ export — bundles every loaded KML layer + every photo with GPS into
-       a single .kmz that opens in Google Earth Pro. Disabled until there's
-       something to export. -->
-  <button id="kmz-export-btn" onclick="exportKMZ()" title="Экспортировать все объекты и фото с GPS в один .kmz для Google Earth Pro">📦 Экспорт в KMZ</button>
   <button id="share-btn" onclick="copyShareLink()" style="display:none">🔗 Поделиться</button>
   <div id="stats">
     <div class="stat"><span class="stat-val" id="stat-total">0</span><span class="stat-lbl">фото</span></div>
@@ -710,12 +553,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     <div class="stat"><span class="stat-val" id="stat-angle">0</span><span class="stat-lbl">с углом</span></div>
     <div class="stat stat-toggle" id="stat-photos-toggle" onclick="togglePhotoMarkers()" title="Скрыть/показать точки фотографий на карте">
       <span class="stat-val" id="stat-photos-state">👁</span><span class="stat-lbl" id="stat-photos-lbl">Откл.фото</span>
-    </div>
-    <!-- KML master visibility toggle (moved here in v58, was floating to the right
-         of the map and overlapping the «По объектам» button). Hidden when no KML
-         layers are loaded — see _refreshKMLEyeButton, which now also drives this. -->
-    <div class="stat stat-toggle" id="stat-kml-toggle" onclick="toggleAllKMLVisibility()" style="display:none" title="Скрыть/показать все KML-слои на карте">
-      <span class="stat-val" id="stat-kml-state">👁</span><span class="stat-lbl" id="stat-kml-lbl">Откл.KML</span>
     </div>
   </div>
   <button id="clear-btn" onclick="clearAll()">очистить</button>
@@ -769,45 +606,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     <button id="folder-filter-reset" onclick="clearFolderFilter()">× сбросить</button>
   </div>
 
-  <!-- Sidebar tabs (Task 4): Photos / Markers — switches the lower panel between
-       photo thumbnails and a Google-Earth-Pro-style hierarchical marker list. -->
-  <div id="sidebar-tabs">
-    <button class="sb-tab active" data-tab="photos" onclick="switchSidebarTab('photos')">📸 Фото</button>
-    <button class="sb-tab"        data-tab="marks"  onclick="switchSidebarTab('marks')">🏷 Метки</button>
-  </div>
-
-  <div id="photo-list" class="sidebar-panel"></div>
-
-  <!-- Markers panel — split into 3 vertical scrollable subgroups -->
-  <div id="marks-list" class="sidebar-panel" style="display:none">
-    <div class="marks-group" id="marks-group-zu">
-      <div class="marks-group-header" onclick="toggleMarksGroup('zu')">
-        <span id="marks-arrow-zu">▼</span>
-        <span class="mg-icon mg-icon-zu" title="Земельные участки — заполненный квадрат">■</span>
-        <span class="mg-title">Зем.участки</span>
-        <span class="mg-count" id="marks-count-zu">0</span>
-      </div>
-      <div class="marks-group-body" id="marks-body-zu"></div>
-    </div>
-    <div class="marks-group" id="marks-group-oks">
-      <div class="marks-group-header" onclick="toggleMarksGroup('oks')">
-        <span id="marks-arrow-oks">▼</span>
-        <span class="mg-icon mg-icon-oks" title="ОКСы — пустой квадрат">▢</span>
-        <span class="mg-title">ОКСы</span>
-        <span class="mg-count" id="marks-count-oks">0</span>
-      </div>
-      <div class="marks-group-body" id="marks-body-oks"></div>
-    </div>
-    <div class="marks-group" id="marks-group-exp">
-      <div class="marks-group-header" onclick="toggleMarksGroup('exp')">
-        <span id="marks-arrow-exp">▼</span>
-        <span class="mg-icon mg-icon-exp" title="Пояснения — точка-пин">●</span>
-        <span class="mg-title">Пояснения</span>
-        <span class="mg-count" id="marks-count-exp">0</span>
-      </div>
-      <div class="marks-group-body" id="marks-body-exp"></div>
-    </div>
-  </div>
+  <div id="photo-list"></div>
 
   <!-- FOLDER TREE (bottom of sidebar) -->
   <div id="folder-tree-panel">
@@ -817,7 +616,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
       </div>
       <div class="ftree-actions" onclick="event.stopPropagation()">
         <button class="ftree-action-btn" onclick="createRootFolder()" title="Создать новую папку">+ папка</button>
-        <button id="ftree-filter-btn" class="ftree-action-btn" onclick="clearFolderFilter()" title="Сбросить фильтр папки">× фильтр</button>
+        <button class="ftree-action-btn" onclick="clearFolderFilter()" title="Сбросить фильтр папки">× фильтр</button>
       </div>
     </div>
     <div id="folder-tree-content"></div>
@@ -860,18 +659,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
         <button id="lb-copy-name-btn" title="Копировать имя" onclick="copyToClipboard(photos[activeIdx]?.name||'')">
           <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
         </button>
-        <button id="lb-move-btn" title="Переместить файл в папку на диске" onclick="startPhotoMove(activeIdx)">📂→</button>
         <button id="lb-close-bar" onclick="event.stopPropagation();closeLightbox()">&#215;</button>
       </div>
       <div id="lb-section-label">Геолокация и съёмка</div>
-      <!-- Move-to-folder panel (replaces img+info when move mode active) -->
-      <div id="lb-move-panel">
-        <div class="lmp-title">📂 Перемещение фото в папку</div>
-        <div class="lmp-filename" id="lmp-filename-text"></div>
-        <div class="lmp-root-needed" id="lmp-root-needed">⚠ Потребуется выбрать корневую папку с фотографиями (даст доступ на чтение/запись)</div>
-        <div class="lmp-hint">Выберите папку в окне <em>«Структура объекта»</em> ↙<br/>— файл переместится в неё на диске</div>
-        <button class="lmp-cancel-btn" onclick="cancelPhotoMove()">✖ Отмена</button>
-      </div>
       <div id="lb-img-wrap"><img id="lb-img" src="" alt=""/></div>
       <div id="lb-zoom-bar">
         <button class="lbz-btn" onclick="lbZoomOut()">&#8722;</button>
@@ -894,12 +684,16 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
   <!-- Zoom indicator -->
   <div id="zoom-indicator">z</div>
 
-  <button id="fit-btn"      onclick="fitMapToPhotos()">⊟ По объектам</button>
+  <button id="fit-btn"      onclick="fitMapToPhotos()">⊟ По фото</button>
   <div id="kml-wrap">
-    <!-- v58: master visibility toggle moved to the stats panel (#stat-kml-toggle)
-         to sit next to #stat-photos-toggle. Only the dropdown trigger remains here. -->
-    <button id="kml-btn" onclick="toggleKMLMenu(event)" title="Список загруженных KML">🗺 KML ▾</button>
-    <div id="kml-dropdown" onclick="event.stopPropagation()"></div>
+    <!-- Two-piece KML control:
+         (a) eye-button toggles ALL kmlLayers visibility at once (master switch)
+         (b) chevron-button opens the per-file dropdown with checkboxes
+         The visual distinction between "off" (gray) and "on" (cyan) is essential —
+         user reported the previous one-piece button felt like a passive label. -->
+    <button id="kml-eye-btn" onclick="toggleAllKMLVisibility()" title="Скрыть/показать все KML">👁</button>
+    <button id="kml-btn" onclick="toggleKMLMenu()" title="Список загруженных KML">🗺 KML ▾</button>
+    <div id="kml-dropdown"></div>
   </div>
   <!-- Cadastre: button + layer dropdown -->
   <div id="cad-wrap">
@@ -1127,16 +921,9 @@ function _ensureGroupBuilt(groupKey){
     `https://nspd.gov.ru/api/aeggis/v2/${id}/wms`,
     { service:'WMS', version:'1.3.0', format:'image/png', transparent:true,
       styles:'', authkey:'0', tileSize:256, attribution:'© НСПД', zIndex:450,
-      // v62: reduce tile-grid artifacts at high zoom.
-      //   • keepBuffer:1 instead of 4 — fewer stale tiles ghosting at edges.
-      //   • updateWhenIdle:true — only request after user stops moving (no
-      //     half-loaded grids during pan).
-      //   • maxNativeZoom:18 instead of 19 — at z19 NSPD returns uniform-color
-      //     tile-bitmaps that look like green rectangles. z18 is the last clean level.
-      //   • crossOrigin — required for some browsers to avoid blank tiles.
-      keepBuffer:1, updateWhenIdle:true, updateWhenZooming:false, crossOrigin:true,
+      keepBuffer:4, updateWhenIdle:false, updateWhenZooming:false,
       layers:String(id), opacity:op,
-      minZoom:16, maxNativeZoom:18, maxZoom:22,
+      minZoom:16, maxNativeZoom:19, maxZoom:22,
     }
   ));
 }
@@ -1153,10 +940,9 @@ function _getActiveIds(){
 
 function toggleCadastreMenu(e){
   e && e.stopPropagation();
-  // v60 (Task 7): close KML dropdown when opening Кадастр so they don't overlap
-  document.getElementById('kml-dropdown')?.classList.remove('open');
   const dd = document.getElementById('cadastre-dropdown');
   dd.classList.toggle('open');
+  // If opening for the first time, activate default checked groups
   if (dd.classList.contains('open') && !cadastreActive) _applyCadastreLayers();
 }
 document.addEventListener('click', e=>{
@@ -1416,32 +1202,7 @@ async function queryNSPDAtPoint(){
     });
   }
   html += '</div>';
-
-  // ── Positioning: ensure the popup is fully visible ─────────────
-  // Sidebar is ~280px wide (left); timeline ~70px tall (bottom).
-  // autoPanPaddingTopLeft/BottomRight tell Leaflet to keep the popup
-  // inside those insets — so it never hides behind the sidebar or
-  // behind the "Координаты" floating card.
-  const sidebarW = (document.getElementById('sidebar')?.offsetWidth || 280) + 16;
-  const timelineH = (document.getElementById('timeline')?.offsetHeight || 60) + 16;
-  const cadastrePopup = L.popup({
-    maxWidth: 400,
-    autoPan: true,
-    autoPanPaddingTopLeft:     L.point(sidebarW, 60),
-    autoPanPaddingBottomRight: L.point(80, timelineH + 60),
-    keepInView: true,
-    offset: L.point(0, -8),
-  }).setLatLng(window.lastClickedPoint).setContent(html);
-
-  cadastrePopup.openOn(map);
-
-  // After popup opens, scroll the popup pane so top of content is visible
-  // (important when result list is long)
-  setTimeout(() => {
-    const popupEl = cadastrePopup.getElement?.();
-    if(popupEl) popupEl.scrollTop = 0;
-  }, 80);
-
+  L.popup({maxWidth:380}).setLatLng(window.lastClickedPoint).setContent(html).openOn(map);
   setTimeout(updateCadastreCacheInfo, 2000);
 }
 
@@ -2087,97 +1848,18 @@ function _vertexDragStart(e, marker){
   // Hide midpoints during drag (they re-render once on drop)
   _ce.midpoints.forEach(m => map.removeLayer(m));
   _ce.midpoints = [];
-
-  // Ensure snap indicator exists in map container
-  let snapEl = document.getElementById('snap-indicator');
-  if(!snapEl){
-    snapEl = document.createElement('div');
-    snapEl.id = 'snap-indicator';
-    document.getElementById('map-wrap').appendChild(snapEl);
-  }
-
   const move = ev => {
-    const snap = _findSnapTarget(ev.latlng);
-    const ll = snap ? snap.latlng : ev.latlng;
-    marker.setLatLng(ll);
+    marker.setLatLng(ev.latlng);
     _syncPolygonFromVertices();
-    // Show/hide snap indicator
-    if(snap){
-      const pt = map.latLngToContainerPoint(ll);
-      snapEl.style.left = pt.x + 'px';
-      snapEl.style.top  = pt.y + 'px';
-      snapEl.classList.add('visible');
-    } else {
-      snapEl.classList.remove('visible');
-    }
   };
   const up = () => {
     map.off('mousemove', move);
     map.off('mouseup',   up);
     map.dragging.enable();
-    snapEl.classList.remove('visible');
     _refreshMidpoints();
   };
   map.on('mousemove', move);
   map.on('mouseup',   up);
-}
-
-// ── Snap-to-adjacent-contour helpers ──────────────────────────────
-// _SNAP_PX: distance in screen pixels within which we snap to adjacent contour.
-const _SNAP_PX = 12;
-
-function _getAdjacentContourFeatures(){
-  const verts = [];  // [{latlng}]
-  const edges  = [];  // [{a:LatLng, b:LatLng}]
-  if(typeof kmlLayers === 'undefined') return {verts, edges};
-  for(const layer of kmlLayers){
-    if(!layer.visible) continue;
-    layer.layerGroup.eachLayer(lyr => {
-      if(typeof lyr.getLatLngs !== 'function') return;
-      if(_ce && lyr === _ce.polygon) return; // skip self
-      const raw = lyr.getLatLngs();
-      const rings = (Array.isArray(raw) && raw.length && Array.isArray(raw[0])) ? raw : [raw];
-      for(const ring of rings){
-        if(!ring || !ring.length) continue;
-        const flat = ring[0] instanceof L.LatLng ? ring : ring.flat ? ring.flat(Infinity) : ring;
-        for(let i=0; i<flat.length; i++){
-          if(!(flat[i] instanceof L.LatLng)) continue;
-          verts.push({latlng: flat[i]});
-          const next = flat[(i+1)%flat.length];
-          if(next instanceof L.LatLng) edges.push({a: flat[i], b: next});
-        }
-      }
-    });
-  }
-  return {verts, edges};
-}
-
-// Returns {latlng} of snap target or null.
-function _findSnapTarget(latlng){
-  const {verts, edges} = _getAdjacentContourFeatures();
-  if(!verts.length && !edges.length) return null;
-  const origin = map.latLngToContainerPoint(latlng);
-  let bestDist = _SNAP_PX + 1, bestLL = null;
-  // 1. Snap to vertex (priority)
-  for(const {latlng: vll} of verts){
-    const pt = map.latLngToContainerPoint(vll);
-    const d  = Math.hypot(pt.x - origin.x, pt.y - origin.y);
-    if(d < bestDist){ bestDist = d; bestLL = vll; }
-  }
-  if(bestLL) return {latlng: bestLL};
-  // 2. Snap to nearest point on edge
-  for(const {a, b} of edges){
-    const pa = map.latLngToContainerPoint(a);
-    const pb = map.latLngToContainerPoint(b);
-    const dx = pb.x - pa.x, dy = pb.y - pa.y;
-    const len2 = dx*dx + dy*dy;
-    if(len2 === 0) continue;
-    const t = Math.max(0, Math.min(1, ((origin.x-pa.x)*dx + (origin.y-pa.y)*dy) / len2));
-    const cx = pa.x + t*dx, cy = pa.y + t*dy;
-    const d  = Math.hypot(cx - origin.x, cy - origin.y);
-    if(d < bestDist){ bestDist = d; bestLL = map.containerPointToLatLng(L.point(cx, cy)); }
-  }
-  return bestLL ? {latlng: bestLL} : null;
 }
 
 function _syncPolygonFromVertices(){
@@ -2439,401 +2121,19 @@ map.on('click',function(e){
   if(manualGPSActive){handleMapClickForGPS(e);return;}
   closeLightbox();
   window.lastClickedPoint=e.latlng;
-  // v61: unified click pipeline. Hit-tests cad/KML at point, opens one card per
-  // hit (or just a coords card), auto-switches to Метки tab if objects were hit.
-  _handleMapAreaClick(e.latlng);
-});
-// Keep cards anchored to map: redraw on every move/zoom/resize.
-map.on('move zoom moveend zoomend resize',()=>{
-  _redrawConnectors();
-  if(typeof _redrawLightboxConnector === 'function') _redrawLightboxConnector();
+  const lat=e.latlng.lat.toFixed(6),lng=e.latlng.lng.toFixed(6);
+  L.popup({maxWidth:224}).setLatLng(e.latlng).setContent(buildCoordPopup(lat,lng,null,null)).openOn(map);
 });
 map.on('move zoom',()=>{if(lbLL&&document.getElementById('lightbox').classList.contains('visible'))posLightbox(lbLL,true);});
-// v60 fix: when the user pans, leaflet renders/re-renders markers lazily —
-// new DOM nodes don't carry the .active class that was set on the previous
-// node (which has been thrown away). Re-apply on every moveend so the yellow
-// "selected photo" dot stays visible when the user explores the map.
-map.on('moveend zoomend',()=>{ if(activeIdx!==null) setActiveMarker(activeIdx); });
 
-// ═══════════════════════════════════════════════════════════════════
-// INFO CARDS — multi-popup overlay with connector lines (v61)
-// ═══════════════════════════════════════════════════════════════════
-// Replaces the L.popup-based single-card approach. When the user clicks the
-// map, we hit-test every cad polygon, KML placemark, and (in future) photo
-// marker at that latlng and open ONE draggable card per hit. All cards share
-// the same anchor (the click point), connected by thin dashed SVG lines.
-//
-// Why custom instead of L.popup?
-//   • Leaflet's L.popup auto-closes on map click — no good for multi-card UI.
-//   • L.popup can't draw a connector to its anchor when dragged (it's not draggable at all).
-//   • We need different cards for cad (with full attributes) vs KML (with name+desc).
-//
-// State model:
-//   _infoCards: Map<id, {el, anchorLL, dx, dy, hit}>
-//     • el: the .info-card DOM element
-//     • anchorLL: the click latlng (shared by all cards in a session)
-//     • dx, dy: pixel offset from anchor to card top-left, in map-wrap coords;
-//                user-adjustable via drag
-//     • hit: the source hit object {kind, cadNum, name, desc, lat, lng, …}
-//
-// Lifecycle:
-//   click on map / cad / KML  →  closeAllInfoCards() → hits = _hitTestAllAtPoint(ll)
-//                              →  showInfoCardsAt(ll, hits) creates one card per hit
-//                              →  on drag/move/zoom: _redrawConnectors()
-//   click outside cards (incl. another map click) → closeAllInfoCards before reopening
-
-const _infoCards = new Map();      // id → entry
-let   _connectorSvg = null;        // <svg> element holding all lines
-let   _infoCardsContainer = null;  // <div> holding all .info-card elements
-let   _infoCardSeq = 0;            // monotonic id
-
-function _ensureInfoOverlay(){
-  if(_connectorSvg && _infoCardsContainer) return;
-  const mw = document.getElementById('map-wrap');
-  if(!mw) return;
-  if(!_connectorSvg){
-    _connectorSvg = document.createElementNS('http://www.w3.org/2000/svg','svg');
-    _connectorSvg.id = 'info-connectors';
-    _connectorSvg.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:1900;width:100%;height:100%';
-    mw.appendChild(_connectorSvg);
-  }
-  if(!_infoCardsContainer){
-    _infoCardsContainer = document.createElement('div');
-    _infoCardsContainer.id = 'info-cards';
-    _infoCardsContainer.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:1901;width:100%;height:100%';
-    mw.appendChild(_infoCardsContainer);
-  }
+function buildCoordPopup(lat,lng,kmlName,kmlDesc){
+  // Compact layout for the 30%-narrower (224px) popup: smaller font, tighter buttons
+  let h=`<div style="font-family:system-ui;line-height:1.4;font-size:11.5px"><b>📍 Координаты</b><br><code style="background:#f0f0f0;padding:1px 5px;border-radius:3px;font-size:10.5px">${lat}, ${lng}</code>`;
+  if(kmlName||kmlDesc)h+=`<hr style="border:none;border-top:1px solid #ddd;margin:6px 0"><b>🗺 ${esc(kmlName||'Объект')}</b>${kmlDesc?'<br><span style="color:#444;font-size:10.5px">'+esc(kmlDesc)+'</span>':''}`;
+  h+=`<br><br><button onclick="queryNSPDAtPoint()" style="background:#ff9500;color:#fff;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;font-weight:700;width:100%;font-size:11px">📍 Запросить кадастр</button>`;
+  h+=`<button onclick="startExplanationPoint(${lat},${lng})" style="background:#47c8ff;color:#0d0f14;border:none;padding:5px 8px;border-radius:4px;cursor:pointer;font-weight:700;width:100%;margin-top:5px;font-size:11px">💬 Добавить пояснение</button></div>`;
+  return h;
 }
-
-function closeAllInfoCards(){
-  _infoCards.forEach(c => c.el.remove());
-  _infoCards.clear();
-  if(_connectorSvg) _connectorSvg.innerHTML = '';
-}
-
-// Hit-test: return objects whose geometry contains the click.
-// v64 changes:
-//   • For POINTS, hit-radius is now measured in PIXELS (18 px) instead of
-//     degrees. Pixel space matches the user's visual perception — they expect
-//     to hit "the dot they see", not "anything within 11 m". This is essential
-//     in dense clusters of explanation pins where multiple sit within a tile.
-//   • For POINTS, return only the NEAREST one — clicking inside a "пирог" of
-//     overlapping pins should give exactly one card, not five.
-//   • POLYGONS still use ray-casting (point-in-ring) — no change needed there.
-function _hitTestAllAtPoint(latlng){
-  const hits = [];
-  if(typeof _gatherMarkers !== 'function') return hits;
-  const buckets = _gatherMarkers();
-  // Polygon hits — keep all (a click may legitimately be inside multiple)
-  for(const grp of ['zu','oks']){
-    for(const m of buckets[grp]){
-      if(_hitTestMarker(m, latlng.lat, latlng.lng)){
-        hits.push({kind: grp, marker: m});
-      }
-    }
-  }
-  // Point hits (exp, plus any cad/KML Point objects that bucketed into zu/oks
-  // by classifier) — measure pixel distance, keep only the closest within 18 px.
-  const PX_RADIUS = 18;
-  let bestPoint = null, bestDist = Infinity;
-  const clickPt = map.latLngToContainerPoint(latlng);
-  for(const grp of ['zu','oks','exp']){
-    for(const m of buckets[grp]){
-      const ll = _markerPointLatLng(m);
-      if(!ll) continue;
-      const pt = map.latLngToContainerPoint(ll);
-      const d = Math.hypot(pt.x - clickPt.x, pt.y - clickPt.y);
-      if(d < PX_RADIUS && d < bestDist){
-        // Skip if already counted as polygon (those have a different geom path)
-        const alreadyPolygon = hits.some(h => h.marker.id === m.id);
-        if(alreadyPolygon) continue;
-        bestPoint = {kind: grp, marker: m};
-        bestDist = d;
-      }
-    }
-  }
-  if(bestPoint) hits.push(bestPoint);
-  return hits;
-}
-
-// Return [lat, lon] for a marker IF its underlying geometry is a Point
-// (otherwise null — polygons are handled by the polygon-hit path).
-function _markerPointLatLng(m){
-  if(!m || !m.pmRef) return null;
-  if(m.source === 'cad'){
-    const g = m.pmRef.geom;
-    if(g?.type === 'Point'){ const [lon, lat] = g.coordinates; return [lat, lon]; }
-    return null;
-  }
-  if(m.pmRef.type === 'Point' && m.pmRef.coords){
-    return m.pmRef.coords;  // already [lat, lon]
-  }
-  return null;
-}
-
-// Open cards. If no hits → single "Координаты" card (just the click point).
-// Multiple hits → one card per hit, fanned around the anchor in a circle.
-function showInfoCardsAt(latlng, hits){
-  closeAllInfoCards();
-  _ensureInfoOverlay();
-  const anchorLL = latlng;
-  // Coords card always first — gives the user the standard "request cadastre"
-  // and "add explanation" actions even when objects exist at the click.
-  _createInfoCard({type:'coords', lat:latlng.lat, lng:latlng.lng}, anchorLL, 0, hits.length + 1);
-  hits.forEach((hit, i) => {
-    _createInfoCard({type:'object', hit}, anchorLL, i + 1, hits.length + 1);
-  });
-  _redrawConnectors();
-}
-
-// Compute the initial pixel offset (dx, dy) for card index i out of total N.
-// Cards fan out around the anchor at a radius scaled to the count — more cards
-// need more room. v64: minimum radius 200 px (was 160) so the anchor + thread
-// stays clearly visible even with the typically wide ~260 px cards.
-function _initialCardOffset(idx, total){
-  // Scale radius with count: 1 card = 200, 2 = 220, 3+ = 240+. Caps at 360.
-  const R = Math.min(360, 200 + Math.max(0, total - 1) * 20);
-  // Wider fan when there are more cards — distributes them around almost a full
-  // circle so no two overlap. With ≤3 cards we keep a 180° upper-arc.
-  const span = total <= 3 ? Math.PI * 1.0 : Math.PI * 1.6;
-  const startAngle = -span / 2 - Math.PI/2;   // top-center start
-  const endAngle   =  span / 2 - Math.PI/2;
-  const t = total > 1 ? (idx / (total - 1)) : 0.5;
-  const a = startAngle + t * (endAngle - startAngle);
-  return { dx: Math.cos(a) * R, dy: Math.sin(a) * R };
-}
-
-function _createInfoCard(payload, anchorLL, idx, total){
-  _ensureInfoOverlay();
-  const id = ++_infoCardSeq;
-  const el = document.createElement('div');
-  el.className = 'info-card';
-  el.dataset.cardId = id;
-  el.style.pointerEvents = 'auto';
-
-  // Build inner HTML based on payload type
-  if(payload.type === 'coords'){
-    el.innerHTML = _renderCoordsCard(payload.lat, payload.lng, id);
-  } else if(payload.type === 'object'){
-    el.innerHTML = _renderObjectCard(payload.hit, id);
-  }
-
-  _infoCardsContainer.appendChild(el);
-
-  // Initial position
-  const offset = _initialCardOffset(idx, total);
-  const anchorPt = map.latLngToContainerPoint(anchorLL);
-  const cardW = el.offsetWidth || 240;
-  const cardH = el.offsetHeight || 140;
-  const mw = document.getElementById('map-wrap');
-  const W = mw.offsetWidth, H = mw.offsetHeight;
-  let x = anchorPt.x + offset.dx - cardW/2;
-  let y = anchorPt.y + offset.dy - cardH/2;
-  // Clamp to viewport
-  x = Math.max(8, Math.min(W - cardW - 8, x));
-  y = Math.max(8, Math.min(H - cardH - 8, y));
-  el.style.left = x + 'px';
-  el.style.top  = y + 'px';
-
-  const entry = { el, anchorLL, dx: x - anchorPt.x, dy: y - anchorPt.y, payload };
-  _infoCards.set(id, entry);
-
-  // Drag handle: header bar
-  _attachInfoCardDrag(el, entry);
-
-  // Close button delegate
-  el.querySelector('.ic-close')?.addEventListener('click', e => {
-    e.stopPropagation();
-    el.remove();
-    _infoCards.delete(id);
-    _redrawConnectors();
-  });
-
-  return entry;
-}
-
-function _attachInfoCardDrag(el, entry){
-  const handle = el.querySelector('.ic-header') || el;
-  let dragging = false, sx=0, sy=0, ox=0, oy=0;
-  handle.addEventListener('mousedown', e => {
-    if(e.target.closest('button')) return;  // don't drag when clicking a button
-    dragging = true;
-    sx = e.clientX; sy = e.clientY;
-    ox = parseInt(el.style.left, 10) || 0;
-    oy = parseInt(el.style.top, 10)  || 0;
-    el.classList.add('dragging');
-    e.preventDefault();
-  });
-  document.addEventListener('mousemove', e => {
-    if(!dragging) return;
-    const mw = document.getElementById('map-wrap');
-    const W = mw.offsetWidth, H = mw.offsetHeight;
-    const cw = el.offsetWidth, ch = el.offsetHeight;
-    const nx = Math.max(0, Math.min(W - cw, ox + (e.clientX - sx)));
-    const ny = Math.max(0, Math.min(H - ch, oy + (e.clientY - sy)));
-    el.style.left = nx + 'px';
-    el.style.top  = ny + 'px';
-    // Update entry's pixel-delta-from-anchor so it survives map move
-    const ap = map.latLngToContainerPoint(entry.anchorLL);
-    entry.dx = nx - ap.x;
-    entry.dy = ny - ap.y;
-    _redrawConnectors();
-  });
-  document.addEventListener('mouseup', () => {
-    if(dragging){ dragging = false; el.classList.remove('dragging'); }
-  });
-}
-
-// Recompute connector lines + reposition cards relative to current map state.
-// Cards stick to their anchor latlng — when the map pans, they pan with it.
-function _redrawConnectors(){
-  if(!_connectorSvg) return;
-  _connectorSvg.innerHTML = '';
-  if(_infoCards.size === 0) return;
-  // For each card: compute current anchor pixel, set card position = anchor + delta,
-  // then draw connector line + small dot at anchor.
-  let drewAnchor = false;
-  _infoCards.forEach(entry => {
-    const ap = map.latLngToContainerPoint(entry.anchorLL);
-    const cw = entry.el.offsetWidth, ch = entry.el.offsetHeight;
-    const x = ap.x + entry.dx;
-    const y = ap.y + entry.dy;
-    entry.el.style.left = x + 'px';
-    entry.el.style.top  = y + 'px';
-    // Connector: from anchor to nearest edge of card
-    const cx = x + cw/2, cy = y + ch/2;
-    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
-    line.setAttribute('x1', ap.x);
-    line.setAttribute('y1', ap.y);
-    line.setAttribute('x2', cx);
-    line.setAttribute('y2', cy);
-    // v62: bright green (was #e8ff47 yellow). Yellow conflicted visually with
-    // photo-GPS markers (yellow dots) — user couldn't tell click-anchor from photos.
-    line.setAttribute('stroke', '#00ff66');
-    line.setAttribute('stroke-width', '2');
-    line.setAttribute('stroke-opacity', '0.7');
-    line.setAttribute('stroke-dasharray', '4,3');
-    _connectorSvg.appendChild(line);
-    if(!drewAnchor){
-      const dot = document.createElementNS('http://www.w3.org/2000/svg','circle');
-      dot.setAttribute('cx', ap.x);
-      dot.setAttribute('cy', ap.y);
-      dot.setAttribute('r', '5');
-      dot.setAttribute('fill', '#00ff66');
-      dot.setAttribute('stroke', '#0d0f14');
-      dot.setAttribute('stroke-width', '1.5');
-      _connectorSvg.appendChild(dot);
-      drewAnchor = true;
-    }
-  });
-}
-
-// ── Card renderers ─────────────────────────────────────────────────
-// Compact coords card.
-// v64: copy icon moved into the header (mini-button before close); minimal body.
-function _renderCoordsCard(lat, lng, cardId){
-  const ll = `${(+lat).toFixed(6)}, ${(+lng).toFixed(6)}`;
-  const llEsc = ll.replace(/'/g,"\\'");
-  return (
-    `<div class="ic-header">`+
-      `<span class="ic-title">📍 Координаты</span>`+
-      `<button class="ic-icobtn" title="Копировать координаты" onclick="_copyToClip('${llEsc}', this)">⎘</button>`+
-      `<button class="ic-close" title="Закрыть">×</button>`+
-    `</div>`+
-    `<div class="ic-body">`+
-      `<code class="ic-coords">${ll}</code>`+
-      `<button class="ic-action ic-orange" onclick="queryNSPDAtPoint()" title="Запросить кадастр в этой точке">📍 Запросить кадастр</button>`+
-      `<button class="ic-action ic-cyan"   onclick="startExplanationPoint(${+lat},${+lng})" title="Добавить пояснение">💬 Добавить пояснение</button>`+
-    `</div>`
-  );
-}
-
-// Object card — copy mini-button in header, minimal body.
-function _renderObjectCard(hit, cardId){
-  const m = hit.marker;
-  const groupTitle = hit.kind === 'zu'  ? 'Земельный участок'
-                  :  hit.kind === 'oks' ? 'ОКС / Сооружение'
-                  :                       'Пояснение';
-  const groupClass = hit.kind === 'zu'  ? 'ic-zu'
-                  :  hit.kind === 'oks' ? 'ic-oks'
-                  :                       'ic-exp';
-  const safeName = _escapeHtml(m.name || '(без названия)');
-  const safeDesc = _escapeHtml(m.desc || '');
-  const fullText = `${m.name || ''}${m.desc ? '\n' + m.desc : ''}`;
-  const fullTextEsc = fullText.replace(/'/g,"\\'").replace(/\n/g,'\\n').replace(/"/g,'&quot;');
-  return (
-    `<div class="ic-header ${groupClass}">`+
-      `<span class="ic-title">${groupTitle}</span>`+
-      `<button class="ic-icobtn" title="Копировать текст" onclick="_copyToClip('${fullTextEsc}', this)">⎘</button>`+
-      `<button class="ic-close" title="Закрыть">×</button>`+
-    `</div>`+
-    `<div class="ic-body">`+
-      `<div class="ic-name">${safeName}</div>`+
-      (safeDesc ? `<div class="ic-desc">${safeDesc}</div>` : '')+
-    `</div>`
-  );
-}
-
-// Copy helper used by all info-card buttons. Briefly flashes the button to
-// confirm the action.
-window._copyToClip = function(text, btn){
-  const fallback = () => {
-    const ta = document.createElement('textarea');
-    ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
-    document.body.appendChild(ta); ta.select();
-    try{ document.execCommand('copy'); }catch(_){}
-    document.body.removeChild(ta);
-  };
-  const flash = () => {
-    if(!btn) return;
-    const orig = btn.textContent;
-    btn.classList.add('flashed');
-    btn.textContent = '✓';
-    setTimeout(() => { btn.classList.remove('flashed'); btn.textContent = orig; }, 900);
-  };
-  if(navigator.clipboard?.writeText){
-    navigator.clipboard.writeText(text).then(flash, () => { fallback(); flash(); });
-  } else { fallback(); flash(); }
-};
-
-// Map click pipeline (v61, augmented v62)
-//   • directHit: optional {kind, marker} when the click handler KNOWS exactly
-//     which placemark was clicked (its leaflet layer's own click handler).
-//     Geometric hit-test alone can miss the polygon when the click latlng
-//     falls a fraction of a degree outside the ring (rasterisation rounding).
-//     The directHit guarantees the just-clicked object is in the cards.
-function _handleMapAreaClick(latlng, directHit){
-  closeAllInfoCards();
-  let hits = _hitTestAllAtPoint(latlng);
-  if(directHit && directHit.marker
-     && !hits.some(h => h.marker.id === directHit.marker.id)){
-    hits.push(directHit);
-  }
-  showInfoCardsAt(latlng, hits);
-  if(hits.length > 0 && typeof switchSidebarTab === 'function'){
-    switchSidebarTab('marks');
-    if(window.activateMarkersAtLatLng) window.activateMarkersAtLatLng(latlng);
-  }
-}
-
-// Helper: given a leaflet layer (`evt.target`), find its corresponding marker
-// entry from `_gatherMarkers` so we can pass it as directHit.
-function _markerForLeafletLayer(leafletLayer){
-  if(!leafletLayer || typeof _gatherMarkers !== 'function') return null;
-  const buckets = _gatherMarkers();
-  for(const grp of ['zu','oks','exp']){
-    for(const m of buckets[grp]){
-      if(m.pmRef && m.pmRef._leafletLayer === leafletLayer){
-        return {kind: grp, marker: m};
-      }
-    }
-  }
-  return null;
-}
-
-// Keep original buildCoordPopup name as a no-op stub so older callsites that
-// still try to invoke it during transition don't crash. Returns empty string.
-function buildCoordPopup(){ return ''; }
 
 // ═══ STATE ════════════════════════════════════════════════════════
 let photos=[],activeIdx=null,lbLL=null,lbScale=1;
@@ -2841,51 +2141,17 @@ let remotePhotos=[];
 let timelineMode='full';
 
 // ═══ UPLOAD ═══════════════════════════════════════════════════════
-function toggleUploadMenu(e){
-  e.stopPropagation();
-  const m = document.getElementById('upload-menu');
-  if(!m.classList.contains('open')) _refreshUploadHints();
-  m.classList.toggle('open');
-}
+function toggleUploadMenu(e){e.stopPropagation();document.getElementById('upload-menu').classList.toggle('open');}
 function closeUploadMenu(){document.getElementById('upload-menu').classList.remove('open');}
-
-function _refreshUploadHints(){
-  const el = document.getElementById('upload-hints');
-  if(!el) return;
-  const photo = _loadPathHint(_LS_PATH_PHOTO);
-  const xlsx  = _loadPathHint(_LS_PATH_XLSX);
-  const kml   = _loadPathHint(_LS_PATH_KML);
-  // v65 (Task 3): hints are now ACTION buttons, not just labels. Clicking
-  // re-triggers the appropriate file picker so the user can quickly reload the
-  // last source. Browsers don't permit auto-loading by stored path (security),
-  // so we open the same picker the menu button does — but the picker remembers
-  // the last folder per file-type, so the user lands close to their target.
-  const row = (kind, ico, lbl, name, onclick) =>
-    `<button class="uh-row uh-clickable" type="button" onclick="${onclick}" title="Открыть тот же тип файла повторно">`+
-      `<span class="uh-ico">${ico}</span>`+
-      `<span class="uh-lbl">${lbl}:</span>`+
-      `<span class="uh-val">${_escapeHtml(name)}</span>`+
-    `</button>`;
-  const parts = [];
-  if(photo) parts.push(row('photo', '📂', 'Фото', photo.name, 'closeUploadMenu();triggerFolderUpload()'));
-  if(xlsx)  parts.push(row('xlsx',  '📋', 'XLSX', xlsx.name,  'closeUploadMenu();pickXlsxCatalog()'));
-  if(kml)   parts.push(row('kml',   '🗺',  'KML',  kml.name,   'closeUploadMenu();pickKMLViaMenu()'));
-  if(parts.length === 0){ el.style.display = 'none'; return; }
-  el.style.display = 'block';
-  el.innerHTML = `<div class="uh-title">Последние загруженные (клик — открыть повторно):</div>${parts.join('')}`;
-}
 document.addEventListener('click',()=>{closeUploadMenu();closeKMLMenu();});
 
 async function triggerFolderUpload(){
   if('showDirectoryPicker' in window){
     try{
       const dh=await window.showDirectoryPicker({mode:'read'});
-      _savePathHint(_LS_PATH_PHOTO, dh.name);
-      _captureFirstSessionName('photo', dh.name);
-      _photoRootDirHandle = dh; // save for potential move operations
       showToast('⏳ Сканирование…','info',6000);
       const{photos:pe,kmls:ke}=await collectFilesFromHandle(dh,'',dh.name);
-      for(const k of ke){if(k.isKmz)await loadKMZFromFile(k.file,k.name);else await loadKMLFromFile(k.file,k.name);}
+      for(const k of ke)await loadKMLFromFile(k.file,k.name);
       if(pe.length)await handleFileEntries(pe,dh.name);
       else if(!ke.length)showToast('Файлов не найдено','warn');
     }catch(e){if(e.name!=='AbortError')document.getElementById('folder-input-fallback').click();}
@@ -2897,8 +2163,7 @@ async function collectFilesFromHandle(dh,relPath,rootName){
   for await(const[name,entry]of dh.entries()){
     if(entry.kind==='file'){
       if(/\.jpe?g$/i.test(name)){const f=await entry.getFile();photos.push({file:f,locPath:relPath,fileHandle:entry});}
-      else if(/\.kml$/i.test(name)){const f=await entry.getFile();kmls.push({file:f,name,relPath,isKmz:false});}
-      else if(/\.kmz$/i.test(name)){const f=await entry.getFile();kmls.push({file:f,name,relPath,isKmz:true});}
+      else if(/\.kml$/i.test(name)){const f=await entry.getFile();kmls.push({file:f,name,relPath});}
     }else if(entry.kind==='directory'){
       const sub=await collectFilesFromHandle(entry,relPath?`${relPath}/${name}`:name,rootName);
       photos.push(...sub.photos);kmls.push(...sub.kmls);
@@ -2909,10 +2174,10 @@ async function collectFilesFromHandle(dh,relPath,rootName){
 
 function triggerFileUpload(){document.getElementById('file-input').click();}
 document.getElementById('file-input').addEventListener('change',e=>{const ents=[...(e.target.files||[])].map(f=>({file:f,locPath:deriveFolderPath(f,''),fileHandle:null}));handleFileEntries(ents,'');e.target.value='';});
-document.getElementById('folder-input-fallback').addEventListener('change',e=>{const files=[...(e.target.files||[])];if(!files.length)return;const rn=(files[0].webkitRelativePath||'').split('/')[0]||'';if(rn){_captureFirstSessionName('photo',rn);_savePathHint(_LS_PATH_PHOTO,rn);}handleFileEntries(files.map(f=>({file:f,locPath:deriveFolderPath(f,rn),fileHandle:null})),rn);e.target.value='';});
-document.getElementById('kml-file-input').addEventListener('change',async e=>{for(const f of e.target.files||[]){_captureFirstSessionName('kml',f.name);if(/\.kmz$/i.test(f.name))await loadKMZFromFile(f,f.name);else await loadKMLFromFile(f,f.name);}e.target.value='';});
+document.getElementById('folder-input-fallback').addEventListener('change',e=>{const files=[...(e.target.files||[])];if(!files.length)return;const rn=(files[0].webkitRelativePath||'').split('/')[0]||'';handleFileEntries(files.map(f=>({file:f,locPath:deriveFolderPath(f,rn),fileHandle:null})),rn);e.target.value='';});
+document.getElementById('kml-file-input').addEventListener('change',async e=>{for(const f of e.target.files||[])await loadKMLFromFile(f,f.name);e.target.value='';});
 document.getElementById('map-wrap').addEventListener('dragover',e=>e.preventDefault());
-document.getElementById('map-wrap').addEventListener('drop',e=>{e.preventDefault();const fs=[...e.dataTransfer.files];const js=fs.filter(f=>/jpe?g/i.test(f.type||f.name));const ks=fs.filter(f=>/\.kml$/i.test(f.name));const kzs=fs.filter(f=>/\.kmz$/i.test(f.name));if(js.length)handleFileEntries(js.map(f=>({file:f,locPath:'',fileHandle:null})),'');ks.forEach(f=>loadKMLFromFile(f,f.name));kzs.forEach(f=>loadKMZFromFile(f,f.name));});
+document.getElementById('map-wrap').addEventListener('drop',e=>{e.preventDefault();const fs=[...e.dataTransfer.files];const js=fs.filter(f=>/jpe?g/i.test(f.type||f.name));const ks=fs.filter(f=>/\.kml$/i.test(f.name));if(js.length)handleFileEntries(js.map(f=>({file:f,locPath:'',fileHandle:null})),'');ks.forEach(f=>loadKMLFromFile(f,f.name));});
 
 async function handleFileEntries(entries,rootName){
   if(!entries.length)return;
@@ -3049,9 +2314,8 @@ function renderFolderNodes(nodes,container,depth){
     });
 
     row.appendChild(toggle);row.appendChild(icon);row.appendChild(label);row.appendChild(count);row.appendChild(del);
-    // П2: click to activate folder filter OR execute move in move-mode
+    // П2: click to activate folder filter
     row.addEventListener('click',()=>{
-      if(_moveModePhotoIdx!==null){executePhotoMove(node.path);return;}
       if(selectedFolderPath===node.path){clearFolderFilter();}
       else{setFolderFilter(node.path);}
     });
@@ -3065,9 +2329,6 @@ function setFolderFilter(path){
   selectedFolderPath=path;
   document.getElementById('folder-filter-name').textContent=path.split('/').pop();
   document.getElementById('folder-filter-banner').classList.add('visible');
-  // Light up the filter button
-  const fb=document.getElementById('ftree-filter-btn');
-  if(fb)fb.classList.add('filter-active');
   updateFolderTreePanel();
   renderList();
   renderTimeline();
@@ -3077,9 +2338,6 @@ function setFolderFilter(path){
 function clearFolderFilter(){
   selectedFolderPath=null;
   document.getElementById('folder-filter-banner').classList.remove('visible');
-  // Dim the filter button
-  const fb=document.getElementById('ftree-filter-btn');
-  if(fb)fb.classList.remove('filter-active');
   updateFolderTreePanel();
   renderList();
   renderTimeline();
@@ -3154,133 +2412,50 @@ function kmlAlpha(c){ if(!c||c.length<2)return 1; return parseInt(c.padStart(8,'
 
 function parseKML(xmlText,filename){
   const doc=new DOMParser().parseFromString(xmlText,'text/xml');
-  // ── Robust name/description extraction ────────────────────────
-  // querySelector with namespace-aware XML can fail to match plain <name>;
-  // getElementsByTagName ignores namespaces — safer for both Yandex-style KML
-  // (where some old files use <n>) and standard KML (where it's <name>).
-  // We use a helper that scans direct CHILDREN only (depth=1) to avoid picking
-  // up a Folder's <name> when looking for a Document's <name>.
-  const childText = (parent, tagOrTags) => {
-    const tags = Array.isArray(tagOrTags) ? tagOrTags : [tagOrTags];
-    for(const t of tags){
-      for(const child of parent.children){
-        if(child.localName === t || child.tagName === t){
-          return (child.textContent || '').trim();
-        }
-      }
-    }
-    return '';
-  };
-  // Pick the first Document we find
-  const docEl = doc.getElementsByTagName('Document')[0];
-  const docName = (docEl && (childText(docEl, 'name') || childText(docEl, 'n'))) || filename.replace(/\.kml$/i,'');
-
-  // Build style table: id → resolved style block. We also preserve the raw
-  // styleUrl on each placemark so downstream consumers (e.g. the marker list
-  // grouping in renderMarksList) can classify by "cad_zu_/cad_oks_/cad_exp_".
-  const styles = _parseKMLStyles(doc);
-
+  const styles={};
+  doc.querySelectorAll('Style').forEach(s=>{
+    const id=s.getAttribute('id');if(!id)return;
+    const fillColor_raw = s.querySelector('PolyStyle color')?.textContent||'';
+    styles['#'+id]={
+      lineColor:  kmlColorToCss(s.querySelector('LineStyle color')?.textContent||''),
+      lineWidth:  parseFloat(s.querySelector('LineStyle width')?.textContent||'2'),
+      fillColor:  kmlColorToCss(fillColor_raw),
+      // Store fill opacity from alpha channel of the KML fill color (NOT hardcoded 1)
+      fillOpacity: s.querySelector('PolyStyle fill')?.textContent==='0' ? 0 : kmlAlpha(fillColor_raw),
+      hasFill:    s.querySelector('PolyStyle fill')?.textContent!=='0',
+    };
+  });
+  const docEl=doc.querySelector('Document');
+  const docName=docEl?.querySelector(':scope > n')?.textContent?.trim()||docEl?.querySelector(':scope > name')?.textContent?.trim()||filename.replace(/\.kml$/i,'');
   const placemarks=[];
-  const pmList = doc.getElementsByTagName('Placemark');
-  for(const pm of pmList){
-    const name = childText(pm, 'name') || childText(pm, 'n') || '';
-    const desc = childText(pm, 'description') || '';
-    const styleUrl = childText(pm, 'styleUrl');
-    const style = styles[styleUrl] || styles[styleUrl.replace(/^#/, '')] ||
-                  {lineColor:'rgba(71,200,255,0.9)',lineWidth:2,fillColor:'rgba(71,200,255,0.12)',fillOpacity:0.12,hasFill:true};
-
-    // Helpers for coordinate parsing — KML stores "lon,lat[,alt]"
-    const parseCoordList = txt => txt.trim().split(/\s+/).map(pair => {
-      const p = pair.split(','); return [parseFloat(p[1]), parseFloat(p[0])]; // [lat, lon] for Leaflet
-    }).filter(c => !isNaN(c[0]) && !isNaN(c[1]));
-
-    const pCoord = pm.getElementsByTagName('Point')[0]?.getElementsByTagName('coordinates')[0];
-    if(pCoord){
-      const p = pCoord.textContent.trim().split(',');
-      const lat = parseFloat(p[1]), lon = parseFloat(p[0]);
-      if(!isNaN(lat) && !isNaN(lon)){
-        placemarks.push({type:'Point', name, desc, style, styleUrl, coords:[lat,lon]});
-      }
-    }
-    const polyCoordsEl = pm.getElementsByTagName('Polygon')[0]
-                          ?.getElementsByTagName('outerBoundaryIs')[0]
-                          ?.getElementsByTagName('LinearRing')[0]
-                          ?.getElementsByTagName('coordinates')[0];
-    if(polyCoordsEl){
-      const c = parseCoordList(polyCoordsEl.textContent);
-      if(c.length > 2) placemarks.push({type:'Polygon', name, desc, style, styleUrl, coords:c});
-    }
-    const lineEl = pm.getElementsByTagName('LineString')[0]?.getElementsByTagName('coordinates')[0];
-    if(lineEl){
-      const c = parseCoordList(lineEl.textContent);
-      if(c.length > 1) placemarks.push({type:'LineString', name, desc, style, styleUrl, coords:c});
-    }
-  }
-  return {docName, filename, placemarks};
-}
-
-// Extracted style-table builder (unchanged behaviour, factored out so parseKML
-// reads cleaner). Returns map styleUrl → resolved {lineColor, lineWidth, ...}.
-function _parseKMLStyles(doc){
-  const styles = {};
-  const styleEls = doc.getElementsByTagName('Style');
-  for(const s of styleEls){
-    const id = s.getAttribute('id');
-    if(!id) continue;
-    const ls = s.getElementsByTagName('LineStyle')[0];
-    const ps = s.getElementsByTagName('PolyStyle')[0];
-    const is = s.getElementsByTagName('IconStyle')[0];
-    const lineCol  = ls?.getElementsByTagName('color')[0]?.textContent?.trim() || 'ff000000';
-    const lineW    = parseFloat(ls?.getElementsByTagName('width')[0]?.textContent || '2');
-    const polyCol  = ps?.getElementsByTagName('color')[0]?.textContent?.trim() || lineCol;
-    const fill     = (ps?.getElementsByTagName('fill')[0]?.textContent || '1').trim() !== '0';
-    const iconCol  = is?.getElementsByTagName('color')[0]?.textContent?.trim() || lineCol;
-    const ABGRtoRGBA = c => {
-      if(!c || c.length < 6) return 'rgba(71,200,255,0.5)';
-      const a = parseInt(c.slice(0,2), 16) / 255;
-      const b = parseInt(c.slice(2,4), 16);
-      const g = parseInt(c.slice(4,6), 16);
-      const r = parseInt(c.slice(6,8), 16);
-      return `rgba(${r},${g},${b},${a.toFixed(3)})`;
-    };
-    styles['#'+id] = styles[id] = {
-      lineColor: ABGRtoRGBA(lineCol),
-      lineWidth: lineW,
-      fillColor: ABGRtoRGBA(polyCol),
-      fillOpacity: parseInt((polyCol||'00').slice(0,2), 16) / 255,
-      hasFill: fill,
-      iconColor: ABGRtoRGBA(iconCol),
-    };
-  }
-  return styles;
+  doc.querySelectorAll('Placemark').forEach(pm=>{
+    const name=(pm.querySelector(':scope > n')?.textContent||pm.querySelector(':scope > name')?.textContent||'').trim();
+    const desc=(pm.querySelector(':scope > description')?.textContent||'').trim();
+    const styleUrl=pm.querySelector('styleUrl')?.textContent?.trim()||'';
+    const style=styles[styleUrl]||{lineColor:'rgba(71,200,255,0.9)',lineWidth:2,fillColor:'rgba(71,200,255,0.12)',fillOpacity:0.12,hasFill:true};
+    const pc=txt=>txt.trim().split(/\s+/).map(pair=>{const p=pair.split(',');return[parseFloat(p[1]),parseFloat(p[0])];}).filter(c=>!isNaN(c[0])&&!isNaN(c[1]));
+    const pCoord=pm.querySelector('Point coordinates');
+    if(pCoord){const p=pCoord.textContent.trim().split(',');const lat=parseFloat(p[1]),lon=parseFloat(p[0]);if(!isNaN(lat))placemarks.push({type:'Point',name,desc,style,coords:[lat,lon]});}
+    const polyEl=pm.querySelector('Polygon outerBoundaryIs LinearRing coordinates');
+    if(polyEl){const c=pc(polyEl.textContent);if(c.length>2)placemarks.push({type:'Polygon',name,desc,style,coords:c});}
+    const lineEl=pm.querySelector('LineString coordinates');
+    if(lineEl){const c=pc(lineEl.textContent);if(c.length>1)placemarks.push({type:'LineString',name,desc,style,coords:c});}
+  });
+  return{docName,filename,placemarks};
 }
 
 function renderKMLOnMap(parsed){
   const lg=L.layerGroup();
   parsed.placemarks.forEach(pm=>{
     let layer;
+    // FIX: use pm.style.fillOpacity (actual alpha from KML) instead of hardcoded 1
     if(pm.type==='Polygon')layer=L.polygon(pm.coords,{color:pm.style.lineColor,weight:pm.style.lineWidth,fillColor:pm.style.fillColor,fillOpacity:pm.style.fillOpacity??0.1});
     else if(pm.type==='LineString')layer=L.polyline(pm.coords,{color:pm.style.lineColor,weight:pm.style.lineWidth});
     else if(pm.type==='Point')layer=L.circleMarker(pm.coords,{radius:7,color:pm.style.lineColor,fillColor:pm.style.lineColor,fillOpacity:.85,weight:2});
     if(layer){
-      // v61: click delegates to the unified map-area pipeline. v62: also pass
-      // `directHit` so hit-test never misses the polygon we just clicked
-      // (floating-point edge cases were causing point-in-ring to return false
-      // for clicks landing on the rasterised polygon edge).
-      layer.on('click', e => {
-        L.DomEvent.stopPropagation(e);
-        // v66: when "Указать GPS" is active, the click sets the photo's anchor
-        // point — don't open info cards or switch sidebar tab. Mirrors the
-        // top-level map.on('click') guard.
-        if(manualGPSActive){ handleMapClickForGPS(e); return; }
-        window.lastClickedPoint = e.latlng;
-        const direct = _markerForLeafletLayer(layer);
-        _handleMapAreaClick(e.latlng, direct);
-      });
+      layer.on('click',e=>{L.DomEvent.stopPropagation(e);window.lastClickedPoint=e.latlng;L.popup({maxWidth:224}).setLatLng(e.latlng).setContent(buildCoordPopup(e.latlng.lat.toFixed(6),e.latlng.lng.toFixed(6),pm.name||pm.desc,pm.name?pm.desc:'')).openOn(map);});
+      if(pm.name||pm.desc)layer.bindTooltip(`<b>${esc(pm.name||'')}</b>${pm.desc?'<br><small>'+esc(pm.desc)+'</small>':''}`,{sticky:true,opacity:.92});
       layer.addTo(lg);
-      pm._leafletLayer = layer;
-      pm._parentGroup  = lg;
-      if(pm._visible === undefined) pm._visible = true;
     }
   });
   return lg;
@@ -3293,100 +2468,6 @@ async function loadKMLFromFile(file,displayName,handle){
   } catch(e){showToast(`❌ KML: ${e.message}`,'error',5000);}
 }
 
-// ── KMZ import ────────────────────────────────────────────────────
-// KMZ is a ZIP archive containing doc.kml (or other .kml) plus optional
-// ground overlays and photos. We use the already-loaded JSZip library.
-async function loadKMZFromFile(file, displayName){
-  if(typeof JSZip === 'undefined'){
-    showToast('⚠ JSZip не загружен — KMZ недоступен','error',4000);
-    return;
-  }
-  try{
-    showToast(`⏳ Читаем KMZ: ${displayName||file.name}…`,'info',5000);
-    const buf = await file.arrayBuffer();
-    const zip = await JSZip.loadAsync(buf);
-
-    // 1. Find the root KML (Google Earth convention: doc.kml first, else first .kml)
-    const kmlFiles = Object.keys(zip.files).filter(n => /\.kml$/i.test(n) && !zip.files[n].dir);
-    if(!kmlFiles.length){
-      showToast(`❌ KMZ не содержит .kml файлов: ${displayName}`,'error',5000);
-      return;
-    }
-    // Prefer "doc.kml" at root, then shortest path
-    const kmlName = kmlFiles.find(n => /^doc\.kml$/i.test(n.split('/').pop()))
-                 || kmlFiles.sort((a,b) => a.length - b.length)[0];
-    const kmlText = await zip.files[kmlName].async('string');
-
-    // 2. Extract embedded photos referenced in the KML (GroundOverlay / PhotoOverlay / href)
-    //    and register them as blob URLs so relative src= paths resolve inside the app.
-    const _kmzBlobMap = {};  // filename → blob URL
-    const imgFiles = Object.keys(zip.files).filter(n =>
-      !zip.files[n].dir && /\.(jpe?g|png|gif|webp)$/i.test(n)
-    );
-    for(const imgPath of imgFiles){
-      const blob = await zip.files[imgPath].async('blob');
-      const blobUrl = URL.createObjectURL(blob);
-      _kmzBlobMap[imgPath] = blobUrl;
-      // Also store by basename so relative href="photo.jpg" works
-      _kmzBlobMap[imgPath.split('/').pop()] = blobUrl;
-    }
-
-    // 3. Patch KML text: replace relative image hrefs with blob URLs
-    let patchedKML = kmlText;
-    for(const [name, blobUrl] of Object.entries(_kmzBlobMap)){
-      // Replace <href>name</href> with blob URL (handles both basename and full path)
-      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      patchedKML = patchedKML.replace(
-        new RegExp(`(<href>)${escaped}(</href>)`, 'gi'),
-        `$1${blobUrl}$2`
-      );
-    }
-
-    // 4. Load the patched KML as usual
-    const kmzDisplayName = (displayName||file.name).replace(/\.kmz$/i,'');
-    await _loadKMLFromText(patchedKML, kmzDisplayName, null);
-
-    // 5. Load any embedded JPEG photos with GPS as photo markers
-    const photoEntries = [];
-    for(const imgPath of imgFiles){
-      if(!/\.jpe?g$/i.test(imgPath)) continue;
-      const blob = await zip.files[imgPath].async('blob');
-      const f = new File([blob], imgPath.split('/').pop(), {type:'image/jpeg'});
-      photoEntries.push({file:f, locPath:'', fileHandle:null});
-    }
-    if(photoEntries.length){
-      await handleFileEntries(photoEntries, kmzDisplayName);
-      showToast(`📸 KMZ: извлечено ${photoEntries.length} фото из архива`,'info',3000);
-    }
-
-  } catch(e){
-    console.error('[kmz]', e);
-    showToast(`❌ KMZ: ${e.message}`,'error',6000);
-  }
-}
-
-// FSA-aware KMZ menu picker
-window.pickKMZViaMenu = async function(){
-  if(_fsaSupported){
-    try{
-      const handles = await window.showOpenFilePicker({
-        types:[{description:'KMZ (Google Earth)', accept:{'application/vnd.google-earth.kmz':['.kmz']}}],
-        multiple: true,
-      });
-      for(const h of handles){
-        const f = await h.getFile();
-        _captureFirstSessionName('kml', f.name);
-        await loadKMZFromFile(f, f.name);
-      }
-      return;
-    } catch(e){
-      if(e?.name === 'AbortError') return;
-    }
-  }
-  // Fallback: reuse kml-file-input (already accepts .kmz)
-  document.getElementById('kml-file-input').click();
-};
-
 // FSA-aware menu picker for KML — gives writable handle so saves go to the same file
 window.pickKMLViaMenu = async function(){
   if(_fsaSupported){
@@ -3397,7 +2478,6 @@ window.pickKMLViaMenu = async function(){
       });
       for(const h of handles){
         const f = await h.getFile();
-        _savePathHint(_LS_PATH_KML, f.name); _captureFirstSessionName('kml', f.name);
         await loadKMLFromFile(f, f.name, h);
       }
       return;
@@ -3431,7 +2511,7 @@ async function _loadKMLFromText(text, displayName, handle){
     handle: handle||null, // FSA writable handle — null on legacy upload path
   });
   updateKMLButton();
-  saveKMLLayersToStorage();if(typeof renderMarksList==='function'&&_activeSidebarTab==='marks')renderMarksList();
+  saveKMLLayersToStorage();
   const handleNote = handle ? ' (можно сохранять обратно в ту же папку)' : '';
   showToast(`🗺 KML: ${parsed.docName} (${parsed.placemarks.length} obj)${handleNote}`,'success',3000);
 }
@@ -3443,50 +2523,6 @@ async function _loadKMLFromText(text, displayName, handle){
 // Size note: localStorage limit is ~5 MB; each KML in our use-case is <100 KB,
 // so ~50 layers comfortably fit. Beyond that we trim oldest in saveKMLLayersToStorage.
 const _LS_KML_KEY = 'kmlPersist.v1';
-
-// ── Path-hint persistence (Task 1) ────────────────────────────────
-// localStorage keys for the LAST opened folder per data type. Browsers don't
-// expose absolute paths to JS for security reasons, but FSA gives us file
-// names and (when re-querying) folder hints. We store:
-//   • lastPhotoDir.name    — folder display name from last photo upload
-//   • lastPhotoDir.handle  — directory handle (if FSA supports it; not all browsers do)
-//   • lastXlsxFile.name    — file name from last XLSX
-//   • lastKMLFile.name     — file name from last KML
-// Display purpose: show "📂 Последняя папка фото: …" / "📋 Последний XLSX: …" hints
-// in toasts. Cannot programmatically navigate to OS paths — browser security.
-const _LS_PATH_PHOTO = 'paths.photo.v1';
-const _LS_PATH_XLSX  = 'paths.xlsx.v1';
-const _LS_PATH_KML   = 'paths.kml.v1';
-
-// Session-level "first opened" name (NOT from localStorage — that's a previous
-// session's hint). Whichever was first this session becomes the KMZ root folder
-// name. Priority: photo folder > KML doc > XLSX > generic fallback.
-let _firstSessionPhotoFolder = null;  // root folder name from triggerFolderUpload
-let _firstSessionKMLName     = null;  // first KML's docName (without .kml)
-let _firstSessionXLSXName    = null;  // first XLSX basename
-function _captureFirstSessionName(kind, name){
-  if(!name) return;
-  const trimmed = String(name).replace(/\.kml$/i,'').replace(/\.xlsx?$/i,'').trim();
-  if(!trimmed) return;
-  if(kind === 'photo' && !_firstSessionPhotoFolder) _firstSessionPhotoFolder = trimmed;
-  else if(kind === 'kml' && !_firstSessionKMLName)  _firstSessionKMLName    = trimmed;
-  else if(kind === 'xlsx' && !_firstSessionXLSXName) _firstSessionXLSXName  = trimmed;
-}
-function _kmzRootName(){
-  return _firstSessionPhotoFolder
-      || _firstSessionKMLName
-      || _firstSessionXLSXName
-      || 'EkceloFoto экспорт';
-}
-
-function _savePathHint(key, name){
-  try { localStorage.setItem(key, JSON.stringify({name, savedAt:Date.now()})); }
-  catch(_){}
-}
-function _loadPathHint(key){
-  try { return JSON.parse(localStorage.getItem(key) || 'null'); }
-  catch(_){ return null; }
-}
 const _LS_KML_LIMIT_BYTES = 4_500_000;  // leave headroom under 5 MB browser cap
 
 function saveKMLLayersToStorage(){
@@ -3558,31 +2594,16 @@ function updateKMLButton(){
 }
 
 function _refreshKMLEyeButton(){
-  // v58: KML master toggle relocated from a floating button (which collided with
-  // «По объектам») into the stats panel as #stat-kml-toggle, sitting next to
-  // #stat-photos-toggle. We keep the old #kml-eye-btn DOM lookup conditional so
-  // legacy markup (if any) doesn't error.
+  const eye = document.getElementById('kml-eye-btn');
+  if(!eye) return;
   const total = kmlLayers.length;
   const on    = kmlLayers.filter(l => l.visible).length;
-
-  // New stat-style toggle in the header
-  const stat  = document.getElementById('stat-kml-toggle');
-  const state = document.getElementById('stat-kml-state');
-  const lbl   = document.getElementById('stat-kml-lbl');
-  if(stat){
-    stat.style.display = total > 0 ? '' : 'none';
-    if(state) state.textContent = on > 0 ? '👁' : '⊘';
-    if(lbl)   lbl.textContent   = on > 0 ? 'Откл.KML' : 'Вкл.KML';
-    stat.classList.toggle('active', on > 0 && on === total);
-    stat.title = on === total ? 'Скрыть все KML-слои' :
-                 on === 0     ? 'Показать все KML-слои' :
-                                `Видны ${on} из ${total} — клик: показать все`;
-  }
-  // Legacy floating eye button (left in DOM for now — hidden by display rule below)
-  const eye = document.getElementById('kml-eye-btn');
-  if(eye){
-    eye.style.display = 'none';  // suppressed in v58, replaced by stat-kml-toggle
-  }
+  eye.classList.toggle('all-on',  on === total && total > 0);
+  eye.classList.toggle('all-off', on === 0);
+  eye.textContent = on > 0 ? '👁' : '⊘';
+  eye.title = on === total ? 'Скрыть все KML-слои' :
+              on === 0     ? 'Показать все KML-слои' :
+                             `Видны ${on} из ${total} — клик: показать все`;
 }
 
 window.toggleAllKMLVisibility = function(){
@@ -3608,14 +2629,7 @@ function renderKMLDropdown(){
   });
   document.getElementById('kml-btn').classList.toggle('active',kmlLayers.some(l=>l.visible));
 }
-function toggleKMLMenu(ev){
-  if(ev) ev.stopPropagation();
-  // v60 (Task 7): mutually-exclusive dropdowns. Opening one closes the other so
-  // they don't overlap visually (cad menu sits left of KML menu and they would
-  // otherwise stack on top of each other when both open).
-  document.getElementById('cadastre-dropdown')?.classList.remove('open');
-  document.getElementById('kml-dropdown').classList.toggle('open');
-}
+function toggleKMLMenu(){document.getElementById('kml-dropdown').classList.toggle('open');}
 function closeKMLMenu(){document.getElementById('kml-dropdown').classList.remove('open');}
 function toggleKMLLayer(idx,v){
   const l=kmlLayers[idx];if(!l)return;
@@ -3623,7 +2637,7 @@ function toggleKMLLayer(idx,v){
   if(v)l.layerGroup.addTo(map);else map.removeLayer(l.layerGroup);
   document.getElementById('kml-btn').classList.toggle('active',kmlLayers.some(k=>k.visible));
   _refreshKMLEyeButton();
-  saveKMLLayersToStorage();if(typeof renderMarksList==='function'&&_activeSidebarTab==='marks')renderMarksList();
+  saveKMLLayersToStorage();
 }
 function removeKMLLayer(idx){
   if(kmlLayers[idx])map.removeLayer(kmlLayers[idx].layerGroup);
@@ -3633,7 +2647,7 @@ function removeKMLLayer(idx){
     document.getElementById('kml-wrap').classList.remove('has-layers');
     clearKMLPersistedStorage();
   } else {
-    saveKMLLayersToStorage();if(typeof renderMarksList==='function'&&_activeSidebarTab==='marks')renderMarksList();
+    saveKMLLayersToStorage();
   }
 }
 
@@ -3649,632 +2663,10 @@ function addMarker(photo,idx){
 function rebuildMarkerListeners(){photos.forEach((p,i)=>{if(!p.marker)return;p.marker.off('click');p.marker.on('click',()=>openLightbox(i,p.marker.getLatLng()));});}
 function setActiveMarker(idx){photos.forEach((p,i)=>{const d=p.marker?.getElement()?.querySelector('.marker-dot');if(d)d.classList.toggle('active',i===idx);});}
 function clearActiveMarker(){photos.forEach(p=>p.marker?.getElement()?.querySelector('.marker-dot')?.classList.remove('active'));}
-function fitMapToPhotos(){
-  // "По объектам" — fit map to UNION of:
-  //   • photo GPS points (with .lat set)
-  //   • all cad placemarks (saved contours from kdConfirm) — every polygon vertex,
-  //     plus point coords for explanation pins
-  //   • all parsed-KML placemarks (loaded from KML files) — same
-  // Without the KML/cad union, "fit" was useless when user had cadastre but no
-  // photos, or photos in one place and contours in another.
-  const lls = [];
-  for(const p of photos){
-    if(p.lat != null) lls.push([p.lat, p.lon]);
-  }
-  for(const layer of kmlLayers){
-    if(!layer || layer.visible === false) continue;  // respect visibility toggle
-    for(const pm of (layer.cadPlacemarks || [])){
-      if(!pm.geom?.coordinates) continue;
-      const g = pm.geom;
-      if(g.type === 'Point'){
-        const [lon, lat] = g.coordinates; lls.push([lat, lon]);
-      } else if(g.type === 'Polygon'){
-        for(const [lon, lat] of g.coordinates[0] || []) lls.push([lat, lon]);
-      } else if(g.type === 'MultiPolygon'){
-        for(const ring of (g.coordinates[0] || [])) for(const [lon, lat] of ring) lls.push([lat, lon]);
-      }
-    }
-    for(const pm of (layer.parsedData?.placemarks || [])){
-      if(!pm.coords) continue;
-      // pm.coords is [lat,lon] for Point, [[lat,lon],...] for Polygon/LineString (Leaflet order)
-      if(pm.type === 'Point') lls.push(pm.coords);
-      else if(Array.isArray(pm.coords[0])) for(const c of pm.coords) lls.push(c);
-    }
-  }
-  if(!lls.length) return;
-  document.getElementById('map-hint').classList.add('hidden');
-  if(lls.length === 1) map.setView(lls[0], 19);
-  else map.fitBounds(L.latLngBounds(lls), {padding:[60,60], maxZoom:19});
-}
+function fitMapToPhotos(){const pts=photos.filter(p=>p.lat!=null);if(!pts.length)return;document.getElementById('map-hint').classList.add('hidden');if(pts.length===1)map.setView([pts[0].lat,pts[0].lon],19);else map.fitBounds(L.latLngBounds(pts.map(p=>[p.lat,p.lon])),{padding:[60,60],maxZoom:19});}
 
 // ═══ П4: SIDEBAR — full card click + folder filter ═════════════════
 function getSortTs(p){return p.dateObj?.getTime()||p._sortTs||0;}
-
-// ── SIDEBAR TABS + MARKERS PANEL (Task 4) ─────────────────────────
-// Switches between Photos and Markers in the left sidebar. The Markers panel
-// has 3 sub-groups: ZU (зем.участки), OKS (здания/сооружения), Exp (пояснения).
-// Each entry: checkbox (visible toggle) + name + description, white-on-black.
-// Click on a map marker activates the corresponding sidebar entry across ALL
-// matching groups (a click point may hit a polygon and a pin at once).
-
-let _activeSidebarTab = 'photos';
-
-window.switchSidebarTab = function(tab){
-  _activeSidebarTab = tab;
-  document.querySelectorAll('#sidebar-tabs .sb-tab').forEach(b => {
-    b.classList.toggle('active', b.dataset.tab === tab);
-  });
-  document.getElementById('photo-list').style.display = tab === 'photos' ? '' : 'none';
-  document.getElementById('marks-list').style.display = tab === 'marks'  ? '' : 'none';
-  if(tab === 'marks') renderMarksList();
-};
-
-window.toggleMarksGroup = function(grp){
-  const el = document.getElementById(`marks-group-${grp}`);
-  const arrow = document.getElementById(`marks-arrow-${grp}`);
-  if(!el) return;
-  el.classList.toggle('collapsed');
-  if(arrow) arrow.textContent = el.classList.contains('collapsed') ? '▶' : '▼';
-};
-
-// Build the Markers list from current state. Sources:
-//   1. kmlLayers[*].cadPlacemarks — contours saved via the dialog (typed by safeType)
-//   2. kmlLayers[*].parsedData.placemarks — placemarks from loaded KML files; we
-//      classify by Style id pattern (cad_zu_/cad_oks_/cad_exp_) when present,
-//      otherwise by geometry type (Point → exp, Polygon → oks default).
-//
-// Each entry stores a stable composite id `${layerIdx}:${kind}:${innerIdx}` so
-// click events on the map can re-find and highlight the row.
-function _gatherMarkers(){
-  const buckets = { zu: [], oks: [], exp: [] };
-  kmlLayers.forEach((layer, layerIdx) => {
-    // (1) Contours saved via kdConfirm — explicit type, GeoJSON [lon,lat] geometry
-    (layer.cadPlacemarks || []).forEach((pm, i) => {
-      const bucket = pm.type === 'zu' ? 'zu' : pm.type === 'exp' ? 'exp' : 'oks';
-      const ll = pm.geom?.coordinates ? _markerLatLon(pm.geom) : null;
-      const matched = layer.parsedData?.placemarks?.find(p =>
-        (p.name||'').includes(pm.cadNum) || (p.desc||'').includes(pm.cadNum));
-      // pmRef is the SAME OBJECT as pm — letting checkbox handlers mutate _visible
-      // and add/remove the underlying leaflet sublayer (pm._leafletLayer).
-      buckets[bucket].push({
-        id:        `cad:${layerIdx}:${i}`,
-        layerIdx, source:'cad', innerIdx:i,
-        name:      (matched?.name && matched.name !== pm.cadNum) ? matched.name : (pm.cadNum || '(без номера)'),
-        desc:      _markerDescFromLines(pm.lines) || matched?.desc || '',
-        layerName: layer.docName || layer.filename || '',
-        latlng:    ll,
-        layerVisible: layer.visible !== false,
-        markerVisible: pm._visible !== false,
-        pmRef: pm,
-      });
-    });
-    (layer.parsedData?.placemarks || []).forEach((pm, i) => {
-      const alreadyTracked = (layer.cadPlacemarks || []).some(c =>
-        (pm.name||'').includes(c.cadNum) || (pm.desc||'').includes(c.cadNum));
-      if(alreadyTracked) return;
-      // Classify: styleUrl pattern → explicit type; otherwise rich heuristic.
-      // (v61) Match the "земл" word-root anywhere in name OR desc — covers
-      // "Земля под канаткой" / "Земельный участок" / "Земли населённых пунктов" /
-      // "Пляж … 7022 кв.м · Земли" all in one regex. Word-boundary check (\b before
-      // the prefix) avoids false positives on words like "примЗемлерь".
-      let bucket = 'oks';
-      const blob = `${pm.name||''} | ${pm.desc||''}`.toLowerCase();
-      const looksLikeZU = /(^|[^a-zа-яё])земл/i.test(blob);
-      if(pm.styleUrl){
-        if(/cad_zu_/i.test(pm.styleUrl))       bucket = 'zu';
-        else if(/cad_exp_/i.test(pm.styleUrl)) bucket = 'exp';
-        else if(/cad_oks_/i.test(pm.styleUrl)) bucket = 'oks';
-        else if(looksLikeZU)                   bucket = 'zu';
-        else if(pm.type === 'Point')           bucket = 'exp';
-      } else if(pm.type === 'Point'){
-        bucket = 'exp';
-      } else if(looksLikeZU){
-        bucket = 'zu';
-      }
-      const ll = pm.coords ? (pm.type === 'Point' ? pm.coords : pm.coords[0]) : null;
-      buckets[bucket].push({
-        id:        `pm:${layerIdx}:${i}`,
-        layerIdx, source:'pm', innerIdx:i,
-        name:      pm.name || pm.desc?.split(' · ')?.[0] || '(без названия)',
-        desc:      pm.desc || '',
-        layerName: layer.docName || layer.filename || '',
-        latlng:    ll,
-        layerVisible: layer.visible !== false,
-        markerVisible: pm._visible !== false,
-        pmRef: pm,
-      });
-    });
-  });
-  // v65 (Task 1): dedupe across layers. When two KML files contain the SAME
-  // placemark (e.g. the user loaded "v1.kml" and "v14.kml" of the same dataset),
-  // identical entries appear in both — same name, same description, same
-  // geometry. We collapse them to a single representative (first encountered)
-  // per group. Signature: lower-cased trimmed name|desc, joined by `||`. We
-  // intentionally do NOT match on geometry alone — two distinct placemarks
-  // can share the same coords (a building inside its parcel), only when name
-  // AND description also match is it a real duplicate.
-  for(const grp of ['zu','oks','exp']){
-    const seen = new Map();   // signature → first marker
-    const deduped = [];
-    for(const m of buckets[grp]){
-      const sig = _markerSignature(m);
-      if(seen.has(sig)) continue;
-      seen.set(sig, m);
-      deduped.push(m);
-    }
-    buckets[grp] = deduped;
-  }
-  return buckets;
-}
-
-// Composite signature for cross-layer deduplication. Trims, lowercases,
-// strips repeated whitespace. Empty or "(без названия)" names fall back to
-// the first 80 chars of the description so empty-name placemarks still dedupe
-// when they share content.
-function _markerSignature(m){
-  const norm = s => String(s||'').toLowerCase().replace(/\s+/g,' ').trim();
-  const n = norm(m.name);
-  const d = norm(m.desc);
-  if(!n || /^\(без/.test(n)){
-    // fall back to first stable chunk of desc
-    return 'desc:' + d.slice(0, 80);
-  }
-  return `${n}||${d.slice(0, 80)}`;
-}
-
-// Show/hide a single placemark on the map by adding/removing its leaflet sublayer
-// from the parent layerGroup. The flag pm._visible carries the persistent state
-// (in-memory only — not written to localStorage; preferences reset between
-// reloads, which is acceptable for marker visibility).
-function setMarkerVisible(pm, visible){
-  if(!pm || !pm._leafletLayer || !pm._parentGroup) return;
-  pm._visible = !!visible;
-  if(visible){
-    if(!pm._parentGroup.hasLayer(pm._leafletLayer)){
-      pm._parentGroup.addLayer(pm._leafletLayer);
-    }
-  } else {
-    if(pm._parentGroup.hasLayer(pm._leafletLayer)){
-      pm._parentGroup.removeLayer(pm._leafletLayer);
-    }
-  }
-}
-
-// Returns [lat, lon] — Leaflet convention, NOT GeoJSON. All marker-list code
-// (fly-to, hit-test) uses this convention to avoid swap bugs.
-function _markerLatLon(geom){
-  if(geom.type === 'Point'){
-    const [lon, lat] = geom.coordinates;
-    return [lat, lon];
-  }
-  if(geom.type === 'Polygon'){
-    const v = geom.coordinates[0]?.[0];
-    return v ? [v[1], v[0]] : null;
-  }
-  if(geom.type === 'MultiPolygon'){
-    const v = geom.coordinates[0]?.[0]?.[0];
-    return v ? [v[1], v[0]] : null;
-  }
-  return null;
-}
-function _markerDescFromLines(lines){
-  if(!lines || !lines.length) return '';
-  return lines.map(([k,v]) => `${k}: ${v}`).join(' · ');
-}
-function _markerDescFromPlacemark(pm){
-  return pm?.desc || '';
-}
-
-function renderMarksList(){
-  const buckets = _gatherMarkers();
-  for(const grp of ['zu','oks','exp']){
-    const body = document.getElementById(`marks-body-${grp}`);
-    const cnt  = document.getElementById(`marks-count-${grp}`);
-    if(!body || !cnt) continue;
-    cnt.textContent = buckets[grp].length;
-    body.innerHTML = '';
-
-    // Group-header checkbox: bulk-toggle every marker in this subgroup at once.
-    // We compute its state from the visibility of children (all on / all off /
-    // mixed → indeterminate). Created lazily on first render so the static HTML
-    // stays clean.
-    _ensureGroupCheckbox(grp, buckets[grp]);
-
-    if(!buckets[grp].length){
-      const e = document.createElement('div');
-      e.className = 'mark-empty';
-      e.textContent = grp === 'zu' ? 'Нет земельных участков' :
-                      grp === 'oks' ? 'Нет ОКС/сооружений' :
-                                      'Нет пояснений-точек';
-      body.appendChild(e);
-      continue;
-    }
-    for(const m of buckets[grp]){
-      const item = document.createElement('div');
-      item.className = 'mark-item';
-      item.dataset.markId = m.id;
-
-      // Per-marker checkbox (Task 1, v59): toggles visibility of THIS specific
-      // placemark only. Independent of layer-level visibility — a hidden marker
-      // re-appears when its individual checkbox is checked, regardless of
-      // sibling state. Implementation: setMarkerVisible attaches/detaches the
-      // leaflet sublayer from the parent layerGroup.
-      const cb = document.createElement('input');
-      cb.type    = 'checkbox';
-      cb.checked = m.markerVisible;
-      cb.title   = 'Показать/скрыть этот объект на карте';
-      cb.addEventListener('click', e => e.stopPropagation());  // don't fly-to on cb click
-      cb.addEventListener('change', () => {
-        setMarkerVisible(m.pmRef, cb.checked);
-        // Refresh the group checkbox state (children changed)
-        _refreshGroupCheckbox(grp);
-      });
-      const content = document.createElement('div');
-      content.className = 'mark-content';
-      content.innerHTML =
-        `<div class="mark-name">${_escapeHtml(m.name)}</div>`+
-        (m.desc ? `<div class="mark-desc">${_escapeHtml(m.desc)}</div>` : '');
-      item.appendChild(cb);
-      item.appendChild(content);
-      // Click body → smoothly fly to marker, open coord popup with object info
-      item.addEventListener('click', () => _flyToMarker(m));
-      body.appendChild(item);
-    }
-    _refreshGroupCheckbox(grp);
-  }
-}
-
-// Ensure the group header has a master-checkbox child (insertion is idempotent
-// per group). The checkbox sits BEFORE the existing group title text. When
-// toggled, it forces every marker in the group to the same visibility state.
-function _ensureGroupCheckbox(grp, items){
-  const header = document.querySelector(`#marks-group-${grp} .marks-group-header`);
-  if(!header) return;
-  let cb = header.querySelector('.mg-master-cb');
-  if(!cb){
-    cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.className = 'mg-master-cb';
-    cb.title = 'Показать/скрыть всю группу';
-    cb.addEventListener('click', e => e.stopPropagation());  // don't toggle group collapse
-    cb.addEventListener('change', () => {
-      // Apply the checked state to every item in this group
-      const buckets = _gatherMarkers();
-      for(const m of buckets[grp]){
-        setMarkerVisible(m.pmRef, cb.checked);
-      }
-      // Re-render to update individual checkboxes
-      renderMarksList();
-    });
-    // Insert as the first child so it sits visually before the arrow + icon
-    header.insertBefore(cb, header.firstChild);
-  }
-  _refreshGroupCheckbox(grp, items);
-}
-
-function _refreshGroupCheckbox(grp, items){
-  const header = document.querySelector(`#marks-group-${grp} .marks-group-header`);
-  const cb = header?.querySelector('.mg-master-cb');
-  if(!cb) return;
-  const list = items || _gatherMarkers()[grp] || [];
-  if(list.length === 0){
-    cb.checked = false; cb.indeterminate = false; cb.disabled = true;
-    return;
-  }
-  cb.disabled = false;
-  const onCount = list.filter(m => m.pmRef?._visible !== false).length;
-  if(onCount === 0)              { cb.checked = false; cb.indeterminate = false; }
-  else if(onCount === list.length){ cb.checked = true;  cb.indeterminate = false; }
-  else                            { cb.checked = false; cb.indeterminate = true;  }
-}
-
-function _flyToMarker(m){
-  if(!m || !m.latlng) return;
-  const [lat, lon] = m.latlng;
-  if(typeof map === 'undefined' || lat == null || lon == null) return;
-
-  // Task 2 (v62): selecting an object in Метки should hide any open photo
-  // lightbox — the user is now focused on the cad/KML object, not on photos.
-  if(typeof closeLightbox === 'function') closeLightbox();
-
-  if(m.pmRef && m.pmRef._visible === false){
-    setMarkerVisible(m.pmRef, true);
-    const cb = document.querySelector(`.mark-item[data-mark-id="${CSS.escape(m.id)}"] input[type=checkbox]`);
-    if(cb) cb.checked = true;
-    const grp = m.id.split(':')[0] === 'cad'
-      ? (m.pmRef.type === 'zu' ? 'zu' : m.pmRef.type === 'exp' ? 'exp' : 'oks')
-      : null;
-    if(grp) _refreshGroupCheckbox(grp);
-  }
-
-  const targetZoom = Math.max(map.getZoom(), 18);
-  map.flyTo([lat, lon], targetZoom, {animate:true, duration:0.8});
-  window.lastClickedPoint = L.latLng(lat, lon);
-  setTimeout(() => _handleMapAreaClick(L.latLng(lat, lon)), 850);
-  document.querySelectorAll('.mark-item').forEach(el => el.classList.remove('active'));
-  const row = document.querySelector(`.mark-item[data-mark-id="${CSS.escape(m.id)}"]`);
-  if(row) row.classList.add('active');
-}
-
-// Called from leaflet click handlers when a contour or marker is clicked on the
-// map. Highlights ALL matching sidebar entries (a single click can hit a ZU
-// polygon AND an OKS polygon AND an exp pin if they overlap) and scrolls them
-// into view in their respective sub-group.
-// v60: precise point-in-polygon hit-test instead of the loose 500m bbox check.
-// Activates ONLY markers whose geometry actually contains (or is at) the click.
-// • Polygon — ray-cast point-in-polygon on outer ring (KML coords [lat,lon])
-// • Point   — distance ≤ ~11m
-// Multiple groups can match (a building can sit on a parcel and overlap a pin),
-// so all matching groups light up — but only the matching ROWS, not whole groups.
-window.activateMarkersAtLatLng = function(latlng){
-  if(_activeSidebarTab !== 'marks') return;
-  if(!latlng) return;
-  document.querySelectorAll('.mark-item').forEach(el => el.classList.remove('active'));
-  // v64: use the SAME hit set the info-cards use, so the highlighted rows in
-  // Метки always match the open cards. _hitTestAllAtPoint returns nearest-only
-  // for points + every overlapping polygon.
-  const hits = _hitTestAllAtPoint(latlng);
-  const firstByGroup = { zu: null, oks: null, exp: null };
-  for(const h of hits){
-    const row = document.querySelector(`.mark-item[data-mark-id="${CSS.escape(h.marker.id)}"]`);
-    if(!row) continue;
-    row.classList.add('active');
-    if(!firstByGroup[h.kind]) firstByGroup[h.kind] = row;
-  }
-  for(const grp of ['zu','oks','exp']){
-    const row = firstByGroup[grp];
-    if(row) _scrollRowIntoGroupBody(row);
-  }
-};
-
-// Scroll a marker row into its enclosing .marks-group-body without affecting
-// other scroll ancestors. The group must be expanded — if collapsed, expand it
-// first so the row is actually rendered/visible.
-function _scrollRowIntoGroupBody(row){
-  if(!row) return;
-  const body = row.closest('.marks-group-body');
-  if(!body) return;
-  const group = body.closest('.marks-group');
-  // If the group is collapsed, expand it so the row becomes visible at all
-  if(group && group.classList.contains('collapsed')){
-    group.classList.remove('collapsed');
-    const grpKey = group.id.replace('marks-group-','');
-    const arrow = document.getElementById(`marks-arrow-${grpKey}`);
-    if(arrow) arrow.textContent = '▼';
-  }
-  // Use offsetTop relative to body — robust against transforms / sticky headers
-  const rowRect = row.getBoundingClientRect();
-  const bodyRect = body.getBoundingClientRect();
-  const rowTopInBody = rowRect.top - bodyRect.top + body.scrollTop;
-  const visibleStart = body.scrollTop;
-  const visibleEnd   = body.scrollTop + body.clientHeight;
-  // If row is already fully visible, leave the scroll alone — avoids nervous
-  // jumping when user clicks repeatedly on the same area.
-  if(rowTopInBody >= visibleStart + 4 && rowTopInBody + rowRect.height <= visibleEnd - 4) return;
-  // Center the row in the body's viewport
-  const target = Math.max(0, rowTopInBody - body.clientHeight/2 + rowRect.height/2);
-  body.scrollTo({top: target, behavior:'smooth'});
-}
-
-// Determine if a click at (clickLat, clickLon) lies inside / on a marker.
-// For polygons we use ray-casting on the outer ring; for points we use a small
-// distance threshold (~11m at the equator).
-function _hitTestMarker(m, clickLat, clickLon){
-  if(!m || !m.pmRef) return false;
-  const pm = m.pmRef;
-  // Helper: is a point [lat, lon] within 18 pixels of the click in screen space?
-  // v64: replaces the previous 0.0001° (~11 m) tolerance which over-matched in
-  // dense pin clusters. Falls back to degree-based when map isn't ready.
-  const pointHit = (lat, lon) => {
-    if(typeof map === 'undefined' || !map.latLngToContainerPoint){
-      return Math.abs(lat - clickLat) < 0.0001 && Math.abs(lon - clickLon) < 0.0001;
-    }
-    const click = map.latLngToContainerPoint([clickLat, clickLon]);
-    const target = map.latLngToContainerPoint([lat, lon]);
-    return Math.hypot(click.x - target.x, click.y - target.y) < 18;
-  };
-  if(m.source === 'cad'){
-    const g = pm.geom;
-    if(!g) return false;
-    if(g.type === 'Point'){
-      const [lon, lat] = g.coordinates;
-      return pointHit(lat, lon);
-    }
-    if(g.type === 'Polygon'){
-      const ring = (g.coordinates[0] || []).map(([lon, lat]) => [lat, lon]);
-      return _pointInRing(clickLat, clickLon, ring);
-    }
-    if(g.type === 'MultiPolygon'){
-      for(const poly of g.coordinates){
-        const ring = (poly[0] || []).map(([lon, lat]) => [lat, lon]);
-        if(_pointInRing(clickLat, clickLon, ring)) return true;
-      }
-      return false;
-    }
-    return false;
-  }
-  if(pm.type === 'Point'){
-    const [lat, lon] = pm.coords;
-    return pointHit(lat, lon);
-  }
-  if(pm.type === 'Polygon' && pm.coords?.length){
-    return _pointInRing(clickLat, clickLon, pm.coords);
-  }
-  return false;
-}
-
-// Ray-casting point-in-polygon. ring = [[lat,lon], …]. Self-closing or open both
-// supported (we treat the segment from last vertex back to first as also part of
-// the polygon edges).
-function _pointInRing(lat, lon, ring){
-  if(!ring || ring.length < 3) return false;
-  let inside = false;
-  for(let i = 0, j = ring.length - 1; i < ring.length; j = i++){
-    const [lat_i, lon_i] = ring[i];
-    const [lat_j, lon_j] = ring[j];
-    const intersect = ((lat_i > lat) !== (lat_j > lat)) &&
-                      (lon < (lon_j - lon_i) * (lat - lat_i) / (lat_j - lat_i) + lon_i);
-    if(intersect) inside = !inside;
-  }
-  return inside;
-}
-
-
-// ═══ MOVE PHOTO TO FOLDER (File System Access API) ═══════════════
-// Works in Chrome/Edge on Win10. Requires user to grant readwrite access
-// to the root photo directory (once per session).
-let _moveModePhotoIdx = null;  // photo index being moved, null = not in move mode
-let _photoRootDirHandle = null; // FileSystemDirectoryHandle to photo root
-
-function startPhotoMove(idx){
-  const p=photos[idx];
-  if(!p||p.isRemote){showToast('Перемещение доступно только для локальных фото','warn');return;}
-
-  const hasTree=Object.keys(buildFolderTree()).length>0;
-  if(!hasTree){showToast('Нет папок в «Структура объекта» — создайте папки сначала','warn',5000);return;}
-
-  _moveModePhotoIdx=idx;
-
-  // Expand & highlight folder tree
-  const treePanel=document.getElementById('folder-tree-panel');
-  treePanel.classList.add('visible','move-mode');
-  folderTreeIsOpen=true;
-  updateFolderTreePanel();
-
-  // Show move panel in lightbox, hide normal content
-  document.getElementById('lb-section-label').textContent='📂 Перемещение фото в папку';
-  document.getElementById('lb-move-panel').classList.add('visible');
-  document.getElementById('lmp-filename-text').textContent=p.name;
-  // Show hint about root dir if we don't have a handle yet
-  document.getElementById('lmp-root-needed').classList.toggle('visible',!_photoRootDirHandle);
-  document.getElementById('lb-img-wrap').style.display='none';
-  document.getElementById('lb-zoom-bar').style.display='none';
-  document.getElementById('lb-info').style.display='none';
-  document.getElementById('lb-move-btn').style.display='none';
-}
-
-function cancelPhotoMove(){
-  _moveModePhotoIdx=null;
-  document.getElementById('folder-tree-panel').classList.remove('move-mode');
-  document.getElementById('lb-section-label').textContent='Геолокация и съёмка';
-  document.getElementById('lb-move-panel').classList.remove('visible');
-  document.getElementById('lb-img-wrap').style.display='';
-  document.getElementById('lb-zoom-bar').style.display='';
-  document.getElementById('lb-info').style.display='';
-  const lbMoveBtn=document.getElementById('lb-move-btn');
-  lbMoveBtn.style.display='';
-  if(activeIdx!=null&&!photos[activeIdx]?.isRemote)lbMoveBtn.classList.add('visible');
-  updateFolderTreePanel();
-}
-
-async function executePhotoMove(targetLocPath){
-  if(_moveModePhotoIdx===null)return;
-  const idx=_moveModePhotoIdx;
-  const p=photos[idx];
-  if(!p)return;
-
-  // Check FSA support
-  if(typeof window.showDirectoryPicker!=='function'){
-    showToast('⚠ Браузер не поддерживает File System Access API. Используйте Chrome/Edge.','error',8000);
-    return;
-  }
-
-  // Acquire (or re-acquire) root directory handle with readwrite
-  if(!_photoRootDirHandle){
-    try{
-      showToast('Выберите корневую папку с фотографиями…','info',5000);
-      _photoRootDirHandle=await window.showDirectoryPicker({mode:'readwrite'});
-    }catch(e){
-      if(e.name!=='AbortError')showToast('⚠ Отменено или нет доступа к папке','warn',4000);
-      return;
-    }
-  }
-
-  // Ensure we still have readwrite permission (may be revoked after sleep)
-  try{
-    const perm=await _photoRootDirHandle.requestPermission({mode:'readwrite'});
-    if(perm!=='granted'){
-      showToast('⚠ Нет прав записи в папку. Выберите папку заново.','error',5000);
-      _photoRootDirHandle=null;
-      return;
-    }
-  }catch(e){
-    _photoRootDirHandle=null;
-    showToast('⚠ Нет доступа к папке. Выберите заново.','error',5000);
-    return;
-  }
-
-  // Prevent moving to same folder
-  if(p.locPath===targetLocPath){
-    showToast('Файл уже находится в этой папке','warn');
-    cancelPhotoMove();
-    return;
-  }
-
-  try{
-    // ── 1. Navigate/create target directory ──────────────────────
-    let targetDir=_photoRootDirHandle;
-    for(const part of targetLocPath.split('/').filter(Boolean)){
-      targetDir=await targetDir.getDirectoryHandle(part,{create:true});
-    }
-
-    // ── 2. Write file to target and VERIFY before delete ──────────
-    const blob=p.file; // File object (available for all local photos)
-    const targetFH=await targetDir.getFileHandle(p.name,{create:true});
-    const writable=await targetFH.createWritable();
-    await writable.write(blob);
-    await writable.close();
-
-    // ── 3. Verify: read back written file and check size ──────────
-    let verified=false;
-    try{
-      const writtenFile=await targetFH.getFile();
-      verified=(writtenFile.size===blob.size);
-    }catch(e){verified=false;}
-    if(!verified){
-      // Try to clean up the partial/bad file
-      try{await targetDir.removeEntry(p.name);}catch(_){}
-      showToast('⚠ Ошибка записи — файл не скопирован, источник не тронут','error',7000);
-      cancelPhotoMove();
-      return;
-    }
-
-    // ── 4. Delete source file (ONLY after successful write+verify) ─
-    // Navigate to source directory (p.locPath is relative to root handle)
-    let sourceDir=_photoRootDirHandle;
-    const sourceParts=(p.locPath||'').split('/').filter(Boolean);
-    for(const part of sourceParts){
-      try{sourceDir=await sourceDir.getDirectoryHandle(part);}
-      catch(_){sourceDir=null;break;}
-    }
-    if(sourceDir){
-      try{await sourceDir.removeEntry(p.name);}
-      catch(e){showToast(`⚠ Файл скопирован (проверен), но удалить оригинал не удалось: ${e.message}`,'warn',7000);}
-    }else{
-      showToast('⚠ Файл скопирован и проверен, но исходная папка не найдена в выбранном корне','warn',6000);
-    }
-
-    // ── 5. Update photo state in app ──────────────────────────────
-    p.locPath=targetLocPath;
-
-    showToast(`✅ ${p.name} → ${targetLocPath}`,'success',5000);
-    cancelPhotoMove();
-    updateFolderTreePanel();
-    renderList();
-    // Re-open lightbox to show updated locPath
-    openLightbox(idx,p.lat!=null?L.latLng(p.lat,p.lon):null);
-
-  }catch(e){
-    console.error('[ekcelo move]',e);
-    // If root handle is bad — reset so user can re-pick
-    if(e.name==='NotFoundError'||e.name==='NotAllowedError'){
-      _photoRootDirHandle=null;
-      showToast(`⚠ Ошибка доступа: ${e.message}. Попробуйте ещё раз.`,'error',7000);
-    }else{
-      showToast(`⚠ Ошибка перемещения: ${e.message}`,'error',7000);
-    }
-  }
-}
 
 function renderList(){
   const list=document.getElementById('photo-list');
@@ -4286,19 +2678,12 @@ function renderList(){
 
   if(selectedFolderPath){
     // П2+П3: filter sidebar to selected folder + subfolders
-    // Exact folder photos first, then subfolders (by date within each group)
-    const exactIndices=mainIndices.filter(i=>photos[i].locPath===selectedFolderPath);
-    const subIndices=mainIndices.filter(i=>isPhotoInSelectedFolder(photos[i])&&photos[i].locPath!==selectedFolderPath);
-    exactIndices.sort((a,b)=>getSortTs(photos[a])-getSortTs(photos[b]));
-    subIndices.sort((a,b)=>getSortTs(photos[a])-getSortTs(photos[b]));
-    mainIndices=[...exactIndices,...subIndices];
+    mainIndices=mainIndices.filter(i=>isPhotoInSelectedFolder(photos[i]));
     // Show unassigned local photos for drag-and-drop into the selected folder
     unassignedIndices=[...photos.keys()].filter(i=>!photos[i].locPath&&!photos[i].isRemote);
   }
 
-  if(!selectedFolderPath){
-    mainIndices=mainIndices.sort((a,b)=>getSortTs(photos[a])-getSortTs(photos[b]));
-  }
+  mainIndices=mainIndices.sort((a,b)=>getSortTs(photos[a])-getSortTs(photos[b]));
 
   if(!mainIndices.length&&!unassignedIndices.length){
     const el=document.createElement('div');
@@ -4356,13 +2741,6 @@ function renderPhotoItem(i,container,isDragCandidate=false){
   const del=document.createElement('button');del.className='del-btn';del.innerHTML='&#215;';
   del.addEventListener('click',ev=>{ev.stopPropagation();deletePhoto(i);});
 
-  // Move-to-folder button (local photos only)
-  if(!p.isRemote){
-    const mvBtn=document.createElement('button');mvBtn.className='photo-move-btn';mvBtn.title='Переместить файл в папку на диске';mvBtn.innerHTML='📂';
-    mvBtn.addEventListener('click',async ev=>{ev.stopPropagation();await openLightbox(i,p.lat!=null?L.latLng(p.lat,p.lon):null);startPhotoMove(i);});
-    item.appendChild(mvBtn);
-  }
-
   item.appendChild(thumb);item.appendChild(meta);item.appendChild(del);
   container.appendChild(item);
 }
@@ -4391,11 +2769,6 @@ const ICON={
 
 async function openLightbox(idx,latlng){
   const p=photos[idx];if(!p)return;
-  // Task 2 (v61): selecting a photo means the user wants to see its location on
-  // the map — auto-enable the photo-markers layer if it was toggled off.
-  if(typeof _photosVisible !== 'undefined' && !_photosVisible && typeof setPhotoMarkersVisible === 'function'){
-    setPhotoMarkersVisible(true);
-  }
   activeIdx=idx;lbLL=latlng;lbScale=1;lbManualPos=false; // reset drag on new photo
   document.querySelectorAll('.photo-item').forEach(el=>el.classList.remove('active'));
   const item=document.querySelector(`.photo-item[data-idx="${idx}"]`);
@@ -4404,9 +2777,6 @@ async function openLightbox(idx,latlng){
   document.getElementById('lb-zoom-val').textContent='100%';
   document.getElementById('lb-filename-text').textContent=p.name;
   document.getElementById('lb-filename-text').title=p.name;
-  // Show move button only for local (disk) photos
-  const lbMoveBtn=document.getElementById('lb-move-btn');
-  lbMoveBtn.classList.toggle('visible',!p.isRemote);
   document.getElementById('lb-tbody').innerHTML=buildRows(p);
   document.getElementById('lb-card').classList.remove('gps-active');
   const lb=document.getElementById('lightbox');
@@ -4445,7 +2815,7 @@ function enterGPSFromLightbox(){
 }
 
 function posLightbox(latlng,fast=false){
-  if(lbManualPos){ _redrawLightboxConnector(); return; } // user has dragged it — don't auto-reposition (but still redraw connector)
+  if(lbManualPos)return; // user has dragged it — don't auto-reposition
   const lb=document.getElementById('lightbox'),card=document.getElementById('lb-card'),mw=document.getElementById('map-wrap');
   const cw=card.offsetWidth||320,ch=card.offsetHeight||400,W=mw.offsetWidth,H=mw.offsetHeight,gap=16;
   let left,top;
@@ -4453,77 +2823,11 @@ function posLightbox(latlng,fast=false){
   else{const pt=map.latLngToContainerPoint(latlng);left=pt.x+36;top=pt.y-ch/2;if(left+cw>W-gap)left=pt.x-cw-36;if(left<gap)left=gap;if(top<gap)top=gap;if(top+ch>H-gap)top=H-ch-gap;}
   if(fast){lb.classList.add('no-transition');lb.style.left=left+'px';lb.style.top=top+'px';requestAnimationFrame(()=>lb.classList.remove('no-transition'));}
   else{lb.style.left=left+'px';lb.style.top=top+'px';}
-  _redrawLightboxConnector();
-}
-
-// ── Lightbox connector (Task 4, v62) ──────────────────────────────
-// Draws a thin yellow line from the photo's GPS marker to the lightbox card.
-// Yellow (#e8ff47) deliberately matches the photo-marker color so it visually
-// reads as "this card belongs to that yellow dot" — useful when multiple photos
-// are stacked at the same coordinate ("пирог точек") and the user can't tell
-// which dot is currently selected.
-function _redrawLightboxConnector(){
-  const lb = document.getElementById('lightbox');
-  if(!lb || !lb.classList.contains('visible')) return _clearLightboxConnector();
-  if(!lbLL || activeIdx === null) return _clearLightboxConnector();
-  const photo = photos[activeIdx];
-  if(!photo || photo.lat == null) return _clearLightboxConnector();
-
-  // Use the dedicated SVG layer (created on demand). Separate from the info-cards
-  // SVG so that closeAllInfoCards() doesn't blow away the lightbox connector.
-  const mw = document.getElementById('map-wrap');
-  if(!mw) return;
-  let svg = document.getElementById('lb-connector-svg');
-  if(!svg){
-    svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
-    svg.id = 'lb-connector-svg';
-    svg.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:1899;width:100%;height:100%';
-    mw.appendChild(svg);
-  }
-  svg.innerHTML = '';
-
-  // Anchor: the photo's GPS coordinate (NOT the original lbLL — that may be a
-  // map-click point used to OPEN the lightbox; we want the photo's true location).
-  const ap = map.latLngToContainerPoint([photo.lat, photo.lon]);
-  const card = document.getElementById('lb-card');
-  const lbR = lb.getBoundingClientRect();
-  const mwR = mw.getBoundingClientRect();
-  const cx = lbR.left - mwR.left + lbR.width/2;
-  const cy = lbR.top  - mwR.top  + lbR.height/2;
-
-  const line = document.createElementNS('http://www.w3.org/2000/svg','line');
-  line.setAttribute('x1', ap.x); line.setAttribute('y1', ap.y);
-  line.setAttribute('x2', cx);   line.setAttribute('y2', cy);
-  line.setAttribute('stroke', '#e8ff47');
-  line.setAttribute('stroke-width', '1');
-  line.setAttribute('stroke-opacity', '0.7');
-  line.setAttribute('stroke-dasharray', '4,3');
-  svg.appendChild(line);
-
-  // Highlight ring around the photo dot — makes the selected one obvious in a stack
-  const ring = document.createElementNS('http://www.w3.org/2000/svg','circle');
-  ring.setAttribute('cx', ap.x); ring.setAttribute('cy', ap.y);
-  ring.setAttribute('r', '11');
-  ring.setAttribute('fill', 'none');
-  ring.setAttribute('stroke', '#e8ff47');
-  ring.setAttribute('stroke-width', '2');
-  ring.setAttribute('stroke-opacity', '0.85');
-  svg.appendChild(ring);
-}
-function _clearLightboxConnector(){
-  const svg = document.getElementById('lb-connector-svg');
-  if(svg) svg.innerHTML = '';
 }
 
 // Item 3: draggable lightbox via filename bar ─────────────────────
 let lbManualPos=false; // set when user drags, prevents map auto-reposition
 (function initLightboxDrag(){
-  // v60 fix: #lightbox is `position:absolute` inside #map-wrap, so style.left/top
-  // values are ALREADY in map-wrap's coordinate space. The earlier code subtracted
-  // map-wrap's viewport offset on mousedown but then added the raw cursor delta
-  // on mousemove — meaning the lightbox jumped by exactly map-wrap.left pixels
-  // and then drifted by the same amount on every mousemove. The fix is to keep
-  // the entire calculation in the same coordinate space (map-wrap-local).
   let dragging=false, startX=0, startY=0, origL=0, origT=0;
   const handle=()=>document.getElementById('lb-filename-bar');
   const lb=()=>document.getElementById('lightbox');
@@ -4533,9 +2837,9 @@ let lbManualPos=false; // set when user drags, prevents map auto-reposition
     if(!lb().classList.contains('visible'))return;
     dragging=true;
     startX=e.clientX; startY=e.clientY;
-    // style.left/top are px relative to #map-wrap (the offset parent). No subtraction.
-    origL = parseInt(lb().style.left||'0', 10);
-    origT = parseInt(lb().style.top ||'0', 10);
+    const mw=document.getElementById('map-wrap').getBoundingClientRect();
+    origL=parseInt(lb().style.left||'0')-mw.left;
+    origT=parseInt(lb().style.top||'0')-mw.top;
     lb().classList.add('no-transition');
     e.preventDefault();
   });
@@ -4550,26 +2854,13 @@ let lbManualPos=false; // set when user drags, prevents map auto-reposition
     const newT=Math.max(0,Math.min(H-ch, origT+dy));
     lb().style.left=newL+'px'; lb().style.top=newT+'px';
     lbManualPos=true;
-    // Task 4 (v62): redraw connector line in real-time while dragging so the
-    // line tracks the card position instead of snapping at mouseup.
-    if(typeof _redrawLightboxConnector === 'function') _redrawLightboxConnector();
   });
   document.addEventListener('mouseup',()=>{
     if(dragging){dragging=false;lb().classList.remove('no-transition');}
   });
 })();
 
-function closeLightbox(){
-  if(_moveModePhotoIdx!==null)cancelPhotoMove();
-  document.getElementById('lightbox').classList.remove('visible');
-  document.getElementById('lb-card').classList.remove('gps-active');
-  document.querySelectorAll('.photo-item').forEach(el=>el.classList.remove('active'));
-  clearActiveMarker();
-  activeIdx=null;
-  lbManualPos=false;
-  // Task 4 (v62): clear the connector line + ring when lightbox closes
-  _clearLightboxConnector();
-}
+function closeLightbox(){document.getElementById('lightbox').classList.remove('visible');document.getElementById('lb-card').classList.remove('gps-active');document.querySelectorAll('.photo-item').forEach(el=>el.classList.remove('active'));clearActiveMarker();activeIdx=null;lbManualPos=false;}
 
 // Sorted navigation order: all photos by shooting date (fallback: file mtime)
 function getSortedNavOrder(){
@@ -5185,15 +3476,11 @@ function _makeCadLayer(geom, type, interactive) {
 }
 
 function _attachCadEvents(layer, cadNum, type, lines) {
-  layer.on('click', e => {
-    L.DomEvent.stopPropagation(e);
-    // v66: when "Указать GPS" is active, the click anchors a photo — info-card
-    // pipeline is bypassed (and so is the auto-switch to Метки tab).
-    if(manualGPSActive){ handleMapClickForGPS(e); return; }
-    window.lastClickedPoint = e.latlng;
-    const direct = _markerForLeafletLayer(layer);
-    _handleMapAreaClick(e.latlng, direct);
-  });
+  const fi = { priority: type === 'zu' ? 3 : 2, cadNum, type, lines };
+  layer.on('mouseover', e => { cadHoveredFeatures = cadHoveredFeatures.filter(f => f.cadNum !== cadNum); cadHoveredFeatures.push(fi); _showCadTip(e.originalEvent); });
+  layer.on('mousemove', e => _showCadTip(e.originalEvent));
+  layer.on('mouseout',  () => { cadHoveredFeatures = cadHoveredFeatures.filter(f => f.cadNum !== cadNum); if (!cadHoveredFeatures.length) _hideCadTip(); });
+  layer.on('click', e => { L.DomEvent.stopPropagation(e); window.lastClickedPoint = e.latlng; L.popup({maxWidth:340}).setLatLng(e.latlng).setContent(_cadPopup(e.latlng.lat.toFixed(6), e.latlng.lng.toFixed(6), type, cadNum, lines)).openOn(map); });
 }
 
 function _showCadTip(ev) {
@@ -5380,8 +3667,7 @@ async function _ingestXlsxFile(file, handle){
     _objectCatalog         = items;
     _objectCatalogRaw      = bytes;
     _objectCatalogFilename = file.name.replace(/\.xlsx?$/i, '');
-    _objectCatalogHandle   = handle;
-    _savePathHint(_LS_PATH_XLSX, file.name); _captureFirstSessionName('xlsx', file.name);  // remember last XLSX file name
+    _objectCatalogHandle   = handle;  // null on legacy path; set on FSA path
     _hydrateCatalogCentroidsFromXLSX(wb);
     _initCatalogWorkbook();
     const handleNote = handle ? ' (можно сохранять обратно в ту же папку)' : '';
@@ -5683,26 +3969,7 @@ function _kdRebuildDropdown(){
   kmlLayers.forEach((l,i)=>{
     const it = document.createElement('div');
     it.className = 'kd-dd-item' + (i===0?' selected':'');
-    // Rich item layout (Task 3):
-    //   line 1: 📂 docName  (N)
-    //   line 2: 📄 filename
-    //   line 3: ✓ in-place save (FSA) | 📥 will download (legacy)
-    // Browsers don't expose absolute paths to JS; the FSA handle gives only the
-    // file name. We can't show "E:\ОБЪЕКТЫ\..." literally — the OS hides that
-    // for privacy. What we CAN show:
-    //   • the file name the user picked
-    //   • whether saves go IN-PLACE (FSA handle present) or to ~/Downloads
-    const docName    = l.docName || l.filename || 'KML-слой';
-    const filename   = l.filename || '';
-    const count      = l.placemarkCount || 0;
-    const inPlace    = !!l.handle;
-    const pathHint   = inPlace
-      ? '<span class="kd-dd-fsa">✓ запись в исходную папку</span>'
-      : '<span class="kd-dd-leg">📥 будет скачан в Загрузки</span>';
-    const fnLine     = filename && filename !== docName
-      ? `<div class="kd-dd-fn">📄 ${_escapeHtml(filename)}</div>`
-      : '';
-    it.innerHTML = `<div class="kd-dd-name">📂 ${_escapeHtml(docName)} <span class="kd-dd-cnt">(${count})</span></div>${fnLine}<div class="kd-dd-path">${pathHint}</div>`;
+    it.textContent = `${l.docName||l.filename}${l.placemarkCount?' ('+l.placemarkCount+')':''}`;
     it.onclick = () => _kdPickLayer(i);
     menu.appendChild(it);
   });
@@ -5721,9 +3988,9 @@ window.kdToggleDropdown = function(ev){
 function _kdPickLayer(i){
   _kdLayerIdx = i;
   const layer = kmlLayers[i];
-  // Concise display in the closed dropdown button: name (count)
   document.getElementById('kd-dd-current').textContent =
-    `${layer.docName||layer.filename||'KML'}${layer.placemarkCount?' ('+layer.placemarkCount+')':''}`;
+    `${layer.docName||layer.filename}${layer.placemarkCount?' ('+layer.placemarkCount+')':''}`;
+  // Update selected highlight
   document.querySelectorAll('#kd-dd-menu .kd-dd-item').forEach((el,j)=>{
     el.classList.toggle('selected', j===i);
   });
@@ -5800,184 +4067,27 @@ function kdConfirm(){
   const geom   = _kdPendingGeom;
   const safeType = (type==='str') ? 'oks' : type;
 
-  // v65 (Task 1): pre-flight duplicate check. Scan the target layer (and all
-  // others — duplicates across layers also confuse the user) for an existing
-  // placemark with the same cadNum, same name, or geometrically-equivalent
-  // contour. Show a modal asking the user how to proceed.
-  if(_kdDest === 'layer' || _kdDest === 'disk'){
-    const dup = _findDuplicate(cadNum, name, desc, geom, _kdDest, _kdLayerIdx);
-    if(dup){
-      // Save state needed to resume
-      _kdDuplicatePendingState = { cadNum, name, desc, type, geom, safeType };
-      _showDuplicateDialog(dup);
-      return;  // user will resolve via modal
-    }
-  }
-
-  _kdConfirmInner({cadNum, name, desc, type, geom, safeType});
-}
-
-// State carried while the duplicate-resolution modal is open
-let _kdDuplicatePendingState = null;
-
-// Find the first duplicate of (cadNum / name / desc / geom) in any loaded layer.
-// Returns {layerName, placemark, reason} or null.
-function _findDuplicate(cadNum, name, desc, geom){
-  const norm = s => String(s||'').toLowerCase().trim();
-  const targetCad  = norm(cadNum);
-  const targetName = norm(name);
-  const targetDesc = norm(desc);
-  // Compute a reduced fingerprint of the contour: rounded-to-6-decimals first
-  // 5 vertices joined. Two contours with identical first 5 vertices at 6dp
-  // are practically the same shape.
-  const geomFingerprint = g => {
-    if(!g?.coordinates) return '';
-    if(g.type === 'Point'){
-      const [lon, lat] = g.coordinates;
-      return `pt:${lat.toFixed(6)},${lon.toFixed(6)}`;
-    }
-    let ring = null;
-    if(g.type === 'Polygon')      ring = g.coordinates[0];
-    if(g.type === 'MultiPolygon') ring = g.coordinates[0]?.[0];
-    if(!ring) return '';
-    return ring.slice(0, 5).map(([lo,la]) => `${la.toFixed(6)},${lo.toFixed(6)}`).join('|');
-  };
-  const targetFp = geomFingerprint(geom);
-  for(let li = 0; li < kmlLayers.length; li++){
-    const layer = kmlLayers[li];
-    // (1) cad-saved entries
-    for(const c of (layer.cadPlacemarks || [])){
-      if(targetCad && targetCad !== 'без_номера' && norm(c.cadNum) === targetCad){
-        return {
-          layerName: layer.docName || layer.filename,
-          placemarkName: c.cadNum,
-          reason: 'кадастровый номер',
-          conflictText: cadNum,
-        };
-      }
-      if(targetFp && c.geom && geomFingerprint(c.geom) === targetFp){
-        return {
-          layerName: layer.docName || layer.filename,
-          placemarkName: c.cadNum,
-          reason: 'идентичный контур',
-          conflictText: targetFp.slice(0, 60) + '…',
-        };
-      }
-    }
-    // (2) parsed-KML placemarks
-    for(const pm of (layer.parsedData?.placemarks || [])){
-      const pmName = norm(pm.name);
-      const pmDesc = norm(pm.desc);
-      if(targetName && pmName === targetName){
-        return {
-          layerName: layer.docName || layer.filename,
-          placemarkName: pm.name,
-          reason: 'название',
-          conflictText: name,
-        };
-      }
-      // Substring match for cadNum inside description
-      if(targetCad && targetCad !== 'без_номера' && pmDesc.includes(targetCad)){
-        return {
-          layerName: layer.docName || layer.filename,
-          placemarkName: pm.name || pm.desc?.slice(0, 50),
-          reason: 'кадастровый номер в описании',
-          conflictText: cadNum,
-        };
-      }
-      if(targetDesc && pmDesc === targetDesc){
-        return {
-          layerName: layer.docName || layer.filename,
-          placemarkName: pm.name || '(без названия)',
-          reason: 'идентичное описание',
-          conflictText: (desc.length > 60 ? desc.slice(0, 60) + '…' : desc),
-        };
-      }
-    }
-  }
-  return null;
-}
-
-// Show modal dialog; user picks one of three outcomes.
-function _showDuplicateDialog(dup){
-  let modal = document.getElementById('dup-modal');
-  if(!modal){
-    modal = document.createElement('div');
-    modal.id = 'dup-modal';
-    modal.innerHTML =
-      `<div class="dm-card">`+
-        `<h3>⚠ Возможный дубликат</h3>`+
-        `<div class="dm-body">`+
-          `<div class="dm-info" id="dm-info"></div>`+
-        `</div>`+
-        `<div class="dm-actions">`+
-          `<button class="dm-btn dm-cancel" onclick="_dupResolve('cancel')">Отказ от записи</button>`+
-          `<button class="dm-btn dm-edit"   onclick="_dupResolve('edit')">Вернуться к редактированию</button>`+
-          `<button class="dm-btn dm-force"  onclick="_dupResolve('force')">Всё равно записать</button>`+
-        `</div>`+
-      `</div>`;
-    document.body.appendChild(modal);
-  }
-  document.getElementById('dm-info').innerHTML =
-    `Найдено совпадение в слое <b>«${_escapeHtml(dup.layerName)}»</b>:<br/>`+
-    `<span class="dm-pmname">${_escapeHtml(dup.placemarkName||'')}</span><br/>`+
-    `Причина: <b>${_escapeHtml(dup.reason)}</b><br/>`+
-    `<code>${_escapeHtml(dup.conflictText||'')}</code>`;
-  modal.classList.add('open');
-  // Default focus on the safest button
-  setTimeout(() => modal.querySelector('.dm-cancel')?.focus(), 60);
-}
-
-window._dupResolve = function(action){
-  document.getElementById('dup-modal')?.classList.remove('open');
-  const st = _kdDuplicatePendingState;
-  _kdDuplicatePendingState = null;
-  if(!st) return;
-  if(action === 'cancel'){
-    _kdPendingGeom = null;
-    showToast('Сохранение отменено','info',2000);
-    return;
-  }
-  if(action === 'edit'){
-    document.getElementById('kml-save-dialog').classList.add('open');
-    return;
-  }
-  if(action === 'force'){
-    _kdConfirmInner(st);
-  }
-};
-
-// Inner save — invoked either directly when no duplicate, or after the user
-// chose "Всё равно записать" in the duplicate modal.
-function _kdConfirmInner(st){
-  const {cadNum, name, desc, type, geom, safeType} = st;
-
   // Coordinate sanity check (must be near Earth surface, within Web Mercator latitudes)
   const coordsSafe = (cs) => cs.every(([lo,la])=>
     Math.abs(lo)<=180 && Math.abs(la)<=90 && la>=-85 && la<=85
   );
   let geomXml = '', csOk = true;
-  // For Google Earth Pro: Polygon needs <tessellate>1</tessellate> + <altitudeMode>clampToGround</altitudeMode>
-  // for proper rendering on terrain (otherwise long edges go straight through hills).
-  // Yandex MK ignores these tags but doesn't reject them — safe to emit always.
-  const polyExtras = '<tessellate>1</tessellate><altitudeMode>clampToGround</altitudeMode>';
-  const pointExtras = '<altitudeMode>clampToGround</altitudeMode>';
   if(geom.type==='Polygon'){
     if(!coordsSafe(geom.coordinates[0])) csOk=false;
     else {
       const cs = geom.coordinates[0].map(([lo,la])=>`${lo},${la},0`).join(' ');
-      geomXml = `<Polygon>${polyExtras}<outerBoundaryIs><LinearRing>${polyExtras}<coordinates>${cs}</coordinates></LinearRing></outerBoundaryIs></Polygon>`;
+      geomXml = `<Polygon><outerBoundaryIs><LinearRing><coordinates>${cs}</coordinates></LinearRing></outerBoundaryIs></Polygon>`;
     }
   } else if(geom.type==='MultiPolygon'){
     if(!coordsSafe(geom.coordinates[0][0])) csOk=false;
     else {
       const cs = geom.coordinates[0][0].map(([lo,la])=>`${lo},${la},0`).join(' ');
-      geomXml = `<Polygon>${polyExtras}<outerBoundaryIs><LinearRing>${polyExtras}<coordinates>${cs}</coordinates></LinearRing></outerBoundaryIs></Polygon>`;
+      geomXml = `<Polygon><outerBoundaryIs><LinearRing><coordinates>${cs}</coordinates></LinearRing></outerBoundaryIs></Polygon>`;
     }
   } else if(geom.type==='Point'){
     const [lo,la] = geom.coordinates;
     if(Math.abs(lo)>180||Math.abs(la)>90) csOk=false;
-    else geomXml = `<Point>${pointExtras}<coordinates>${lo},${la},0</coordinates></Point>`;
+    else geomXml = `<Point><coordinates>${lo},${la},0</coordinates></Point>`;
   } else { csOk=false; }
 
   if(!csOk || !geomXml){
@@ -6040,16 +4150,7 @@ function _kdConfirmInner(st){
     const tgt = kmlLayers[idx];
     if(!tgt){ showToast('Слой не найден — выберите его из списка','error',3000); _kdPendingGeom=null; return; }
     if(!tgt.cadPlacemarks) tgt.cadPlacemarks=[];
-    // v59: store the actual leaflet layer + visibility flag so the marker-list
-    // checkbox can independently show/hide just THIS contour without affecting
-    // its siblings (the previous design toggled the whole layer group).
-    const cadEntry = {
-      cadNum, type:safeType, geom, lines:linesForTooltip, parts:cleanParts,
-      _leafletLayer: lyr || null,
-      _parentGroup:  tgt.layerGroup,
-      _visible:      true,
-    };
-    tgt.cadPlacemarks.push(cadEntry);
+    tgt.cadPlacemarks.push({cadNum, type:safeType, geom, lines:linesForTooltip, parts:cleanParts});
     tgt.placemarkCount = (tgt.placemarkCount||0) + 1;
     if(lyr) lyr.addTo(tgt.layerGroup);
 
@@ -6061,7 +4162,7 @@ function _kdConfirmInner(st){
     } else {
       tgt.kmlText = _buildKMLDocument([styleXml], [placemarkXml], tgt.docName || tgt.filename);
     }
-    saveKMLLayersToStorage();if(typeof renderMarksList==='function'&&_activeSidebarTab==='marks')renderMarksList();
+    saveKMLLayersToStorage();
 
     // Also download the updated KML file so the user has a tangible artifact —
     // not just an in-memory + localStorage entry. If the layer was loaded via
@@ -6071,14 +4172,7 @@ function _kdConfirmInner(st){
       // FSA path — overwrite the original file in-place
       _writeKMLToHandle(tgt.handle, tgt.kmlText, filename);
     } else {
-      // v65 (Task 2): no handle (layer was uploaded via legacy <input>) — open
-      // a Save dialog instead of dumping to ~/Downloads. The browser remembers
-      // the last folder used in any save dialog this session, so if the user
-      // opened ANY KML via FSA earlier (or saved one), the dialog opens there.
-      // Pre-fill the original filename so just hitting Enter overwrites it.
-      // ALSO: capture the resulting handle into tgt.handle so subsequent saves
-      // in this session go straight to that file with no further dialog.
-      _saveKMLPickFolderAndCapture(tgt.kmlText, filename, tgt);
+      _downloadBlob(tgt.kmlText, filename);
     }
 
     _maybeOfferCentroidWriteback(cadNum, geom);
@@ -6136,34 +4230,6 @@ async function _saveKMLPickFolder(text, suggestedName){
       await writable.close();
       _showSaveInfoDialog(handle.name||suggestedName, null,
         'Файл сохранён в выбранную папку.');
-      return handle;
-    } catch(e){
-      if(e?.name === 'AbortError') return null;
-      console.warn('[kml-save-picker]', e);
-    }
-  }
-  _downloadBlob(text, suggestedName);
-  return null;
-}
-
-// Same as _saveKMLPickFolder but ALSO captures the picked handle onto the
-// target layer entry so future saves go to that file with no dialog. Used by
-// the "save to layer" branch when the layer originally had no FSA handle
-// (legacy <input> upload). Future re-saves use _writeKMLToHandle directly.
-async function _saveKMLPickFolderAndCapture(text, suggestedName, tgt){
-  if(_fsaSupported){
-    try {
-      const handle = await window.showSaveFilePicker({
-        suggestedName,
-        types:[{description:'KML', accept:{'application/vnd.google-earth.kml+xml':['.kml']}}],
-      });
-      const writable = await handle.createWritable();
-      await writable.write(text);
-      await writable.close();
-      tgt.handle = handle;
-      tgt.filename = handle.name || suggestedName;
-      _showSaveInfoDialog(handle.name||suggestedName, null,
-        'Файл сохранён в выбранную папку. Дальнейшие записи пойдут в тот же файл.');
       return;
     } catch(e){
       if(e?.name === 'AbortError') return;
@@ -6190,417 +4256,19 @@ function _appendToKMLText(kmlText, styleXml, placemarkXml){
 }
 
 function _buildKMLDocument(styles, placemarks, docName){
-  // Cross-compatible KML 2.2 for Google Earth Pro AND Yandex Map Constructor.
-  //   GE Pro needs:  <Style id> child of Document, <styleUrl> in Placemark,
-  //                  tessellate+altitudeMode on Polygon (added in geomXml),
-  //                  <open>1</open> so the layer expands on load.
-  //   Yandex MK needs: <name>+<description> CDATA, UTF-8 no BOM, KML 2.2 ns only.
+  // Document-level <name> required for Yandex Maps Constructor to show
+  // the layer with a meaningful label in its sidebar (not just "Слой 1").
   const nl='\n';
   const safeName = (docName || 'Контуры').replace(/[<>&]/g, '');
   return '<?xml version="1.0" encoding="UTF-8"?>'+nl+
-    '<kml xmlns="http://www.opengis.net/kml/2.2">'+nl+
-    '<Document>'+nl+
+    '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>'+nl+
     `<name><![CDATA[${safeName}]]></name>`+nl+
-    '<open>1</open>'+nl+
     styles.join(nl)+nl+
     '<Folder>'+nl+
     `<name><![CDATA[${safeName}]]></name>`+nl+
-    '<open>1</open>'+nl+
     placemarks.join(nl)+nl+
     '</Folder>'+nl+
-    '</Document>'+nl+
-    '</kml>';
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// KMZ EXPORT (v63) — bundle KML objects + photos into a single archive
-// ═══════════════════════════════════════════════════════════════════
-//
-// KMZ format: a ZIP file containing `doc.kml` + media files (referenced from
-// the KML by relative paths like `images/foo.jpg`). Google Earth Pro reads it
-// natively. Yandex Maps Constructor doesn't support KMZ — only KML.
-//
-// LIMITATIONS (informed user-facing):
-//   • Browser memory: JSZip builds the entire archive in RAM. ~500MB total
-//     payload is the practical ceiling on most desktops; bigger may crash the tab.
-//   • Photos: each is downsized to 1600px on the long side (JPEG quality 0.78)
-//     to keep size sane. Originals are NOT embedded — that would explode size.
-//     Typical 1600px thumb is 200-400 KB; 500 photos ≈ 150 MB.
-//   • GE Pro performance: above ~500 placemarks the timeline + render slow down.
-//   • No video / GPX / EXIF preserved in the embedded thumbs (re-encoded JPEG).
-//   • Coordinate accuracy: KML uses lon,lat,alt at 6-decimal precision (~11 cm).
-//   • Encoding: KML inside KMZ uses UTF-8, no BOM.
-//
-// What gets exported:
-//   1. Every loaded KML layer's parsedData.placemarks (polygons, lines, points)
-//   2. Every cad placemark saved via the dialog (cadPlacemarks)
-//   3. Every photo with a GPS coordinate — as a Placemark with the photo as a
-//      thumbnail icon AND embedded full-size in the description's <img>.
-
-window.exportKMZ = async function(){
-  const btn = document.getElementById('kmz-export-btn');
-  if(typeof JSZip === 'undefined'){
-    showToast('Библиотека JSZip не загружена — проверьте интернет','error',4500);
-    return;
-  }
-  // Estimate scope
-  const photosWithGPS = (typeof photos !== 'undefined' ? photos : []).filter(p => p.lat != null);
-  const layerCount = (kmlLayers||[]).length;
-  let placemarkCount = 0;
-  for(const l of (kmlLayers||[])){
-    placemarkCount += (l.parsedData?.placemarks?.length || 0);
-    placemarkCount += (l.cadPlacemarks?.length || 0);
-  }
-  if(placemarkCount === 0 && photosWithGPS.length === 0){
-    showToast('Нечего экспортировать: загрузите KML или фото с GPS','warn',4000);
-    return;
-  }
-  // Confirm with the user — they need to know about the size implications
-  const ok = window.confirm(
-    `Экспорт в KMZ для Google Earth Pro:\n\n`+
-    `  • Объектов KML/cad: ${placemarkCount}\n`+
-    `  • Фото с GPS: ${photosWithGPS.length} (будут уменьшены до 1600 px)\n`+
-    `  • Слоёв KML: ${layerCount}\n\n`+
-    `Ограничения:\n`+
-    `  • Архив строится в памяти браузера (~500 MB безопасный потолок)\n`+
-    `  • Фото пере-кодируются в JPEG q=0.78, EXIF не переносится\n`+
-    `  • Yandex.Карты не открывают KMZ — только KML\n`+
-    `  • При большом числе фото GE Pro может тормозить\n\n`+
-    `Продолжить?`
-  );
-  if(!ok) return;
-  btn.classList.add('busy');
-  btn.disabled = true;
-  const origLabel = btn.innerHTML;
-  btn.innerHTML = '⏳ Экспорт…';
-  try {
-    const zip = new JSZip();
-    const imagesFolder = zip.folder('images');
-
-    // ── Bucket placemarks by category for KML sub-folders ─────────────
-    // 4 categories: zu / oks / exp (objects from KML/cad) + photos (handled
-    // separately below — they get nested by source-folder structure). Each
-    // bucket holds its own placemark XML strings; styles are dedup'd globally.
-    const styleXmls       = new Set();
-    const buckets = { zu: [], oks: [], exp: [] };
-    const photoNodes      = [];   // {locPath, xml} entries for photo subfolder tree
-
-    // Use the same classifier the marker list uses, so categorisation in the
-    // KMZ matches what the user sees in Метки.
-    const classifyParsed = (pm) => {
-      const blob = `${pm.name||''} | ${pm.desc||''}`.toLowerCase();
-      const looksLikeZU = /(^|[^a-zа-яё])земл/i.test(blob);
-      if(pm.styleUrl){
-        if(/cad_zu_/i.test(pm.styleUrl))       return 'zu';
-        if(/cad_exp_/i.test(pm.styleUrl))      return 'exp';
-        if(/cad_oks_/i.test(pm.styleUrl))      return 'oks';
-        if(looksLikeZU)                        return 'zu';
-        if(pm.type === 'Point')                return 'exp';
-        return 'oks';
-      }
-      if(pm.type === 'Point')                  return 'exp';
-      if(looksLikeZU)                          return 'zu';
-      return 'oks';
-    };
-
-    // ── (1) Loaded KML layers ──────────────────────────────────────
-    // Cross-layer dedup so two loaded KMLs of the same dataset don't double-up.
-    const seenSig = new Set();
-    const sig = (n,d) => `${(n||'').trim().toLowerCase()}||${(d||'').slice(0,80).trim().toLowerCase()}`;
-
-    for(const layer of (kmlLayers||[])){
-      const parsed = layer.parsedData;
-      if(!parsed?.placemarks) continue;
-      for(const pm of parsed.placemarks){
-        if(pm._visible === false) continue;
-        const s = sig(pm.name, pm.desc);
-        if(seenSig.has(s)) continue;
-        seenSig.add(s);
-        const sid = (pm.styleUrl || '').replace('#','') || 'default';
-        styleXmls.add(_synthStyleXmlFromParsedStyle(sid, pm.style));
-        const cat = classifyParsed(pm);
-        buckets[cat].push(_pmToKMLXml(pm.name, pm.desc, sid, pm));
-      }
-      for(const pm of (layer.cadPlacemarks||[])){
-        if(pm._visible === false) continue;
-        const cat = pm.type === 'zu' ? 'zu' : pm.type === 'exp' ? 'exp' : 'oks';
-        const cn  = pm.cadNum || '';
-        const matched = parsed?.placemarks?.find(p =>
-          (p.name||'').includes(cn) || (p.desc||'').includes(cn));
-        const s = sig(matched?.name || cn, matched?.desc || (pm.lines||[]).map(([k,v])=>`${k}: ${v}`).join(' · '));
-        if(seenSig.has(s)) continue;
-        seenSig.add(s);
-        if(pm.parts?.style)     styleXmls.add(pm.parts.style);
-        if(pm.parts?.placemark) buckets[cat].push(pm.parts.placemark);
-      }
-    }
-
-    // ── (2) Photo placemarks ──────────────────────────────────────
-    styleXmls.add(
-      `<Style id="photo_icon">`+
-        `<IconStyle>`+
-          `<color>ffe5ff47</color>`+
-          `<scale>1.0</scale>`+
-          `<Icon><href>http://maps.google.com/mapfiles/kml/shapes/camera.png</href></Icon>`+
-        `</IconStyle>`+
-        `<LabelStyle><scale>0.7</scale></LabelStyle>`+
-      `</Style>`
-    );
-
-    // Subfolder skip-list — these names mean "this is the photo container folder
-    // itself, drop into it" rather than being a meaningful subfolder name. So a
-    // photo at "Часовня/Фото/01.jpg" appears as if it were directly in Часовня.
-    const PHOTO_FOLDER_SKIP = /^(фото|фотографии|фотография|foto|photos?)$/i;
-
-    // Sanitize a path segment for the photo subfolder tree (no leading skip-list
-    // names, normalise separators).
-    const cleanPhotoPath = (locPath) => {
-      if(!locPath) return [];
-      return String(locPath).split(/[\\/]/)
-        .map(s => s.trim())
-        .filter(s => s && !PHOTO_FOLDER_SKIP.test(s));
-    };
-
-    const BATCH = 4;
-    for(let i = 0; i < photosWithGPS.length; i += BATCH){
-      const batch = photosWithGPS.slice(i, i + BATCH);
-      btn.innerHTML = `⏳ Фото ${i+1}-${Math.min(i+BATCH, photosWithGPS.length)} / ${photosWithGPS.length}`;
-      await Promise.all(batch.map(async (p, j) => {
-        const idx = i + j;
-        const safeName = `photo_${String(idx+1).padStart(4,'0')}.jpg`;
-        try {
-          const blob = await _downscalePhotoForKMZ(p);
-          if(blob) imagesFolder.file(safeName, blob);
-        } catch(e){
-          console.warn('[kmz-photo]', p.name, e);
-          return;
-        }
-        const ts = p.date ? new Date(p.date).toISOString() : '';
-        const angle = (p.bearing != null && !isNaN(p.bearing)) ? `Угол съёмки: ${p.bearing.toFixed(0)}°<br/>` : '';
-        const desc =
-          `<![CDATA[<div style="font-family:Arial,sans-serif">`+
-            `<img src="images/${safeName}" style="max-width:480px;display:block;margin-bottom:6px"/>`+
-            `<b>${_escapeHtml(p.name||safeName)}</b><br/>`+
-            `Координаты: ${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}<br/>`+
-            angle+
-            (ts ? `Снято: ${ts}<br/>` : '')+
-          `</div>]]>`;
-        const xml =
-          `<Placemark>`+
-            `<name>${_escapeXml(p.name||safeName)}</name>`+
-            `<description>${desc}</description>`+
-            `<styleUrl>#photo_icon</styleUrl>`+
-            (ts ? `<TimeStamp><when>${ts}</when></TimeStamp>` : '')+
-            `<Point><altitudeMode>clampToGround</altitudeMode>`+
-              `<coordinates>${p.lon.toFixed(6)},${p.lat.toFixed(6)},0</coordinates>`+
-            `</Point>`+
-          `</Placemark>`;
-        photoNodes.push({pathSegments: cleanPhotoPath(p.locPath), xml});
-      }));
-    }
-
-    // Build photo folder tree from the path segments. {root: {childMap}, items: [xml...]}
-    const buildPhotoTree = (nodes) => {
-      const root = {children: new Map(), items: []};
-      for(const n of nodes){
-        let cur = root;
-        for(const seg of n.pathSegments){
-          if(!cur.children.has(seg)) cur.children.set(seg, {children: new Map(), items: []});
-          cur = cur.children.get(seg);
-        }
-        cur.items.push(n.xml);
-      }
-      return root;
-    };
-    const photoTreeToKML = (node, name) => {
-      const childParts = [];
-      for(const [childName, childNode] of node.children){
-        childParts.push(photoTreeToKML(childNode, childName));
-      }
-      const itemsPart = node.items.join('\n');
-      const inner = childParts.join('\n') + (childParts.length && itemsPart ? '\n' : '') + itemsPart;
-      // Top-level "Фотографии" folder is always emitted; nested folders only if name given
-      if(name == null) return inner;
-      return `<Folder>`+
-        `<name><![CDATA[${name}]]></name>`+
-        `<open>0</open>`+
-        inner+
-        `</Folder>`;
-    };
-
-    // ── Build doc.kml ─────────────────────────────────────────────
-    btn.innerHTML = '⏳ Сборка KML…';
-    const rootName = _kmzRootName();
-    const photoTree = buildPhotoTree(photoNodes);
-    const photosFolderXml = photoNodes.length
-      ? `<Folder><name><![CDATA[Фотографии]]></name><open>1</open>${photoTreeToKML(photoTree, null)}</Folder>`
-      : '';
-    const subfolder = (label, items) => items.length
-      ? `<Folder><name><![CDATA[${label}]]></name><open>1</open>${items.join('\n')}</Folder>`
-      : '';
-    const allFolders = [
-      subfolder('Зем.участки', buckets.zu),
-      subfolder('ОКСы',        buckets.oks),
-      subfolder('Пояснения',   buckets.exp),
-      photosFolderXml,
-    ].filter(Boolean).join('\n');
-
-    const kml =
-      '<?xml version="1.0" encoding="UTF-8"?>\n'+
-      '<kml xmlns="http://www.opengis.net/kml/2.2">\n'+
-      '<Document>\n'+
-      `<name><![CDATA[${rootName.replace(/[<>&]/g,'')}]]></name>\n`+
-      `<open>1</open>\n`+
-      [...styleXmls].join('\n')+'\n'+
-      allFolders+'\n'+
-      '</Document>\n'+
-      '</kml>';
-    zip.file('doc.kml', kml);
-
-    // ── Generate the .kmz blob ────────────────────────────────────
-    btn.innerHTML = '⏳ Сжатие…';
-    const blob = await zip.generateAsync({
-      type:'blob',
-      mimeType:'application/vnd.google-earth.kmz',
-      compression:'DEFLATE',
-      compressionOptions:{level:6},
-    });
-
-    // Save (FSA picker first, fallback to legacy download)
-    const stamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,16);
-    // Filename also uses the root name when available — e.g. "Соколова52.kmz"
-    // is more meaningful than "ekcelo_export_2026-04-30T12-00.kmz".
-    const safeRoot = rootName.replace(/[^\wа-яА-ЯёЁ-]+/g,'_').replace(/^_+|_+$/g,'') || 'ekcelo_export';
-    const filename = `${safeRoot}_${stamp}.kmz`;
-    if(typeof window.showSaveFilePicker === 'function'){
-      try {
-        const handle = await window.showSaveFilePicker({
-          suggestedName: filename,
-          types:[{description:'KMZ', accept:{'application/vnd.google-earth.kmz':['.kmz']}}],
-        });
-        const w = await handle.createWritable();
-        await w.write(blob); await w.close();
-        _showSaveInfoDialog(handle.name||filename, null,
-          'KMZ сохранён в выбранную папку. Откройте его в Google Earth Pro.');
-        showToast(`✅ KMZ: ${(blob.size/1024/1024).toFixed(1)} MB`, 'success', 3500);
-        return;
-      } catch(e){
-        if(e?.name === 'AbortError'){ return; }
-        // fallthrough
-      }
-    }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filename; a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 8000);
-    _showSaveInfoDialog(filename, url, 'KMZ скачан в папку «Загрузки». Откройте в Google Earth Pro.');
-    showToast(`✅ KMZ: ${(blob.size/1024/1024).toFixed(1)} MB`, 'success', 3500);
-  } catch(e){
-    console.warn('[kmz-export]', e);
-    showToast('❌ Ошибка экспорта: '+(e.message||e), 'error', 5500);
-  } finally {
-    btn.classList.remove('busy');
-    btn.disabled = false;
-    btn.innerHTML = origLabel;
-  }
-};
-
-// Convert a parsed KML placemark back to KML XML for re-emission
-function _pmToKMLXml(name, desc, sid, pm){
-  const safeName = _escapeXml(name||'');
-  const safeDesc = desc ? `<description><![CDATA[${desc}]]></description>` : '';
-  const styleRef = `<styleUrl>#${sid}</styleUrl>`;
-  let geom = '';
-  if(pm.type === 'Point' && pm.coords){
-    const [lat, lon] = pm.coords;
-    geom = `<Point><altitudeMode>clampToGround</altitudeMode><coordinates>${lon},${lat},0</coordinates></Point>`;
-  } else if(pm.type === 'Polygon' && pm.coords?.length){
-    const cs = pm.coords.map(([la,lo]) => `${lo},${la},0`).join(' ');
-    geom = `<Polygon><tessellate>1</tessellate><altitudeMode>clampToGround</altitudeMode>`+
-           `<outerBoundaryIs><LinearRing><tessellate>1</tessellate><coordinates>${cs}</coordinates></LinearRing></outerBoundaryIs>`+
-           `</Polygon>`;
-  } else if(pm.type === 'LineString' && pm.coords?.length){
-    const cs = pm.coords.map(([la,lo]) => `${lo},${la},0`).join(' ');
-    geom = `<LineString><tessellate>1</tessellate><coordinates>${cs}</coordinates></LineString>`;
-  }
-  return `<Placemark><name>${safeName}</name>${safeDesc}${styleRef}${geom}</Placemark>`;
-}
-
-// Synthesize a KML <Style> from a resolved style object (lineColor as rgba(),
-// fillColor as rgba(), lineWidth, etc). Used for placemarks loaded from a KML
-// where we don't have the original Style XML.
-function _synthStyleXmlFromParsedStyle(id, st){
-  const rgba2ABGR = c => {
-    if(!c) return 'ff7f7f7f';
-    const m = String(c).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
-    if(!m) return 'ff7f7f7f';
-    const r = (+m[1]).toString(16).padStart(2,'0');
-    const g = (+m[2]).toString(16).padStart(2,'0');
-    const b = (+m[3]).toString(16).padStart(2,'0');
-    const a = (Math.round((m[4] != null ? +m[4] : 1) * 255)).toString(16).padStart(2,'0');
-    return a+b+g+r;
-  };
-  const lineColor = rgba2ABGR(st?.lineColor);
-  const fillColor = rgba2ABGR(st?.fillColor);
-  const w = st?.lineWidth || 2;
-  return `<Style id="${id}">`+
-    `<LineStyle><color>${lineColor}</color><width>${w}</width></LineStyle>`+
-    `<PolyStyle><color>${fillColor}</color><fill>${st?.hasFill?1:0}</fill></PolyStyle>`+
-    `<IconStyle><color>${lineColor}</color><scale>0.9</scale></IconStyle>`+
-    `</Style>`;
-}
-
-// XML escape helper for attribute / element text (NOT for CDATA — keep CDATA as-is).
-function _escapeXml(s){
-  return String(s||'').replace(/[&<>'"]/g, c =>
-    ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&apos;','"':'&quot;'}[c]));
-}
-
-// Downscale photo for embedding in KMZ. Returns a Blob (jpeg q=0.78).
-// Source priority:
-//   1. p.displayUrl  — usually the in-memory blob URL of the original
-//   2. p.thumbUrl    — fallback (smaller, but still embeddable)
-//   3. p.file        — File object (created from input/folder upload)
-//   4. p.originalBlob — re-encoded blob if EXIF was rewritten
-// Remote photos (Yandex/GDrive) use displayUrl pointing at fetched blob URL.
-async function _downscalePhotoForKMZ(p){
-  const MAX = 1600;
-  const Q = 0.78;
-  let src = p.displayUrl || p.thumbUrl;
-  let createdUrl = false;
-  if(!src){
-    const blob = p.originalBlob || p.file || null;
-    if(blob){ src = URL.createObjectURL(blob); createdUrl = true; }
-  }
-  if(!src) return null;
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    // crossOrigin avoids tainted-canvas exceptions on some remote photos.
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      try {
-        const w = img.naturalWidth, h = img.naturalHeight;
-        const scale = Math.min(1, MAX / Math.max(w, h));
-        const tw = Math.round(w * scale), th = Math.round(h * scale);
-        const canvas = document.createElement('canvas');
-        canvas.width = tw; canvas.height = th;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, tw, th);
-        canvas.toBlob(b => {
-          if(createdUrl) URL.revokeObjectURL(src);
-          resolve(b);
-        }, 'image/jpeg', Q);
-      } catch(e){
-        if(createdUrl) URL.revokeObjectURL(src);
-        reject(e);
-      }
-    };
-    img.onerror = () => {
-      if(createdUrl) URL.revokeObjectURL(src);
-      reject(new Error('Image decode failed: '+(p.name||'')));
-    };
-    img.src = src;
-  });
+    '</Document></kml>';
 }
 
 function _downloadBlob(text, filename){
@@ -7232,15 +4900,11 @@ window.doSearchCadastral = async function(){
   }
 };
 
-// ── INIT — KML restore policy ─────────────────────────────────────
-// v59: auto-restore disabled per user request. The user wants explicit control
-// over what KMLs are loaded into the session. We also CLEAR previously stored
-// state so old layers don't quietly accumulate in localStorage and surprise
-// later sessions if restore is ever re-enabled.
-//
-// To re-enable later: just call `restoreKMLLayersFromStorage()` here.
+// ── INIT — restore persisted KML layers on page load ──────────────
+// Run after all module-scope state is ready. Use queueMicrotask so other top-level
+// init code (placeholders, default styles) finishes first.
 queueMicrotask(() => {
-  try { localStorage.removeItem(_LS_KML_KEY); } catch(_){}
+  restoreKMLLayersFromStorage().catch(e => console.warn('[init] kml restore', e));
 });
 </script>
 </body>
