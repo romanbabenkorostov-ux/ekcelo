@@ -7,7 +7,7 @@
      from file:// context (origin=null → strict-origin sends literal "null" → OSM blocks).
      Chrome was unaffected (sends no Referer from file://, OSM accepts Chrome UA).
      Each tile layer sets its own referrerPolicy via img.referrerPolicy attribute. -->
-<title>EkceloFoto v2.9.54</title>
+<title>EkceloFoto v2.9.55</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -180,11 +180,25 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #auto-save-label:hover{border-color:var(--accent);color:var(--text)}
 #auto-save-label input{accent-color:var(--accent);cursor:pointer;width:12px;height:12px}
 #auto-save-label.active-label{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
-/* KMZ export button */
-#kmz-export-btn{display:flex;align-items:center;gap:5px;background:transparent;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);white-space:nowrap;padding:4px 7px;border:1px solid var(--border);border-radius:var(--r);transition:border-color .15s,color .15s,background .15s;cursor:pointer;flex-shrink:0}
-#kmz-export-btn:hover{border-color:#6cd96c;color:#6cd96c;background:rgba(108,217,108,.08)}
-#kmz-export-btn:disabled{opacity:.4;cursor:not-allowed;border-color:var(--border)}
-#kmz-export-btn.busy{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);animation:pulse-busy 1.2s ease-in-out infinite}
+/* Export data button + dropdown (v2.9.55: replaces standalone KMZ button) */
+#export-wrap{position:relative;flex-shrink:0}
+#export-btn{display:flex;align-items:center;gap:5px;background:transparent;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);white-space:nowrap;padding:4px 7px;border:1px solid var(--border);border-radius:var(--r);transition:border-color .15s,color .15s,background .15s;cursor:pointer}
+#export-btn:hover{border-color:#6cd96c;color:#6cd96c;background:rgba(108,217,108,.08)}
+#export-btn:disabled{opacity:.4;cursor:not-allowed;border-color:var(--border)}
+#export-btn.busy{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);animation:pulse-busy 1.2s ease-in-out infinite}
+#export-menu{display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:9100;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);min-width:280px;max-width:380px;padding:4px 0;animation:pop-in .15s ease both}
+#export-menu.open{display:block}
+#export-menu .em-section{font-size:9px;font-family:'JetBrains Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:6px 14px 3px}
+#export-menu button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:transparent;border:none;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;padding:8px 14px;cursor:pointer;transition:background .1s}
+#export-menu button:hover{background:var(--accent-dim)}
+#export-menu button.em-cancel{color:var(--muted);font-size:11px}
+#export-menu button.em-cancel:hover{background:rgba(255,92,92,.12);color:var(--danger)}
+#export-menu hr{border:none;border-top:1px solid var(--border);margin:3px 0}
+#export-menu .em-recent-item{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--muted);padding:5px 14px;cursor:pointer;transition:background .1s;border:none;background:transparent;width:100%;text-align:left;font-family:'JetBrains Mono',monospace}
+#export-menu .em-recent-item:hover{background:var(--accent-dim);color:var(--text)}
+#export-menu .em-recent-item .em-recent-fmt{font-size:8.5px;font-weight:700;padding:1px 5px;border-radius:3px;background:var(--surface2);border:1px solid var(--border);min-width:32px;text-align:center;flex-shrink:0}
+#export-menu .em-recent-item .em-recent-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#export-menu .em-empty{font-size:10px;color:var(--muted);padding:5px 14px;font-style:italic}
 @keyframes pulse-busy{0%,100%{opacity:.7}50%{opacity:1}}
 #stats{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);margin-left:auto;display:flex;gap:6px;align-items:center;flex-shrink:0}
 .stat{display:flex;flex-direction:row;align-items:center;gap:3px}
@@ -305,11 +319,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .photo-item.active{background:var(--accent-dim);border-color:var(--accent)}
 .photo-item.no-gps{opacity:.72}
 .photo-item.dragging{opacity:.25;border:1px dashed var(--accent2)}
-.thumb{width:78px;height:78px;border-radius:5px;object-fit:cover;background:var(--border);display:block;flex-shrink:0;pointer-events:none}
+.thumb{width:82px;height:82px;border-radius:5px;object-fit:cover;background:var(--border);display:block;flex-shrink:0;pointer-events:none}
 .thumb.loading{background:linear-gradient(90deg,var(--border) 25%,#2a3450 50%,var(--border) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .photo-meta{flex:1;min-width:0;padding-top:2px;pointer-events:none}
-.photo-name{font-size:8px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
+.photo-name{font-family:'Arial Narrow','Inter','Roboto Condensed',sans-serif;font-size:10px;font-weight:600;font-stretch:condensed;letter-spacing:-0.01em;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
 .photo-coords{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--muted);margin-top:2px;line-height:1.5}
 .gps-badge{font-size:8px;padding:1px 4px;border-radius:3px;font-family:'JetBrains Mono',monospace;margin-top:3px;display:inline-block}
 .gps-ok{background:rgba(100,160,0,.15);color:#3a6800}
@@ -335,7 +349,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #lb-move-panel{display:none;padding:10px 12px 12px;font-family:'JetBrains Mono',monospace}
 #lb-move-panel.visible{display:block}
 #lb-move-panel .lmp-title{font-size:10px;font-weight:700;color:#47c8ff;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
-#lb-move-panel .lmp-filename{font-size:11px;color:var(--text);background:rgba(255,255,255,.06);border-radius:4px;padding:5px 8px;margin-bottom:8px;word-break:break-all;border:1px solid var(--border)}
+#lb-move-panel .lmp-filename{font-size:11px;color:var(--text);background:rgba(255,255,255,.06);border-radius:4px;padding:5px 8px;margin-bottom:6px;word-break:break-all;border:1px solid var(--border)}
+#lb-move-panel .lmp-current{font-size:10px;color:var(--muted);background:rgba(71,200,255,.06);border:1px solid rgba(71,200,255,.25);border-radius:4px;padding:5px 8px;margin-bottom:8px;word-break:break-all}
+#lb-move-panel .lmp-current b{color:#47c8ff;font-weight:600}
 #lb-move-panel .lmp-hint{font-size:10px;color:var(--muted);line-height:1.5;margin-bottom:10px}
 #lb-move-panel .lmp-hint em{color:#47c8ff;font-style:normal}
 #lb-move-panel .lmp-root-needed{font-size:10px;color:#ff9500;background:rgba(255,149,0,.08);border:1px solid rgba(255,149,0,.25);border-radius:4px;padding:6px 8px;margin-bottom:8px;display:none}
@@ -486,7 +502,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #lightbox{display:none;position:absolute;z-index:2000;pointer-events:none;transition:left .18s cubic-bezier(.4,0,.2,1),top .18s cubic-bezier(.4,0,.2,1)}
 #lightbox.visible{display:block;pointer-events:all}
 #lightbox.no-transition{transition:none !important}
-#lb-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;width:320px;box-shadow:var(--shadow);animation:pop-in .2s cubic-bezier(.34,1.56,.64,1) both;transition:opacity .22s ease}
+#lb-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;width:351px;box-shadow:var(--shadow);animation:pop-in .2s cubic-bezier(.34,1.56,.64,1) both;transition:opacity .22s ease}
 #lb-card.gps-active{opacity:.22;pointer-events:none}
 @keyframes pop-in{from{transform:scale(.88) translateY(8px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}
 #lb-filename-bar{padding:9px 10px 5px;display:flex;align-items:center;gap:5px;border-bottom:1px solid rgba(255,255,255,.05);cursor:move;user-select:none}
@@ -498,7 +514,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #lb-section-label-text{flex:1}
 #lb-close-bar{flex-shrink:0;width:22px;height:22px;background:rgba(0,0,0,.5);border:none;border-radius:50%;color:#fff;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s}
 #lb-close-bar:hover{background:rgba(255,92,92,.75)}
-#lb-img-wrap{position:relative;width:100%;height:190px;overflow:hidden;background:#080a0e;cursor:zoom-in}
+#lb-img-wrap{position:relative;width:100%;height:209px;overflow:hidden;background:#080a0e;cursor:zoom-in}
 #lb-img{width:100%;height:100%;object-fit:contain;transition:transform .18s ease;transform-origin:center}
 #lb-zoom-bar{display:flex;align-items:center;gap:5px;padding:3px 8px;background:var(--surface2);border-top:1px solid var(--border)}
 .lbz-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:3px;width:20px;height:20px;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
@@ -768,6 +784,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .info-card .ic-action:hover{filter:brightness(1.12)}
 .info-card .ic-orange{background:#ff9500;color:#fff}
 .info-card .ic-cyan{background:#47c8ff;color:#0d0f14}
+/* v2.9.55: contour-creation mini-buttons in coords card.
+   Three colors match CAD_STYLES: zu=green, oks=purple, exp=cyan-blue. */
+.info-card .ic-action-row{display:flex;gap:4px;margin-top:4px}
+.info-card .ic-action.ic-mini{flex:1;display:block;width:auto;margin-top:0;padding:4px 4px;font-size:9.5px;font-weight:700;text-align:center}
+.info-card .ic-green{background:#22c55e;color:#0d0f14}
+.info-card .ic-purple{background:#a855f7;color:#fff}
+.info-card .ic-cyan2{background:#1e54e5;color:#fff}
 .cad-tip-section{padding:6px 9px;line-height:1.5}
 .cad-tip-section+.cad-tip-section{border-top:1px solid rgba(255,255,255,.08)}
 /* Cad tip sections: use theme surface vars for readability in light mode */
@@ -975,7 +998,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.54</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.55</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -992,7 +1015,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
       <button onclick="closeUploadMenu();showYandexDialog()">🌐 Яндекс.Диск (ссылка)</button>
       <button onclick="closeUploadMenu();showGDrivePanel()">📁 Google Drive (папка)</button>
       <hr/>
-      <button onclick="closeUploadMenu();pickKMLViaMenu()">🗺 Добавить KML вручную…</button>
+      <button onclick="closeUploadMenu();pickKMLViaMenu()">🗺 Добавить из .KML</button>
       <button onclick="closeUploadMenu();pickKMZViaMenu()">📦 Добавить KMZ (Google Earth)…</button>
       <button onclick="closeUploadMenu();pickXlsxCatalog()">📋 Загрузить кад.номера (XLSX)…</button>
       <!-- Path hints (Task 1): persistent reminders of last opened locations.
@@ -1010,10 +1033,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     <input type="checkbox" id="auto-save-cb" onchange="onAutoSaveCbChange(this)"/>
     EXIF авто
   </label>
-  <!-- KMZ export — bundles every loaded KML layer + every photo with GPS into
-       a single .kmz that opens in Google Earth Pro. Disabled until there's
-       something to export. -->
-  <button id="kmz-export-btn" onclick="exportKMZ()" title="Экспортировать все объекты и фото с GPS в один .kmz для Google Earth Pro">📦 KMZ</button>
+  <!-- v2.9.55: Export data dropdown (was: standalone KMZ button).
+       Lets the user choose KMZ/KML/XLSX, plus quick-resave to recently saved files. -->
+  <div id="export-wrap">
+    <button id="export-btn" onclick="toggleExportMenu(event)" title="Экспортировать объекты и фото с GPS — выбор формата">📤 Экспорт данных ▾</button>
+    <div id="export-menu" onclick="event.stopPropagation()"></div>
+  </div>
   <button id="share-btn" onclick="copyShareLink()" style="display:none">🔗 Поделиться</button>
   <div id="stats">
     <div class="stat"><span class="stat-val" id="stat-total">0</span><span class="stat-lbl">фото</span></div>
@@ -1189,6 +1214,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
       <div id="lb-move-panel">
         <div class="lmp-title">📂 Перемещение фото в папку</div>
         <div class="lmp-filename" id="lmp-filename-text"></div>
+        <div class="lmp-current" id="lmp-current-folder"></div>
         <div class="lmp-root-needed" id="lmp-root-needed">⚠ Потребуется выбрать корневую папку с фотографиями (разрешить доступ на запись)</div>
         <div class="lmp-hint">Выберите папку в окне <em>«Структура объекта»</em> ↙<br>файл физически переместится на диске</div>
         <button class="lmp-cancel-btn" onclick="cancelPhotoMove()">✖ Отмена</button>
@@ -2614,6 +2640,9 @@ function _showEditorToolbar(){
       `<button id="contour-shift-btn" onclick="toggleContourShiftMode()" title="Захватить весь контур и сдвинуть (компенсация смещения проекций)">↔ Сдвиг</button>`+
       `<button id="contour-edit-finish" onclick="finishContourEditor()">✅ Завершить</button>`+
       `<button id="contour-edit-revert" onclick="revertContourEditor()" title="Вернуть исходный авто-контур">↺ Сброс</button>`+
+      // v2.9.55 — Task 8: contour cleanup + project transfer.
+      `<button id="contour-edit-delete-shape" onclick="deleteContourShape()" title="Стереть контур, объект (метку) сохранить">🗑 Удалить контур</button>`+
+      `<button id="contour-edit-move-project" onclick="moveContourToOtherProject()" title="Сохранить объект в другой файл (KMZ/KML/XLSX) и удалить из текущей сессии">📤 В др. проект</button>`+
       `<button id="contour-edit-cancel" onclick="cancelContourEditor()">Отмена</button>`;
     document.body.appendChild(bar);
   }
@@ -2734,6 +2763,240 @@ window.revertContourEditor = function(){
   map.closePopup();
   showToast('Контур восстановлен','info',1800);
 };
+
+// ═══ v2.9.55 — Task 8: contour cleanup + project transfer ══════════
+// "🗑 Удалить контур" — keeps the placemark (cadNum, description, type) alive
+// in its current KML layer, but replaces its Polygon geometry with a Point at
+// the polygon centroid. This is what the user described: "ранее сохранённый
+// объект остаётся, но стирается его контур". The point still appears in Метки
+// and exports, just without polygon edges.
+window.deleteContourShape = function(){
+  if(!_ce) return;
+  const sm = _ce.sourceMarker;
+  if(!sm){
+    // No source marker means this contour was never saved (e.g. just-created
+    // seed square from "ЗУ/ОКС/Бизнес-актив" buttons). Nothing to keep — just
+    // dispose the editor.
+    showToast('Контур ещё не сохранён — отменяю редактирование','info',2500);
+    _disposeContourEditor();
+    return;
+  }
+  if(!confirm('Удалить контур (полигон)?\n\nОбъект, его кад.номер и описание сохранятся как точечная метка в центроиде. Геометрия полигона будет утеряна безвозвратно.')){
+    return;
+  }
+  // Locate the cadPlacemark in kmlLayers
+  let foundLayer = null, foundCp = null;
+  for(const layer of (kmlLayers||[])){
+    if(!layer.cadPlacemarks) continue;
+    const cp = layer.cadPlacemarks.find(c =>
+      c === sm.pmRef || (sm.cadNum && c.cadNum === sm.cadNum) || c.geom === sm.pmRef?.geom
+    );
+    if(cp){ foundLayer = layer; foundCp = cp; break; }
+  }
+  if(!foundCp){
+    showToast('Не найдена исходная метка — отмена','warn',3000);
+    _disposeContourEditor();
+    return;
+  }
+  // Compute centroid in [lon, lat] for the new Point geometry.
+  // _computeCentroid returns {lon, lat} (NOT {lng, lat}) — important to match.
+  const ctr = _computeCentroid(foundCp.geom);
+  if(!ctr){
+    showToast('Не удалось вычислить центроид — отмена','error',3000);
+    return;
+  }
+  // Remove old leaflet layer (polygon) from map
+  if(foundCp._leafletLayer){ try { map.removeLayer(foundCp._leafletLayer); } catch(_){} }
+  // Replace geom with Point + create a new leaflet point marker
+  foundCp.geom = { type:'Point', coordinates:[ctr.lon, ctr.lat] };
+  const newLyr = _makeCadLayer(foundCp.geom, foundCp.type, true);
+  if(newLyr){
+    if(typeof _attachCadEvents === 'function'){
+      _attachCadEvents(newLyr, foundCp.cadNum||'', foundCp.type, foundCp.lines||[]);
+    }
+    if(foundLayer.layerGroup) newLyr.addTo(foundLayer.layerGroup);
+    foundCp._leafletLayer = newLyr;
+  }
+  // Re-emit kmlText: rebuild placemark XML with new (Point) geometry
+  if(typeof _rebuildLayerKMLText === 'function'){
+    _rebuildLayerKMLText(foundLayer);
+  } else {
+    // Best-effort: drop kmlText so next save regenerates it from cadPlacemarks
+    foundLayer.kmlText = null;
+  }
+  // Persist + refresh UI
+  if(typeof saveKMLLayersToStorage === 'function') saveKMLLayersToStorage();
+  if(typeof renderMarksList === 'function' && _activeSidebarTab === 'marks') renderMarksList();
+  _disposeContourEditor();
+  showToast(`✅ Контур удалён · метка ${foundCp.cadNum||''} сохранена точкой`,'success',4000);
+};
+
+// "📤 Переместить в другой проект" — saves the current contour to a separate
+// file (KMZ/KML/XLSX, user picks via the same dialog as Task 2's export menu)
+// AND removes the placemark from the current session after successful save.
+// Implementation strategy: build a single-placemark export, write to disk via
+// the same _pickAndWrite helpers, then remove from kmlLayers and dispose editor.
+window.moveContourToOtherProject = async function(){
+  if(!_ce) return;
+  const sm = _ce.sourceMarker;
+  if(!sm){
+    showToast('Контур ещё не сохранён — сначала «✅ Завершить» в текущий проект','warn',5000);
+    return;
+  }
+  // Locate cp + its layer
+  let foundLayer = null, foundCp = null;
+  for(const layer of (kmlLayers||[])){
+    if(!layer.cadPlacemarks) continue;
+    const cp = layer.cadPlacemarks.find(c =>
+      c === sm.pmRef || (sm.cadNum && c.cadNum === sm.cadNum) || c.geom === sm.pmRef?.geom
+    );
+    if(cp){ foundLayer = layer; foundCp = cp; break; }
+  }
+  if(!foundCp){
+    showToast('Не найдена исходная метка — отмена','warn',3000);
+    return;
+  }
+  // Show format chooser using the same export menu logic as Task 2
+  const fmt = await _pickExportFormatForContour(foundCp);
+  if(!fmt){ return; }  // user cancelled
+  // Build single-placemark export based on chosen format
+  const itemName = foundCp.cadNum || ((foundCp.parts?.placemark||'').match(/<name[^>]*>([^<]+)<\/name>/i)?.[1]) || 'Контур';
+  const projName = String(itemName).replace(/[^\wа-яА-ЯёЁ-]/g,'_').slice(0,40);
+  let saved = false, savedName = '';
+  try {
+    if(fmt === 'kml'){
+      const styleXml = foundCp.parts?.style || '';
+      const pmXml    = foundCp.parts?.placemark || '';
+      if(!pmXml){ showToast('Внутреннее: placemark XML отсутствует','error',3000); return; }
+      const xml = _buildKMLDocument(styleXml ? [styleXml] : [], [pmXml], itemName);
+      const suggestedName = _autoExportName('kml').replace('EkceloFoto', projName);
+      const h = await _pickAndWrite(xml, suggestedName, 'application/vnd.google-earth.kml+xml', '.kml');
+      if(!h) return;  // cancelled
+      saved = true; savedName = (h && h !== '_legacy') ? (h.name || suggestedName) : suggestedName;
+      if(h && h !== '_legacy') _exportHandleCache.set(savedName, h);
+      _saveRecentExport('kml', savedName);
+    } else if(fmt === 'xlsx'){
+      if(typeof XLSX === 'undefined'){
+        showToast('Библиотека XLSX не загружена','error',4500);
+        return;
+      }
+      const wb = XLSX.utils.book_new();
+      const c = _computeCentroid(foundCp.geom);
+      const typeLabel = foundCp.type==='zu' ? 'ЗУ' : foundCp.type==='oks' ? 'ОКС' : foundCp.type==='exp' ? 'Бизнес-актив' : foundCp.type;
+      const descTxt = (foundCp.lines||[]).map(L=>L[0]+': '+L[1]).join(' · ');
+      const rows = [
+        ['Тип','Кад.номер/Имя','Описание','Центр (lat,lon)'],
+        [typeLabel, foundCp.cadNum||'', descTxt, c ? `${c.lat.toFixed(6)}, ${c.lon.toFixed(6)}` : ''],
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      XLSX.utils.book_append_sheet(wb, ws, 'Объект');
+      const xlsxData = XLSX.write(wb, { bookType:'xlsx', type:'array' });
+      const blob = new Blob([xlsxData], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+      const suggestedName = _autoExportName('xlsx').replace('EkceloFoto', projName);
+      const h = await _pickAndWriteBlob(blob, suggestedName, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.xlsx');
+      if(!h) return;
+      saved = true; savedName = (h && h !== '_legacy') ? (h.name || suggestedName) : suggestedName;
+      if(h && h !== '_legacy') _exportHandleCache.set(savedName, h);
+      _saveRecentExport('xlsx', savedName);
+    } else if(fmt === 'kmz'){
+      // KMZ for a single contour: use JSZip to bundle a minimal doc.kml.
+      if(typeof JSZip === 'undefined'){ showToast('JSZip не загружена','error',4500); return; }
+      const styleXml = foundCp.parts?.style || '';
+      const pmXml    = foundCp.parts?.placemark || '';
+      const xml = _buildKMLDocument(styleXml ? [styleXml] : [], [pmXml], itemName);
+      const zip = new JSZip();
+      zip.file('doc.kml', xml);
+      const blob = await zip.generateAsync({ type:'blob', mimeType:'application/vnd.google-earth.kmz' });
+      const suggestedName = _autoExportName('kmz').replace('EkceloFoto', projName);
+      const h = await _pickAndWriteBlob(blob, suggestedName, 'application/vnd.google-earth.kmz', '.kmz');
+      if(!h) return;
+      saved = true; savedName = (h && h !== '_legacy') ? (h.name || suggestedName) : suggestedName;
+      if(h && h !== '_legacy') _exportHandleCache.set(savedName, h);
+      _saveRecentExport('kmz', savedName);
+    }
+  } catch(e){
+    console.warn('[move-contour]', e);
+    showToast('Ошибка сохранения: '+(e.message||e),'error',5000);
+    return;
+  }
+  if(!saved) return;
+  // SUCCESS: remove the contour from the current session
+  if(foundCp._leafletLayer){ try { map.removeLayer(foundCp._leafletLayer); } catch(_){} }
+  const idx = foundLayer.cadPlacemarks.indexOf(foundCp);
+  if(idx >= 0){
+    foundLayer.cadPlacemarks.splice(idx, 1);
+    foundLayer.placemarkCount = Math.max(0, (foundLayer.placemarkCount||1) - 1);
+  }
+  if(typeof _rebuildLayerKMLText === 'function') _rebuildLayerKMLText(foundLayer);
+  if(typeof saveKMLLayersToStorage === 'function') saveKMLLayersToStorage();
+  if(typeof renderMarksList === 'function' && _activeSidebarTab === 'marks') renderMarksList();
+  _disposeContourEditor();
+  showToast(`✅ Перемещено в «${savedName}» · удалено из сессии`,'success',5000);
+};
+
+// Modal-style format chooser for "move to other project". Returns a Promise
+// that resolves to 'kmz' | 'kml' | 'xlsx' | null (cancelled). Uses a tiny
+// custom dialog rather than reusing the export-menu (which is a dropdown
+// anchored to a button — wrong UI affordance for this contextual action).
+function _pickExportFormatForContour(cp){
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;display:flex;align-items:center;justify-content:center;animation:fadeIn .15s ease';
+    const FONT = "font-family:'JetBrains Mono',monospace";
+    const itemLabel = cp.cadNum || 'Контур';
+    overlay.innerHTML =
+      `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px 20px;min-width:320px;max-width:420px;box-shadow:var(--shadow);${FONT}">`+
+        `<div style="font-size:13px;font-weight:700;color:var(--accent2);margin-bottom:6px">📤 Переместить в другой проект</div>`+
+        `<div style="font-size:11px;color:var(--muted);margin-bottom:14px;word-break:break-all">${esc(itemLabel)}<br/><span style="opacity:.7">Объект будет сохранён в выбранный файл и удалён из текущей сессии после успешного сохранения.</span></div>`+
+        `<div style="display:flex;flex-direction:column;gap:6px">`+
+          `<button class="_pcfmt _pcfmt_kmz" data-fmt="kmz" style="background:#2d6a4f;border:none;color:#fff;border-radius:5px;padding:8px 12px;cursor:pointer;font-size:12px;text-align:left;${FONT}">📦 KMZ — Google Earth</button>`+
+          `<button class="_pcfmt" data-fmt="kml" style="background:#3b82f6;border:none;color:#fff;border-radius:5px;padding:8px 12px;cursor:pointer;font-size:12px;text-align:left;${FONT}">🗺 KML — Яндекс.Карты, GE</button>`+
+          `<button class="_pcfmt" data-fmt="xlsx" style="background:#8b5cf6;border:none;color:#fff;border-radius:5px;padding:8px 12px;cursor:pointer;font-size:12px;text-align:left;${FONT}">📋 XLSX — таблица</button>`+
+          `<button class="_pcfmt _pcfmt_cancel" data-fmt="" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:6px 12px;cursor:pointer;font-size:11px;margin-top:6px;${FONT}">Отмена</button>`+
+        `</div>`+
+      `</div>`;
+    document.body.appendChild(overlay);
+    const cleanup = (val) => { overlay.remove(); resolve(val); };
+    overlay.addEventListener('click', e => {
+      if(e.target === overlay){ cleanup(null); return; }
+      const btn = e.target.closest('._pcfmt');
+      if(btn){
+        const f = btn.dataset.fmt || '';
+        cleanup(f || null);
+      }
+    });
+    // Esc closes
+    const onKey = e => {
+      if(e.key === 'Escape'){ document.removeEventListener('keydown', onKey); cleanup(null); }
+    };
+    document.addEventListener('keydown', onKey);
+  });
+}
+
+// Helper used by both deleteContourShape and moveContourToOtherProject:
+// regenerate the layer's `kmlText` from its current cadPlacemarks + parsedData.
+// This keeps disk persistence in sync after geometry changes.
+function _rebuildLayerKMLText(layer){
+  if(!layer) return;
+  const styles = new Set();
+  const placemarks = [];
+  for(const cp of (layer.cadPlacemarks||[])){
+    if(cp.parts?.style) styles.add(cp.parts.style);
+    if(cp.parts?.placemark) placemarks.push(cp.parts.placemark);
+  }
+  // Preserve original file-loaded placemarks if any (parsedData)
+  if(layer.kmlText && (layer.parsedData?.placemarks||[]).length){
+    const styleRe = /<Style\b[\s\S]*?<\/Style>/g;
+    const pmRe    = /<Placemark\b[\s\S]*?<\/Placemark>/g;
+    const sm = layer.kmlText.match(styleRe) || [];
+    const pm = layer.kmlText.match(pmRe) || [];
+    sm.forEach(s => styles.add(s));
+    // Avoid duplicating cad-placemarks already collected above
+    const cadPmStrings = new Set(placemarks);
+    pm.forEach(p => { if(!cadPmStrings.has(p)) placemarks.push(p); });
+  }
+  layer.kmlText = _buildKMLDocument([...styles], placemarks, layer.docName||layer.filename||'KML');
+}
 
 function _disposeContourEditor(){
   if(!_ce) return;
@@ -3211,9 +3474,37 @@ function _renderCoordsCard(lat, lng, cardId){
       `<code class="ic-coords">${ll}</code>`+
       `<button class="ic-action ic-orange" onclick="queryNSPDAtPoint()" title="Запросить кадастр в этой точке">📍 Запросить кадастр</button>`+
       `<button class="ic-action ic-cyan"   onclick="startExplanationPoint(${+lat},${+lng})" title="Добавить пояснение">💬 Добавить пояснение</button>`+
+      // v2.9.55: three contour-creation shortcuts. Each starts the contour editor
+      // with a small (~30m) square seed centered on the click point. The user
+      // then drags vertices to match the real shape and saves via kdConfirm.
+      `<div class="ic-action-row">`+
+        `<button class="ic-action ic-mini ic-green"  onclick="startNewContour(${+lat},${+lng},'zu')"  title="Создать контур ЗУ — Земельный участок">▢ ЗУ</button>`+
+        `<button class="ic-action ic-mini ic-purple" onclick="startNewContour(${+lat},${+lng},'oks')" title="Создать контур ОКС / Сооружение">▢ ОКС</button>`+
+        `<button class="ic-action ic-mini ic-cyan2"  onclick="startNewContour(${+lat},${+lng},'exp')" title="Создать контур Бизнес-актива">▢ Бизнес</button>`+
+      `</div>`+
     `</div>`
   );
 }
+
+// v2.9.55: launch the contour editor with a seed square around the given point.
+// Used by the new "ЗУ / ОКС / Бизнес-актив" buttons in the coords card.
+//   type: 'zu' | 'oks' | 'exp'  (matches CAD_STYLES + safeType in kdConfirm)
+window.startNewContour = function(lat, lng, type){
+  // Build a ~30m square ring (Polygon ring is closed: first==last) in [lon,lat]
+  // GeoJSON order, which is what startContourEditor expects.
+  const dLat = 30/111320;                          // ≈30m in degrees of latitude
+  const dLng = 30/(111320*Math.cos(lat*Math.PI/180)); // adjust for current latitude
+  const ring = [
+    [lng-dLng, lat-dLat],
+    [lng+dLng, lat-dLat],
+    [lng+dLng, lat+dLat],
+    [lng-dLng, lat+dLat],
+    [lng-dLng, lat-dLat],  // close the ring
+  ];
+  const geom = { type:'Polygon', coordinates:[ring] };
+  closeAllInfoCards();
+  startContourEditor(geom, type, '', '');
+};
 
 // Object card — copy mini-button in header, minimal body.
 // Global registry: markerId → marker object, for edit handlers
@@ -3405,13 +3696,14 @@ function _refreshUploadHints(){
   if(!el) return;
   const photo = _loadPathHint(_LS_PATH_PHOTO);
   const xlsx  = _loadPathHint(_LS_PATH_XLSX);
-  const kml   = _loadPathHint(_LS_PATH_KML);
   const kmz   = _loadPathHint(_LS_PATH_KMZ);
+  const recentKMLs = (typeof _loadRecentKMLs === 'function') ? _loadRecentKMLs() : [];
   // v65 (Task 3): hints are now ACTION buttons, not just labels. Clicking
   // re-triggers the appropriate file picker so the user can quickly reload the
   // last source. Browsers don't permit auto-loading by stored path (security),
   // so we open the same picker the menu button does — but the picker remembers
   // the last folder per file-type, so the user lands close to their target.
+  // v2.9.55: KMLs are now a multi-item list (last N) with per-item reopen.
   const row = (kind, ico, lbl, name, onclick) =>
     `<button class="uh-row uh-clickable" type="button" onclick="${onclick}" title="Открыть тот же тип файла повторно">`+
       `<span class="uh-ico">${ico}</span>`+
@@ -3421,7 +3713,13 @@ function _refreshUploadHints(){
   const parts = [];
   if(photo) parts.push(row('photo', '📂', 'Фото',  photo.name, 'closeUploadMenu();triggerFolderUpload()'));
   if(xlsx)  parts.push(row('xlsx',  '📋', 'XLSX',  xlsx.name,  'closeUploadMenu();pickXlsxCatalog()'));
-  if(kml)   parts.push(row('kml',   '🗺',  'KML',   kml.name,   'closeUploadMenu();pickKMLViaMenu()'));
+  // KML: list each recent file separately. Click → reopenRecentKML(name).
+  // Filename is the stored display name; the FSA handle (if cached this session)
+  // enables direct read; otherwise the OS picker opens at the last folder.
+  for(const rk of recentKMLs){
+    const safeName = String(rk.name||'').replace(/'/g,"\\'");
+    parts.push(row('kml', '🗺', 'KML', rk.name, `reopenRecentKML('${safeName}')`));
+  }
   if(kmz)   parts.push(row('kmz',   '📦', 'KMZ',   kmz.name,   'closeUploadMenu();pickKMZViaMenu()'));
   if(parts.length === 0){ el.style.display = 'none'; return; }
   el.style.display = 'block';
@@ -3841,6 +4139,16 @@ function renderKMLOnMap(parsed){
 async function loadKMLFromFile(file,displayName,handle){
   try{
     const text=await file.text();
+    // v2.9.55: every successful KML load is recorded in the recent list, so the
+    // user sees it under "Последние загруженные" in the upload menu and can
+    // re-open with one click. Centralized here so legacy <input>, drag-n-drop,
+    // FSA picker, and any future code paths all converge to the same place.
+    if(typeof _saveRecentKML === 'function'){
+      _saveRecentKML(displayName||file.name, file.size||0);
+      if(handle && typeof _kmlOpenHandleCache !== 'undefined'){
+        _kmlOpenHandleCache.set(displayName||file.name, handle);
+      }
+    }
     await _loadKMLFromText(text, displayName||file.name, handle||null);
   } catch(e){showToast(`❌ KML: ${e.message}`,'error',5000);}
 }
@@ -4261,6 +4569,10 @@ window.pickKMLViaMenu = async function(){
       for(const h of handles){
         const f = await h.getFile();
         _savePathHint(_LS_PATH_KML, f.name); _captureFirstSessionName('kml', f.name);
+        // v2.9.55: track in recent-KMLs list and cache the FSA handle for
+        // one-click re-load within this session.
+        _saveRecentKML(f.name, f.size||0);
+        _kmlOpenHandleCache.set(f.name, h);
         await loadKMLFromFile(f, f.name, h);
       }
       return;
@@ -4269,6 +4581,62 @@ window.pickKMLViaMenu = async function(){
     }
   }
   document.getElementById('kml-file-input').click();
+};
+
+// v2.9.55: list of recently loaded KMLs (last N) so user can re-open with one click.
+// Persisted: filename, file size, timestamp. NOT persisted: FSA handle (browsers
+// don't allow FSA handle persistence to localStorage; cross-session re-open
+// always shows the OS picker with last-used folder pre-selected).
+const _LS_RECENT_KMLS = 'kmls.recent.v1';
+const _MAX_RECENT_KMLS = 5;
+const _kmlOpenHandleCache = new Map();   // session-only: filename → FSA handle
+
+function _loadRecentKMLs(){
+  try {
+    const raw = localStorage.getItem(_LS_RECENT_KMLS);
+    if(!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch(e){ return []; }
+}
+function _saveRecentKML(filename, size){
+  try {
+    let arr = _loadRecentKMLs();
+    arr = arr.filter(x => x.name !== filename);  // de-dup
+    arr.unshift({ name: filename, size: size||0, ts: Date.now() });
+    if(arr.length > _MAX_RECENT_KMLS) arr = arr.slice(0, _MAX_RECENT_KMLS);
+    localStorage.setItem(_LS_RECENT_KMLS, JSON.stringify(arr));
+  } catch(e){ console.warn('[recent-kmls]', e); }
+}
+
+// Re-open a recently loaded KML by filename. Idempotent: if already loaded,
+// flashes a toast instead of re-loading.
+window.reopenRecentKML = async function(filename){
+  closeUploadMenu();
+  // Check if this KML is already open in the current session
+  const existing = (kmlLayers||[]).find(l => l.filename === filename);
+  if(existing){
+    showToast(`KML «${filename}» уже открыт`, 'info', 2500);
+    return;
+  }
+  // Try the cached FSA handle first — direct read, no picker
+  const handle = _kmlOpenHandleCache.get(filename);
+  if(handle && _fsaSupported){
+    try {
+      const f = await handle.getFile();
+      _savePathHint(_LS_PATH_KML, f.name); _captureFirstSessionName('kml', f.name);
+      _saveRecentKML(f.name, f.size||0);  // bump to top of recent list
+      await loadKMLFromFile(f, f.name, handle);
+      return;
+    } catch(e){
+      console.warn('[reopen-kml-handle]', e);
+      // Handle expired or user revoked — fall through to picker
+      _kmlOpenHandleCache.delete(filename);
+    }
+  }
+  // Fallback: open picker. Browsers don't expose stored paths, but the picker
+  // remembers the last folder for this app/origin → user lands close.
+  await window.pickKMLViaMenu();
 };
 
 // Common loader — used by file picker AND by the persistence-restore path on
@@ -4504,15 +4872,52 @@ function removeKMLLayer(idx){
 // ═══ MARKERS ══════════════════════════════════════════════════════
 function fovSvg(bearing,R,accent=false){if(bearing===null||isNaN(bearing))return'';const cx=R,cy=R,S=R*2,rad=a=>a*Math.PI/180,b=bearing-90;const oL=rad(b-65),oR=rad(b+65),ox1=cx+R*Math.cos(oL),oy1=cy+R*Math.sin(oL),ox2=cx+R*Math.cos(oR),oy2=cy+R*Math.sin(oR);const iL=rad(b-22),iR=rad(b+22),ix1=cx+R*Math.cos(iL),iy1=cy+R*Math.sin(iL),ix2=cx+R*Math.cos(iR),iy2=cy+R*Math.sin(iR);const nx=cx+R*.55*Math.cos(rad(b)),ny=cy+R*.55*Math.sin(rad(b));const c=accent?['rgba(71,200,255,0.10)','rgba(71,200,255,0.24)','rgba(71,200,255,0.60)','rgba(71,200,255,1.0)']:['rgba(232,255,71,0.04)','rgba(232,255,71,0.07)','rgba(232,255,71,0.20)','rgba(232,255,71,0.55)'];return`<svg width="${S}" height="${S}" viewBox="0 0 ${S} ${S}" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;overflow:visible"><path d="M${cx},${cy} L${ox1},${oy1} A${R},${R} 0 0,1 ${ox2},${oy2} Z" fill="${c[0]}"/><path d="M${cx},${cy} L${ix1},${iy1} A${R},${R} 0 0,1 ${ix2},${iy2} Z" fill="${c[1]}" stroke="${c[2]}" stroke-width="0.8"/><line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="${c[3]}" stroke-width="1.3" stroke-linecap="round"/></svg>`;}
 
+// v2.9.55: build the photo-marker icon HTML. Extracted from addMarker() so that
+// setActiveMarker() can rebuild the icon with accent=true (cyan FOV) on
+// activation. Without rebuilding, the FOV stays yellow regardless of selection.
+function _photoMarkerHtml(photo, accent=false){
+  const hb = photo.bearing!==null && !isNaN(photo.bearing);
+  const S=100, HIT=20;
+  return hb
+    ? `<div style="width:${HIT}px;height:${HIT}px;position:relative;overflow:visible"><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:${S}px;height:${S}px;pointer-events:none">${fovSvg(photo.bearing,S/2,accent)}</div><div class="marker-dot${accent?' active':''}"></div></div>`
+    : `<div style="width:${HIT}px;height:${HIT}px;position:relative"><div class="marker-dot${accent?' active':''}"></div></div>`;
+}
+
 function addMarker(photo,idx){
-  const hb=photo.bearing!==null&&!isNaN(photo.bearing),S=100,HIT=20;
-  const html=hb?`<div style="width:${HIT}px;height:${HIT}px;position:relative;overflow:visible"><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:${S}px;height:${S}px;pointer-events:none">${fovSvg(photo.bearing,S/2)}</div><div class="marker-dot"></div></div>`:`<div style="width:${HIT}px;height:${HIT}px;position:relative"><div class="marker-dot"></div></div>`;
+  const HIT=20;
+  const html = _photoMarkerHtml(photo, false);
   const icon=L.divIcon({html,className:'',iconSize:[HIT,HIT],iconAnchor:[HIT/2,HIT/2]});
   photo.marker=L.marker([photo.lat,photo.lon],{icon}).addTo(map).on('click',()=>openLightbox(photos.indexOf(photo),photo.marker.getLatLng()));
 }
 function rebuildMarkerListeners(){photos.forEach((p,i)=>{if(!p.marker)return;p.marker.off('click');p.marker.on('click',()=>openLightbox(i,p.marker.getLatLng()));});}
-function setActiveMarker(idx){photos.forEach((p,i)=>{const d=p.marker?.getElement()?.querySelector('.marker-dot');if(d)d.classList.toggle('active',i===idx);});}
-function clearActiveMarker(){photos.forEach(p=>p.marker?.getElement()?.querySelector('.marker-dot')?.classList.remove('active'));}
+function setActiveMarker(idx){
+  // v2.9.55: rebuild marker icon for the active photo with accent=true (cyan FOV).
+  // For all others, ensure they're back to non-accent (yellow FOV).
+  const HIT=20;
+  photos.forEach((p,i)=>{
+    if(!p.marker) return;
+    const isActive = (i===idx);
+    // Fast path for photos without bearing or where state didn't change:
+    // just toggle the active class on the dot (cheap DOM op).
+    const el = p.marker.getElement();
+    const dot = el?.querySelector('.marker-dot');
+    if(p.bearing===null || isNaN(p.bearing)){
+      if(dot) dot.classList.toggle('active', isActive);
+      return;
+    }
+    // Photo HAS bearing — need to rebuild icon to recolor the FOV cone.
+    // Avoid rebuilding if the current state already matches.
+    const wasAccent = !!(dot && dot.classList.contains('active'));
+    if(wasAccent === isActive) return;
+    p.marker.setIcon(L.divIcon({
+      html: _photoMarkerHtml(p, isActive),
+      className: '',
+      iconSize: [HIT, HIT],
+      iconAnchor: [HIT/2, HIT/2],
+    }));
+  });
+}
+function clearActiveMarker(){photos.forEach((p,i)=>{const el=p.marker?.getElement();const d=el?.querySelector('.marker-dot');if(!d||!d.classList.contains('active'))return;if(p.bearing!=null&&!isNaN(p.bearing)){const HIT=20;p.marker.setIcon(L.divIcon({html:_photoMarkerHtml(p,false),className:'',iconSize:[HIT,HIT],iconAnchor:[HIT/2,HIT/2]}));}else{d.classList.remove('active');}});}
 function fitMapToPhotos(){
   // "По объектам" — fit map to UNION of:
   //   • photo GPS points (with .lat set)
@@ -5001,13 +5406,18 @@ function startPhotoMove(idx){
   tp.classList.add('visible','move-mode');
   folderTreeIsOpen = true;
   updateFolderTreePanel();
-  // Switch lightbox to move panel
+  // Switch lightbox to move panel — v2.9.55: keep the photo visible AND
+  // show its current folder so the user knows what they're moving from.
   document.getElementById('lb-section-label-text').textContent = '📂 Перемещение фото в папку';
   document.getElementById('lb-move-panel').classList.add('visible');
   document.getElementById('lmp-filename-text').textContent = p.name;
+  // Current folder: show locPath if assigned, else "(без папки)"
+  const curFolder = (p.locPath && p.locPath.trim()) ? p.locPath : '(без папки)';
+  document.getElementById('lmp-current-folder').innerHTML =
+    `Сейчас в: <b>${esc(curFolder)}</b>`;
   document.getElementById('lmp-root-needed').classList.toggle('visible', !_photoRootDirHandle);
-  document.getElementById('lb-img-wrap').style.display = 'none';
-  document.getElementById('lb-zoom-bar').style.display = 'none';
+  // v2.9.55: keep #lb-img-wrap and zoom-bar visible (was hidden — user couldn't
+  // see what they were moving). Hide only the info table to make room for the panel.
   document.getElementById('lb-info').style.display = 'none';
   document.getElementById('lb-move-btn').style.display = 'none';
 }
@@ -5256,7 +5666,7 @@ function buildRows(p){
   const ib=(icon,title,fn)=>`<button class="gps-icon-btn" title="${title}" onclick="${fn}" style="display:inline-flex;vertical-align:middle;margin-left:4px">${ICON[icon]}</button>`;
   if(hasCoords)addRow('Координаты',ct,ib('copy','Копировать',`copyToClipboard('${ct}')`)+ib('edit','Изменить','enterGPSFromLightbox()'));
   else rows.push(`<tr><td style="color:var(--muted);font-size:10px;width:92px">Координаты</td><td><button class="gps-set-btn" onclick="enterGPSFromLightbox()">${ICON.pin} Установить</button></td></tr>`);
-  if(hasBearing)addRow('Угол съёмки',p.bearing.toFixed(1)+'°',ib('edit','Изменить','enterGPSFromLightbox()'));
+  if(hasBearing)addRow('Угол съёмки',Math.round(p.bearing)+'°',ib('edit','Изменить','enterGPSFromLightbox()'));
   else rows.push(`<tr><td style="color:var(--muted);font-size:10px;width:92px">Угол съёмки</td><td><button class="gps-set-btn" onclick="enterGPSFromLightbox()">${ICON.compass} Установить</button></td></tr>`);
   if(p.altitude!=null)addRow('Высота',p.altitude.toFixed(1)+' м');
   addRow('Дата съёмки',p.date?formatDate(p.date):null);
@@ -5500,7 +5910,7 @@ function updateViewerInfoBar(p){
     items.push(`<button class="viewer-gps-btn" onclick="viewerSetGPS()">📍 Установить координаты</button>`);
   // Bearing: show value or action button
   if(p.bearing!=null&&!isNaN(p.bearing)&&p.bearing!==0)
-    items.push(`<div class="viewer-info-item"><span class="viewer-info-icon">↗</span>${p.bearing.toFixed(1)}°</div>`);
+    items.push(`<div class="viewer-info-item"><span class="viewer-info-icon">↗</span>${Math.round(p.bearing)}°</div>`);
   else
     items.push(`<button class="viewer-gps-btn" onclick="viewerSetGPS()">↗ Установить азимут</button>`);
   const ds=p.date?formatDate(p.date):(p.file?.lastModified?formatDate(new Date(p.file.lastModified)):'');
@@ -7539,7 +7949,7 @@ function _buildKMLDocument(styles, placemarks, docName){
 //      thumbnail icon AND embedded full-size in the description's <img>.
 
 window.exportKMZ = async function(){
-  const btn = document.getElementById('kmz-export-btn');
+  const btn = document.getElementById('export-btn');
   if(typeof JSZip === 'undefined'){
     showToast('Библиотека JSZip не загружена — проверьте интернет','error',4500);
     return;
@@ -7792,6 +8202,10 @@ window.exportKMZ = async function(){
         await w.write(blob); await w.close();
         _showSaveInfoDialog(handle.name||filename, null,
           'KMZ сохранён в выбранную папку. Откройте его в Google Earth Pro.');
+        // v2.9.55: register in recent exports + cache the FSA handle for re-saves
+        const savedName = handle.name || filename;
+        if(typeof _saveRecentExport === 'function') _saveRecentExport('kmz', savedName);
+        if(typeof _exportHandleCache !== 'undefined') _exportHandleCache.set(savedName, handle);
         showToast(`✅ KMZ: ${(blob.size/1024/1024).toFixed(1)} MB`, 'success', 3500);
         return;
       } catch(e){
@@ -7804,6 +8218,7 @@ window.exportKMZ = async function(){
     a.href = url; a.download = filename; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 8000);
     _showSaveInfoDialog(filename, url, 'KMZ скачан в папку «Загрузки». Откройте в Google Earth Pro.');
+    if(typeof _saveRecentExport === 'function') _saveRecentExport('kmz', filename);
     showToast(`✅ KMZ: ${(blob.size/1024/1024).toFixed(1)} MB`, 'success', 3500);
   } catch(e){
     console.warn('[kmz-export]', e);
@@ -7815,7 +8230,341 @@ window.exportKMZ = async function(){
   }
 };
 
-// Convert a parsed KML placemark back to KML XML for re-emission
+// ──────────────────────────────────────────────────────────────────────
+// EXPORT DATA MENU (v2.9.55) — replaces the standalone "📦 KMZ" button.
+// User picks format: KMZ / KML / XLSX. Recently saved files are remembered
+// so the user can re-save (idempotent overwrite) with one click. Per-session
+// FSA handles enable in-place rewrites without re-prompting; cross-session
+// the file name is shown but a fresh save dialog opens.
+// ──────────────────────────────────────────────────────────────────────
+const _LS_RECENT_EXPORTS = 'exports.recent.v1';
+const _MAX_RECENT_EXPORTS = 5;
+// Session-only handle cache: filename → FSA writable handle.
+// Browsers don't permit persisting handles to localStorage; IndexedDB could
+// store them but cross-session reuse needs explicit user permission anyway,
+// so we keep this in-memory only.
+const _exportHandleCache = new Map();
+
+function _loadRecentExports(){
+  try {
+    const raw = localStorage.getItem(_LS_RECENT_EXPORTS);
+    if(!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch(e){ return []; }
+}
+function _saveRecentExport(format, filename){
+  try {
+    let arr = _loadRecentExports();
+    // De-dup: bump existing entry with same fmt+name to top
+    arr = arr.filter(x => !(x.fmt===format && x.name===filename));
+    arr.unshift({ fmt: format, name: filename, ts: Date.now() });
+    if(arr.length > _MAX_RECENT_EXPORTS) arr = arr.slice(0, _MAX_RECENT_EXPORTS);
+    localStorage.setItem(_LS_RECENT_EXPORTS, JSON.stringify(arr));
+  } catch(e){ console.warn('[recent-exports]', e); }
+}
+
+// Generate a default filename based on current timestamp (auto-naming per spec).
+//   Pattern: YYYY-MM-DD_HH-mm_EkceloFoto.{ext}
+function _autoExportName(ext){
+  const d = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const stamp = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
+  // Prefer the first session name (project context) if available
+  const proj = (typeof _firstSessionPhotoFolder !== 'undefined' && _firstSessionPhotoFolder)
+            || (typeof _firstSessionKMLName    !== 'undefined' && _firstSessionKMLName)
+            || (typeof _firstSessionXLSXName   !== 'undefined' && _firstSessionXLSXName)
+            || 'EkceloFoto';
+  const safe = String(proj).replace(/[^\wа-яА-ЯёЁ-]/g,'_').slice(0,40);
+  return `${stamp}_${safe}.${ext}`;
+}
+
+window.toggleExportMenu = function(ev){
+  if(ev) ev.stopPropagation();
+  const menu = document.getElementById('export-menu');
+  if(!menu) return;
+  if(menu.classList.contains('open')){
+    menu.classList.remove('open');
+    return;
+  }
+  // Build menu content fresh each open to reflect current recent list
+  const recent = _loadRecentExports();
+  const fmtLabel = { kmz:'KMZ', kml:'KML', xlsx:'XLSX' };
+  const fmtIcon  = { kmz:'📦', kml:'🗺', xlsx:'📋' };
+  let html =
+    `<div class="em-section">Выгрузить как</div>`+
+    `<button onclick="closeExportMenu();exportData('kmz')">📦 KMZ — Google Earth + фото</button>`+
+    `<button onclick="closeExportMenu();exportData('kml')">🗺 KML — без фото (для Яндекс.Карт)</button>`+
+    `<button onclick="closeExportMenu();exportData('xlsx')">📋 XLSX — таблица объектов</button>`+
+    `<hr/>`;
+  if(recent.length){
+    html += `<div class="em-section">Перезаписать ранее сохранённые</div>`;
+    recent.forEach((r,i) => {
+      const icon = fmtIcon[r.fmt] || '📄';
+      const lbl  = fmtLabel[r.fmt] || r.fmt.toUpperCase();
+      html += `<button class="em-recent-item" onclick="closeExportMenu();exportData('${r.fmt}',${i})" title="Перезаписать ${esc(r.name)}">`+
+              `<span class="em-recent-fmt">${lbl}</span>`+
+              `<span class="em-recent-name">${icon} ${esc(r.name)}</span>`+
+              `</button>`;
+    });
+    html += `<hr/>`;
+  } else {
+    html += `<div class="em-empty">Ещё нет сохранённых файлов</div><hr/>`;
+  }
+  html += `<button class="em-cancel" onclick="closeExportMenu()">✖ Отмена</button>`;
+  menu.innerHTML = html;
+  menu.classList.add('open');
+};
+window.closeExportMenu = function(){
+  document.getElementById('export-menu')?.classList.remove('open');
+};
+
+// Master export router. recentIdx (optional) — if set, reuse handle/name from
+// _loadRecentExports()[recentIdx] for idempotent overwrite.
+window.exportData = async function(format, recentIdx=null){
+  if(format === 'kmz'){
+    // Existing KMZ flow handles its own save dialog and toasts.
+    // After successful export, register in recent list (uses last-saved filename).
+    return window.exportKMZ();
+  }
+  if(format === 'kml'){
+    return _exportAsKML(recentIdx);
+  }
+  if(format === 'xlsx'){
+    return _exportAsXLSX(recentIdx);
+  }
+  showToast('Неизвестный формат экспорта: '+format, 'error', 3000);
+};
+
+// Build an aggregated KML containing every layer in kmlLayers (plus their
+// cadPlacemarks). Photos with GPS are emitted as KML <Point> placemarks too,
+// so the file is a complete portable view of the session.
+async function _exportAsKML(recentIdx){
+  const photosWithGPS = (typeof photos !== 'undefined' ? photos : []).filter(p => p.lat != null);
+  let placemarkCount = 0;
+  for(const l of (kmlLayers||[])){
+    placemarkCount += (l.parsedData?.placemarks?.length || 0);
+    placemarkCount += (l.cadPlacemarks?.length || 0);
+  }
+  if(placemarkCount === 0 && photosWithGPS.length === 0){
+    showToast('Нечего экспортировать: загрузите KML или фото с GPS','warn',4000);
+    return;
+  }
+  // Concatenate styles + placemarks across all loaded layers
+  const styles = new Set();
+  const placemarks = [];
+  for(const layer of (kmlLayers||[])){
+    // From cadPlacemarks (saved contours): explicit XML parts present
+    for(const cp of (layer.cadPlacemarks||[])){
+      if(cp.parts?.style) styles.add(cp.parts.style);
+      if(cp.parts?.placemark) placemarks.push(cp.parts.placemark);
+    }
+    // From parsedData.placemarks (loaded KML): re-emit each as XML.
+    // We use the layer's existing kmlText if present (full doc) — simplest path.
+    // But that mixes whole-doc trees; for an aggregated single doc, prefer
+    // splicing per-placemark XML. Here we leverage the already-aggregated
+    // kmlText only when no cadPlacemarks exist (i.e., layer is purely
+    // file-loaded with no in-app additions).
+    if(layer.kmlText && !(layer.cadPlacemarks||[]).length){
+      // Extract <Placemark>…</Placemark> blocks and <Style>…</Style> blocks
+      // with a permissive regex (we control this XML's source).
+      const styleRe = /<Style\b[\s\S]*?<\/Style>/g;
+      const pmRe    = /<Placemark\b[\s\S]*?<\/Placemark>/g;
+      const sm = layer.kmlText.match(styleRe) || [];
+      const pm = layer.kmlText.match(pmRe) || [];
+      sm.forEach(s => styles.add(s));
+      pm.forEach(p => placemarks.push(p));
+    }
+  }
+  // Photos with GPS as point placemarks (no embedded thumb — KMZ does that;
+  // here we keep the file lean for Yandex.Карты compatibility).
+  if(photosWithGPS.length){
+    styles.add(`<Style id="photoPin"><IconStyle><color>ff47ffe8</color><scale>1.1</scale><Icon><href>https://maps.google.com/mapfiles/kml/shapes/camera.png</href></Icon></IconStyle></Style>`);
+    for(const p of photosWithGPS){
+      const nm = (p.name||'photo').replace(/[<&>]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'})[c]);
+      const bearingLine = (p.bearing!=null && !isNaN(p.bearing)) ? `Угол: ${Math.round(p.bearing)}° · ` : '';
+      const dateLine    = p.date ? `Дата: ${p.date} · ` : '';
+      const desc = `${dateLine}${bearingLine}${p.lat.toFixed(6)},${p.lon.toFixed(6)}`;
+      placemarks.push(`<Placemark><name><![CDATA[${nm}]]></name><description><![CDATA[${desc}]]></description><styleUrl>#photoPin</styleUrl><Point><coordinates>${p.lon},${p.lat},0</coordinates></Point></Placemark>`);
+    }
+  }
+  const docName = _firstSessionPhotoFolder || _firstSessionKMLName || _firstSessionXLSXName || 'EkceloFoto';
+  const xml = _buildKMLDocument([...styles], placemarks, docName);
+  // Decide filename + handle
+  const recent = recentIdx!=null ? _loadRecentExports()[recentIdx] : null;
+  const suggestedName = recent?.name || _autoExportName('kml');
+  const cachedHandle  = _exportHandleCache.get(suggestedName) || null;
+  const btn = document.getElementById('export-btn');
+  btn?.classList.add('busy'); if(btn) btn.disabled = true;
+  try {
+    let savedName = suggestedName;
+    if(cachedHandle){
+      try {
+        const w = await cachedHandle.createWritable();
+        await w.write(xml); await w.close();
+        savedName = cachedHandle.name || suggestedName;
+        showToast(`✅ Перезаписано: ${savedName}`,'success',3500);
+      } catch(e){
+        console.warn('[export-kml-rewrite]', e);
+        // Fall back to picker
+        const h = await _pickAndWrite(xml, suggestedName, 'application/vnd.google-earth.kml+xml', '.kml');
+        if(!h) return;  // user cancelled
+        savedName = h.name || suggestedName;
+        _exportHandleCache.set(savedName, h);
+      }
+    } else {
+      const h = await _pickAndWrite(xml, suggestedName, 'application/vnd.google-earth.kml+xml', '.kml');
+      if(!h) return;
+      savedName = h.name || suggestedName;
+      if(h !== '_legacy') _exportHandleCache.set(savedName, h);
+    }
+    _saveRecentExport('kml', savedName);
+  } finally {
+    btn?.classList.remove('busy'); if(btn) btn.disabled = false;
+  }
+}
+
+// Build XLSX export from current data: photos sheet + objects sheet.
+async function _exportAsXLSX(recentIdx){
+  if(typeof XLSX === 'undefined'){
+    showToast('Библиотека XLSX не загружена','error',4500);
+    return;
+  }
+  const photosArr = (typeof photos !== 'undefined' ? photos : []);
+  let objCount = 0;
+  for(const l of (kmlLayers||[])){ objCount += (l.cadPlacemarks?.length||0) + (l.parsedData?.placemarks?.length||0); }
+  if(!photosArr.length && !objCount){
+    showToast('Нечего экспортировать: нет фото и нет объектов','warn',4000);
+    return;
+  }
+  const wb = XLSX.utils.book_new();
+  // Sheet 1: Photos
+  if(photosArr.length){
+    const photoRows = [['Имя','Папка','Широта','Долгота','Угол съёмки','Высота','Дата']];
+    for(const p of photosArr){
+      photoRows.push([
+        p.name || '',
+        p.locPath || '',
+        p.lat != null ? +p.lat.toFixed(7) : '',
+        p.lon != null ? +p.lon.toFixed(7) : '',
+        (p.bearing != null && !isNaN(p.bearing)) ? Math.round(p.bearing) : '',
+        p.altitude != null ? +p.altitude : '',
+        p.date || '',
+      ]);
+    }
+    const wsPhotos = XLSX.utils.aoa_to_sheet(photoRows);
+    XLSX.utils.book_append_sheet(wb, wsPhotos, 'Фото');
+  }
+  // Sheet 2: Objects (cad + KML placemarks)
+  if(objCount){
+    const objRows = [['Тип','Кад.номер/Имя','Описание','Слой','Центр (lat,lon)']];
+    for(const layer of (kmlLayers||[])){
+      const layerName = layer.docName || layer.filename || '';
+      for(const cp of (layer.cadPlacemarks||[])){
+        const c = (typeof _computeCentroid === 'function') ? _computeCentroid(cp.geom) : null;
+        const ctr = c ? `${c.lat.toFixed(6)}, ${c.lon.toFixed(6)}` : '';
+        const typeLabel = cp.type==='zu' ? 'ЗУ' : cp.type==='oks' ? 'ОКС' : cp.type==='exp' ? 'Бизнес-актив' : cp.type;
+        const descTxt = (cp.lines||[]).map(L=>L[0]+': '+L[1]).join(' · ');
+        objRows.push([typeLabel, cp.cadNum||'', descTxt, layerName, ctr]);
+      }
+      for(const pm of (layer.parsedData?.placemarks||[])){
+        objRows.push(['KML', pm.name||'', pm.desc||'', layerName, '']);
+      }
+    }
+    const wsObj = XLSX.utils.aoa_to_sheet(objRows);
+    XLSX.utils.book_append_sheet(wb, wsObj, 'Объекты');
+  }
+  const xlsxData = XLSX.write(wb, { bookType:'xlsx', type:'array' });
+  const blob = new Blob([xlsxData], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  // Save flow same as KML
+  const recent = recentIdx!=null ? _loadRecentExports()[recentIdx] : null;
+  const suggestedName = recent?.name || _autoExportName('xlsx');
+  const cachedHandle  = _exportHandleCache.get(suggestedName) || null;
+  const btn = document.getElementById('export-btn');
+  btn?.classList.add('busy'); if(btn) btn.disabled = true;
+  try {
+    let savedName = suggestedName;
+    if(cachedHandle){
+      try {
+        const w = await cachedHandle.createWritable();
+        await w.write(blob); await w.close();
+        savedName = cachedHandle.name || suggestedName;
+        showToast(`✅ Перезаписано: ${savedName}`,'success',3500);
+      } catch(e){
+        const h = await _pickAndWriteBlob(blob, suggestedName, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.xlsx');
+        if(!h) return;
+        savedName = h.name || suggestedName;
+        if(h !== '_legacy') _exportHandleCache.set(savedName, h);
+      }
+    } else {
+      const h = await _pickAndWriteBlob(blob, suggestedName, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.xlsx');
+      if(!h) return;
+      savedName = h.name || suggestedName;
+      if(h !== '_legacy') _exportHandleCache.set(savedName, h);
+    }
+    _saveRecentExport('xlsx', savedName);
+  } finally {
+    btn?.classList.remove('busy'); if(btn) btn.disabled = false;
+  }
+}
+
+// Helpers for pick-and-write — return the handle (or '_legacy' string for the
+// non-FSA download fallback path). 'null' = user cancelled.
+async function _pickAndWrite(text, suggestedName, mime, ext){
+  if(_fsaSupported){
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName,
+        types:[{description: ext.slice(1).toUpperCase(), accept:{[mime]:[ext]}}],
+      });
+      const w = await handle.createWritable();
+      await w.write(text); await w.close();
+      showToast(`✅ Сохранено: ${handle.name}`,'success',3500);
+      return handle;
+    } catch(e){
+      if(e?.name === 'AbortError') return null;
+      console.warn('[export-pick]', e);
+    }
+  }
+  // Legacy fallback
+  _downloadBlob(text, suggestedName);
+  showToast(`✅ Загружено в ~/Downloads: ${suggestedName}`,'success',3500);
+  return '_legacy';
+}
+async function _pickAndWriteBlob(blob, suggestedName, mime, ext){
+  if(_fsaSupported){
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName,
+        types:[{description: ext.slice(1).toUpperCase(), accept:{[mime]:[ext]}}],
+      });
+      const w = await handle.createWritable();
+      await w.write(blob); await w.close();
+      showToast(`✅ Сохранено: ${handle.name}`,'success',3500);
+      return handle;
+    } catch(e){
+      if(e?.name === 'AbortError') return null;
+      console.warn('[export-pick-blob]', e);
+    }
+  }
+  // Legacy: blob → object URL → <a download>
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = suggestedName;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+  showToast(`✅ Загружено в ~/Downloads: ${suggestedName}`,'success',3500);
+  return '_legacy';
+}
+// Close menu on outside click
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('export-menu');
+  const wrap = document.getElementById('export-wrap');
+  if(menu && menu.classList.contains('open') && wrap && !wrap.contains(e.target)){
+    menu.classList.remove('open');
+  }
+});
+
+
 function _pmToKMLXml(name, desc, sid, pm){
   // If name is empty (externally loaded KML where <name> was blank),
   // derive a meaningful name from the description text.
