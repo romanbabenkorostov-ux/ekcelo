@@ -7,7 +7,7 @@
      from file:// context (origin=null → strict-origin sends literal "null" → OSM blocks).
      Chrome was unaffected (sends no Referer from file://, OSM accepts Chrome UA).
      Each tile layer sets its own referrerPolicy via img.referrerPolicy attribute. -->
-<title>EkceloFoto v2.9.55</title>
+<title>EkceloFoto v2.9.56</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -998,7 +998,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.55</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.56</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -2881,14 +2881,17 @@ window.moveContourToOtherProject = async function(){
         return;
       }
       const wb = XLSX.utils.book_new();
-      const c = _computeCentroid(foundCp.geom);
-      const typeLabel = foundCp.type==='zu' ? 'ЗУ' : foundCp.type==='oks' ? 'ОКС' : foundCp.type==='exp' ? 'Бизнес-актив' : foundCp.type;
-      const descTxt = (foundCp.lines||[]).map(L=>L[0]+': '+L[1]).join(' · ');
+      // v2.9.56: use the shared XLSX helpers so single-object exports have the
+      // same column layout as full-session exports (Тип объекта / Кад.номер /
+      // Описание / Слой / Центр).
+      const layerName = (foundLayer && (foundLayer.docName||foundLayer.filename)) || '';
       const rows = [
-        ['Тип','Кад.номер/Имя','Описание','Центр (lat,lon)'],
-        [typeLabel, foundCp.cadNum||'', descTxt, c ? `${c.lat.toFixed(6)}, ${c.lon.toFixed(6)}` : ''],
+        _xlsxObjectsHeader(),
+        _xlsxRowFromCp(foundCp, layerName),
       ];
       const ws = XLSX.utils.aoa_to_sheet(rows);
+      _xlsxLockCadNumColumn(ws);
+      ws['!cols'] = [{wch:22},{wch:22},{wch:60},{wch:24},{wch:24}];
       XLSX.utils.book_append_sheet(wb, ws, 'Объект');
       const xlsxData = XLSX.write(wb, { bookType:'xlsx', type:'array' });
       const blob = new Blob([xlsxData], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
@@ -7998,17 +8001,24 @@ window.exportKMZ = async function(){
 
     // Use the same classifier the marker list uses, so categorisation in the
     // KMZ matches what the user sees in Метки.
+    // v2.9.56: stronger heuristic for 'exp' bucket — checks for explicit
+    // "Пояснение"/"Объяснение" tokens in the description (set by EkceloFoto
+    // when the user added an explanation point), so re-imported KMLs with
+    // mismatched <Style id> still classify correctly.
     const classifyParsed = (pm) => {
       const blob = `${pm.name||''} | ${pm.desc||''}`.toLowerCase();
       const looksLikeZU = /(^|[^a-zа-яё])земл/i.test(blob);
+      const looksLikeExp = /пояснени|объяснени|комментари/i.test(blob);
       if(pm.styleUrl){
         if(/cad_zu_/i.test(pm.styleUrl))       return 'zu';
         if(/cad_exp_/i.test(pm.styleUrl))      return 'exp';
         if(/cad_oks_/i.test(pm.styleUrl))      return 'oks';
         if(looksLikeZU)                        return 'zu';
+        if(looksLikeExp)                       return 'exp';
         if(pm.type === 'Point')                return 'exp';
         return 'oks';
       }
+      if(looksLikeExp)                         return 'exp';
       if(pm.type === 'Point')                  return 'exp';
       if(looksLikeZU)                          return 'zu';
       return 'oks';
@@ -8043,8 +8053,9 @@ window.exportKMZ = async function(){
         seenSig.add(s);
         if(pm.parts?.style)     styleXmls.add(pm.parts.style);
         if(pm.parts?.placemark){
-          // Ensure <name> is human-readable: prefix with type label + cadNum
-          const typeLabel = cat==='zu' ? 'ЗУ' : 'ОКС';
+          // Ensure <name> is human-readable: prefix with type label + cadNum.
+          // v2.9.56: 'exp' label restored — was incorrectly bucketed as 'ОКС'.
+          const typeLabel = cat==='zu' ? 'ЗУ' : cat==='exp' ? 'Пояснение' : 'ОКС';
           const enriched = pm.parts.placemark.replace(
             /<name><!\[CDATA\[(.*?)\]\]><\/name>/,
             (_, n) => `<name><![CDATA[${typeLabel} ${(n||'').trim()||pm.cadNum||''}]]></name>`
@@ -8052,6 +8063,25 @@ window.exportKMZ = async function(){
           buckets[cat].push(enriched);
         }
       }
+    }
+
+    // v2.9.56: Guarantee the «Пояснения» folder has a usable blue point style.
+    // If the loaded data doesn't contain a `cad_exp_*` style (because the KML
+    // was authored elsewhere), add a fallback so reimported explanation points
+    // still render as blue dots in Google Earth / Yandex Maps Constructor.
+    if(buckets.exp.length){
+      // Color is KML AABBGGRR: alpha=ff, blue=ff, green=54, red=1e → #1e54ff blue,
+      // matching the in-app explanation marker (CAD_STYLES.exp.color #1e54e5).
+      styleXmls.add(
+        `<Style id="exp_default">`+
+          `<IconStyle>`+
+            `<color>ffe5541e</color>`+         // #1e54e5 BGR-encoded
+            `<scale>1.0</scale>`+
+            `<Icon><href>http://maps.google.com/mapfiles/kml/paddle/blu-circle.png</href></Icon>`+
+          `</IconStyle>`+
+          `<LabelStyle><scale>0.8</scale><color>ffffffff</color></LabelStyle>`+
+        `</Style>`
+      );
     }
 
     // ── (2) Photo placemarks ──────────────────────────────────────
@@ -8337,17 +8367,20 @@ window.exportData = async function(format, recentIdx=null){
 };
 
 // Build an aggregated KML containing every layer in kmlLayers (plus their
-// cadPlacemarks). Photos with GPS are emitted as KML <Point> placemarks too,
-// so the file is a complete portable view of the session.
+// Build an aggregated KML containing every layer in kmlLayers (plus their
+// cadPlacemarks). v2.9.56: KML export NO LONGER includes photo placemarks —
+// only contours/explanations/object placemarks. Rationale: KML's <Point> has
+// no inline image data, only an icon URL; without the actual thumbnails
+// (which are in KMZ's archive, not raw KML) photo points are misleading and
+// clutter Яндекс.Карты imports. Photos with GPS belong in KMZ exclusively.
 async function _exportAsKML(recentIdx){
-  const photosWithGPS = (typeof photos !== 'undefined' ? photos : []).filter(p => p.lat != null);
   let placemarkCount = 0;
   for(const l of (kmlLayers||[])){
     placemarkCount += (l.parsedData?.placemarks?.length || 0);
     placemarkCount += (l.cadPlacemarks?.length || 0);
   }
-  if(placemarkCount === 0 && photosWithGPS.length === 0){
-    showToast('Нечего экспортировать: загрузите KML или фото с GPS','warn',4000);
+  if(placemarkCount === 0){
+    showToast('Нечего экспортировать в KML: нет контуров и объектов. Для фото с GPS используйте KMZ.','warn',5000);
     return;
   }
   // Concatenate styles + placemarks across all loaded layers
@@ -8374,18 +8407,6 @@ async function _exportAsKML(recentIdx){
       const pm = layer.kmlText.match(pmRe) || [];
       sm.forEach(s => styles.add(s));
       pm.forEach(p => placemarks.push(p));
-    }
-  }
-  // Photos with GPS as point placemarks (no embedded thumb — KMZ does that;
-  // here we keep the file lean for Yandex.Карты compatibility).
-  if(photosWithGPS.length){
-    styles.add(`<Style id="photoPin"><IconStyle><color>ff47ffe8</color><scale>1.1</scale><Icon><href>https://maps.google.com/mapfiles/kml/shapes/camera.png</href></Icon></IconStyle></Style>`);
-    for(const p of photosWithGPS){
-      const nm = (p.name||'photo').replace(/[<&>]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'})[c]);
-      const bearingLine = (p.bearing!=null && !isNaN(p.bearing)) ? `Угол: ${Math.round(p.bearing)}° · ` : '';
-      const dateLine    = p.date ? `Дата: ${p.date} · ` : '';
-      const desc = `${dateLine}${bearingLine}${p.lat.toFixed(6)},${p.lon.toFixed(6)}`;
-      placemarks.push(`<Placemark><name><![CDATA[${nm}]]></name><description><![CDATA[${desc}]]></description><styleUrl>#photoPin</styleUrl><Point><coordinates>${p.lon},${p.lat},0</coordinates></Point></Placemark>`);
     }
   }
   const docName = _firstSessionPhotoFolder || _firstSessionKMLName || _firstSessionXLSXName || 'EkceloFoto';
@@ -8455,23 +8476,26 @@ async function _exportAsXLSX(recentIdx){
     const wsPhotos = XLSX.utils.aoa_to_sheet(photoRows);
     XLSX.utils.book_append_sheet(wb, wsPhotos, 'Фото');
   }
-  // Sheet 2: Objects (cad + KML placemarks)
+  // Sheet 2: Objects (cad + KML placemarks).
+  // v2.9.56: dedicated columns for cadastral number and centroid; "Тип объекта"
+  // promoted from a 4-value enum to a richer label with sub-types. Extraction
+  // helpers below tolerate both EkceloFoto-authored and externally-imported KMLs.
   if(objCount){
-    const objRows = [['Тип','Кад.номер/Имя','Описание','Слой','Центр (lat,lon)']];
+    const objRows = [_xlsxObjectsHeader()];
     for(const layer of (kmlLayers||[])){
       const layerName = layer.docName || layer.filename || '';
+      // (a) cadPlacemarks (objects authored or refined inside EkceloFoto)
       for(const cp of (layer.cadPlacemarks||[])){
-        const c = (typeof _computeCentroid === 'function') ? _computeCentroid(cp.geom) : null;
-        const ctr = c ? `${c.lat.toFixed(6)}, ${c.lon.toFixed(6)}` : '';
-        const typeLabel = cp.type==='zu' ? 'ЗУ' : cp.type==='oks' ? 'ОКС' : cp.type==='exp' ? 'Бизнес-актив' : cp.type;
-        const descTxt = (cp.lines||[]).map(L=>L[0]+': '+L[1]).join(' · ');
-        objRows.push([typeLabel, cp.cadNum||'', descTxt, layerName, ctr]);
+        objRows.push(_xlsxRowFromCp(cp, layerName));
       }
+      // (b) loaded KML placemarks (may originate from EkceloFoto or any 3rd party)
       for(const pm of (layer.parsedData?.placemarks||[])){
-        objRows.push(['KML', pm.name||'', pm.desc||'', layerName, '']);
+        objRows.push(_xlsxRowFromParsedPm(pm, layerName));
       }
     }
     const wsObj = XLSX.utils.aoa_to_sheet(objRows);
+    _xlsxLockCadNumColumn(wsObj);
+    wsObj['!cols'] = [{wch:22},{wch:22},{wch:60},{wch:24},{wch:24}];
     XLSX.utils.book_append_sheet(wb, wsObj, 'Объекты');
   }
   const xlsxData = XLSX.write(wb, { bookType:'xlsx', type:'array' });
@@ -8505,6 +8529,113 @@ async function _exportAsXLSX(recentIdx){
     _saveRecentExport('xlsx', savedName);
   } finally {
     btn?.classList.remove('busy'); if(btn) btn.disabled = false;
+  }
+}
+
+// ─── XLSX «Объекты» helpers (v2.9.56) ─────────────────────────────────
+// Centralised so both _exportAsXLSX (full session export) and
+// moveContourToOtherProject (single-object export) emit identical schema.
+// Schema: [Тип объекта | Кад.номер | Описание | Слой | Центр (lat,lon)]
+// Cadastral number regex: NN:NN:1-to-8-digits:1-to-8-digits — anchored on
+// word boundaries so we don't grab parts of longer numerics.
+const _RE_CADNUM   = /\b(\d{2}:\d{2}:\d{1,8}:\d{1,8})\b/;
+// Centroid line written by EkceloFoto as "Центр: 47.225590, 39.728802".
+// Captures lat first (range ±90) then lon (±180); flexible whitespace.
+const _RE_CENTROID = /Центр\s*:\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/i;
+
+// Strip the centroid sentence out of a description so it doesn't appear twice
+// (once in its own column, once inside Description). Cleans residual ` · ` glue.
+function _stripCentroidFromDesc(s){
+  return String(s||'')
+    .replace(_RE_CENTROID, '')
+    .replace(/\s*·\s*·\s*/g, ' · ')
+    .replace(/^\s*·\s*|\s*·\s*$/g, '')
+    .trim();
+}
+
+// Determine human-readable object type. Order matters:
+//   1. "Квартира"  → "Квартира"  (most specific — requested by spec).
+//   2. "Помещение" → "Помещение".
+//   3. Else fall back to cad-style colour mapping (cpType for cadPlacemarks,
+//      styleUrl regex for loaded KML placemarks).
+//   4. Last-resort heuristics on the text blob.
+function _xlsxObjectType(cpType, name, desc, styleUrl){
+  const blob = `${name||''} | ${desc||''}`;
+  // Sub-types BEFORE coarse classification — a "Квартира" might sit under an
+  // ОКС (purple) cad-style but should still be recognised as Квартира.
+  if(/\bКвартир/i.test(blob))  return 'Квартира';
+  if(/\bПомещени/i.test(blob)) return 'Помещение';
+  // cadPlacemarks carry an explicit type token
+  if(cpType === 'zu')  return 'Земельный участок';
+  if(cpType === 'oks') return 'ОКС/Сооружение';
+  if(cpType === 'exp') return 'Пояснение';
+  // Loaded KML placemark: classify by styleUrl pattern (matches the same
+  // logic as classifyParsed in KMZ export and renderMarksList grouping).
+  if(styleUrl){
+    if(/cad_zu_/i.test(styleUrl))  return 'Земельный участок';
+    if(/cad_oks_/i.test(styleUrl)) return 'ОКС/Сооружение';
+    if(/cad_exp_/i.test(styleUrl)) return 'Пояснение';
+  }
+  // Last-resort heuristics
+  if(/(^|[^a-zа-яё])земл/i.test(blob)) return 'Земельный участок';
+  if(/пояснени|объяснени/i.test(blob)) return 'Пояснение';
+  if(/бизнес.?актив/i.test(blob))      return 'Бизнес-актив';
+  return 'ОКС/Сооружение';
+}
+
+function _xlsxObjectsHeader(){
+  return ['Тип объекта', 'Кад.номер', 'Описание', 'Слой', 'Центр (lat,lon)'];
+}
+
+// Build a row for an in-app cadPlacemark.
+function _xlsxRowFromCp(cp, layerName){
+  const descRaw = (cp.lines||[]).map(L=>L[0]+': '+L[1]).join(' · ');
+  // Try centroid from description first; fall back to _computeCentroid.
+  let ctr = '';
+  const m = descRaw.match(_RE_CENTROID);
+  if(m){ ctr = `${(+m[1]).toFixed(6)}, ${(+m[2]).toFixed(6)}`; }
+  else if(typeof _computeCentroid === 'function'){
+    const c = _computeCentroid(cp.geom);
+    if(c) ctr = `${c.lat.toFixed(6)}, ${c.lon.toFixed(6)}`;
+  }
+  const cleanDesc = _stripCentroidFromDesc(descRaw);
+  const cadNumOut = cp.cadNum || ((cleanDesc.match(_RE_CADNUM)||[])[1]) || '';
+  const typeOut   = _xlsxObjectType(cp.type, cp.cadNum||'', cleanDesc, '');
+  return [typeOut, cadNumOut, cleanDesc, layerName||'', ctr];
+}
+
+// Build a row for a parsed (loaded-KML) placemark. Centroid is taken from
+// description only — pm.coordinates shape varies across geometry types and
+// without a robust per-geometry centroid path here, falling back to "" is safer.
+function _xlsxRowFromParsedPm(pm, layerName){
+  const nm = pm.name || '';
+  const dsc = pm.desc || '';
+  let ctr = '';
+  const m = dsc.match(_RE_CENTROID);
+  if(m){ ctr = `${(+m[1]).toFixed(6)}, ${(+m[2]).toFixed(6)}`; }
+  const cleanDesc = _stripCentroidFromDesc(dsc);
+  const cadNumOut = ((nm.match(_RE_CADNUM)||[])[1])
+                 || ((cleanDesc.match(_RE_CADNUM)||[])[1])
+                 || '';
+  const typeOut   = _xlsxObjectType(null, nm, cleanDesc, pm.styleUrl||'');
+  // If name doesn't just repeat the cadastral number, prepend it for context
+  const descCol = (nm && nm !== cadNumOut)
+    ? (cleanDesc ? `${nm} · ${cleanDesc}` : nm)
+    : cleanDesc;
+  return [typeOut, cadNumOut, descCol, layerName||'', ctr];
+}
+
+// Force the "Кад.номер" column (B, index 1) to TEXT format. Cadastral numbers
+// like "61:55:0010104:7" are colon-separated and Excel's auto-typer may
+// misread the leading prefix as a time value. Setting cell.t='s' and cell.z='@'
+// locks every cell in that column as a string. Header (row 0) untouched.
+function _xlsxLockCadNumColumn(ws){
+  if(!ws || !ws['!ref']) return;
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  for(let r = 1; r <= range.e.r; r++){
+    const addr = XLSX.utils.encode_cell({c: 1, r});
+    const cell = ws[addr];
+    if(cell){ cell.t = 's'; cell.z = '@'; }
   }
 }
 
