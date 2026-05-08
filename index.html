@@ -7,7 +7,7 @@
      from file:// context (origin=null → strict-origin sends literal "null" → OSM blocks).
      Chrome was unaffected (sends no Referer from file://, OSM accepts Chrome UA).
      Each tile layer sets its own referrerPolicy via img.referrerPolicy attribute. -->
-<title>EkceloFoto v2.9.57</title>
+<title>EkceloFoto v2.9.58</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -382,49 +382,81 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #map-wrap{position:relative;overflow:hidden}
 #map{width:100%;height:100%;background:var(--map-bg);transition:background .3s}
 .leaflet-container{background:var(--map-bg) !important}
-/* ── TILE SEAM FIX (v2.9.36, definitive) ──────────────────────────
-   PROBLEM HISTORY:
+/* ═══════════════════════════════════════════════════════════════════
+   TILE SEAM FIX — ⚠ ВНИМАНИЕ! Не трогать без понимания истории.
+   Working since v2.9.53, confirmed clean in v2.9.56/57 user tests.
+   ═══════════════════════════════════════════════════════════════════
+   Issue: white grid between map tiles (visible only in Chromium-based
+   browsers — Chrome, Yandex; not in Firefox). Two-year history of
+   broken attempts before this configuration stuck:
+
      v2.9.30  filter on .leaflet-div-icon — wrong target
      v2.9.31  delete L.Icon.Default._getIconUrl — fixed unrelated thing
      v2.9.32  mergeOptions {iconUrl:''} — broke photo markers, reverted
      v2.9.33  width:257px + margin:-1px + transform:scale(1.02) on pane —
-              CATASTROPHICALLY broken at z>maxNativeZoom: when Leaflet
-              upscales (z19 native → z22 displayed), each tile-slot is
-              2048×2048 px on screen. The hardcoded `width:257px !important`
-              shrinks the tile bitmap to 257 px square inside a 2048-px slot,
-              leaving 1791 px of map-pane background visible. That's the
-              giant white quadrants the user sees on z22.
-     v2.9.34  removed overlap + filter on tile + bg on pane — correct in
-              principle but apparently didn't reach the user's deployed file.
-   THE BASELINE-PROVEN APPROACH (v2.9.18, no seams ever):
-     One rule: filter on .leaflet-tile (per-tile, not per-pane).
-     Background of pane matches tile color so any sub-pixel hairline reads
-     as the tile color, not white.
-     NOTHING ELSE. No transform on pane. No width/margin override.
-     Leaflet positions tiles via translate3d() with integer pixel values;
-     the browser renders adjacent tiles edge-to-edge.
-   At z>maxNativeZoom the upscaled tiles are also positioned by
-   translate3d() at integer slot-corners, so no inter-tile gaps appear
-   regardless of magnification.
-   ──────────────────────────────────────────────────────────────── */
-/* ── TILE SEAM FIX (v2.9.53) ─────────────────────────────────────
-   Native leaflet.css contains `.leaflet-tile { filter: inherit }` which
-   makes EACH tile inherit our pane's filter and create its OWN GPU
-   compositing layer in Blink — defeating the "one pane = one layer"
-   intent. Override to `filter:none` so only the pane is the filter
-   source. mix-blend-mode:plus-lighter on tile <img> elements still
-   merges them into a shared blending context (Leaflet PR #8891 fix
-   for Chromium #600120). Outline closes residual sub-pixel cracks. */
+              CATASTROPHIC at z>maxNativeZoom: Leaflet upscales each tile
+              slot to 2048×2048 px, but width:257px shrunk the bitmap to
+              257-px square inside it, leaving 1791 px of pane background
+              visible. Giant white quadrants on z22.
+     v2.9.34  Removed the v2.9.33 overlap, kept filter on individual
+              tiles. Worked in Firefox but Chrome rendered 1-px white
+              gaps — each .leaflet-tile got its own GPU compositing
+              layer due to CSS filter, and translate3d() rounding rules
+              don't guarantee exact edge-to-edge across separate layers.
+     v2.9.36  Light theme added (--map-bg: #f2efe9), making the
+              previously-dark gaps suddenly very visible. Same code,
+              new symptom.
+     v2.9.50  Various other tactics (will-change, backface-visibility,
+              transform on tile) — all created MORE separate layers,
+              not fewer. Some made the white grid worse.
+
+   THE WORKING CONFIGURATION (v2.9.53, KEEP THESE FIVE LINES INTACT):
+
+     .leaflet-tile-pane {
+       background: var(--map-bg);          ← matches tile colour, hides
+                                              any sub-pixel hairline
+       filter: var(--map-filter);          ← ONE compositing layer for
+                                              the whole pane (not per
+                                              tile)
+       transform: translateZ(0);           ← forces own 2D composite,
+                                              prevents Blink from
+                                              short-circuiting the layer
+     }
+     .leaflet-container img.leaflet-tile {
+       mix-blend-mode: plus-lighter;       ← Leaflet PR #8891 official
+                                              fix for Chromium #600120;
+                                              merges adjacent <img>s
+                                              into shared blending ctx
+     }
+     .leaflet-tile {
+       filter: none !important;            ← OVERRIDES leaflet.css
+                                              `.leaflet-tile{filter:
+                                              inherit}` which was the
+                                              root cause of per-tile
+                                              composite layers
+       outline: 1px solid transparent;     ← closes residual sub-pixel
+                                              cracks in WebKit
+     }
+
+   IF YOU NEED TO MODIFY THIS BLOCK:
+     1. Test on Chrome AND Firefox AND Yandex Browser (all three).
+     2. Test at zoom levels 10, 18, 22 (covers normal + upscaled tiles).
+     3. Test on a HiDPI monitor (devicePixelRatio > 1) — that's where
+        the seams first appear.
+     4. Check both light and dark themes (--map-bg differs).
+     5. Verify Метки (markers), Контуры (contours), photo pins still
+        render correctly — past "fixes" broke icons.
+   ═══════════════════════════════════════════════════════════════════ */
 .leaflet-tile-pane{
   background: var(--map-bg);
   filter: var(--map-filter);
-  transform: translateZ(0);  /* force own 2D composite layer for entire pane */
+  transform: translateZ(0);
 }
 .leaflet-container img.leaflet-tile{
   mix-blend-mode: plus-lighter;
 }
 .leaflet-tile{
-  filter: none !important;  /* override leaflet.css `filter:inherit` (kills per-tile compose) */
+  filter: none !important;
   outline: 1px solid transparent;
 }
 .leaflet-control-zoom a{background:var(--surface) !important;color:var(--text) !important;border-color:var(--border) !important}
@@ -998,7 +1030,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.57</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.58</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -4177,6 +4209,13 @@ function _parseKMLStyles(doc){
 function renderKMLOnMap(parsed){
   const lg=L.layerGroup();
   parsed.placemarks.forEach(pm=>{
+    // v2.9.58 (Task 9): a placemark marked as duplicate by _dedupParsedPlacemarks
+    // is kept in parsedData (for traceability) but NOT rendered on the map.
+    // Sidebar Marks list also respects pm._visible.
+    if(pm._visible === false){
+      pm._duplicateSkippedAtRender = true;
+      return;
+    }
     let layer;
     if(pm.type==='Polygon')layer=L.polygon(pm.coords,{color:pm.style.lineColor,weight:pm.style.lineWidth,fillColor:pm.style.fillColor,fillOpacity:pm.style.fillOpacity??0.1});
     else if(pm.type==='LineString')layer=L.polyline(pm.coords,{color:pm.style.lineColor,weight:pm.style.lineWidth});
@@ -4718,8 +4757,144 @@ window.reopenRecentKML = async function(filename){
 //       all loaded KMLs and any contours saved into them.
 //   (c) write back via FSA handle (if FSA path was used) so saves go to the
 //       same file in its original folder, not to ~/Downloads.
+// ════════════════════════════════════════════════════════════════════════
+// IDEMPOTENT DEDUP BY CADASTRAL NUMBER (v2.9.58 — Task 9)
+// ════════════════════════════════════════════════════════════════════════
+// Objects loaded from different sources (multiple KMLs, KMZs, shared files)
+// can describe the same real-world parcel — same cadnum, possibly different
+// geometry, possibly different description. We treat cadnum (NN:NN:..:..)
+// as the canonical identity key and dedup transparently:
+//   • At LOAD time: a freshly-parsed placemark whose cadnum already exists
+//     elsewhere in kmlLayers is marked `_duplicateOf` and HIDDEN on the map
+//     (its geometry doesn't render). The richer of the two descriptions is
+//     promoted into the surviving placemark. parsedData still keeps the
+//     duplicate for traceability, but it has _visible=false.
+//   • Before EXPORT: a final pass collapses any remaining duplicates that
+//     might have appeared via in-app contour creation (cadPlacemarks) vs.
+//     loaded KML containing the same cadnum.
+
+// Extract cadnum from a placemark's name/description with the same regex as
+// elsewhere (NN:NN:1-8 digits:1-8 digits). Returns '' if not found.
+function _extractCadNum(nameOrText){
+  if(!nameOrText) return '';
+  const m = String(nameOrText).match(/\b(\d{2}:\d{2}:\d{1,8}:\d{1,8})\b/);
+  return m ? m[1] : '';
+}
+
+// Pick the richer of two descriptions — more non-empty fields, longer text.
+// Used when merging duplicates: we keep the one that carries more info.
+function _pickRicherDesc(descA, descB){
+  const a = String(descA||'').trim();
+  const b = String(descB||'').trim();
+  if(!a) return b;
+  if(!b) return a;
+  // If one is a strict subset of the other — keep the superset
+  if(b.includes(a)) return b;
+  if(a.includes(b)) return a;
+  // Otherwise concatenate with separator (preserve both pieces of info)
+  return `${a} · ${b}`;
+}
+
+// Build a quick lookup of all known cadnums currently in kmlLayers.
+// Returns Map<cadnum, {layer, pm, kind: 'parsed'|'cad'}> — first occurrence wins.
+function _buildCadnumIndex(){
+  const idx = new Map();
+  for(const layer of (kmlLayers||[])){
+    for(const pm of (layer.parsedData?.placemarks||[])){
+      const cn = _extractCadNum(pm.name) || _extractCadNum(pm.desc);
+      if(cn && !idx.has(cn)) idx.set(cn, {layer, pm, kind:'parsed'});
+    }
+    for(const cp of (layer.cadPlacemarks||[])){
+      if(cp.cadNum && !idx.has(cp.cadNum)) idx.set(cp.cadNum, {layer, pm:cp, kind:'cad'});
+    }
+  }
+  return idx;
+}
+
+// Called from _loadKMLFromText right after parseKML() and before
+// renderKMLOnMap(). Marks newly-parsed placemarks whose cadnum already exists
+// in some other kmlLayer as `_duplicateOf`+`_visible:false`. Also enriches
+// the existing placemark's description if the new one is richer. Returns the
+// count of duplicates suppressed.
+function _dedupParsedPlacemarks(parsed, displayName){
+  if(!parsed?.placemarks?.length) return 0;
+  const idx = _buildCadnumIndex();
+  let suppressed = 0;
+  for(const pm of parsed.placemarks){
+    const cn = _extractCadNum(pm.name) || _extractCadNum(pm.desc);
+    if(!cn) continue;
+    const hit = idx.get(cn);
+    if(!hit) continue;
+    // Mark as duplicate — won't render on map, but stays in parsedData for
+    // tracking. Sidebar Marks list filters by _visible too.
+    pm._duplicateOf = hit.layer.filename || '(unknown)';
+    pm._visible = false;
+    suppressed++;
+    // Enrich the surviving record's description with anything we have.
+    if(hit.kind === 'parsed'){
+      hit.pm.desc = _pickRicherDesc(hit.pm.desc, pm.desc);
+      if(!hit.pm.name && pm.name) hit.pm.name = pm.name;
+    } else {
+      // cadPlacemark: append to its lines as a synthetic info row, idempotent
+      const newDesc = String(pm.desc||'').trim();
+      if(newDesc){
+        const lines = hit.pm.lines = (hit.pm.lines||[]);
+        if(!lines.some(L => L[1] === newDesc)){
+          lines.push(['Доп. источник', `${displayName||'KML'}: ${newDesc}`]);
+        }
+      }
+    }
+  }
+  return suppressed;
+}
+
+// Called before XLSX/KML/KMZ export. Walks every layer, every cadPlacemark and
+// parsed placemark, and ensures that within the FINAL output there is at most
+// one record per cadnum. We don't mutate kmlLayers (could conflict with UI);
+// we return a Set of cadnums to skip when iterating. Caller decides which
+// placemark to keep (typically the first encountered with that cadnum).
+function _collectExportSkipCadnums(){
+  // Returns: Set<cadnum> of duplicates beyond the first occurrence.
+  const seen = new Set();
+  const skip = new Set();
+  for(const layer of (kmlLayers||[])){
+    for(const pm of (layer.parsedData?.placemarks||[])){
+      if(pm._visible === false) continue;  // already hidden — won't be exported
+      const cn = _extractCadNum(pm.name) || _extractCadNum(pm.desc);
+      if(!cn) continue;
+      if(seen.has(cn)) skip.add(cn);
+      else seen.add(cn);
+    }
+    for(const cp of (layer.cadPlacemarks||[])){
+      const cn = cp.cadNum;
+      if(!cn) continue;
+      if(seen.has(cn)) skip.add(cn);
+      else seen.add(cn);
+    }
+  }
+  return skip;
+}
+
+// Pre-export sanity check — surfaces duplicates to the user as a toast (not an
+// error: we still export, just dedup). Called from exportData() entry point.
+function _warnIfDuplicateCadnums(){
+  const skip = _collectExportSkipCadnums();
+  if(skip.size > 0){
+    showToast(
+      `⚠ Найдено дублей по кад.№: ${skip.size}. Будут схлопнуты в экспорте.`,
+      'warn', 4500
+    );
+  }
+  return skip;
+}
+
 async function _loadKMLFromText(text, displayName, handle){
   const parsed = parseKML(text, displayName);
+  // v2.9.58 (Task 9): dedup against already-loaded layers BEFORE rendering,
+  // so duplicate placemarks don't even appear on the map. _dedupParsedPlacemarks
+  // marks them with _visible:false; renderKMLOnMap honours that flag.
+  const suppressed = (typeof _dedupParsedPlacemarks === 'function')
+    ? _dedupParsedPlacemarks(parsed, displayName) : 0;
   const lg = renderKMLOnMap(parsed);
   lg.addTo(map);
   kmlLayers.push({
@@ -4736,7 +4911,8 @@ async function _loadKMLFromText(text, displayName, handle){
   updateKMLButton();
   saveKMLLayersToStorage();if(typeof renderMarksList==='function'&&_activeSidebarTab==='marks')renderMarksList();
   const handleNote = handle ? ' (можно сохранять обратно в ту же папку)' : '';
-  showToast(`🗺 KML: ${parsed.docName} (${parsed.placemarks.length} obj)${handleNote}`,'success',3000);
+  const dupNote    = suppressed ? ` · ${suppressed} дублей по кад.№ обогащены` : '';
+  showToast(`🗺 KML: ${parsed.docName} (${parsed.placemarks.length} obj)${handleNote}${dupNote}`,'success',3500);
 }
 
 // ── KML PERSISTENCE (localStorage) ────────────────────────────────
@@ -7728,12 +7904,13 @@ function _kdConfirmInner(st){
   const styleXml = `<Style id="${sid}">${isPoint ? iconStyleXml : (iconStyleXml+polyStyleXml)}</Style>`;
 
   // Placemark: <name> + <description>, exactly the structure the example KML uses.
-  // Description = "<cadNum> · <user description> · Центр: <lat,lon>" — the centroid
-  // gives downstream consumers (Yandex MK, Google Earth) the visual centre even
-  // for complex polygons (Task 6).
-  const _centroidObj  = _computeCentroid(geom);
-  const _centroidLine = _centroidObj ? `Центр: ${_formatCentroid(_centroidObj)}` : '';
-  const fullDesc = [cadNum, desc, _centroidLine].filter(Boolean).join(' · ');
+  // v2.9.58 (Task 8): «Центр» line REMOVED from KML description per user request.
+  //   Rationale: downstream KML consumers (Yandex MK, Google Earth) compute centroid
+  //   themselves from <coordinates>; the «Центр: lat,lon» token was redundant noise
+  //   that polluted balloons. XLSX/UI consumers that need centroid recompute it
+  //   on demand via _computeCentroid(cp.geom) — that data path is unchanged.
+  // Description = "<cadNum> · <user description>" — clean.
+  const fullDesc = [cadNum, desc].filter(Boolean).join(' · ');
   const placemarkXml = `<Placemark><name><![CDATA[${name||cadNum}]]></name><description><![CDATA[${fullDesc}]]></description><styleUrl>#${sid}</styleUrl>${geomXml}</Placemark>`;
   const cleanParts = { style: styleXml, placemark: placemarkXml };
 
@@ -8118,7 +8295,12 @@ window.exportKMZ = async function(){
 
     // ── (1) Loaded KML layers ──────────────────────────────────────
     // Cross-layer dedup so two loaded KMLs of the same dataset don't double-up.
+    // Two layers of dedup:
+    //   • seenSig — by name+desc signature (catches accidental copy-paste duplicates)
+    //   • seenCadnums (v2.9.58) — by cadastral number (catches the same parcel
+    //     appearing in different files with slightly different names/descs)
     const seenSig = new Set();
+    const seenCadnums = new Set();
     const sig = (n,d) => `${(n||'').trim().toLowerCase()}||${(d||'').slice(0,80).trim().toLowerCase()}`;
 
     for(const layer of (kmlLayers||[])){
@@ -8129,6 +8311,12 @@ window.exportKMZ = async function(){
         const s = sig(pm.name, pm.desc);
         if(seenSig.has(s)) continue;
         seenSig.add(s);
+        const cn = (typeof _extractCadNum === 'function')
+          ? (_extractCadNum(pm.name) || _extractCadNum(pm.desc)) : '';
+        if(cn){
+          if(seenCadnums.has(cn)) continue;   // v2.9.58 cadnum dedup
+          seenCadnums.add(cn);
+        }
         const cat = classifyParsed(pm);
         // v2.9.57: skip photo-pins from re-imported KMLs — they get re-emitted
         // by the live photos[] pipeline below (with proper thumbnails). Adding
@@ -8143,6 +8331,10 @@ window.exportKMZ = async function(){
         if(pm._visible === false) continue;
         const cat = pm.type === 'zu' ? 'zu' : pm.type === 'exp' ? 'exp' : 'oks';
         const cn  = pm.cadNum || '';
+        // v2.9.58 (Task 9): cadnum-based dedup — if this cadnum already
+        // emitted (from a parsed placemark or earlier cadPlacemark), skip.
+        if(cn && seenCadnums.has(cn)) continue;
+        if(cn) seenCadnums.add(cn);
         const matched = parsed?.placemarks?.find(p =>
           (p.name||'').includes(cn) || (p.desc||'').includes(cn));
         const s = sig(matched?.name || cn, matched?.desc || (pm.lines||[]).map(([k,v])=>`${k}: ${v}`).join(' · '));
@@ -8152,11 +8344,17 @@ window.exportKMZ = async function(){
         if(pm.parts?.placemark){
           // Ensure <name> is human-readable: prefix with type label + cadNum.
           // v2.9.56: 'exp' label restored — was incorrectly bucketed as 'ОКС'.
+          // v2.9.58 (Task 8): strip "· Центр: lat, lon" from description for
+          //   legacy cadPlacemarks saved before v2.9.58. New saves don't include
+          //   it (see _kdConfirmInner); this scrubs the historic ones on export.
           const typeLabel = cat==='zu' ? 'ЗУ' : cat==='exp' ? 'Пояснение' : 'ОКС';
-          const enriched = pm.parts.placemark.replace(
+          let enriched = pm.parts.placemark.replace(
             /<name><!\[CDATA\[(.*?)\]\]><\/name>/,
             (_, n) => `<name><![CDATA[${typeLabel} ${(n||'').trim()||pm.cadNum||''}]]></name>`
           );
+          enriched = enriched
+            .replace(/\s*·\s*Центр\s*:\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?/g, '')
+            .replace(/Центр\s*:\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*·\s*/g, '');
           buckets[cat].push(enriched);
         }
       }
@@ -8182,6 +8380,16 @@ window.exportKMZ = async function(){
     }
 
     // ── (2) Photo placemarks ──────────────────────────────────────
+    // v2.9.58 (Task 7): Google Earth Pro renders TWO visible elements for each
+    // photo placemark when the file is opened — the icon's text label (from
+    // <name>) shown floating on the map, AND the balloon (from <description>)
+    // which contains the actual <img> thumbnail. To the user this looks like
+    // the same photo is duplicated. The fix:
+    //   1. Set <LabelStyle scale>0</scale> — suppresses the floating text label
+    //      next to the icon. The icon itself remains visible at full size.
+    //   2. Drop the redundant <b>${p.name}</b> from the balloon — name is
+    //      already shown in the balloon's title bar (Google Earth uses <name>).
+    // Net effect: ONE icon on the map, ONE balloon with thumbnail on click.
     styleXmls.add(
       `<Style id="photo_icon">`+
         `<IconStyle>`+
@@ -8189,7 +8397,8 @@ window.exportKMZ = async function(){
           `<scale>1.0</scale>`+
           `<Icon><href>http://maps.google.com/mapfiles/kml/shapes/camera.png</href></Icon>`+
         `</IconStyle>`+
-        `<LabelStyle><scale>0.7</scale></LabelStyle>`+
+        `<LabelStyle><scale>0</scale></LabelStyle>`+   // ← was 0.7, hides duplicate text label
+        `<BalloonStyle><text>$[description]</text></BalloonStyle>`+   // ← balloon shows description only, no extra <name> repeat
       `</Style>`
     );
 
@@ -8223,10 +8432,13 @@ window.exportKMZ = async function(){
         }
         const ts = p.date ? new Date(p.date).toISOString() : '';
         const angle = (p.bearing != null && !isNaN(p.bearing)) ? `Угол съёмки: ${p.bearing.toFixed(0)}°<br/>` : '';
+        // v2.9.58 (Task 7): no duplicate <b>filename</b> in balloon body —
+        // Google Earth already shows <name> as the balloon title bar, so
+        // repeating it inside the body produces visual duplication. Body now
+        // contains only: thumbnail image + coordinates + (optional) angle + (optional) timestamp.
         const desc =
           `<![CDATA[<div style="font-family:Arial,sans-serif">`+
             `<img src="images/${safeName}" style="max-width:480px;display:block;margin-bottom:6px"/>`+
-            `<b>${_escapeHtml(p.name||safeName)}</b><br/>`+
             `Координаты: ${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}<br/>`+
             angle+
             (ts ? `Снято: ${ts}<br/>` : '')+
@@ -8467,7 +8679,11 @@ window.closeExportMenu = function(){
 
 // Master export router. recentIdx (optional) — if set, reuse handle/name from
 // _loadRecentExports()[recentIdx] for idempotent overwrite.
+// v2.9.58 (Task 9): runs a duplicate-cadnum check before any format-specific
+// pipeline, so the user is warned about pending dedup, and the format
+// emitters can use _collectExportSkipCadnums() to know what to skip.
 window.exportData = async function(format, recentIdx=null){
+  if(typeof _warnIfDuplicateCadnums === 'function') _warnIfDuplicateCadnums();
   if(format === 'kmz'){
     // Existing KMZ flow handles its own save dialog and toasts.
     // After successful export, register in recent list (uses last-saved filename).
@@ -8482,7 +8698,6 @@ window.exportData = async function(format, recentIdx=null){
   showToast('Неизвестный формат экспорта: '+format, 'error', 3000);
 };
 
-// Build an aggregated KML containing every layer in kmlLayers (plus their
 // Build an aggregated KML containing every layer in kmlLayers (plus their
 // cadPlacemarks). v2.9.56: KML export NO LONGER includes photo placemarks —
 // only contours/explanations/object placemarks. Rationale: KML's <Point> has
@@ -8502,11 +8717,29 @@ async function _exportAsKML(recentIdx){
   // Concatenate styles + placemarks across all loaded layers
   const styles = new Set();
   const placemarks = [];
+  // v2.9.58 (Task 8): strip any pre-existing "· Центр: lat, lon" trail from
+  // <description> CDATA blocks. Pre-v2.9.58 cadPlacemarks were saved with the
+  // centroid sentence baked in; on re-export to KML we want to omit it. The
+  // regex matches both leading/trailing centroid tokens and is idempotent.
+  const _stripCentroidFromKML = (pmXml) => pmXml
+    .replace(/\s*·\s*Центр\s*:\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?/g, '')
+    .replace(/Центр\s*:\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*·\s*/g, '')
+    .replace(/<description><!\[CDATA\[\s*Центр\s*:\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*\]\]><\/description>/g,
+             '<description><![CDATA[]]></description>');
+
+  // v2.9.58 (Task 9): collect cadnums seen across all sources to dedup output.
+  // _seenCadnums tracks first-occurrence; duplicates (>= 2nd) are skipped.
+  const _seenCadnums = new Set();
+
   for(const layer of (kmlLayers||[])){
     // From cadPlacemarks (saved contours): explicit XML parts present
     for(const cp of (layer.cadPlacemarks||[])){
+      if(cp.cadNum){
+        if(_seenCadnums.has(cp.cadNum)) continue;   // dedup
+        _seenCadnums.add(cp.cadNum);
+      }
       if(cp.parts?.style) styles.add(cp.parts.style);
-      if(cp.parts?.placemark) placemarks.push(cp.parts.placemark);
+      if(cp.parts?.placemark) placemarks.push(_stripCentroidFromKML(cp.parts.placemark));
     }
     // From parsedData.placemarks (loaded KML): re-emit each as XML.
     // We use the layer's existing kmlText if present (full doc) — simplest path.
@@ -8536,7 +8769,14 @@ async function _exportAsKML(recentIdx){
       });
       pm.forEach(p => {
         if(PHOTO_PM_RE.test(p)) return;   // skip photo placemarks
-        placemarks.push(p);
+        // v2.9.58 (Task 9): dedup by cadnum found in <name> or <description>.
+        // Same regex as _extractCadNum, run on raw XML — first occurrence wins.
+        const cnMatch = p.match(/\b(\d{2}:\d{2}:\d{1,8}:\d{1,8})\b/);
+        if(cnMatch){
+          if(_seenCadnums.has(cnMatch[1])) return;
+          _seenCadnums.add(cnMatch[1]);
+        }
+        placemarks.push(_stripCentroidFromKML(p));
       });
     }
   }
@@ -8808,7 +9048,12 @@ function _xlsxMergePhotoIntoSheet(ws, photo, headerCols){
                        : '',
     'Угол съёмки':   (photo.bearing!=null && !isNaN(photo.bearing)) ? Math.round(photo.bearing) : '',
     'Высота':        (photo.altitude!=null) ? +photo.altitude : '',
-    'Дата':          photo.date || '',
+    // v2.9.58 (Task 6 revision): formatDate normalises ALL date inputs to
+    // "DD.MM.YYYY HH:mm:ss" — Date objects, EXIF strings ("2026:04:29 …"),
+    // and ISO strings. Without this, raw photo.date toString() leaked
+    // "Wed Apr 29 2026 11:22:22 GMT+0300 (Москва, стандартное время)" into
+    // the XLSX cell (visible in the user's exported file, broken locale).
+    'Дата':          (typeof formatDate === 'function') ? formatDate(photo.date) : (photo.date || ''),
   };
   for(let c = 0; c < headerCols.length; c++){
     const h = headerCols[c];
@@ -8841,21 +9086,42 @@ async function _exportAsXLSX(recentIdx){
       else if(cp.type === 'oks') oksCount++;
     }
   }
-  if(!photosArr.length && !zuCount && !oksCount){
-    showToast('Нечего экспортировать: нет фото и нет объектов с кад.номерами','warn',4500);
+  // v2.9.58: also consider _objectCatalogWB — if a sample workbook was loaded,
+  // we have data to preserve and re-export even without in-app additions.
+  if(!photosArr.length && !zuCount && !oksCount && !_objectCatalogWB){
+    showToast('Нечего экспортировать: нет фото, объектов и загруженного шаблона','warn',4500);
     return;
   }
 
   // ── Pick base workbook (idempotent merge target) ─────────────────────
-  // Priority 1: last-saved XLSX still reachable through FSA handle (this session)
-  // Priority 2: catalogue loaded via pickXlsxCatalog (_objectCatalogWB)
-  // Priority 3: blank workbook from template (no merge — pure new file)
+  // v2.9.58 (Task 6 revision): priority order revised.
+  //   Old logic (v2.9.57): handle → catalog → fresh. This caused a regression
+  //   where, after a first export saved a Photos-only sheet, the second export
+  //   read THAT freshly-saved file as base — discarding the catalogue data.
+  //   New logic: catalogue (loaded sample) is the source of truth; handle is
+  //   only the save target. If neither exists we fall back to reading the
+  //   previous file via handle, then fresh. This means: if user loaded the
+  //   catalogue once via pickXlsxCatalog, every subsequent export merges into
+  //   it cleanly, regardless of how many save cycles happened in between.
   const recent = recentIdx!=null ? _loadRecentExports()[recentIdx] : null;
   const suggestedName = recent?.name || _autoExportName('xlsx');
   const cachedHandle  = _exportHandleCache.get(suggestedName) || null;
   let wb = null;
   let mergeMode = 'new';
-  if(cachedHandle){
+  // Priority 1: catalogue loaded via pickXlsxCatalog (the user-supplied sample
+  // workbook with ZU + OKS pre-populated). Clone before mutating so the
+  // in-memory catalogue itself isn't touched.
+  if(_objectCatalogWB){
+    try {
+      const data = XLSX.write(_objectCatalogWB, {type:'array', bookType:'xlsx', cellStyles:true});
+      wb = XLSX.read(data, {type:'array', cellStyles:true});
+      mergeMode = 'catalog';
+    } catch(e){ console.warn('[xlsx-merge] catalog clone failed', e); }
+  }
+  // Priority 2: previous export still reachable through FSA handle (this session).
+  // Used only when no catalogue was loaded — keeps overwrite behaviour stable
+  // for users who never load a sample.
+  if(!wb && cachedHandle){
     try {
       const f = await cachedHandle.getFile();
       const buf = await f.arrayBuffer();
@@ -8865,26 +9131,23 @@ async function _exportAsXLSX(recentIdx){
       console.warn('[xlsx-merge] handle read failed', e);
     }
   }
-  if(!wb && _objectCatalogWB){
-    // Clone _objectCatalogWB so the in-memory catalogue isn't mutated by export
-    try {
-      const data = XLSX.write(_objectCatalogWB, {type:'array', bookType:'xlsx', cellStyles:true});
-      wb = XLSX.read(data, {type:'array', cellStyles:true});
-      mergeMode = 'catalog';
-    } catch(e){ console.warn('[xlsx-merge] catalog clone failed', e); }
-  }
+  // Priority 3: fresh template
   if(!wb){
     wb = XLSX.utils.book_new();
     mergeMode = 'new';
   }
 
   // ── Sheet «Земельные участки» ────────────────────────────────────────
+  // v2.9.58 (Task 6 revision): even when the user has no ZU contours in-app
+  // (zuCount=0), if the sample workbook contains the sheet, we still pass
+  // through to ensure the «Описание» column exists. This makes the export
+  // a strict superset of input — never narrower.
   let wsZU = wb.Sheets['Земельные участки'];
   if(!wsZU && zuCount){
     wsZU = _xlsxBuildTemplateSheet('Земельные участки', _XLSX_ZU_COLS);
     XLSX.utils.book_append_sheet(wb, wsZU, 'Земельные участки');
   }
-  if(wsZU && zuCount){
+  if(wsZU){
     const hdr = _findXlsxHeaderRow(wsZU);
     const headerCols = hdr ? hdr.cols : _XLSX_ZU_COLS.slice();
     let cadCol = _findColByHeader(headerCols, /Кадастров.*номер/i);
@@ -8912,28 +9175,31 @@ async function _exportAsXLSX(recentIdx){
       // Add column width for the new Описание column
       if(wsZU['!cols']) wsZU['!cols'].push({wch:30});
     }
-    // Per-column extractors. Index aligns with headerCols.
-    const extractors = headerCols.map((h, idx) => (cp) => {
-      if(idx === cadCol) return cp.cadNum || '';
-      if(/Наименование по бух/i.test(h)) {
-        const lines = (cp.lines||[]); const nm = lines.find(L=>/Название/i.test(L[0]));
-        return nm ? nm[1] : '';
-      }
-      if(/Площадь/i.test(h)) {
-        const lines = (cp.lines||[]); const a = lines.find(L=>/площадь/i.test(L[0]));
-        if(a){ const m = String(a[1]).match(/[\d.,]+/); if(m) return +m[0].replace(',','.'); }
+    // Merge in-app ZU cadPlacemarks only when there are any (no-op otherwise)
+    if(zuCount){
+      // Per-column extractors. Index aligns with headerCols.
+      const extractors = headerCols.map((h, idx) => (cp) => {
+        if(idx === cadCol) return cp.cadNum || '';
+        if(/Наименование по бух/i.test(h)) {
+          const lines = (cp.lines||[]); const nm = lines.find(L=>/Название/i.test(L[0]));
+          return nm ? nm[1] : '';
+        }
+        if(/Площадь/i.test(h)) {
+          const lines = (cp.lines||[]); const a = lines.find(L=>/площадь/i.test(L[0]));
+          if(a){ const m = String(a[1]).match(/[\d.,]+/); if(m) return +m[0].replace(',','.'); }
+          return null;
+        }
+        if(/Адрес/i.test(h)) {
+          const lines = (cp.lines||[]); const a = lines.find(L=>/адрес/i.test(L[0]));
+          return a ? a[1] : null;
+        }
         return null;
-      }
-      if(/Адрес/i.test(h)) {
-        const lines = (cp.lines||[]); const a = lines.find(L=>/адрес/i.test(L[0]));
-        return a ? a[1] : null;
-      }
-      return null;
-    });
-    for(const layer of (kmlLayers||[])){
-      for(const cp of (layer.cadPlacemarks||[])){
-        if(cp.type !== 'zu') continue;
-        _xlsxMergeCpIntoSheet(wsZU, cp, cadCol, descCol, extractors);
+      });
+      for(const layer of (kmlLayers||[])){
+        for(const cp of (layer.cadPlacemarks||[])){
+          if(cp.type !== 'zu') continue;
+          _xlsxMergeCpIntoSheet(wsZU, cp, cadCol, descCol, extractors);
+        }
       }
     }
   }
@@ -8944,7 +9210,7 @@ async function _exportAsXLSX(recentIdx){
     wsOKS = _xlsxBuildTemplateSheet('Здания и сооружения', _XLSX_OKS_COLS);
     XLSX.utils.book_append_sheet(wb, wsOKS, 'Здания, сооружения');
   }
-  if(wsOKS && oksCount){
+  if(wsOKS){
     const hdr = _findXlsxHeaderRow(wsOKS);
     const headerCols = hdr ? hdr.cols : _XLSX_OKS_COLS.slice();
     // OKS sheet has TWO «Кадастров» columns; pick the one NOT containing
@@ -8967,34 +9233,36 @@ async function _exportAsXLSX(recentIdx){
       wsOKS['!ref'] = XLSX.utils.encode_range({ s: range.s, e: { r: range.e.r, c: descCol } });
       if(wsOKS['!cols']) wsOKS['!cols'].push({wch:30});
     }
-    const extractors = headerCols.map((h, idx) => (cp) => {
-      if(idx === cadCol) return cp.cadNum || '';
-      if(/Наименование по бух/i.test(h)) {
-        const lines = (cp.lines||[]); const nm = lines.find(L=>/Название/i.test(L[0]));
-        return nm ? nm[1] : '';
-      }
-      if(/Площадь/i.test(h)) {
-        const lines = (cp.lines||[]); const a = lines.find(L=>/площадь/i.test(L[0]));
-        if(a){ const m = String(a[1]).match(/[\d.,]+/); if(m) return +m[0].replace(',','.'); }
+    if(oksCount){
+      const extractors = headerCols.map((h, idx) => (cp) => {
+        if(idx === cadCol) return cp.cadNum || '';
+        if(/Наименование по бух/i.test(h)) {
+          const lines = (cp.lines||[]); const nm = lines.find(L=>/Название/i.test(L[0]));
+          return nm ? nm[1] : '';
+        }
+        if(/Площадь/i.test(h)) {
+          const lines = (cp.lines||[]); const a = lines.find(L=>/площадь/i.test(L[0]));
+          if(a){ const m = String(a[1]).match(/[\d.,]+/); if(m) return +m[0].replace(',','.'); }
+          return null;
+        }
+        if(/Адрес/i.test(h)) {
+          const lines = (cp.lines||[]); const a = lines.find(L=>/адрес/i.test(L[0]));
+          return a ? a[1] : null;
+        }
+        // Назначение (purpose) — derive from sub-type detection (Квартира/Помещение)
+        if(/Назначение|Вид объекта/i.test(h)) {
+          const lines = (cp.lines||[]); const dscBlob = lines.map(L=>L[1]).join(' ');
+          if(/\bКвартир/i.test(dscBlob))  return 'Квартира';
+          if(/\bПомещени/i.test(dscBlob)) return 'Помещение';
+          return null;
+        }
         return null;
-      }
-      if(/Адрес/i.test(h)) {
-        const lines = (cp.lines||[]); const a = lines.find(L=>/адрес/i.test(L[0]));
-        return a ? a[1] : null;
-      }
-      // Назначение (purpose) — derive from sub-type detection (Квартира/Помещение)
-      if(/Назначение|Вид объекта/i.test(h)) {
-        const lines = (cp.lines||[]); const dscBlob = lines.map(L=>L[1]).join(' ');
-        if(/\bКвартир/i.test(dscBlob))  return 'Квартира';
-        if(/\bПомещени/i.test(dscBlob)) return 'Помещение';
-        return null;
-      }
-      return null;
-    });
-    for(const layer of (kmlLayers||[])){
-      for(const cp of (layer.cadPlacemarks||[])){
-        if(cp.type !== 'oks') continue;
-        _xlsxMergeCpIntoSheet(wsOKS, cp, cadCol, descCol, extractors);
+      });
+      for(const layer of (kmlLayers||[])){
+        for(const cp of (layer.cadPlacemarks||[])){
+          if(cp.type !== 'oks') continue;
+          _xlsxMergeCpIntoSheet(wsOKS, cp, cadCol, descCol, extractors);
+        }
       }
     }
   }
