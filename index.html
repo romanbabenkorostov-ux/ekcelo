@@ -7,7 +7,7 @@
      from file:// context (origin=null → strict-origin sends literal "null" → OSM blocks).
      Chrome was unaffected (sends no Referer from file://, OSM accepts Chrome UA).
      Each tile layer sets its own referrerPolicy via img.referrerPolicy attribute. -->
-<title>EkceloFoto v2.9.56</title>
+<title>EkceloFoto v2.9.57</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -186,7 +186,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #export-btn:hover{border-color:#6cd96c;color:#6cd96c;background:rgba(108,217,108,.08)}
 #export-btn:disabled{opacity:.4;cursor:not-allowed;border-color:var(--border)}
 #export-btn.busy{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);animation:pulse-busy 1.2s ease-in-out infinite}
-#export-menu{display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:9100;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);min-width:280px;max-width:380px;padding:4px 0;animation:pop-in .15s ease both}
+#export-menu{display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:9100;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);min-width:364px;max-width:494px;padding:4px 0;animation:pop-in .15s ease both}
 #export-menu.open{display:block}
 #export-menu .em-section{font-size:9px;font-family:'JetBrains Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:6px 14px 3px}
 #export-menu button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:transparent;border:none;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;padding:8px 14px;cursor:pointer;transition:background .1s}
@@ -998,7 +998,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.56</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.57</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -2881,19 +2881,60 @@ window.moveContourToOtherProject = async function(){
         return;
       }
       const wb = XLSX.utils.book_new();
-      // v2.9.56: use the shared XLSX helpers so single-object exports have the
-      // same column layout as full-session exports (Тип объекта / Кад.номер /
-      // Описание / Слой / Центр).
+      // v2.9.57: emit using the customer-template format. Single-object export
+      // creates ONE sheet appropriate to the cp.type:
+      //   ZU  → «Земельные участки» with the cp's row + Описание column
+      //   OKS → «Здания, сооружения» with same
+      //   exp → fallback to a small free-form sheet (no template for explanations)
       const layerName = (foundLayer && (foundLayer.docName||foundLayer.filename)) || '';
-      const rows = [
-        _xlsxObjectsHeader(),
-        _xlsxRowFromCp(foundCp, layerName),
-      ];
-      const ws = XLSX.utils.aoa_to_sheet(rows);
-      _xlsxLockCadNumColumn(ws);
-      ws['!cols'] = [{wch:22},{wch:22},{wch:60},{wch:24},{wch:24}];
-      XLSX.utils.book_append_sheet(wb, ws, 'Объект');
-      const xlsxData = XLSX.write(wb, { bookType:'xlsx', type:'array' });
+      if(foundCp.type === 'zu' || foundCp.type === 'oks'){
+        const cols      = foundCp.type === 'zu' ? _XLSX_ZU_COLS : _XLSX_OKS_COLS;
+        const sheetName = foundCp.type === 'zu' ? 'Земельные участки' : 'Здания, сооружения';
+        const ws = _xlsxBuildTemplateSheet(sheetName, cols);
+        // Locate cadnum column: ZU template col F (5), OKS template col G (6)
+        const cadCol  = foundCp.type === 'zu' ? 5 : 6;
+        // Append «Описание» at the end (always present in single-object export)
+        const descCol = cols.length;  // beyond last template col
+        ws[XLSX.utils.encode_cell({r:1, c:descCol})] = { t:'s', v:'Описание', s:_XLSX_HEADER_STYLE };
+        const range = XLSX.utils.decode_range(ws['!ref']);
+        ws['!ref'] = XLSX.utils.encode_range({ s:range.s, e:{r:range.e.r, c:descCol} });
+        if(ws['!cols']) ws['!cols'].push({wch:30});
+        const headerCols = cols.concat(['Описание']);
+        const extractors = headerCols.map((h, idx) => (cp) => {
+          if(idx === cadCol) return cp.cadNum || '';
+          if(/Наименование по бух/i.test(h)){
+            const nm = (cp.lines||[]).find(L=>/Название/i.test(L[0])); return nm ? nm[1] : '';
+          }
+          if(/Площадь/i.test(h)){
+            const a = (cp.lines||[]).find(L=>/площадь/i.test(L[0]));
+            if(a){ const m = String(a[1]).match(/[\d.,]+/); if(m) return +m[0].replace(',','.'); }
+            return null;
+          }
+          if(/Адрес/i.test(h)){
+            const a = (cp.lines||[]).find(L=>/адрес/i.test(L[0])); return a ? a[1] : null;
+          }
+          return null;
+        });
+        _xlsxMergeCpIntoSheet(ws, foundCp, cadCol, descCol, extractors);
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      } else {
+        // exp / default — keep a compact free-form sheet
+        const ws = _xlsxBuildTemplateSheet('Объект', ['Тип объекта','Кад.номер','Описание','Слой','Центр (lat,lon)']);
+        const row = _xlsxRowFromCp(foundCp, layerName);
+        const startR = 2;  // row 2 (0-indexed) = first data row after title+header
+        for(let c = 0; c < row.length; c++){
+          const t = (typeof row[c] === 'number') ? 'n' : 's';
+          ws[XLSX.utils.encode_cell({r:startR, c})] = { t, v: row[c] };
+          if(c === 1){ // cadnum column → text
+            ws[XLSX.utils.encode_cell({r:startR, c})].t = 's';
+            ws[XLSX.utils.encode_cell({r:startR, c})].z = '@';
+          }
+        }
+        const range = XLSX.utils.decode_range(ws['!ref']);
+        ws['!ref'] = XLSX.utils.encode_range({ s:range.s, e:{r:startR, c:Math.max(range.e.c, row.length-1)} });
+        XLSX.utils.book_append_sheet(wb, ws, 'Объект');
+      }
+      const xlsxData = XLSX.write(wb, { bookType:'xlsx', type:'array', cellStyles:true });
       const blob = new Blob([xlsxData], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
       const suggestedName = _autoExportName('xlsx').replace('EkceloFoto', projName);
       const h = await _pickAndWriteBlob(blob, suggestedName, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.xlsx');
@@ -3640,6 +3681,34 @@ window._copyToClip = function(text, btn){
     navigator.clipboard.writeText(text).then(flash, () => { fallback(); flash(); });
   } else { fallback(); flash(); }
 };
+
+// v2.9.57: copy the saved file's name to clipboard after a successful export,
+// per spec "после записи файла копируй в буфер обмена полный путь к
+// сохранённому файлу". CAVEAT: browsers do NOT expose the absolute OS path
+// of FSA-handled files (security policy) — only `handle.name` is available.
+// Copying the bare filename is the closest we can ship; a path-aware
+// experience would require a native wrapper (Electron/Tauri).
+function _copyExportNameSilent(name){
+  if(!name) return;
+  try {
+    if(navigator.clipboard?.writeText){
+      navigator.clipboard.writeText(name).catch(() => {
+        // Fallback for non-secure contexts (file://) where clipboard API may fail
+        const ta = document.createElement('textarea');
+        ta.value = name; ta.style.position='fixed'; ta.style.opacity='0';
+        document.body.appendChild(ta); ta.select();
+        try{ document.execCommand('copy'); }catch(_){}
+        document.body.removeChild(ta);
+      });
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = name; ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.select();
+      try{ document.execCommand('copy'); }catch(_){}
+      document.body.removeChild(ta);
+    }
+  } catch(_){}
+}
 
 // Map click pipeline (v61, augmented v62)
 //   • directHit: optional {kind, marker} when the click handler KNOWS exactly
@@ -8005,7 +8074,30 @@ window.exportKMZ = async function(){
     // "Пояснение"/"Объяснение" tokens in the description (set by EkceloFoto
     // when the user added an explanation point), so re-imported KMLs with
     // mismatched <Style id> still classify correctly.
+    // v2.9.57: returns 'photo' for photo-pin placemarks (re-imported from a
+    // previously-saved KMZ/KML that emitted photos as <Point>s). Caller MUST
+    // skip 'photo' so they don't end up in any object bucket — photos are
+    // emitted in their own pipeline below from the live `photos[]` array,
+    // re-exporting them here would create duplicate pins (one without thumb
+    // from re-imported KML, plus one with thumb from photos[]).
+    const PHOTO_NAME_RE = /\.(jpg|jpeg|png|heic|heif|webp)\b/i;
+    const PHOTO_DESC_RE = /(угол(\s+съ[её]мки)?|GMT[+\-]\d{1,2}|©.+GPS\s*Map\s*Camera|\d{4}\.\d{2}\.\d{2}\s+\d{2}:\d{2})/i;
+    const isPhotoPlacemark = (pm) => {
+      if(!pm) return false;
+      if(pm.styleUrl && /^#?(photoPin|photo_icon|photo_)/i.test(pm.styleUrl)) return true;
+      if(pm.name && PHOTO_NAME_RE.test(pm.name)) return true;
+      // Don't classify polygons/lines as photos even if desc mentions a photo
+      const isPoint = pm.type === 'Point' || (Array.isArray(pm.coordinates) && typeof pm.coordinates[0] === 'number');
+      if(!isPoint) return false;
+      if(pm.desc && PHOTO_DESC_RE.test(pm.desc)) return true;
+      return false;
+    };
     const classifyParsed = (pm) => {
+      // v2.9.57: photo-pins re-imported from previous KMZ/KML never go into
+      // object buckets (they'd appear as a duplicate pin in Пояснения without
+      // a thumbnail — see the user-reported bug shown in Yandex Maps Constructor
+      // listing IMG_*.jpg under blue circles).
+      if(isPhotoPlacemark(pm)) return 'photo';
       const blob = `${pm.name||''} | ${pm.desc||''}`.toLowerCase();
       const looksLikeZU = /(^|[^a-zа-яё])земл/i.test(blob);
       const looksLikeExp = /пояснени|объяснени|комментари/i.test(blob);
@@ -8037,9 +8129,14 @@ window.exportKMZ = async function(){
         const s = sig(pm.name, pm.desc);
         if(seenSig.has(s)) continue;
         seenSig.add(s);
+        const cat = classifyParsed(pm);
+        // v2.9.57: skip photo-pins from re-imported KMLs — they get re-emitted
+        // by the live photos[] pipeline below (with proper thumbnails). Adding
+        // them here too would duplicate the pins in Google Earth and clutter
+        // the «Пояснения» folder in Yandex Maps Constructor with photo dots.
+        if(cat === 'photo') continue;
         const sid = (pm.styleUrl || '').replace('#','') || 'default';
         styleXmls.add(_synthStyleXmlFromParsedStyle(sid, pm.style));
-        const cat = classifyParsed(pm);
         buckets[cat].push(_pmToKMLXml(pm.name, pm.desc, sid, pm));
       }
       for(const pm of (layer.cadPlacemarks||[])){
@@ -8268,7 +8365,10 @@ window.exportKMZ = async function(){
 // the file name is shown but a fresh save dialog opens.
 // ──────────────────────────────────────────────────────────────────────
 const _LS_RECENT_EXPORTS = 'exports.recent.v1';
-const _MAX_RECENT_EXPORTS = 5;
+// v2.9.57: per spec, store only the LAST file per format (not a FIFO list of 5).
+// Schema kept array-based for backward compat with old localStorage entries:
+// on load we collapse to one-per-format. On save we always overwrite.
+const _MAX_RECENT_EXPORTS = 3;        // 1 per format (kmz/kml/xlsx)
 // Session-only handle cache: filename → FSA writable handle.
 // Browsers don't permit persisting handles to localStorage; IndexedDB could
 // store them but cross-session reuse needs explicit user permission anyway,
@@ -8280,18 +8380,34 @@ function _loadRecentExports(){
     const raw = localStorage.getItem(_LS_RECENT_EXPORTS);
     if(!raw) return [];
     const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr : [];
+    if(!Array.isArray(arr)) return [];
+    // v2.9.57: collapse to one-per-format. If localStorage still has older
+    // entries (from v2.9.55 FIFO list), we keep only the most recent of each
+    // format. Returned order is canonical: kmz, kml, xlsx.
+    const byFmt = {};
+    for(const e of arr){
+      if(!e || !e.fmt) continue;
+      if(!byFmt[e.fmt] || (byFmt[e.fmt].ts||0) < (e.ts||0)){
+        byFmt[e.fmt] = e;
+      }
+    }
+    return ['kmz','kml','xlsx'].map(f => byFmt[f]).filter(Boolean);
   } catch(e){ return []; }
 }
 function _saveRecentExport(format, filename){
   try {
     let arr = _loadRecentExports();
-    // De-dup: bump existing entry with same fmt+name to top
-    arr = arr.filter(x => !(x.fmt===format && x.name===filename));
+    // Replace any existing entry for this format (v2.9.57: one per format)
+    arr = arr.filter(x => x.fmt !== format);
     arr.unshift({ fmt: format, name: filename, ts: Date.now() });
     if(arr.length > _MAX_RECENT_EXPORTS) arr = arr.slice(0, _MAX_RECENT_EXPORTS);
     localStorage.setItem(_LS_RECENT_EXPORTS, JSON.stringify(arr));
   } catch(e){ console.warn('[recent-exports]', e); }
+  // v2.9.57: copy the filename to the clipboard so the user can paste it
+  // into a file manager, email, or report. Centralised here so EVERY export
+  // path (KMZ/KML/XLSX, full session and single-object via «В др. проект»)
+  // gets the behaviour for free.
+  _copyExportNameSilent(filename);
 }
 
 // Generate a default filename based on current timestamp (auto-naming per spec).
@@ -8405,8 +8521,23 @@ async function _exportAsKML(recentIdx){
       const pmRe    = /<Placemark\b[\s\S]*?<\/Placemark>/g;
       const sm = layer.kmlText.match(styleRe) || [];
       const pm = layer.kmlText.match(pmRe) || [];
-      sm.forEach(s => styles.add(s));
-      pm.forEach(p => placemarks.push(p));
+      // v2.9.57: re-imported KMLs may contain photo-pins (saved by an older
+      // version of EkceloFoto). Drop them at re-emission so the new KML is
+      // photo-free per spec. Photo-pin signatures: styleUrl=#photoPin /
+      // #photo_icon, name like "*.jpg", or description with "Угол:" / "GMT".
+      // Same regexes as classifyParsed above; replicated as XML-string filters
+      // because here we don't have parsed pm objects.
+      const PHOTO_PM_RE = /<styleUrl>\s*#?(photoPin|photo_icon|photo_)[^<]*<\/styleUrl>|<name>\s*<!\[CDATA\[[^\]]*\.(jpg|jpeg|png|heic|heif|webp)[^\]]*\]\]>\s*<\/name>|<description>\s*<!\[CDATA\[[^\]]*?(угол(\s+съ[её]мки)?|GMT[+\-]\d{1,2}|©.+GPS\s*Map\s*Camera)[^\]]*?\]\]>\s*<\/description>/i;
+      sm.forEach(s => {
+        // Don't re-emit photo styles either — they reference external icons that
+        // may break in Yandex Maps Constructor offline.
+        if(/id\s*=\s*"(photoPin|photo_icon)"/i.test(s)) return;
+        styles.add(s);
+      });
+      pm.forEach(p => {
+        if(PHOTO_PM_RE.test(p)) return;   // skip photo placemarks
+        placemarks.push(p);
+      });
     }
   }
   const docName = _firstSessionPhotoFolder || _firstSessionKMLName || _firstSessionXLSXName || 'EkceloFoto';
@@ -8445,75 +8576,459 @@ async function _exportAsKML(recentIdx){
   }
 }
 
-// Build XLSX export from current data: photos sheet + objects sheet.
+// ════════════════════════════════════════════════════════════════════════
+// XLSX export (v2.9.57)
+// ════════════════════════════════════════════════════════════════════════
+// Output schema follows the «Список_недвижимости_ОС» template provided by
+// the customer. Three sheets:
+//   1. «Земельные участки»   — rows for ZU cadPlacemarks. 22 columns.
+//   2. «Здания, сооружения»  — rows for OKS cadPlacemarks. 30 columns.
+//   3. «Фото»                — rows for photos[] with GPS. 6 columns.
+//
+// IDEMPOTENT MERGE (v2.9.57): if a workbook is already loaded as the object
+// catalogue (`_objectCatalogWB`, set by pickXlsxCatalog) OR a previously-
+// saved XLSX is still reachable through a session FSA-handle, we read its
+// rows first and merge by cadnum: existing rows keep their data, only EMPTY
+// cells get filled from the live session, and a missing «Описание» column
+// is appended after the last header. This satisfies the spec
+// "часть данных может быть предзаполнена и нужно проходить данные
+// идемпотентно (дозаполнять) по признаку кадастрового номера".
+
+// Template column lists — in order, exactly matching the customer's reference
+// file (Список_недвижимости_ОС_2026-04-22_15_59_36_5.xlsx).
+const _XLSX_ZU_COLS = [
+  '№ п/п', 'Инв. №', 'Наименование по бух.учету', 'Наименование по выписке из ЕГРН',
+  'Адрес', 'Кадастровый номер', 'Площадь, кв.м', 'Категория земель',
+  'Вид разрешенного использования', 'Группы Компаний с одним Собственником',
+  'Группа Компаний', 'Собственник',
+  'Статус                          Возможные варианты:\n1.Владение\n2. Подготовка к продаже\n3. Объявленные торги\n4. Сделка',
+  'Вид права (собственность/долевая собственность/аренда/аренда со множественностью лиц)',
+  '№ выписки из ЕГРН', 'Дата выписки из ЕГРН', 'Балансовая стоимость, руб.',
+  'Дата постановки на баланс', 'Информация об ограничениях (обременениях) права (при наличии)',
+  'Кадастровая стоимость, руб', 'Рыночная стоимость, руб', 'Источники обогащения',
+];
+const _XLSX_OKS_COLS = [
+  '№ п/п', 'Инв. №', 'Наименование по бух.учету', 'Вид объекта недвижимости',
+  'Наименование по выписке из ЕГРН', 'Адрес', 'Кадастровый номер', 'Площадь, кв.м',
+  'Назначение', 'Количество этажей \n(в том числе подземных)',
+  'Количество подземных этажей', 'Материал стен', 'Завершение строительства',
+  'Ввод в эксплуатацию', 'Кадастровый № Земельного участка , на котором расположен объект',
+  'Группы Компаний с одним Собственником', 'Группа Компаний', 'Собственник',
+  'Статус                                              Возможные варианты:\n1.Владение\n2. Подготовка к продаже\n3. Объявленные торги\n4. Сделка',
+  'Вид права (собственность/долевая собственность/аренда)', '№ выписки из ЕГРН',
+  'Дата выписки из ЕГРН', 'Первоначальная балансовая стоимость, руб.',
+  'Дата постановки на баланс', 'Остаточная балансовая стоимость, руб.',
+  'Дата формирования остаточной стоимости',
+  'Информация об ограничениях (обременениях) права (при наличии)',
+  'Кадастровая, руб', 'Рыночная стоимость, руб', 'Источники обогащения',
+];
+const _XLSX_PHOTOS_COLS = ['Имя', 'Папка', 'Координаты', 'Угол съёмки', 'Высота', 'Дата'];
+// Header row style — Calibri 9pt bold, dark text on light-green fill, centered, wrapped.
+// This matches row 2 of the customer's reference workbook exactly.
+const _XLSX_HEADER_STYLE = {
+  font: { name:'Calibri', sz:9, bold:true, color:{rgb:'FF0D0D0D'} },
+  fill: { patternType:'solid', fgColor:{rgb:'FFCCFFCC'} },
+  alignment: { horizontal:'center', vertical:'center', wrapText:true },
+  border: {
+    top:    { style:'thin', color:{rgb:'FF999999'} },
+    bottom: { style:'thin', color:{rgb:'FF999999'} },
+    left:   { style:'thin', color:{rgb:'FF999999'} },
+    right:  { style:'thin', color:{rgb:'FF999999'} },
+  },
+};
+
+// Find a header row in an existing sheet. Returns {headerRow:0-indexed, cols:[...header strings]}
+// or null if no recognisable header was found within the first 4 rows.
+// The customer's template has the title in row 1 and headers in row 2.
+function _findXlsxHeaderRow(ws){
+  if(!ws || !ws['!ref']) return null;
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  for(let r = range.s.r; r <= Math.min(range.s.r + 3, range.e.r); r++){
+    const cols = [];
+    let hits = 0;
+    for(let c = range.s.c; c <= range.e.c; c++){
+      const cell = ws[XLSX.utils.encode_cell({r, c})];
+      const v = cell ? String(cell.v||'').trim() : '';
+      cols.push(v);
+      if(/№\s*п\/п|инв\.?\s*№|кадастров.*номер|наименование/i.test(v)) hits++;
+    }
+    if(hits >= 2) return { headerRow: r, cols };
+  }
+  return null;
+}
+
+// Find the column index for a given header label (case-insensitive substring match).
+// Returns -1 if not found. Used both for cadnum lookup and «Описание» column append.
+function _findColByHeader(headerCols, needle){
+  const re = needle instanceof RegExp ? needle : new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i');
+  for(let i = 0; i < headerCols.length; i++){
+    if(re.test(headerCols[i] || '')) return i;
+  }
+  return -1;
+}
+
+// Apply the canonical header style to row `r` (0-indexed) of `ws` over columns
+// 0..colCount-1. Idempotent — overwrites whatever style was there.
+function _applyXlsxHeaderStyle(ws, r, colCount){
+  for(let c = 0; c < colCount; c++){
+    const addr = XLSX.utils.encode_cell({r, c});
+    const cell = ws[addr] || (ws[addr] = { t:'s', v:'' });
+    cell.s = _XLSX_HEADER_STYLE;
+  }
+}
+
+// Build a fresh sheet from a column list — title in row 1, headers in row 2,
+// styled per template. Returns the Sheet object (not yet attached to a wb).
+function _xlsxBuildTemplateSheet(title, cols){
+  const aoa = [
+    [title, null, `Дата формирования: ${new Date().toLocaleDateString('ru-RU')}`],
+    cols,
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  _applyXlsxHeaderStyle(ws, 1, cols.length);
+  // Reasonable column widths
+  const widths = cols.map(h => {
+    if(/№\s*п\/п/i.test(h)) return {wch:6};
+    if(/Инв\.?\s*№/i.test(h)) return {wch:12};
+    if(/Кадастров.*номер/i.test(h)) return {wch:22};
+    if(/Площадь/i.test(h)) return {wch:12};
+    if(/Адрес|Информация об ограничен|Источники/i.test(h)) return {wch:42};
+    if(/Наименование|Назначение|Описание/i.test(h)) return {wch:30};
+    if(/Координаты|Дата|Угол/i.test(h)) return {wch:18};
+    return {wch:20};
+  });
+  ws['!cols'] = widths;
+  return ws;
+}
+
+// Compute the «Описание» string for a cadPlacemark — same logic as the
+// previous «Объекты» sheet's Description column (Change 11) but here it's
+// emitted as a NEW column appended to the ZU/OKS sheet per spec.
+function _xlsxDescriptionForCp(cp){
+  if(!cp) return '';
+  const descRaw = (cp.lines||[]).map(L=>L[0]+': '+L[1]).join(' · ');
+  // Append centroid as the FINAL token, even if it was inside lines — keep
+  // the column readable. _xlsxRowFromCp normally strips it; here we want it.
+  let center = '';
+  const m = descRaw.match(_RE_CENTROID);
+  if(m){ center = `Центр: ${(+m[1]).toFixed(6)}, ${(+m[2]).toFixed(6)}`; }
+  else if(typeof _computeCentroid === 'function'){
+    const c = _computeCentroid(cp.geom);
+    if(c) center = `Центр: ${c.lat.toFixed(6)}, ${c.lon.toFixed(6)}`;
+  }
+  const cleanDesc = _stripCentroidFromDesc(descRaw);
+  const typeOut   = _xlsxObjectType(cp.type, cp.cadNum||'', cleanDesc, '');
+  return [typeOut, cleanDesc, center].filter(Boolean).join(' · ');
+}
+
+// Idempotent merge of a cadPlacemark into a sheet:
+//   1. Find the existing row by cadNum (in the cadnum column).
+//   2. If row exists — fill ONLY empty cells from cp data (don't overwrite
+//      existing values); also fill the «Описание» column always (it's our
+//      derived data and most likely needs refresh).
+//   3. If row doesn't exist — append a new row at the bottom.
+// `cadCol` — 0-based index of the «Кадастровый номер» column.
+// `descCol` — 0-based index of «Описание» column (appended if it didn't exist).
+// `valueExtractors` — array of functions cp -> string|number|null, length =
+//   header count. Returns null if the column should be left empty (preserves
+//   existing value on merge); returns string/number to fill in if empty.
+function _xlsxMergeCpIntoSheet(ws, cp, cadCol, descCol, valueExtractors){
+  if(!ws['!ref']) return;
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  const cad = String(cp.cadNum||'').trim();
+  if(!cad) return;
+  // Find existing row (start from header+1 = row 2)
+  let foundRow = -1;
+  for(let r = range.s.r + 2; r <= range.e.r; r++){
+    const cell = ws[XLSX.utils.encode_cell({r, c: cadCol})];
+    if(cell && String(cell.v||'').trim() === cad){
+      foundRow = r;
+      break;
+    }
+  }
+  const targetRow = foundRow >= 0 ? foundRow : (range.e.r + 1);
+  const desc = _xlsxDescriptionForCp(cp);
+  const colCount = Math.max(valueExtractors.length, descCol + 1);
+  for(let c = 0; c < colCount; c++){
+    const addr = XLSX.utils.encode_cell({r: targetRow, c});
+    const existing = ws[addr];
+    let newVal = null;
+    if(c === descCol){
+      // ALWAYS refresh the description column — it's our derived data
+      newVal = desc;
+    } else if(c < valueExtractors.length){
+      newVal = valueExtractors[c](cp);
+    }
+    if(newVal === null || newVal === undefined || newVal === '') continue;
+    // Idempotency: don't overwrite existing non-empty cells (except desc)
+    if(c !== descCol && existing && existing.v !== undefined && String(existing.v).trim() !== ''){
+      continue;
+    }
+    const t = (typeof newVal === 'number') ? 'n' : 's';
+    ws[addr] = { t, v: newVal };
+    // Lock cadnum column to TEXT to avoid Excel auto-typing
+    if(c === cadCol){ ws[addr].t = 's'; ws[addr].z = '@'; }
+  }
+  // If we appended, bump !ref. If we overwrote, !ref already covered the row.
+  if(targetRow > range.e.r){
+    ws['!ref'] = XLSX.utils.encode_range({
+      s: range.s,
+      e: { r: targetRow, c: Math.max(range.e.c, colCount - 1) },
+    });
+  } else if(colCount - 1 > range.e.c){
+    // Appended a new column (descCol beyond original last col)
+    ws['!ref'] = XLSX.utils.encode_range({
+      s: range.s,
+      e: { r: range.e.r, c: colCount - 1 },
+    });
+  }
+}
+
+// Merge a single photo (with GPS) into the «Фото» sheet by filename uniqueness.
+// Same idempotency rules: existing non-empty cells preserved.
+function _xlsxMergePhotoIntoSheet(ws, photo, headerCols){
+  if(!ws['!ref']) return;
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  const nameCol = _findColByHeader(headerCols, /^Имя$/i);
+  if(nameCol < 0) return;
+  const name = String(photo.name||'').trim();
+  if(!name) return;
+  let foundRow = -1;
+  for(let r = range.s.r + 2; r <= range.e.r; r++){
+    const cell = ws[XLSX.utils.encode_cell({r, c: nameCol})];
+    if(cell && String(cell.v||'').trim() === name){ foundRow = r; break; }
+  }
+  const targetRow = foundRow >= 0 ? foundRow : (range.e.r + 1);
+  // Compose values keyed by header label (resilient to user-edited template)
+  const values = {
+    'Имя':           name,
+    'Папка':         photo.locPath || '',
+    'Координаты':    (photo.lat!=null && photo.lon!=null)
+                       ? `${(+photo.lat).toFixed(7)}, ${(+photo.lon).toFixed(7)}`
+                       : '',
+    'Угол съёмки':   (photo.bearing!=null && !isNaN(photo.bearing)) ? Math.round(photo.bearing) : '',
+    'Высота':        (photo.altitude!=null) ? +photo.altitude : '',
+    'Дата':          photo.date || '',
+  };
+  for(let c = 0; c < headerCols.length; c++){
+    const h = headerCols[c];
+    const v = values[h];
+    if(v === undefined || v === null || v === '') continue;
+    const addr = XLSX.utils.encode_cell({r: targetRow, c});
+    const existing = ws[addr];
+    if(existing && existing.v !== undefined && String(existing.v).trim() !== '') continue;
+    const t = (typeof v === 'number') ? 'n' : 's';
+    ws[addr] = { t, v };
+  }
+  if(targetRow > range.e.r){
+    ws['!ref'] = XLSX.utils.encode_range({
+      s: range.s,
+      e: { r: targetRow, c: range.e.c },
+    });
+  }
+}
+
 async function _exportAsXLSX(recentIdx){
   if(typeof XLSX === 'undefined'){
     showToast('Библиотека XLSX не загружена','error',4500);
     return;
   }
-  const photosArr = (typeof photos !== 'undefined' ? photos : []);
-  let objCount = 0;
-  for(const l of (kmlLayers||[])){ objCount += (l.cadPlacemarks?.length||0) + (l.parsedData?.placemarks?.length||0); }
-  if(!photosArr.length && !objCount){
-    showToast('Нечего экспортировать: нет фото и нет объектов','warn',4000);
+  const photosArr = (typeof photos !== 'undefined' ? photos : []).filter(p => p.lat!=null);
+  let zuCount = 0, oksCount = 0;
+  for(const l of (kmlLayers||[])){
+    for(const cp of (l.cadPlacemarks||[])){
+      if(cp.type === 'zu')       zuCount++;
+      else if(cp.type === 'oks') oksCount++;
+    }
+  }
+  if(!photosArr.length && !zuCount && !oksCount){
+    showToast('Нечего экспортировать: нет фото и нет объектов с кад.номерами','warn',4500);
     return;
   }
-  const wb = XLSX.utils.book_new();
-  // Sheet 1: Photos
-  if(photosArr.length){
-    const photoRows = [['Имя','Папка','Широта','Долгота','Угол съёмки','Высота','Дата']];
-    for(const p of photosArr){
-      photoRows.push([
-        p.name || '',
-        p.locPath || '',
-        p.lat != null ? +p.lat.toFixed(7) : '',
-        p.lon != null ? +p.lon.toFixed(7) : '',
-        (p.bearing != null && !isNaN(p.bearing)) ? Math.round(p.bearing) : '',
-        p.altitude != null ? +p.altitude : '',
-        p.date || '',
-      ]);
-    }
-    const wsPhotos = XLSX.utils.aoa_to_sheet(photoRows);
-    XLSX.utils.book_append_sheet(wb, wsPhotos, 'Фото');
-  }
-  // Sheet 2: Objects (cad + KML placemarks).
-  // v2.9.56: dedicated columns for cadastral number and centroid; "Тип объекта"
-  // promoted from a 4-value enum to a richer label with sub-types. Extraction
-  // helpers below tolerate both EkceloFoto-authored and externally-imported KMLs.
-  if(objCount){
-    const objRows = [_xlsxObjectsHeader()];
-    for(const layer of (kmlLayers||[])){
-      const layerName = layer.docName || layer.filename || '';
-      // (a) cadPlacemarks (objects authored or refined inside EkceloFoto)
-      for(const cp of (layer.cadPlacemarks||[])){
-        objRows.push(_xlsxRowFromCp(cp, layerName));
-      }
-      // (b) loaded KML placemarks (may originate from EkceloFoto or any 3rd party)
-      for(const pm of (layer.parsedData?.placemarks||[])){
-        objRows.push(_xlsxRowFromParsedPm(pm, layerName));
-      }
-    }
-    const wsObj = XLSX.utils.aoa_to_sheet(objRows);
-    _xlsxLockCadNumColumn(wsObj);
-    wsObj['!cols'] = [{wch:22},{wch:22},{wch:60},{wch:24},{wch:24}];
-    XLSX.utils.book_append_sheet(wb, wsObj, 'Объекты');
-  }
-  const xlsxData = XLSX.write(wb, { bookType:'xlsx', type:'array' });
-  const blob = new Blob([xlsxData], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-  // Save flow same as KML
+
+  // ── Pick base workbook (idempotent merge target) ─────────────────────
+  // Priority 1: last-saved XLSX still reachable through FSA handle (this session)
+  // Priority 2: catalogue loaded via pickXlsxCatalog (_objectCatalogWB)
+  // Priority 3: blank workbook from template (no merge — pure new file)
   const recent = recentIdx!=null ? _loadRecentExports()[recentIdx] : null;
   const suggestedName = recent?.name || _autoExportName('xlsx');
   const cachedHandle  = _exportHandleCache.get(suggestedName) || null;
+  let wb = null;
+  let mergeMode = 'new';
+  if(cachedHandle){
+    try {
+      const f = await cachedHandle.getFile();
+      const buf = await f.arrayBuffer();
+      wb = XLSX.read(new Uint8Array(buf), {type:'array', cellStyles:true});
+      mergeMode = 'fsa-handle';
+    } catch(e){
+      console.warn('[xlsx-merge] handle read failed', e);
+    }
+  }
+  if(!wb && _objectCatalogWB){
+    // Clone _objectCatalogWB so the in-memory catalogue isn't mutated by export
+    try {
+      const data = XLSX.write(_objectCatalogWB, {type:'array', bookType:'xlsx', cellStyles:true});
+      wb = XLSX.read(data, {type:'array', cellStyles:true});
+      mergeMode = 'catalog';
+    } catch(e){ console.warn('[xlsx-merge] catalog clone failed', e); }
+  }
+  if(!wb){
+    wb = XLSX.utils.book_new();
+    mergeMode = 'new';
+  }
+
+  // ── Sheet «Земельные участки» ────────────────────────────────────────
+  let wsZU = wb.Sheets['Земельные участки'];
+  if(!wsZU && zuCount){
+    wsZU = _xlsxBuildTemplateSheet('Земельные участки', _XLSX_ZU_COLS);
+    XLSX.utils.book_append_sheet(wb, wsZU, 'Земельные участки');
+  }
+  if(wsZU && zuCount){
+    const hdr = _findXlsxHeaderRow(wsZU);
+    const headerCols = hdr ? hdr.cols : _XLSX_ZU_COLS.slice();
+    let cadCol = _findColByHeader(headerCols, /Кадастров.*номер/i);
+    // Skip the "Кадастровый № Земельного участка" cross-reference column if matched
+    if(cadCol >= 0 && /земельного\s+участка/i.test(headerCols[cadCol]||'')){
+      // Continue searching after this index
+      for(let i = cadCol + 1; i < headerCols.length; i++){
+        if(/Кадастров.*номер/i.test(headerCols[i]||'') && !/земельного\s+участка/i.test(headerCols[i]||'')){
+          cadCol = i; break;
+        }
+      }
+    }
+    if(cadCol < 0) cadCol = 5; // Fallback to template column F
+    let descCol = _findColByHeader(headerCols, /^Описание$/i);
+    if(descCol < 0){
+      // Append «Описание» after the last column
+      descCol = headerCols.length;
+      const r = (hdr ? hdr.headerRow : 1);
+      const addr = XLSX.utils.encode_cell({r, c: descCol});
+      wsZU[addr] = { t:'s', v:'Описание', s:_XLSX_HEADER_STYLE };
+      headerCols.push('Описание');
+      // Bump !ref to include the new column
+      const range = XLSX.utils.decode_range(wsZU['!ref']);
+      wsZU['!ref'] = XLSX.utils.encode_range({ s: range.s, e: { r: range.e.r, c: descCol } });
+      // Add column width for the new Описание column
+      if(wsZU['!cols']) wsZU['!cols'].push({wch:30});
+    }
+    // Per-column extractors. Index aligns with headerCols.
+    const extractors = headerCols.map((h, idx) => (cp) => {
+      if(idx === cadCol) return cp.cadNum || '';
+      if(/Наименование по бух/i.test(h)) {
+        const lines = (cp.lines||[]); const nm = lines.find(L=>/Название/i.test(L[0]));
+        return nm ? nm[1] : '';
+      }
+      if(/Площадь/i.test(h)) {
+        const lines = (cp.lines||[]); const a = lines.find(L=>/площадь/i.test(L[0]));
+        if(a){ const m = String(a[1]).match(/[\d.,]+/); if(m) return +m[0].replace(',','.'); }
+        return null;
+      }
+      if(/Адрес/i.test(h)) {
+        const lines = (cp.lines||[]); const a = lines.find(L=>/адрес/i.test(L[0]));
+        return a ? a[1] : null;
+      }
+      return null;
+    });
+    for(const layer of (kmlLayers||[])){
+      for(const cp of (layer.cadPlacemarks||[])){
+        if(cp.type !== 'zu') continue;
+        _xlsxMergeCpIntoSheet(wsZU, cp, cadCol, descCol, extractors);
+      }
+    }
+  }
+
+  // ── Sheet «Здания, сооружения» ───────────────────────────────────────
+  let wsOKS = wb.Sheets['Здания, сооружения'];
+  if(!wsOKS && oksCount){
+    wsOKS = _xlsxBuildTemplateSheet('Здания и сооружения', _XLSX_OKS_COLS);
+    XLSX.utils.book_append_sheet(wb, wsOKS, 'Здания, сооружения');
+  }
+  if(wsOKS && oksCount){
+    const hdr = _findXlsxHeaderRow(wsOKS);
+    const headerCols = hdr ? hdr.cols : _XLSX_OKS_COLS.slice();
+    // OKS sheet has TWO «Кадастров» columns; pick the one NOT containing
+    // «земельного участка» (that's a parent-ZU cross-reference column).
+    let cadCol = -1;
+    for(let i = 0; i < headerCols.length; i++){
+      if(/Кадастров.*номер/i.test(headerCols[i]||'') && !/земельного\s+участка/i.test(headerCols[i]||'')){
+        cadCol = i; break;
+      }
+    }
+    if(cadCol < 0) cadCol = 6; // Fallback to template column G
+    let descCol = _findColByHeader(headerCols, /^Описание$/i);
+    if(descCol < 0){
+      descCol = headerCols.length;
+      const r = (hdr ? hdr.headerRow : 1);
+      const addr = XLSX.utils.encode_cell({r, c: descCol});
+      wsOKS[addr] = { t:'s', v:'Описание', s:_XLSX_HEADER_STYLE };
+      headerCols.push('Описание');
+      const range = XLSX.utils.decode_range(wsOKS['!ref']);
+      wsOKS['!ref'] = XLSX.utils.encode_range({ s: range.s, e: { r: range.e.r, c: descCol } });
+      if(wsOKS['!cols']) wsOKS['!cols'].push({wch:30});
+    }
+    const extractors = headerCols.map((h, idx) => (cp) => {
+      if(idx === cadCol) return cp.cadNum || '';
+      if(/Наименование по бух/i.test(h)) {
+        const lines = (cp.lines||[]); const nm = lines.find(L=>/Название/i.test(L[0]));
+        return nm ? nm[1] : '';
+      }
+      if(/Площадь/i.test(h)) {
+        const lines = (cp.lines||[]); const a = lines.find(L=>/площадь/i.test(L[0]));
+        if(a){ const m = String(a[1]).match(/[\d.,]+/); if(m) return +m[0].replace(',','.'); }
+        return null;
+      }
+      if(/Адрес/i.test(h)) {
+        const lines = (cp.lines||[]); const a = lines.find(L=>/адрес/i.test(L[0]));
+        return a ? a[1] : null;
+      }
+      // Назначение (purpose) — derive from sub-type detection (Квартира/Помещение)
+      if(/Назначение|Вид объекта/i.test(h)) {
+        const lines = (cp.lines||[]); const dscBlob = lines.map(L=>L[1]).join(' ');
+        if(/\bКвартир/i.test(dscBlob))  return 'Квартира';
+        if(/\bПомещени/i.test(dscBlob)) return 'Помещение';
+        return null;
+      }
+      return null;
+    });
+    for(const layer of (kmlLayers||[])){
+      for(const cp of (layer.cadPlacemarks||[])){
+        if(cp.type !== 'oks') continue;
+        _xlsxMergeCpIntoSheet(wsOKS, cp, cadCol, descCol, extractors);
+      }
+    }
+  }
+
+  // ── Sheet «Фото» ─────────────────────────────────────────────────────
+  let wsPhotos = wb.Sheets['Фото'];
+  if(!wsPhotos && photosArr.length){
+    wsPhotos = _xlsxBuildTemplateSheet('Фото', _XLSX_PHOTOS_COLS);
+    XLSX.utils.book_append_sheet(wb, wsPhotos, 'Фото');
+  }
+  if(wsPhotos && photosArr.length){
+    const hdr = _findXlsxHeaderRow(wsPhotos);
+    const headerCols = hdr ? hdr.cols : _XLSX_PHOTOS_COLS.slice();
+    for(const p of photosArr){
+      _xlsxMergePhotoIntoSheet(wsPhotos, p, headerCols);
+    }
+  }
+
+  // ── Write workbook ───────────────────────────────────────────────────
+  // cellStyles:true preserves the header styling we set + any styles already
+  // present in the merge-source workbook (per-cell colours, fonts, borders).
+  const xlsxData = XLSX.write(wb, { bookType:'xlsx', type:'array', cellStyles:true });
+  const blob = new Blob([xlsxData], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const btn = document.getElementById('export-btn');
   btn?.classList.add('busy'); if(btn) btn.disabled = true;
   try {
     let savedName = suggestedName;
-    if(cachedHandle){
+    if(cachedHandle && mergeMode === 'fsa-handle'){
+      // We already read it — same handle should still be writable
       try {
         const w = await cachedHandle.createWritable();
         await w.write(blob); await w.close();
         savedName = cachedHandle.name || suggestedName;
-        showToast(`✅ Перезаписано: ${savedName}`,'success',3500);
+        showToast(`✅ Перезаписано: ${savedName} · имя в буфере`,'success',4000);
       } catch(e){
         const h = await _pickAndWriteBlob(blob, suggestedName, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.xlsx');
         if(!h) return;
@@ -8650,7 +9165,7 @@ async function _pickAndWrite(text, suggestedName, mime, ext){
       });
       const w = await handle.createWritable();
       await w.write(text); await w.close();
-      showToast(`✅ Сохранено: ${handle.name}`,'success',3500);
+      showToast(`✅ Сохранено: ${handle.name} · имя скопировано в буфер`,'success',4000);
       return handle;
     } catch(e){
       if(e?.name === 'AbortError') return null;
@@ -8659,7 +9174,7 @@ async function _pickAndWrite(text, suggestedName, mime, ext){
   }
   // Legacy fallback
   _downloadBlob(text, suggestedName);
-  showToast(`✅ Загружено в ~/Downloads: ${suggestedName}`,'success',3500);
+  showToast(`✅ Загружено в ~/Downloads: ${suggestedName} · имя в буфере`,'success',4000);
   return '_legacy';
 }
 async function _pickAndWriteBlob(blob, suggestedName, mime, ext){
@@ -8671,7 +9186,7 @@ async function _pickAndWriteBlob(blob, suggestedName, mime, ext){
       });
       const w = await handle.createWritable();
       await w.write(blob); await w.close();
-      showToast(`✅ Сохранено: ${handle.name}`,'success',3500);
+      showToast(`✅ Сохранено: ${handle.name} · имя скопировано в буфер`,'success',4000);
       return handle;
     } catch(e){
       if(e?.name === 'AbortError') return null;
@@ -8683,7 +9198,7 @@ async function _pickAndWriteBlob(blob, suggestedName, mime, ext){
   const a = document.createElement('a'); a.href = url; a.download = suggestedName;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1500);
-  showToast(`✅ Загружено в ~/Downloads: ${suggestedName}`,'success',3500);
+  showToast(`✅ Загружено в ~/Downloads: ${suggestedName} · имя в буфере`,'success',4000);
   return '_legacy';
 }
 // Close menu on outside click
