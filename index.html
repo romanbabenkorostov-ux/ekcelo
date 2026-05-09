@@ -7,7 +7,7 @@
      from file:// context (origin=null → strict-origin sends literal "null" → OSM blocks).
      Chrome was unaffected (sends no Referer from file://, OSM accepts Chrome UA).
      Each tile layer sets its own referrerPolicy via img.referrerPolicy attribute. -->
-<title>EkceloFoto v2.9.60</title>
+<title>EkceloFoto v2.9.61</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -285,16 +285,23 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .marks-group:last-child{border-bottom:none}
 .marks-group.collapsed .marks-group-body{display:none}
 .marks-group.collapsed{flex:0 0 auto}
-.marks-group-header{display:flex;align-items:center;gap:6px;padding:7px 10px;background:var(--surface2);border-bottom:1px solid var(--border);cursor:pointer;user-select:none;flex-shrink:0;transition:background .12s}
+/* v2.9.61 (UPDATE Bug 39A): rows shrunk to 60% of v2.9.60 height (padding 7→3px),
+   group-coloured left border 4px, subtle gradient, brighter title/count for
+   stronger visual hierarchy. Each group's header carries its own accent colour
+   via a per-group selector below. */
+.marks-group-header{display:flex;align-items:center;gap:6px;padding:3px 10px;background:linear-gradient(90deg,var(--surface2) 0%, var(--surface) 100%);border-bottom:1px solid var(--border);cursor:pointer;user-select:none;flex-shrink:0;transition:background .12s,border-color .12s;border-left:4px solid transparent;min-height:24px}
 .marks-group-header:hover{background:var(--accent-dim)}
 .marks-group-header > span:first-child{font-size:9px;color:var(--muted);width:10px}
+#marks-group-zu  > .marks-group-header{border-left-color:#5cff8a}
+#marks-group-oks > .marks-group-header{border-left-color:#d6a3ff}
+#marks-group-exp > .marks-group-header{border-left-color:#7adcff}
 .mg-master-cb{margin:0 6px 0 0;flex-shrink:0;accent-color:var(--accent2);cursor:pointer;width:13px;height:13px}
 .mg-master-cb:disabled{opacity:.35;cursor:not-allowed}
 .mg-icon{font-size:13px;width:14px;text-align:center;display:inline-block;font-weight:900;text-shadow:0 0 4px currentColor}
 .mg-icon-zu{color:#5cff8a}
 .mg-icon-oks{color:#d6a3ff}
 .mg-icon-exp{color:#7adcff}
-.mg-title{flex:1;font-size:12px;font-weight:800;color:var(--text);letter-spacing:0.2px}
+.mg-title{flex:1;font-size:12px;font-weight:800;color:var(--text);letter-spacing:0.3px;text-transform:uppercase}
 .mg-count{font-size:10px;font-weight:700;color:var(--text);background:var(--bg);border:1px solid var(--accent2);padding:1px 7px;border-radius:9px;min-width:20px;text-align:center}
 .marks-group-body{flex:1;overflow-y:auto;min-height:0;padding:2px 0}
 .marks-group-body::-webkit-scrollbar{width:5px}
@@ -1030,7 +1037,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.60</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.61</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -5609,16 +5616,47 @@ function _markerSignature(m){
 // from the parent layerGroup. The flag pm._visible carries the persistent state
 // (in-memory only — not written to localStorage; preferences reset between
 // reloads, which is acceptable for marker visibility).
+// v2.9.61 (UPDATE Bug 39B): toggle visibility of a marker whose backing
+// representation may differ between sources:
+//   • parsedData placemarks (from parseKML → renderKMLOnMap) — have BOTH
+//     pm._leafletLayer and pm._parentGroup set (the layerGroup of their KML).
+//   • cadPlacemarks created in-app via _kdConfirmInner / startExplanationPoint
+//     / startNewContour — have pm._leafletLayer, but pm._parentGroup is NOT
+//     always set (depends on the creation path; some attach directly to map).
+// Old guard `if(!pm._parentGroup) return;` silently no-op'd for the second
+// case, which is why the «Пояснения» group checkbox in the user's screenshot
+// looked unresponsive — the click event fired, the change handler ran, but
+// every setMarkerVisible call returned early without flipping anything.
+//
+// Fix: try the layerGroup path first; if no parentGroup, fall back to the
+// global `map` removeLayer/addLayer. _visible is always updated regardless,
+// so the rest of the UI (Marks list, count badges, group checkbox state)
+// stays consistent.
 function setMarkerVisible(pm, visible){
-  if(!pm || !pm._leafletLayer || !pm._parentGroup) return;
+  if(!pm) return;
   pm._visible = !!visible;
-  if(visible){
-    if(!pm._parentGroup.hasLayer(pm._leafletLayer)){
-      pm._parentGroup.addLayer(pm._leafletLayer);
+  // Path 1: tracked under a layerGroup — preferred, integrates with KML
+  // layer-toggle logic (one click on the layer toggles the whole group).
+  if(pm._leafletLayer && pm._parentGroup){
+    if(visible){
+      if(!pm._parentGroup.hasLayer(pm._leafletLayer)){
+        pm._parentGroup.addLayer(pm._leafletLayer);
+      }
+    } else {
+      if(pm._parentGroup.hasLayer(pm._leafletLayer)){
+        pm._parentGroup.removeLayer(pm._leafletLayer);
+      }
     }
-  } else {
-    if(pm._parentGroup.hasLayer(pm._leafletLayer)){
-      pm._parentGroup.removeLayer(pm._leafletLayer);
+    return;
+  }
+  // Path 2 (v2.9.61): direct map attach/detach for cadPlacemarks without
+  // a parent group — covers Пояснения created via startExplanationPoint and
+  // seed-square contours from the coords-card shortcut.
+  if(pm._leafletLayer && typeof map !== 'undefined'){
+    if(visible){
+      if(!map.hasLayer(pm._leafletLayer)) pm._leafletLayer.addTo(map);
+    } else {
+      if(map.hasLayer(pm._leafletLayer))  map.removeLayer(pm._leafletLayer);
     }
   }
 }
