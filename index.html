@@ -7,7 +7,7 @@
      from file:// context (origin=null → strict-origin sends literal "null" → OSM blocks).
      Chrome was unaffected (sends no Referer from file://, OSM accepts Chrome UA).
      Each tile layer sets its own referrerPolicy via img.referrerPolicy attribute. -->
-<title>EkceloFoto v2.9.59</title>
+<title>EkceloFoto v2.9.60</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -290,12 +290,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .marks-group-header > span:first-child{font-size:9px;color:var(--muted);width:10px}
 .mg-master-cb{margin:0 6px 0 0;flex-shrink:0;accent-color:var(--accent2);cursor:pointer;width:13px;height:13px}
 .mg-master-cb:disabled{opacity:.35;cursor:not-allowed}
-.mg-icon{font-size:12px;width:14px;text-align:center;display:inline-block}
-.mg-icon-zu{color:#3ec870}
-.mg-icon-oks{color:#c180f0}
-.mg-icon-exp{color:#47c8ff}
-.mg-title{flex:1;font-size:11px;font-weight:700;color:var(--text)}
-.mg-count{font-size:10px;color:var(--muted);background:var(--surface);border:1px solid var(--border);padding:1px 6px;border-radius:9px;min-width:18px;text-align:center}
+.mg-icon{font-size:13px;width:14px;text-align:center;display:inline-block;font-weight:900;text-shadow:0 0 4px currentColor}
+.mg-icon-zu{color:#5cff8a}
+.mg-icon-oks{color:#d6a3ff}
+.mg-icon-exp{color:#7adcff}
+.mg-title{flex:1;font-size:12px;font-weight:800;color:var(--text);letter-spacing:0.2px}
+.mg-count{font-size:10px;font-weight:700;color:var(--text);background:var(--bg);border:1px solid var(--accent2);padding:1px 7px;border-radius:9px;min-width:20px;text-align:center}
 .marks-group-body{flex:1;overflow-y:auto;min-height:0;padding:2px 0}
 .marks-group-body::-webkit-scrollbar{width:5px}
 .marks-group-body::-webkit-scrollbar-thumb{background:var(--scroll-thumb)}
@@ -1030,7 +1030,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.59</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.60</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -3870,26 +3870,49 @@ document.getElementById('map-wrap').addEventListener('drop',e=>{e.preventDefault
 
 async function handleFileEntries(entries,rootName){
   if(!entries.length)return;
-  setProgress(0);let added=0;
+  // v2.9.60 (Task 38): consolidated dedup-summary toast at end of batch (not per file).
+  setProgress(0);
+  let added=0, enriched=0, skipped=0;
   for(let i=0;i<entries.length;i++){
     const{file,locPath,fileHandle}=entries[i];
-    if(/\.jpe?g$/i.test(file.name)||/jpe?g/i.test(file.type||''))if(await addLocalPhoto(file,locPath,fileHandle))added++;
+    if(/\.jpe?g$/i.test(file.name)||/jpe?g/i.test(file.type||'')){
+      const sizeBefore = photos.length;
+      await addLocalPhoto(file,locPath,fileHandle);
+      const lastEntry = _dedupLog[_dedupLog.length-1];
+      if(photos.length > sizeBefore) added++;
+      else if(lastEntry?.action === 'enriched') enriched++;
+      else if(lastEntry?.action === 'duplicate-skipped') skipped++;
+    }
     setProgress(Math.round((i+1)/entries.length*100));
   }
   setTimeout(()=>setProgress(0),500);
   updateStats();renderList();fitMapToPhotos();updateTimelineData();updateFolderTreePanel();
-  if(added)showToast(`Добавлено: ${added} фото`);
+  // v2.9.60: consolidated batch summary toast — clickable for full log
+  const total = added + enriched + skipped;
+  if(total > 0){
+    const parts = [];
+    if(added)    parts.push(`+${added} нов.`);
+    if(enriched) parts.push(`✚${enriched} обогащ.`);
+    if(skipped)  parts.push(`⊘${skipped} дубл.`);
+    showToast(`📂 Импорт: ${parts.join(' · ')}${(enriched||skipped) ? ' · клик → лог' : ''}`,'success',5000,
+      (enriched||skipped) ? showDedupReport : null);
+  }
 }
 
 function deriveFolderPath(file,rootName){const rel=file.webkitRelativePath||'';if(!rel)return'';const parts=rel.split('/');return parts.length<=2?'':parts.slice(1,parts.length-1).join('/');}
 
 async function addLocalPhoto(file,locPath='',fileHandle=null){
-  if(photos.find(p=>p.name===file.name&&p.size===file.size&&!p.isRemote))return false;
+  // v2.9.60: dedup logic moved into addOrEnrichPhoto. The old guard
+  //   if(photos.find(p=>p.name===file.name && p.size===file.size)) return false;
+  // was too narrow (couldn't enrich a kmz-loaded photo with EXIF from local).
+  // Now the merge is automatic and across all sourceTypes.
   const displayUrl=URL.createObjectURL(file);
   let lat=null,lon=null,bearing=null,altitude=null,date='',gppData=null;
   try{const e=await exifr.parse(file,{gps:true,tiff:true,exif:true,ifd0:true,translateValues:true});if(e){lat=e.latitude??e.GPSLatitude??null;lon=e.longitude??e.GPSLongitude??null;bearing=e.GPSImgDirection!=null?parseFloat(e.GPSImgDirection):null;altitude=e.GPSAltitude??null;date=e.DateTimeOriginal??e.DateTime??'';gppData=parseGPPUserComment(e);}}catch(err){}
   const dateMismatch=detectDateMismatch(file,date);
-  addPhoto({name:file.name,size:file.size,displayUrl,thumbUrl:displayUrl,lat,lon,bearing,altitude,date,isRemote:false,file,fileHandle,experimentData:gppData||null,locPath,dateMismatch,sourceType:'local'});
+  // v2.9.60 (Task 38): track first local source folder for dedup-log default save path
+  if(!_dedupBatchFolder && locPath) _dedupBatchFolder = locPath.split('/')[0] || locPath;
+  addOrEnrichPhoto({name:file.name,size:file.size,displayUrl,thumbUrl:displayUrl,lat,lon,bearing,altitude,date,isRemote:false,file,fileHandle,experimentData:gppData||null,locPath,dateMismatch,sourceType:'local'});
   return true;
 }
 function detectDateMismatch(file,dateExif){if(!file?.lastModified||!dateExif)return false;const m=String(dateExif).match(/(\d{4})[:\-](\d{2})[:\-](\d{2})[T\s](\d{2})[:\-](\d{2})[:\-](\d{2})/);if(!m)return false;try{return Math.abs(new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+m[6]).getTime()-file.lastModified)>60000;}catch{return false;}}
@@ -3920,16 +3943,193 @@ async function loadFromGoogleDrive(){
 }
 
 // ═══ PHOTO REGISTRY ═══════════════════════════════════════════════
-function addPhoto(photo){
-  // Ensure dateObj for all sources (local, GDrive, Yandex, URL, KML)
+// v2.9.60 (Tasks 38, 43): single idempotent entry point for adding photos.
+// Replaces the older `addPhoto` + scattered `photos.find(...)` checks. Logic:
+//   1. Lookup by case-insensitive filename across ALL sources (local/kmz/gdrive/yandex).
+//   2. If existing entry found:
+//      a) Enrich missing fields: lat/lon/bearing/altitude/date — fill ONLY if
+//         the existing value is null/undefined. Never overwrite a real value.
+//      b) Append the new sourceType to a `_sources` audit list.
+//      c) Log to `_dedupLog` for the import-summary report.
+//      d) Re-add map marker if we just gained coordinates (existing had none).
+//      e) Return the existing entry (no new push to photos[]).
+//   3. If no existing entry — push as new, log to `_dedupLog` as fresh.
+// Returns the photo object (existing-enriched or freshly-pushed).
+const _dedupLog = [];   // {when, file, action, sources, fields, note}
+
+// Run-summary tracker — `_dedupBatchFolder` set when a batch import starts
+// (folder upload, KMZ extraction, etc.) so we can present a single
+// consolidated report at end and default the log save path to the first
+// local source folder.
+let _dedupBatchFolder = '';
+
+function addOrEnrichPhoto(photo){
+  if(!photo?.name) return null;
+  // Case-insensitive lookup — different OS/uploads may differ in case
+  const nameKey = String(photo.name).toLowerCase();
+  const existing = photos.find(p => String(p.name||'').toLowerCase() === nameKey);
+  if(existing){
+    const fieldsBefore = {
+      lat: existing.lat, lon: existing.lon,
+      bearing: existing.bearing, altitude: existing.altitude,
+      date: existing.date,
+    };
+    // Enrich: fill only what existing lacks
+    const enrichedFields = [];
+    const ENRICHABLE = ['lat','lon','bearing','altitude','date','locPath','experimentData'];
+    for(const k of ENRICHABLE){
+      const cur = existing[k];
+      const nw  = photo[k];
+      const curIsEmpty = (cur == null || cur === '' || (typeof cur === 'number' && isNaN(cur)));
+      const nwIsValue  = (nw  != null && nw !== '' && !(typeof nw === 'number' && isNaN(nw)));
+      if(curIsEmpty && nwIsValue){
+        existing[k] = nw;
+        enrichedFields.push(k);
+      }
+    }
+    // Refresh dateObj if we just enriched the date
+    if(enrichedFields.includes('date') && existing.date){
+      existing.dateObj = parsePhotoDate(existing.date) || undefined;
+    }
+    // Track contributing sources (audit trail). Used by the dedup-log report.
+    if(!existing._sources) existing._sources = [existing.sourceType || 'unknown'];
+    if(photo.sourceType && !existing._sources.includes(photo.sourceType)){
+      existing._sources.push(photo.sourceType);
+    }
+    // If we just gained coordinates (existing had none, new has them) — add a
+    // map marker. This is the v2.9.60 Task 38 case: "one photo without coords +
+    // another with coords → enriched, single point on map" instead of two
+    // separate camera markers.
+    const justGotCoords = enrichedFields.includes('lat') || enrichedFields.includes('lon');
+    if(justGotCoords && existing.lat != null && existing.lon != null && !existing.marker){
+      const idx = photos.indexOf(existing);
+      if(idx >= 0) addMarker(existing, idx);
+    }
+    // If we already had a file blob, keep it; if new has one and existing didn't, take it
+    if(!existing.file && photo.file)             existing.file = photo.file;
+    if(!existing.fileHandle && photo.fileHandle) existing.fileHandle = photo.fileHandle;
+    if(!existing.displayUrl && photo.displayUrl) existing.displayUrl = photo.displayUrl;
+    if(!existing.thumbUrl   && photo.thumbUrl)   existing.thumbUrl   = photo.thumbUrl;
+    // Log
+    _dedupLog.push({
+      when: new Date(),
+      file: photo.name,
+      action: enrichedFields.length ? 'enriched' : 'duplicate-skipped',
+      sources: existing._sources.slice(),
+      fields: enrichedFields,
+      note: enrichedFields.length
+        ? `Заполнены поля: ${enrichedFields.join(', ')} из источника «${photo.sourceType||'?'}» (было: ${JSON.stringify(fieldsBefore)})`
+        : `Дубль из «${photo.sourceType||'?'}» — все поля уже были заполнены`,
+    });
+    return existing;
+  }
+  // Fresh photo — push as new
   if(photo.date && !(photo.dateObj instanceof Date)){
     photo.dateObj = parsePhotoDate(photo.date) || undefined;
   }
-  if(!photo.dateObj&&photo.file?.lastModified)photo._sortTs=photo.file.lastModified;
-  photos.push({marker:null,locPath:'',dateMismatch:false,fileHandle:null,...photo});
-  const idx=photos.length-1;
-  if(photo.lat!=null&&photo.lon!=null)addMarker(photos[idx],idx);
-  updateTimelineData();updateInviteButton();
+  if(!photo.dateObj && photo.file?.lastModified) photo._sortTs = photo.file.lastModified;
+  const fresh = {marker:null, locPath:'', dateMismatch:false, fileHandle:null, _sources:[photo.sourceType||'unknown'], ...photo};
+  photos.push(fresh);
+  const idx = photos.length - 1;
+  if(fresh.lat != null && fresh.lon != null) addMarker(fresh, idx);
+  updateTimelineData(); updateInviteButton();
+  _dedupLog.push({
+    when: new Date(),
+    file: photo.name,
+    action: 'added',
+    sources: [photo.sourceType||'unknown'],
+    fields: [],
+    note: `Новое фото из «${photo.sourceType||'?'}»`,
+  });
+  return fresh;
+}
+
+// Backward-compat shim — older call sites use addPhoto(); route through new
+// idempotent helper. Keeps photos.push() out of scattered code paths.
+function addPhoto(photo){ return addOrEnrichPhoto(photo); }
+
+// Show the import-dedup report dialog. Triggered automatically at end of
+// batch imports; can also be opened manually if exposed in UI later.
+async function showDedupReport(){
+  if(!_dedupLog.length){
+    showToast('Лог дедупликации пуст','info',3000);
+    return;
+  }
+  const enriched = _dedupLog.filter(e => e.action === 'enriched').length;
+  const skipped  = _dedupLog.filter(e => e.action === 'duplicate-skipped').length;
+  const added    = _dedupLog.filter(e => e.action === 'added').length;
+  // Build human-readable text report (markdown-ish)
+  const lines = [
+    `# Лог анализа дублей фотографий`,
+    `Сформирован: ${new Date().toLocaleString('ru-RU')}`,
+    ``,
+    `## Сводка`,
+    `- Всего обработано записей: ${_dedupLog.length}`,
+    `- Добавлено новых:    ${added}`,
+    `- Обогащено:          ${enriched}`,
+    `- Пропущено дублей:   ${skipped}`,
+    ``,
+    `## Подробности`,
+  ];
+  for(const e of _dedupLog){
+    const ts = (e.when instanceof Date) ? e.when.toLocaleTimeString('ru-RU') : '';
+    const symbol = e.action === 'added' ? '➕' : e.action === 'enriched' ? '✚' : '⊘';
+    lines.push(`${symbol} **${e.file}** [${ts}] — ${e.action}`);
+    lines.push(`   • Источники: ${e.sources.join(' → ')}`);
+    if(e.fields.length) lines.push(`   • Поля: ${e.fields.join(', ')}`);
+    if(e.note) lines.push(`   • ${e.note}`);
+    lines.push('');
+  }
+  const text = lines.join('\n');
+  // Show on-screen modal first
+  const ovr = document.createElement('div');
+  ovr.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;display:flex;align-items:center;justify-content:center;animation:fadeIn .15s ease';
+  const FONT = "font-family:'JetBrains Mono',monospace";
+  ovr.innerHTML =
+    `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px 20px;width:min(720px,90vw);max-height:80vh;display:flex;flex-direction:column;box-shadow:var(--shadow);${FONT}">`+
+      `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">`+
+        `<div style="font-size:13px;font-weight:700;color:var(--accent2)">📋 Лог анализа дублей фото</div>`+
+        `<button id="_drClose" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer">×</button>`+
+      `</div>`+
+      `<div style="font-size:11px;color:var(--muted);margin-bottom:10px">`+
+        `Всего: ${_dedupLog.length} · Добавлено: ${added} · Обогащено: ${enriched} · Пропущено: ${skipped}`+
+      `</div>`+
+      `<pre id="_drBody" style="flex:1;overflow:auto;background:rgba(0,0,0,.25);border:1px solid var(--border);border-radius:6px;padding:10px 14px;font-size:10px;line-height:1.5;color:var(--text);white-space:pre-wrap;word-break:break-word;margin:0 0 12px 0">${esc(text)}</pre>`+
+      `<div style="display:flex;gap:8px">`+
+        `<button id="_drSave"  style="flex:1;background:var(--accent);color:#0d0f14;border:none;border-radius:5px;padding:8px;font-size:11px;font-weight:700;cursor:pointer;${FONT}">💾 Сохранить в файл</button>`+
+        `<button id="_drClose2" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:8px 14px;font-size:11px;cursor:pointer;${FONT}">Закрыть</button>`+
+      `</div>`+
+    `</div>`;
+  document.body.appendChild(ovr);
+  const close = () => ovr.remove();
+  ovr.querySelector('#_drClose').onclick  = close;
+  ovr.querySelector('#_drClose2').onclick = close;
+  ovr.querySelector('#_drSave').onclick = async () => {
+    // Default save folder = first local source (from _dedupBatchFolder), with
+    // fallback to ~/Downloads. Filename = "dedup-log_<YYYY-MM-DD_HH-mm>.txt".
+    const stamp = (() => {
+      const d = new Date(); const pad = n => String(n).padStart(2,'0');
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
+    })();
+    const filename = `dedup-log_${stamp}.txt`;
+    if(_fsaSupported){
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: filename,
+          types:[{description:'Text', accept:{'text/plain':['.txt','.md']}}],
+        });
+        const w = await handle.createWritable();
+        await w.write(text); await w.close();
+        showToast(`✅ Лог сохранён: ${handle.name}`,'success',3500);
+      } catch(e){
+        if(e?.name === 'AbortError') return;
+        // Fall through to legacy
+        _downloadBlob(text, filename);
+      }
+    } else {
+      _downloadBlob(text, filename);
+    }
+  };
 }
 
 // ═══ П1: FOLDER TREE ══════════════════════════════════════════════
@@ -4139,12 +4339,12 @@ function parseKML(xmlText,filename){
   // Without this flag, the same photo appears twice on the map: once as a
   // <Point> placemark from KML (rendered as small circle by renderKMLOnMap)
   // AND once as a camera marker from photos[] (the real photo with thumbnail).
-  // Detection uses the same triple heuristic as _exportAsKML's filter:
-  //   • styleUrl matches photoPin/photo_icon/photo_*
-  //   • name has photo extension (jpg/png/heic/etc)
-  //   • description contains "Угол:" / "GMT" / "GPS Map Camera" / EXIF date
+  // v2.9.60 (Task 39): tightened heuristic — a date-pattern alone is NOT
+  // enough (real Пояснения text often contains dates). Require AT LEAST ONE
+  // strong signal: photo-style ID, photo-extension in name, or explicit
+  // "Угол:" / "GPS Map Camera" tokens. Generic date strings ignored.
   const PHOTO_NAME_RE_KML = /\.(jpg|jpeg|png|heic|heif|webp)\b/i;
-  const PHOTO_DESC_RE_KML = /(угол(\s+съ[её]мки)?|GMT[+\-]\d{1,2}|©.+GPS\s*Map\s*Camera|\d{4}[.\-:]\d{2}[.\-:]\d{2}\s+\d{2}:\d{2})/i;
+  const PHOTO_DESC_RE_KML = /(угол(\s+съ[её]мки)?|©.+GPS\s*Map\s*Camera|GMT[+\-]\d{1,2})/i;
   const _detectPhotoPin = (name, desc, styleUrl, type) => {
     if(styleUrl && /^#?(photoPin|photo_icon|photo_)/i.test(styleUrl)) return true;
     if(name && PHOTO_NAME_RE_KML.test(name)) return true;
@@ -4465,15 +4665,28 @@ async function loadKMZFromFile(file, displayName, localRootDir=null){
         experimentData: null,
       };
       if(photoObj.date) photoObj.dateObj = parsePhotoDate(photoObj.date);
-      if(!photos.find(p=>p.name===kp.name&&p.sourceType==='kmz')){
-        addPhoto(photoObj);
-        photoAdded++;
-      }
+      // v2.9.60 (Task 43): old guard
+      //   if(!photos.find(p=>p.name===kp.name && p.sourceType==='kmz')) addPhoto(...)
+      // checked ONLY for kmz-source duplicates, so a photo loaded earlier as
+      // local (from a folder) was NOT detected, leading to two markers on the
+      // map. Routing through addOrEnrichPhoto unifies dedup across sourceTypes.
+      addOrEnrichPhoto(photoObj);
+      photoAdded++;
     }
     if(photoAdded>0){
       updateStats(); renderList(); fitMapToPhotos(); updateTimelineData();
       updateFolderTreePanel();
-      showToast(`📸 KMZ: извлечено ${photoAdded} фото`, 'success', 4000);
+      // v2.9.60: detailed summary by action
+      const recent = _dedupLog.slice(-photoAdded);
+      const a = recent.filter(e => e.action==='added').length;
+      const e2 = recent.filter(e => e.action==='enriched').length;
+      const s = recent.filter(e => e.action==='duplicate-skipped').length;
+      const parts = [];
+      if(a)  parts.push(`+${a} нов.`);
+      if(e2) parts.push(`✚${e2} обогащ.`);
+      if(s)  parts.push(`⊘${s} дубл.`);
+      showToast(`📸 KMZ: ${parts.join(' · ') || photoAdded+' фото'}${(e2||s)?' · клик → лог':''}`,
+        'success', 5000, (e2||s) ? showDedupReport : null);
     }
 
     // ── 7. Save to local folder (if requested) ────────────────────
@@ -4722,7 +4935,9 @@ window.pickKMLViaMenu = async function(){
 // don't allow FSA handle persistence to localStorage; cross-session re-open
 // always shows the OS picker with last-used folder pre-selected).
 const _LS_RECENT_KMLS = 'kmls.recent.v1';
-const _MAX_RECENT_KMLS = 5;
+// v2.9.60 (Task 42): single most-recent KML, not a list of N.
+// Spec: "храни только последний загруженный файл каждого загруженного типа".
+const _MAX_RECENT_KMLS = 1;
 const _kmlOpenHandleCache = new Map();   // session-only: filename → FSA handle
 
 function _loadRecentKMLs(){
@@ -4730,7 +4945,11 @@ function _loadRecentKMLs(){
     const raw = localStorage.getItem(_LS_RECENT_KMLS);
     if(!raw) return [];
     const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr : [];
+    if(!Array.isArray(arr)) return [];
+    // v2.9.60 (Task 42): truncate legacy entries from v2.9.59 (where _MAX_RECENT_KMLS
+    // was 5). Display always shows at most _MAX_RECENT_KMLS entries; the next
+    // save will rewrite localStorage with the truncated list.
+    return arr.slice(0, _MAX_RECENT_KMLS);
   } catch(e){ return []; }
 }
 function _saveRecentKML(filename, size){
@@ -6258,7 +6477,7 @@ function onAutoSaveCbChange(cb){document.getElementById('auto-save-label').class
 (function(){try{if(localStorage.getItem('autoSaveEXIF')==='1'){document.getElementById('auto-save-cb').checked=true;document.getElementById('auto-save-label').classList.add('active-label');}}catch(_){}})();
 function clearAll(){closeLightbox();closeViewer();exitManualGPSMode();photos.forEach(p=>{if(p.marker)map.removeLayer(p.marker);if(!p.isRemote&&p.displayUrl)URL.revokeObjectURL(p.displayUrl);});photos=[];activeIdx=null;remotePhotos=[];selectedFolderPath=null;folderTreeExpanded={};emptyFolders=[];document.getElementById('folder-filter-banner').classList.remove('visible');updateFolderTreePanel();updateStats();renderList();updateInviteButton();document.getElementById('map-hint').classList.remove('hidden');document.getElementById('share-btn').style.display='none';showToast('Всё очищено');}
 function setProgress(pct){document.getElementById('load-progress-bar').style.width=pct+'%';document.getElementById('load-progress').classList.toggle('active',pct>0&&pct<100);}
-let _tt=null;function showToast(msg,type='info',dur=2800){const t=document.getElementById('toast');t.innerHTML=msg;const bg={info:'var(--surface)',success:'#0f2a0f',error:'#2a0f0f',warn:'#2a200a'};const bc={info:'var(--border)',success:'#22c55e',error:'#ef4444',warn:'#f59e0b'};t.style.background=bg[type]||bg.info;t.style.borderColor=bc[type]||bc.info;t.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>t.classList.remove('show'),dur);}
+let _tt=null;function showToast(msg,type='info',dur=2800,onClick=null){const t=document.getElementById('toast');t.innerHTML=msg;const bg={info:'var(--surface)',success:'#0f2a0f',error:'#2a0f0f',warn:'#2a200a'};const bc={info:'var(--border)',success:'#22c55e',error:'#ef4444',warn:'#f59e0b'};t.style.background=bg[type]||bg.info;t.style.borderColor=bc[type]||bc.info;t.style.cursor=onClick?'pointer':'';t.onclick=onClick||null;t.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>{t.classList.remove('show');t.onclick=null;t.style.cursor='';},dur);}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function copyToClipboard(text){navigator.clipboard.writeText(text).then(()=>showToast('✅ Скопировано','success',2000)).catch(()=>{const ta=document.createElement('textarea');ta.value=text;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();showToast('✅ Скопировано','success',2000);});}
 function formatDate(d){if(!d)return'';if(d instanceof Date){const p=n=>String(n).padStart(2,'0');return`${p(d.getDate())}.${p(d.getMonth()+1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;}const m=String(d).match(/(\d{4})[-:](\d{2})[-:](\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);return m?`${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]}:${m[6]}`:String(d);}
@@ -8427,16 +8646,36 @@ window.exportKMZ = async function(){
     }
 
     // ── (2) Photo placemarks ──────────────────────────────────────
-    // v2.9.58 (Task 7): Google Earth Pro renders TWO visible elements for each
-    // photo placemark when the file is opened — the icon's text label (from
-    // <name>) shown floating on the map, AND the balloon (from <description>)
-    // which contains the actual <img> thumbnail. To the user this looks like
-    // the same photo is duplicated. The fix:
-    //   1. Set <LabelStyle scale>0</scale> — suppresses the floating text label
-    //      next to the icon. The icon itself remains visible at full size.
-    //   2. Drop the redundant <b>${p.name}</b> from the balloon — name is
-    //      already shown in the balloon's title bar (Google Earth uses <name>).
-    // Net effect: ONE icon on the map, ONE balloon with thumbnail on click.
+    // ╔═══════════════════════════════════════════════════════════════╗
+    // ║ KMZ PHOTO RENDERING — ⚠ ВНИМАНИЕ: НЕ МЕНЯТЬ БЕЗ ПРИЧИНЫ.    ║
+    // ║ User-confirmed working (v2.9.58, Task 40 lock-in v2.9.60):   ║
+    // ║                                                                ║
+    // ║   • На карте Google Earth Pro отображается ТОЛЬКО иконка     ║
+    // ║     камеры — без подписи имени файла рядом.                   ║
+    // ║     Достигается: <LabelStyle><scale>0</scale></LabelStyle>    ║
+    // ║                                                                ║
+    // ║   • При клике на иконку (или клике в боковой панели) —        ║
+    // ║     один balloon: миниатюра + Координаты + Угол + Дата.       ║
+    // ║     Заголовок balloon (= <name>) не дублируется в теле.       ║
+    // ║     Достигается: <BalloonStyle><text>$[description]</text>   ║
+    // ║                  + удалением <b>${p.name}</b> из desc body.   ║
+    // ║                                                                ║
+    // ║ ЕСЛИ НУЖНО МЕНЯТЬ:                                            ║
+    // ║   1. Тестировать в Google Earth Pro (Yandex MK игнорирует     ║
+    // ║      $[description] template).                                 ║
+    // ║   2. После клика проверить: один balloon, один <img>,         ║
+    // ║      имя только в title bar.                                  ║
+    // ║   3. На карте: только camera-icon, без floating-метки.        ║
+    // ║   4. В боковой панели Google Earth: имя файла видно, при     ║
+    // ║      клике flyto и balloon открывается.                       ║
+    // ║                                                                ║
+    // ║ ИСТОРИЯ ПРОВАЛИВШИХСЯ ПОПЫТОК (до v2.9.58):                  ║
+    // ║   • LabelStyle scale=0.7 → подпись имени видна на карте,     ║
+    // ║     создавала визуальный шум.                                  ║
+    // ║   • desc с <b>${p.name}</b> → имя дублировалось в balloon.   ║
+    // ║   • Без <BalloonStyle> → Google Earth по дефолту вставлял    ║
+    // ║     <h3>$[name]</h3> сверху balloon.                          ║
+    // ╚═══════════════════════════════════════════════════════════════╝
     styleXmls.add(
       `<Style id="photo_icon">`+
         `<IconStyle>`+
@@ -8444,8 +8683,8 @@ window.exportKMZ = async function(){
           `<scale>1.0</scale>`+
           `<Icon><href>http://maps.google.com/mapfiles/kml/shapes/camera.png</href></Icon>`+
         `</IconStyle>`+
-        `<LabelStyle><scale>0</scale></LabelStyle>`+   // ← was 0.7, hides duplicate text label
-        `<BalloonStyle><text>$[description]</text></BalloonStyle>`+   // ← balloon shows description only, no extra <name> repeat
+        `<LabelStyle><scale>0</scale></LabelStyle>`+
+        `<BalloonStyle><text>$[description]</text></BalloonStyle>`+
       `</Style>`
     );
 
@@ -8667,6 +8906,19 @@ function _saveRecentExport(format, filename){
   // path (KMZ/KML/XLSX, full session and single-object via «В др. проект»)
   // gets the behaviour for free.
   _copyExportNameSilent(filename);
+}
+
+// v2.9.60 (Task 41): variant without clipboard copy. Used by XLSX export per
+// user request — clipboard noise is unwelcome for spreadsheet exports because
+// the typical follow-up workflow is "open in Excel" not "paste filename".
+function _saveRecentExportNoClipboard(format, filename){
+  try {
+    let arr = _loadRecentExports();
+    arr = arr.filter(x => x.fmt !== format);
+    arr.unshift({ fmt: format, name: filename, ts: Date.now() });
+    if(arr.length > _MAX_RECENT_EXPORTS) arr = arr.slice(0, _MAX_RECENT_EXPORTS);
+    localStorage.setItem(_LS_RECENT_EXPORTS, JSON.stringify(arr));
+  } catch(e){ console.warn('[recent-exports]', e); }
 }
 
 // Generate a default filename based on current timestamp (auto-naming per spec).
@@ -9025,9 +9277,12 @@ function _applyXlsxHeaderStyle(ws, r, colCount){
 
 // Build a fresh sheet from a column list — title in row 1, headers in row 2,
 // styled per template. Returns the Sheet object (not yet attached to a wb).
+// v2.9.60 (Task 41): «Дата формирования» теперь содержит и время, не только
+// дату — `toLocaleString` вместо `toLocaleDateString`. Касается всех листов
+// (Земельные участки / Здания, сооружения / Фото / Объект).
 function _xlsxBuildTemplateSheet(title, cols){
   const aoa = [
-    [title, null, `Дата формирования: ${new Date().toLocaleDateString('ru-RU')}`],
+    [title, null, `Дата формирования: ${new Date().toLocaleString('ru-RU')}`],
     cols,
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -9380,6 +9635,32 @@ async function _exportAsXLSX(recentIdx){
     XLSX.utils.book_append_sheet(wb, wsPhotos, 'Фото');
   }
   if(wsPhotos && photosArr.length){
+    // v2.9.60 (Task 41): always refresh «Дата формирования» on row 1 for the
+    // Photos sheet — it's the only sheet where the timestamp is meaningful
+    // (ZU/OKS sheets carry user-entered data that doesn't change per export).
+    // Look for an existing "Дата формирования: ..." cell in row 0 and update;
+    // if missing, write to column C.
+    const range = wsPhotos['!ref'] ? XLSX.utils.decode_range(wsPhotos['!ref']) : null;
+    const stamp = `Дата формирования: ${new Date().toLocaleString('ru-RU')}`;
+    let dateCellSet = false;
+    if(range){
+      for(let c = range.s.c; c <= range.e.c; c++){
+        const addr = XLSX.utils.encode_cell({r:0, c});
+        const cell = wsPhotos[addr];
+        if(cell && /^\s*Дата формирования\s*:/i.test(String(cell.v||''))){
+          cell.v = stamp;
+          dateCellSet = true;
+          break;
+        }
+      }
+    }
+    if(!dateCellSet){
+      // No existing cell — drop into column C
+      wsPhotos[XLSX.utils.encode_cell({r:0, c:2})] = { t:'s', v: stamp };
+      if(range && range.e.c < 2){
+        wsPhotos['!ref'] = XLSX.utils.encode_range({ s:range.s, e:{r:Math.max(range.e.r,0), c:2} });
+      }
+    }
     const hdr = _findXlsxHeaderRow(wsPhotos);
     const headerCols = hdr ? hdr.cols : _XLSX_PHOTOS_COLS.slice();
     for(const p of photosArr){
@@ -9395,27 +9676,20 @@ async function _exportAsXLSX(recentIdx){
   const btn = document.getElementById('export-btn');
   btn?.classList.add('busy'); if(btn) btn.disabled = true;
   try {
-    let savedName = suggestedName;
-    if(cachedHandle && mergeMode === 'fsa-handle'){
-      // We already read it — same handle should still be writable
-      try {
-        const w = await cachedHandle.createWritable();
-        await w.write(blob); await w.close();
-        savedName = cachedHandle.name || suggestedName;
-        showToast(`✅ Перезаписано: ${savedName} · имя в буфере`,'success',4000);
-      } catch(e){
-        const h = await _pickAndWriteBlob(blob, suggestedName, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.xlsx');
-        if(!h) return;
-        savedName = h.name || suggestedName;
-        if(h !== '_legacy') _exportHandleCache.set(savedName, h);
-      }
-    } else {
-      const h = await _pickAndWriteBlob(blob, suggestedName, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.xlsx');
-      if(!h) return;
-      savedName = h.name || suggestedName;
-      if(h !== '_legacy') _exportHandleCache.set(savedName, h);
-    }
-    _saveRecentExport('xlsx', savedName);
+    // v2.9.60 (Task 41): always show the save picker — same UX as KMZ/KML.
+    // Previously XLSX would silently overwrite the cached FSA handle, but the
+    // user wants explicit per-save target picking. _pickAndWriteBlob handles
+    // the picker dialog. The handle goes into _exportHandleCache only for
+    // potential subsequent reads (mergeMode='fsa-handle' on next export), not
+    // for silent overwrite.
+    const h = await _pickAndWriteBlob(blob, suggestedName, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.xlsx');
+    if(!h) return;   // user cancelled
+    const savedName = (h !== '_legacy') ? (h.name || suggestedName) : suggestedName;
+    if(h !== '_legacy') _exportHandleCache.set(savedName, h);
+    // v2.9.60 (Task 41): _saveRecentExportNoClipboard variant — same recent
+    // tracking but skips the clipboard copy. Spec: "не копируй в буфер
+    // название файла" specifically for XLSX (KMZ/KML still copy as before).
+    _saveRecentExportNoClipboard('xlsx', savedName);
   } finally {
     btn?.classList.remove('busy'); if(btn) btn.disabled = false;
   }
