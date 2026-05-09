@@ -7,7 +7,7 @@
      from file:// context (origin=null → strict-origin sends literal "null" → OSM blocks).
      Chrome was unaffected (sends no Referer from file://, OSM accepts Chrome UA).
      Each tile layer sets its own referrerPolicy via img.referrerPolicy attribute. -->
-<title>EkceloFoto v2.9.58</title>
+<title>EkceloFoto v2.9.59</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -1030,7 +1030,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.58</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.59</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -4131,6 +4131,28 @@ function parseKML(xmlText,filename){
   // grouping in renderMarksList) can classify by "cad_zu_/cad_oks_/cad_exp_".
   const styles = _parseKMLStyles(doc);
 
+  // v2.9.59 (Task 28): detect photo-pin placemarks at parse time so downstream
+  // (renderKMLOnMap + _dedupParsedPlacemarks) can treat them differently from
+  // real cadastre/explanation placemarks. A photo-pin re-imported from an
+  // older KMZ (or sometimes from KML embedded inside a folder upload) describes
+  // the SAME physical photo that's also being loaded as a JPG into photos[].
+  // Without this flag, the same photo appears twice on the map: once as a
+  // <Point> placemark from KML (rendered as small circle by renderKMLOnMap)
+  // AND once as a camera marker from photos[] (the real photo with thumbnail).
+  // Detection uses the same triple heuristic as _exportAsKML's filter:
+  //   • styleUrl matches photoPin/photo_icon/photo_*
+  //   • name has photo extension (jpg/png/heic/etc)
+  //   • description contains "Угол:" / "GMT" / "GPS Map Camera" / EXIF date
+  const PHOTO_NAME_RE_KML = /\.(jpg|jpeg|png|heic|heif|webp)\b/i;
+  const PHOTO_DESC_RE_KML = /(угол(\s+съ[её]мки)?|GMT[+\-]\d{1,2}|©.+GPS\s*Map\s*Camera|\d{4}[.\-:]\d{2}[.\-:]\d{2}\s+\d{2}:\d{2})/i;
+  const _detectPhotoPin = (name, desc, styleUrl, type) => {
+    if(styleUrl && /^#?(photoPin|photo_icon|photo_)/i.test(styleUrl)) return true;
+    if(name && PHOTO_NAME_RE_KML.test(name)) return true;
+    if(type !== 'Point') return false;   // photos are always Points
+    if(desc && PHOTO_DESC_RE_KML.test(desc)) return true;
+    return false;
+  };
+
   const placemarks=[];
   const pmList = doc.getElementsByTagName('Placemark');
   for(const pm of pmList){
@@ -4150,7 +4172,8 @@ function parseKML(xmlText,filename){
       const p = pCoord.textContent.trim().split(',');
       const lat = parseFloat(p[1]), lon = parseFloat(p[0]);
       if(!isNaN(lat) && !isNaN(lon)){
-        placemarks.push({type:'Point', name, desc, style, styleUrl, coords:[lat,lon]});
+        const isPhoto = _detectPhotoPin(name, desc, styleUrl, 'Point');
+        placemarks.push({type:'Point', name, desc, style, styleUrl, coords:[lat,lon], _isPhotoPin: isPhoto});
       }
     }
     const polyCoordsEl = pm.getElementsByTagName('Polygon')[0]
@@ -4820,22 +4843,42 @@ function _dedupParsedPlacemarks(parsed, displayName){
   if(!parsed?.placemarks?.length) return 0;
   const idx = _buildCadnumIndex();
   let suppressed = 0;
+  // v2.9.59 (Task 28): build a lookup of photo names already in photos[] so
+  // we can hide a photo-pin <Placemark> that describes the same JPG. Without
+  // this, importing a folder with both KML AND its source JPGs results in
+  // each photo appearing twice on the map: once as a small Point circle from
+  // the KML's <Placemark>, once as the proper camera marker from photos[].
+  const photoNamesInRegistry = new Set();
+  if(typeof photos !== 'undefined' && Array.isArray(photos)){
+    for(const p of photos){
+      if(p?.name) photoNamesInRegistry.add(String(p.name).toLowerCase());
+    }
+  }
   for(const pm of parsed.placemarks){
+    // ── (a) Photo-pin from KML — hide if the actual JPG is/will be loaded too,
+    //        OR if it's a photo-pin without companion JPG (we still drop it,
+    //        because in v2.9.56+ KML/KMZ exports never emit photo-points; any
+    //        photo-pin in input is legacy noise from old EkceloFoto exports).
+    if(pm._isPhotoPin){
+      pm._visible = false;
+      pm._duplicateOf = photoNamesInRegistry.has(String(pm.name||'').toLowerCase())
+        ? `photo: ${pm.name}`
+        : `photo-pin (legacy KML)`;
+      suppressed++;
+      continue;
+    }
+    // ── (b) cadnum-based dedup against other layers ──────────────
     const cn = _extractCadNum(pm.name) || _extractCadNum(pm.desc);
     if(!cn) continue;
     const hit = idx.get(cn);
     if(!hit) continue;
-    // Mark as duplicate — won't render on map, but stays in parsedData for
-    // tracking. Sidebar Marks list filters by _visible too.
     pm._duplicateOf = hit.layer.filename || '(unknown)';
     pm._visible = false;
     suppressed++;
-    // Enrich the surviving record's description with anything we have.
     if(hit.kind === 'parsed'){
       hit.pm.desc = _pickRicherDesc(hit.pm.desc, pm.desc);
       if(!hit.pm.name && pm.name) hit.pm.name = pm.name;
     } else {
-      // cadPlacemark: append to its lines as a synthetic info row, idempotent
       const newDesc = String(pm.desc||'').trim();
       if(newDesc){
         const lines = hit.pm.lines = (hit.pm.lines||[]);
@@ -5266,6 +5309,10 @@ function _gatherMarkers(){
       });
     });
     (layer.parsedData?.placemarks || []).forEach((pm, i) => {
+      // v2.9.59 (Task 28): photo-pins from re-imported KML must not appear in
+      // Метки (they'd show up as Пояснения while the actual JPG also shows in
+      // the photo list — duplication). _isPhotoPin is set in parseKML.
+      if(pm._isPhotoPin) return;
       const alreadyTracked = (layer.cadPlacemarks || []).some(c =>
         (pm.name||'').includes(c.cadNum) || (pm.desc||'').includes(c.cadNum));
       if(alreadyTracked) return;
@@ -8727,19 +8774,82 @@ async function _exportAsKML(recentIdx){
     .replace(/<description><!\[CDATA\[\s*Центр\s*:\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*\]\]><\/description>/g,
              '<description><![CDATA[]]></description>');
 
-  // v2.9.58 (Task 9): collect cadnums seen across all sources to dedup output.
-  // _seenCadnums tracks first-occurrence; duplicates (>= 2nd) are skipped.
+  // v2.9.59 (Task 27): the v2.9.58 dedup was insufficient for two scenarios:
+  //   1. cadPlacemarks where cp.cadNum is empty (created via the seed-square
+  //      shortcut in coords-card without entering a cadnum) — they fell
+  //      through without any dedup key.
+  //   2. cadPlacemarks where the cadnum is embedded in <name>/<description>
+  //      of cp.parts.placemark but NOT in cp.cadNum field directly.
+  //   3. The same KML loaded twice (e.g. through "recent KMLs" plus a fresh
+  //      drag-n-drop) produced two layer entries; the regex-based re-emission
+  //      branch dedupped only by cadnum extracted from XML, missing objects
+  //      whose cadnum lives in <ExtendedData> rather than <name>/<description>.
+  // Fix: composite dedup with three layers, used in BOTH branches:
+  //   • Primary: cadnum (NN:NN:..:..) — global identity for real estate
+  //   • Fallback 1: name+description signature (lowercase, trimmed)
+  //   • Fallback 2: geometry hash (rounded coords) — catches re-save dups
+  // Each emit pass against any of the three keys is a duplicate → skip.
   const _seenCadnums = new Set();
+  const _seenSigs    = new Set();
+  const _seenGeoms   = new Set();
+  // Extract dedup keys from a Placemark XML string. Returns {cadnum, sig, geom}
+  // — any of which may be empty. Cheap parsing via regex.
+  const _kmlDedupKeys = (pmXml) => {
+    const cnMatch  = pmXml.match(/\b(\d{2}:\d{2}:\d{1,8}:\d{1,8})\b/);
+    const cadnum   = cnMatch ? cnMatch[1] : '';
+    const nameMatch = pmXml.match(/<name>\s*(?:<!\[CDATA\[([\s\S]*?)\]\]>|([\s\S]*?))\s*<\/name>/i);
+    const descMatch = pmXml.match(/<description>\s*(?:<!\[CDATA\[([\s\S]*?)\]\]>|([\s\S]*?))\s*<\/description>/i);
+    const name = (nameMatch ? (nameMatch[1] || nameMatch[2] || '') : '').trim().toLowerCase();
+    const desc = (descMatch ? (descMatch[1] || descMatch[2] || '') : '').trim().toLowerCase().slice(0, 120);
+    const sig = (name || desc) ? `${name}||${desc}` : '';
+    // Geometry hash — first 3 coordinate pairs rounded to 5 decimals (~1m precision).
+    // Captures Polygon outer ring or Point coordinates uniformly enough for dedup.
+    const coordMatch = pmXml.match(/<coordinates>\s*([\s\S]*?)\s*<\/coordinates>/i);
+    let geomHash = '';
+    if(coordMatch){
+      const pts = coordMatch[1].trim().split(/\s+/).slice(0, 3).map(p => {
+        const [lon, lat] = p.split(',').map(Number);
+        if(isNaN(lon) || isNaN(lat)) return '';
+        return `${lon.toFixed(5)},${lat.toFixed(5)}`;
+      }).filter(Boolean);
+      if(pts.length) geomHash = pts.join(';');
+    }
+    return { cadnum, sig, geom: geomHash };
+  };
+  // Returns true if pmXml is a duplicate of something already emitted; otherwise
+  // registers its keys and returns false. Idempotent — calling twice with same
+  // input returns false the first time, true the second.
+  const _isDuplicateKMLPlacemark = (pmXml) => {
+    const k = _kmlDedupKeys(pmXml);
+    // Fast-path: any matching key counts as a hit.
+    if(k.cadnum && _seenCadnums.has(k.cadnum)) return true;
+    if(k.sig    && _seenSigs.has(k.sig))       return true;
+    if(k.geom   && _seenGeoms.has(k.geom))     return true;
+    if(k.cadnum) _seenCadnums.add(k.cadnum);
+    if(k.sig)    _seenSigs.add(k.sig);
+    if(k.geom)   _seenGeoms.add(k.geom);
+    return false;
+  };
 
   for(const layer of (kmlLayers||[])){
     // From cadPlacemarks (saved contours): explicit XML parts present
     for(const cp of (layer.cadPlacemarks||[])){
+      if(cp._visible === false) continue;
+      if(!cp.parts?.placemark) continue;
+      const pmXml = _stripCentroidFromKML(cp.parts.placemark);
+      // v2.9.59: priority to cp.cadNum (authoritative) before XML parsing
       if(cp.cadNum){
-        if(_seenCadnums.has(cp.cadNum)) continue;   // dedup
+        if(_seenCadnums.has(cp.cadNum)) continue;
         _seenCadnums.add(cp.cadNum);
+        // Still register sig/geom so the regex branch below also dedups
+        const k = _kmlDedupKeys(pmXml);
+        if(k.sig)  _seenSigs.add(k.sig);
+        if(k.geom) _seenGeoms.add(k.geom);
+      } else if(_isDuplicateKMLPlacemark(pmXml)){
+        continue;
       }
       if(cp.parts?.style) styles.add(cp.parts.style);
-      if(cp.parts?.placemark) placemarks.push(_stripCentroidFromKML(cp.parts.placemark));
+      placemarks.push(pmXml);
     }
     // From parsedData.placemarks (loaded KML): re-emit each as XML.
     // We use the layer's existing kmlText if present (full doc) — simplest path.
@@ -8769,14 +8879,10 @@ async function _exportAsKML(recentIdx){
       });
       pm.forEach(p => {
         if(PHOTO_PM_RE.test(p)) return;   // skip photo placemarks
-        // v2.9.58 (Task 9): dedup by cadnum found in <name> or <description>.
-        // Same regex as _extractCadNum, run on raw XML — first occurrence wins.
-        const cnMatch = p.match(/\b(\d{2}:\d{2}:\d{1,8}:\d{1,8})\b/);
-        if(cnMatch){
-          if(_seenCadnums.has(cnMatch[1])) return;
-          _seenCadnums.add(cnMatch[1]);
-        }
-        placemarks.push(_stripCentroidFromKML(p));
+        const stripped = _stripCentroidFromKML(p);
+        // v2.9.59: full triple-key dedup (cadnum + sig + geom)
+        if(_isDuplicateKMLPlacemark(stripped)) return;
+        placemarks.push(stripped);
       });
     }
   }
