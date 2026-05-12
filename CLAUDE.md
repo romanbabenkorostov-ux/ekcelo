@@ -94,3 +94,13 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - Будь максимально краток, если пользователь не попросил подробностей.
 - Предлагай "short mode" или "detailed mode".
 - Используй Caveman, если он подключён.
+
+## Obsidian Knowledge Base
+- Основная база знаний находится локально: `E:\Code\ekcelo\obsidian_ekcelo\`
+- При важных решениях, изменениях схемы БД или архитектуры — всегда предлагай создать/обновить заметку в Obsidian.
+- Рекомендуемая структура заметок:
+  - Database/
+  - Parser/
+  - Frontend/
+  - Architecture/
+  - Decisions/
