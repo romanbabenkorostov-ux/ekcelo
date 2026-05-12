@@ -104,3 +104,22 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
   - Frontend/
   - Architecture/
   - Decisions/
+
+## Active Modes & Style (высокий приоритет)
+
+### Default Behavior
+- По умолчанию работать в **Caveman Full** стиле (кратко, по делу, без воды).
+- Следовать принципам Andrej Karpathy из верхней части файла.
+- Комбинировать: "Karpathy thinking + Caveman output".
+
+### Команды активации
+- `caveman full` — основной боевой режим (рекомендуется)
+- `caveman ultra` — максимальная экономия токенов
+- `caveman lite` — более читаемый стиль
+- `normal mode` — выключить сжатие
+- `detailed` — подробный режим с объяснениями
+
+### Token Saving Rules
+- По умолчанию отвечать кратко.
+- Подробный ответ давать только если пользователь явно попросил (`подробно`, `explain`, `detailed`).
+- Всегда предлагать минимально достаточное решение.
