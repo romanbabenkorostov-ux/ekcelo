@@ -249,7 +249,8 @@ def placemark(name: str, descr_html: str, style_id: str, geom_xml: str,
 
 
 # ─── Сборка балунов ─────────────────────────────────────────────────────────
-def cad_balloon(cad: dict, docs_for_cad: list[Path]) -> str:
+def cad_balloon(cad: dict, docs_for_cad: list[Path],
+                photos_for_cad: list[Path] | None = None) -> str:
     rows = []
     for k in ("cadastral_number", "object_type", "address"):
         v = cad.get(k)
@@ -270,6 +271,14 @@ def cad_balloon(cad: dict, docs_for_cad: list[Path]) -> str:
             for p in docs_for_cad
         )
         body += "<hr/><b>Документы:</b>" + imgs
+    if photos_for_cad:
+        imgs = "".join(
+            f"<a href='images/{xml_escape(p.name)}'>"
+            f"<img src='images/{xml_escape(p.name)}' "
+            f"style='max-width:240px;margin:4px;border:1px solid #aaa'/></a>"
+            for p in photos_for_cad
+        )
+        body += "<hr/><b>Фото:</b><div>" + imgs + "</div>"
     return body
 
 
@@ -314,14 +323,62 @@ def build_kmz(root: Path) -> Path:
         m = re.search(r"egr(?:ul|ip)_inn(?:fl)?(\d{10,12})", jpg.name)
         if m: doc_by_inn.setdefault(m.group(1), []).append(jpg); continue
 
-    # ── Фотографии: только те, у кого EXIF GPS ────────────────────────────
+    # ── Фотографии: привязка либо по EXIF GPS, либо по структуре папок.
+    # Распознаваемые пути (после `08_Фотографии/`):
+    #   По_объектам/<КН>/...        — КН в формате 61_44_0050706_31
+    #   По_оборудованию/<инв>/...   — инвентарный № как имя папки
+    #   По_BU/<slug>/...            — slug бизнес-единицы (см. structure.json)
+    #   00_Нераспределенные/...     — без привязки
     photos_dir = root / "08_Фотографии"
-    photos: list[tuple[Path, dict]] = []
-    photos_no_gps: list[Path] = []
+    photos: list[tuple[Path, dict, dict]] = []  # (path, gps_meta, tag)
+    photos_by_cad: dict[str, list[Path]] = {}
+    photos_by_eq: dict[str, list[Path]]  = {}
+    photos_by_bu: dict[str, list[Path]]  = {}
+
+    def _tag_from_path(jpg: Path) -> dict:
+        try:    rel = jpg.relative_to(photos_dir)
+        except Exception: return {}
+        parts = rel.parts
+        if len(parts) < 2: return {}
+        top = parts[0]
+        if top == "По_объектам":
+            cn = parts[1].replace("_", ":")  # 61_44_0050706_31 → 61:44:0050706:31
+            return {"kind": "cad", "cad": cn}
+        if top == "По_оборудованию":
+            return {"kind": "eq", "eq": parts[1]}
+        if top == "По_BU":
+            return {"kind": "bu", "bu": parts[1]}
+        return {}
+
     for jpg in sorted(photos_dir.rglob("*.jpg")):
+        tag = _tag_from_path(jpg)
         meta = read_gps(jpg)
-        if "lat" in meta and "lon" in meta: photos.append((jpg, meta))
-        else: photos_no_gps.append(jpg)
+        # координаты: EXIF приоритетнее, иначе центроид связанного объекта
+        if "lat" not in meta and tag.get("kind") == "cad":
+            cad = by_cn.get(tag["cad"]) or {}
+            g = cad.get("_geom") or {}
+            cen = _centroid_lonlat(g.get("coords")) if g.get("coords") else None
+            if cen:
+                meta["lon"], meta["lat"] = cen
+                meta["alt"] = (cad.get("_z") or 0.0)
+        if "lat" not in meta and tag.get("kind") == "eq":
+            # ищем оборудование с этим инвентарным → центроид его КН
+            for eq in st.get("equipment", []):
+                if str(eq.get("inv_number_hint") or "") == tag["eq"]:
+                    cid = (eq.get("links") or {}).get("cadastre_id")
+                    cad = next((c for c in by_cn.values() if c.get("id") == cid), None)
+                    if cad and cad.get("_geom", {}).get("coords"):
+                        cen = _centroid_lonlat(cad["_geom"]["coords"])
+                        if cen:
+                            meta["lon"], meta["lat"] = cen
+                            meta["alt"] = (cad.get("_z") or 0.0) / 2.0
+                    break
+        if "lat" in meta and "lon" in meta:
+            photos.append((jpg, meta, tag))
+        # индексы для подмешивания в баллоны
+        if tag.get("kind") == "cad": photos_by_cad.setdefault(tag["cad"], []).append(jpg)
+        elif tag.get("kind") == "eq":  photos_by_eq.setdefault(tag["eq"], []).append(jpg)
+        elif tag.get("kind") == "bu":  photos_by_bu.setdefault(tag["bu"], []).append(jpg)
 
     # ── Сборка KML ────────────────────────────────────────────────────────
     ent = st.get("enterprise", {}) or {}
@@ -366,7 +423,7 @@ def build_kmz(root: Path) -> Path:
             for inn in cad_to_inns.get(cn, []):
                 docs.extend(doc_by_inn.get(inn, []))
             name = f"{cn}" + (f" · {cad.get('address')}" if cad.get("address") else "")
-            balloon = cad_balloon(cad, docs)
+            balloon = cad_balloon(cad, docs, photos_by_cad.get(cn))
             style = style_map[gname]
             extrude = (gname in ("Здания", "Сооружения", "ОНС"))
             z = cad.get("_z", 0.0)
@@ -439,17 +496,33 @@ def build_kmz(root: Path) -> Path:
                                  balloon, "doc", geom_xml))
         out.append("</Folder>")
 
-    # 3. Фотографии (Point + <img src="images/...">)
+    # 3. Фотографии (Point + <img src="images/...">), сгруппированы по привязке.
     if photos:
+        groups_p: dict[str, list[tuple[Path, dict, dict]]] = {
+            "По объектам": [], "По оборудованию": [], "По BU": [], "Без привязки": []}
+        for item in photos:
+            t = item[2].get("kind")
+            if t == "cad": groups_p["По объектам"].append(item)
+            elif t == "eq":  groups_p["По оборудованию"].append(item)
+            elif t == "bu":  groups_p["По BU"].append(item)
+            else: groups_p["Без привязки"].append(item)
         out.append(folder_open(f"Фотографии ({len(photos)})"))
-        for jpg, meta in photos:
-            lat, lon = meta["lat"], meta["lon"]
-            alt = meta.get("alt") or 0.0
-            ts = meta.get("ucomment", {}).get("ts") if isinstance(meta.get("ucomment"), dict) else None
-            balloon = photo_balloon(jpg.name, meta)
-            geom_xml = (f"<Point><altitudeMode>relativeToGround</altitudeMode>"
-                        f"<coordinates>{lon:.7f},{lat:.7f},{alt:.2f}</coordinates></Point>")
-            out.append(placemark(jpg.name, balloon, "photo", geom_xml, ts=ts))
+        for gname, items in groups_p.items():
+            if not items: continue
+            out.append(folder_open(f"{gname} ({len(items)})", False))
+            for jpg, meta, tag in items:
+                lat, lon = meta["lat"], meta["lon"]
+                alt = meta.get("alt") or 0.0
+                ts = meta.get("ucomment", {}).get("ts") if isinstance(meta.get("ucomment"), dict) else None
+                extra = ""
+                if tag.get("kind") == "cad": extra = f"<div><b>Объект:</b> {xml_escape(tag['cad'])}</div>"
+                elif tag.get("kind") == "eq": extra = f"<div><b>Оборудование:</b> {xml_escape(tag['eq'])}</div>"
+                elif tag.get("kind") == "bu": extra = f"<div><b>BU:</b> {xml_escape(tag['bu'])}</div>"
+                balloon = photo_balloon(jpg.name, meta) + extra
+                geom_xml = (f"<Point><altitudeMode>relativeToGround</altitudeMode>"
+                            f"<coordinates>{lon:.7f},{lat:.7f},{alt:.2f}</coordinates></Point>")
+                out.append(placemark(jpg.name, balloon, "photo", geom_xml, ts=ts))
+            out.append("</Folder>")
         out.append("</Folder>")
 
     # 4. Граф связей (04_nspd_graph) — отдельный Placemark с balloon-iframe
@@ -489,8 +562,12 @@ def build_kmz(root: Path) -> Path:
         zi.compress_type = zipfile.ZIP_DEFLATED
         zf.writestr(zi, kml_text)
 
-        # images/  ← фото
-        for jpg, _ in photos:
+        # images/  ← фото (все, что упомянуты в KML или в баллонах объектов)
+        used_photos: set[Path] = {p for p, _, _ in photos}
+        for lst in photos_by_cad.values(): used_photos.update(lst)
+        for lst in photos_by_eq.values():  used_photos.update(lst)
+        for lst in photos_by_bu.values():  used_photos.update(lst)
+        for jpg in sorted(used_photos):
             zi = zipfile.ZipInfo(f"images/{jpg.name}", date_time=zinfo_date)
             zi.compress_type = zipfile.ZIP_DEFLATED
             zf.writestr(zi, jpg.read_bytes())
