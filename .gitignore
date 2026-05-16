@@ -1,2 +1,10 @@
 WIKI.md
 README.md
+node_modules/
+dev/node_modules/
+dev/tests/node_modules/
+dev/tests/test-results/
+dev/tests/playwright-report/
+dev/tests/package-lock.json
+dev/package-lock.json
+.eslintcache

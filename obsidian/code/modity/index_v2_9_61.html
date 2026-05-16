@@ -7,7 +7,7 @@
      from file:// context (origin=null → strict-origin sends literal "null" → OSM blocks).
      Chrome was unaffected (sends no Referer from file://, OSM accepts Chrome UA).
      Each tile layer sets its own referrerPolicy via img.referrerPolicy attribute. -->
-<title>EkceloFoto v2.9.62</title>
+<title>EkceloFoto v2.9.61</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -1034,11 +1034,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 </head>
 <body>
 <div id="app">
-<div id="ver-switch" style="position:fixed;top:4px;left:50%;transform:translateX(-50%);z-index:5000;font:11px 'JetBrains Mono',ui-monospace,monospace;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:2px 9px;opacity:.55;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.55"><a href="./v2961.html" style="color:var(--accent2);text-decoration:none">↩ замороженная 2.9.61</a></div>
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.62</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.61</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -1058,7 +1057,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
       <button onclick="closeUploadMenu();pickKMLViaMenu()">🗺 Добавить из .KML</button>
       <button onclick="closeUploadMenu();pickKMZViaMenu()">📦 Добавить KMZ (Google Earth)…</button>
       <button onclick="closeUploadMenu();pickXlsxCatalog()">📋 Загрузить кад.номера (XLSX)…</button>
-      <button onclick="closeUploadMenu();_pickCadastreTilePack()" title="Загрузить пакет чужих тайлов кадастра (z17) в локальный кэш — обогащение, без перезаписи">📥 Загрузить чужие тайлы z17</button>
       <!-- Path hints (Task 1): persistent reminders of last opened locations.
            Browsers don't expose absolute paths; we show the file/folder NAME so the
            user can verify they're working with the right source. Hidden when empty. -->
@@ -1070,7 +1068,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
   <input type="file" id="kml-file-input"        multiple accept=".kml"/>
   <input type="file" id="kmz-file-input"        multiple accept=".kmz"/>
   <input type="file" id="xlsx-file-input"       accept=".xlsx,.xls" style="display:none" onchange="onXlsxFileChosen(this)"/>
-  <input type="file" id="tilepack-file-input"   accept=".zip" style="display:none" onchange="_onTilePackChosen(this)"/>
   <label id="auto-save-label" title="Авто-запись EXIF при навигации">
     <input type="checkbox" id="auto-save-cb" onchange="onAutoSaveCbChange(this)"/>
     EXIF авто
@@ -1421,63 +1418,15 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 'use strict';
 
 // ═══ SERVICE WORKER ════════════════════════════════════════════════
-let _storageState = { persisted:false, usageMB:0, quotaMB:0 };
-// reqId-correlation для запросов к SW с многочанковым ответом (dump/import тайлов)
-const _swPending = new Map();
-let _swReqSeq = 0;
-function _swPost(msg, transfer){
-  const c = navigator.serviceWorker?.controller;
-  if(!c) return false;
-  c.postMessage(msg, transfer||[]);
-  return true;
-}
-// onMessage(d, rec) вызывается на каждое SW-сообщение этого reqId; вернуть true когда завершено
-function _swRequest(msg, transfer, onMessage){
-  return new Promise((resolve,reject)=>{
-    const reqId = 'r'+(++_swReqSeq)+'_'+Date.now();
-    const rec = { reqId, resolve, reject, onMessage };
-    _swPending.set(reqId, rec);
-    if(!_swPost({...msg, reqId}, transfer)){ _swPending.delete(reqId); reject(new Error('no SW controller')); }
-  });
-}
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').then(()=>{updateCadastreCacheInfo();_requestPersistentStorage();}).catch(()=>{});
+  navigator.serviceWorker.register('./sw.js').then(()=>updateCadastreCacheInfo()).catch(()=>{});
   navigator.serviceWorker.addEventListener('message', e=>{
-    const d = e.data;
-    if (d?.type==='cacheSize') {
+    if (e.data?.type==='cacheSize') {
       const el=document.getElementById('cadastre-cache-info');
-      if (d.count>0){
-        let txt=`🗂 ${d.count} тайлов`;
-        if(_storageState.persisted) txt+=` · 🔒 ${_storageState.usageMB}/${_storageState.quotaMB} МБ`;
-        else txt+=' ⚠';
-        el.textContent=txt+' (очистить)';
-        el.title=_storageState.persisted
-          ? `Хранилище закреплено. Использовано ${_storageState.usageMB} МБ из ${_storageState.quotaMB} МБ. Нажмите для очистки.`
-          : 'Хранилище не закреплено — браузер может удалить кэш. Нажмите для очистки.';
-        el.classList.add('visible');
-      } else el.classList.remove('visible');
-      return;
-    }
-    if (d?.reqId && _swPending.has(d.reqId)) {
-      const rec = _swPending.get(d.reqId);
-      try { if (rec.onMessage(d, rec)) _swPending.delete(d.reqId); }
-      catch(err){ _swPending.delete(d.reqId); rec.reject(err); }
+      if (e.data.count>0){el.textContent=`🗂 ${e.data.count} тайлов (очистить)`;el.classList.add('visible');}
+      else el.classList.remove('visible');
     }
   });
-}
-async function _requestPersistentStorage(){
-  try{
-    if(navigator.storage?.persist){
-      const already = navigator.storage.persisted ? await navigator.storage.persisted() : false;
-      _storageState.persisted = already || await navigator.storage.persist();
-    }
-    if(navigator.storage?.estimate){
-      const est = await navigator.storage.estimate();
-      _storageState.usageMB = Math.round((est.usage||0)/1048576);
-      _storageState.quotaMB = Math.round((est.quota||0)/1048576);
-    }
-  }catch(_){}
-  updateCadastreCacheInfo();
 }
 function updateCadastreCacheInfo(){navigator.serviceWorker?.controller?.postMessage('getCacheSize');}
 function clearCadastreCache(){navigator.serviceWorker?.controller?.postMessage('clearCadastreCache');showToast('🗂 Кэш очищен','info',2500);document.getElementById('cadastre-cache-info').classList.remove('visible');}
@@ -1579,23 +1528,6 @@ updateZoomIndicator();
 // the `referrer` init option sets Referer correctly (not a forbidden fetch header name).
 // Tile pipeline: fetch → blob → objectURL → img.src → onload → revokeObjectURL.
 // Works from file://, http://localhost, and any https:// origin.
-//
-// v2.9.62: единый билдер URL тайла. ОБЯЗАН использоваться и createTile, и префетчем z17 —
-// иначе ключ кэша SW (Request.url) не совпадёт и тайлы задвоятся (НЕ идемпотентно).
-// coords — L.Point с полем .z (как отдаёт GridLayer); для префетча: L.point(x,y) + .z=17.
-function _nspdWmsUrl(id, coords){
-  const crs = L.CRS.EPSG3857;
-  const nwLL = crs.pointToLatLng(coords.scaleBy(L.point(256,256)), coords.z);
-  const seLL = crs.pointToLatLng(coords.add([1,1]).scaleBy(L.point(256,256)), coords.z);
-  const nwM  = crs.project(nwLL);
-  const seM  = crs.project(seLL);
-  const minX = Math.min(nwM.x,seM.x), maxX = Math.max(nwM.x,seM.x);
-  const minY = Math.min(nwM.y,seM.y), maxY = Math.max(nwM.y,seM.y);
-  return `https://nspd.gov.ru/api/aeggis/v2/${id}/wms?`+
-    `SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true`+
-    `&LAYERS=${id}&STYLES=&authkey=0&WIDTH=256&HEIGHT=256&CRS=EPSG:3857`+
-    `&BBOX=${minX},${minY},${maxX},${maxY}`;
-}
 const L_NspdLayer = L.GridLayer.extend({
   options: {
     tileSize: 256, opacity: 1, zIndex: 450,
@@ -1606,7 +1538,19 @@ const L_NspdLayer = L.GridLayer.extend({
   createTile(coords, done){
     const img = document.createElement('img');
     img.style.cssText = 'width:256px;height:256px;';
-    const url = _nspdWmsUrl(this.options._layerId, coords);
+    // Project tile coords → EPSG:3857 BBOX using Leaflet's own CRS
+    const crs = L.CRS.EPSG3857;
+    const nwLL = crs.pointToLatLng(coords.scaleBy(L.point(256,256)), coords.z);
+    const seLL = crs.pointToLatLng(coords.add([1,1]).scaleBy(L.point(256,256)), coords.z);
+    const nwM  = crs.project(nwLL);
+    const seM  = crs.project(seLL);
+    const minX = Math.min(nwM.x,seM.x), maxX = Math.max(nwM.x,seM.x);
+    const minY = Math.min(nwM.y,seM.y), maxY = Math.max(nwM.y,seM.y);
+    const id  = this.options._layerId;
+    const url = `https://nspd.gov.ru/api/aeggis/v2/${id}/wms?`+
+      `SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true`+
+      `&LAYERS=${id}&STYLES=&authkey=0&WIDTH=256&HEIGHT=256&CRS=EPSG:3857`+
+      `&BBOX=${minX},${minY},${maxX},${maxY}`;
     fetch(url, {
       referrer: 'https://nspd.gov.ru/',
       referrerPolicy: 'unsafe-url',
@@ -1698,7 +1642,6 @@ function _applyCadastreLayers(){
   document.getElementById('cadastre-btn').classList.toggle('active', anyActive);
   if(anyActive && map.getZoom() < 13) showToast('Кадастр виден с zoom ≥ 16');
   setTimeout(updateCadastreCacheInfo, 4000);
-  if(cadastreActive) _scheduleCadastrePrefetch();
 }
 function toggleCadastre(){ toggleCadastreMenu(); }
 function setCadastreOpacity(val){
@@ -1709,70 +1652,6 @@ function setCadastreOpacity(val){
 
 // Legacy: rebuild if needed (used by setCadastreOpacity slider)
 function _buildGroupLayers(k){ _ensureGroupBuilt(k); }
-
-// ── ПРЕФЕТЧ z17 ДЛЯ ЦЕНТРАЛЬНЫХ 70% ───────────────────────────────
-// При включённом кадастре, НЕЗАВИСИМО от выбранного zoom, догружаем тайлы z17
-// для центральных 70% вьюпорта в SW-кэш. Обычный L_NspdLayer продолжает грузить
-// на выбранном zoom без изменений — префетч строго аддитивен.
-// Идемпотентность: повторный fetch уже закэшированного тайла отдаётся SW из кэша
-// (без сети). URL строится тем же _nspdWmsUrl, что и в createTile → ключ кэша совпадает.
-const _PREFETCH_MAX_PER_PASS = 120;   // потолок (тайлы × слои) за проход
-const _PREFETCH_CONCURRENCY  = 6;
-let _prefetchToken = 0;               // ++ на новый проход; устаревшие воркеры выходят
-let _prefetchTimer = null;
-const _prefetchSeen = new Set();      // дедуп in-flight в рамках сессии (троттлинг)
-
-function _scheduleCadastrePrefetch(){
-  if(_prefetchTimer) clearTimeout(_prefetchTimer);
-  _prefetchTimer = setTimeout(()=>{
-    _prefetchTimer = null;
-    if(!cadastreActive) return;
-    if(!_getActiveIds().length) return;
-    _prefetchToken++;
-    _prefetchCadastreZ17(_prefetchToken);
-  }, 400);
-}
-
-function _prefetchCadastreZ17(token){
-  const b = map.getBounds();
-  const n=b.getNorth(), s=b.getSouth(), e=b.getEast(), w=b.getWest();
-  const latC=(n+s)/2, lonC=(e+w)/2, latH=(n-s)*0.35, lonH=(e-w)*0.35;
-  // Индексы z17-тайлов берём из _tileInfo (Python-валидирован), BBOX — НЕ отсюда:
-  // URL строит _nspdWmsUrl (точная проекция createTile), иначе ключ кэша не совпадёт.
-  const tl = _tileInfo(latC+latH, lonC-lonH, 17);   // СЗ угол центральных 70%
-  const br = _tileInfo(latC-latH, lonC+lonH, 17);   // ЮВ угол
-  const x0=Math.min(tl.tileX,br.tileX), x1=Math.max(tl.tileX,br.tileX);
-  const y0=Math.min(tl.tileY,br.tileY), y1=Math.max(tl.tileY,br.tileY);
-  const ids = _getActiveIds();
-  const work = [];
-  for(let x=x0; x<=x1; x++){
-    for(let y=y0; y<=y1; y++){
-      const c = L.point(x,y); c.z = 17;
-      for(const id of ids){
-        const url = _nspdWmsUrl(id, c);
-        if(_prefetchSeen.has(url)) continue;
-        work.push(url);
-        if(work.length >= _PREFETCH_MAX_PER_PASS) break;
-      }
-      if(work.length >= _PREFETCH_MAX_PER_PASS) break;
-    }
-    if(work.length >= _PREFETCH_MAX_PER_PASS) break;
-  }
-  if(!work.length) return;
-  let i = 0;
-  const worker = ()=>{
-    if(token !== _prefetchToken) return Promise.resolve();   // проход устарел
-    if(i >= work.length) return Promise.resolve();
-    const url = work[i++];
-    _prefetchSeen.add(url);
-    return fetch(url, { referrer:'https://nspd.gov.ru/', referrerPolicy:'unsafe-url', headers:{ Accept:'image/png,image/*' } })
-      .then(r=>r.ok?r.blob():null)
-      .catch(()=>{})
-      .then(()=>worker());
-  };
-  for(let k=0; k<_PREFETCH_CONCURRENCY; k++) worker();
-}
-map.on('moveend zoomend', _scheduleCadastrePrefetch);
 
 // ── COORDINATE HELPERS ─────────────────────────────────────────────
 // Precise WebMercator ↔ tile coordinate math (validated by Python test)
@@ -9112,7 +8991,6 @@ window.toggleExportMenu = function(ev){
     `<button onclick="closeExportMenu();exportData('kmz')">📦 KMZ — Google Earth + фото</button>`+
     `<button onclick="closeExportMenu();exportData('kml')">🗺 KML — без фото (для Яндекс.Карт)</button>`+
     `<button onclick="closeExportMenu();exportData('xlsx')">📋 XLSX — таблица объектов</button>`+
-    `<button onclick="closeExportMenu();_exportCadastreTiles()" title="Выгрузить закэшированные тайлы кадастра (включая префетч z17) в ZIP для обмена">🗺 Выгрузить тайлы Росреестра z17</button>`+
     `<hr/>`;
   if(recent.length){
     html += `<div class="em-section">Перезаписать ранее сохранённые</div>`;
@@ -9135,89 +9013,6 @@ window.toggleExportMenu = function(ev){
 window.closeExportMenu = function(){
   document.getElementById('export-menu')?.classList.remove('open');
 };
-
-// ── ОБМЕН ТАЙЛАМИ КАДАСТРА (z17) ──────────────────────────────────
-// dump: SW отдаёт все закэшированные WMS-тайлы nspd чанками (transferable ArrayBuffer).
-function _swDumpCadastreTiles(onProgress){
-  const tiles = [];
-  return _swRequest({ type:'dumpZ17Tiles' }, [], (d, rec)=>{
-    if(d.type==='z17TilesDumpChunk'){ for(const t of d.tiles) tiles.push(t); onProgress&&onProgress(tiles.length); return false; }
-    if(d.type==='z17TilesDumpDone'){ rec.resolve({ tiles, count:d.count }); return true; }
-    return false;
-  });
-}
-// import: шлём тайлы в SW чанками; SW идемпотентно докладывает недостающие (обогащение).
-async function _swImportCadastreTiles(allTiles, onProgress){
-  const CH = 200; let added = 0, skipped = 0;
-  for(let i=0; i<allTiles.length; i+=CH){
-    const slice = allTiles.slice(i, i+CH);
-    const last  = i+CH >= allTiles.length;
-    const ack = await _swRequest(
-      { type:'importZ17Tiles', tiles:slice, seq:(i/CH)|0, last },
-      slice.map(t=>t.bytes),
-      (d, rec)=>{ if(d.type==='z17TilesImported'){ rec.resolve(d); return true; } return false; }
-    );
-    added += ack.added; skipped += ack.skipped;
-    onProgress && onProgress(Math.min(i+CH, allTiles.length), allTiles.length);
-  }
-  return { added, skipped };
-}
-async function _exportCadastreTiles(){
-  if(typeof JSZip === 'undefined'){ showToast('JSZip недоступен','error',4000); return; }
-  if(!navigator.serviceWorker?.controller){ showToast('Service Worker не активен — обновите страницу','warn',5000); return; }
-  showToast('⏳ Готовлю архив тайлов…','info',6000);
-  let dump;
-  try { dump = await _swDumpCadastreTiles(c=>{ if(c%400===0) showToast(`⏳ Собрано ${c} тайлов…`,'info',4000); }); }
-  catch(e){ showToast('Ошибка чтения кэша: '+e.message,'error',5000); return; }
-  if(!dump.tiles.length){ showToast('Нет закэшированных тайлов кадастра','warn',5000); return; }
-  const zip = new JSZip();
-  const manifest = [];
-  dump.tiles.forEach((t,i)=>{
-    const file = `tiles/${String(i+1).padStart(5,'0')}.png`;
-    zip.file(file, t.bytes);
-    manifest.push({ file, url:t.url });
-  });
-  zip.file('manifest.json', JSON.stringify(manifest));
-  zip.file('README.txt',
-    `EkceloFoto — пакет тайлов кадастра (Росреестр/НСПД), v2.9.62\n`+
-    `Тайлов: ${dump.tiles.length}\nСоздан: ${new Date().toISOString()}\n`+
-    `Загрузить: «Загрузить фото/объекты» → «Загрузить чужие тайлы z17».\n`);
-  const blob = await zip.generateAsync({ type:'blob', mimeType:'application/zip' });
-  const ts = new Date().toISOString().slice(0,16).replace(/[-:T]/g,'').replace(/(\d{8})(\d{4})/,'$1_$2');
-  await _pickAndWriteBlob(blob, `ekcelo-cadastre-tiles_${ts}.zip`, 'application/zip', '.zip');
-}
-async function _pickCadastreTilePack(){
-  document.getElementById('tilepack-file-input').click();
-}
-async function _onTilePackChosen(input){
-  const file = input.files && input.files[0];
-  input.value = '';
-  if(!file) return;
-  if(typeof JSZip === 'undefined'){ showToast('JSZip недоступен','error',4000); return; }
-  if(!navigator.serviceWorker?.controller){ showToast('Service Worker не активен — обновите страницу','warn',5000); return; }
-  showToast('⏳ Читаю архив тайлов…','info',6000);
-  let zip, manifest;
-  try {
-    zip = await JSZip.loadAsync(file);
-    const mf = zip.file('manifest.json');
-    if(!mf) throw new Error('нет manifest.json');
-    manifest = JSON.parse(await mf.async('string'));
-  } catch(e){ showToast('Некорректный пакет: '+e.message,'error',5000); return; }
-  const tiles = [];
-  for(const ent of manifest){
-    const f = zip.file(ent.file);
-    if(!f || !ent.url) continue;
-    tiles.push({ url:ent.url, bytes: await f.async('arraybuffer') });
-  }
-  if(!tiles.length){ showToast('В пакете нет тайлов','warn',5000); return; }
-  try {
-    const { added, skipped } = await _swImportCadastreTiles(tiles, (done,total)=>{
-      if(done%400===0||done===total) showToast(`⏳ ${done}/${total}…`,'info',4000);
-    });
-    showToast(`✅ Добавлено ${added}, пропущено ${skipped} тайлов`,'success',5000);
-    updateCadastreCacheInfo();
-  } catch(e){ showToast('Ошибка импорта: '+e.message,'error',5000); }
-}
 
 // Master export router. recentIdx (optional) — if set, reuse handle/name from
 // _loadRecentExports()[recentIdx] for idempotent overwrite.

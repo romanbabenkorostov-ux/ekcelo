@@ -1,0 +1,222 @@
+{
+  "main": {
+    "id": "36752988d80a1b50",
+    "type": "split",
+    "children": [
+      {
+        "id": "16a9420debd3a01d",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "b9c2a4ef269387b3",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Окружение и суть работы.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Окружение и суть работы"
+            }
+          },
+          {
+            "id": "c8e11c1755f648ec",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Предложение по следующему шагу.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Предложение по следующему шагу"
+            }
+          }
+        ],
+        "currentTab": 1
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "2797dec7be3cbd79",
+    "type": "split",
+    "children": [
+      {
+        "id": "f163bab4cfe4ac21",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "bf1c75484bb243a6",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Файловый менеджер"
+            }
+          },
+          {
+            "id": "0208dd0e2ac48360",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Поиск"
+            }
+          },
+          {
+            "id": "3799e01635e34bcd",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Закладки"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "285090bfe7780126",
+    "type": "split",
+    "children": [
+      {
+        "id": "44a46d0e23d6c820",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "f47ddcac1c5785cc",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Обратные ссылки"
+            }
+          },
+          {
+            "id": "e30703d5586daee1",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Исходящие ссылки"
+            }
+          },
+          {
+            "id": "7cf9849cd9e8f4e7",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Теги"
+            }
+          },
+          {
+            "id": "dcd0e50a5d3db05c",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "Все свойства"
+            }
+          },
+          {
+            "id": "feb73a0c53b49c15",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Структура"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Меню быстрого перехода": false,
+      "graph:Граф": false,
+      "canvas:Создать новый холст": false,
+      "daily-notes:Сегодняшняя заметка": false,
+      "templates:Вставить шаблон": false,
+      "command-palette:Открыть палитру команд": false,
+      "bases:Создать новую базу": false
+    }
+  },
+  "active": "c8e11c1755f648ec",
+  "lastOpenFiles": [
+    "Окружение и суть работы.md",
+    "Предложение по следующему шагу.md",
+    "1.md",
+    "code/modity/bugfix_summary_v2936_to_v2939.md",
+    "code/modity/refactor_summary_v2954_to_v2959.md",
+    "code/modity/refactor_summary_v2954_to_v2958.md",
+    "code/modity/refactor_summary_v2954_to_v2957.md",
+    "code/modity/refactor_summary_v2954_to_v2956.md",
+    "code/modity/index_v2_9_61.html",
+    "code/modity/bugfix_summary_v2959_to_v2961.md",
+    "code/modity",
+    "code/Новая папка",
+    "code",
+    "Новая папка",
+    "parser/modify/bugfix_summary_38_to_39.md",
+    "parser/modify/bugfix_summary_1_to_37.md",
+    "parser/modify/bugfix_summary_40.md",
+    "parser/modify",
+    "parser/Новая папка",
+    "parser",
+    "parcer"
+  ]
+}

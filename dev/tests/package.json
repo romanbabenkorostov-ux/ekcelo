@@ -1,0 +1,13 @@
+{
+  "name": "ekcelo-smoke-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "EkceloFoto UI/UX smoke tests (Playwright). Static-served single HTML, no backend.",
+  "scripts": {
+    "test": "playwright test",
+    "test:install": "playwright install --with-deps chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.47.0"
+  }
+}
