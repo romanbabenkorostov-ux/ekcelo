@@ -136,11 +136,16 @@ EGRN_MARKERS = (
     "роскадастр", "росреестр",
     "сведения о характеристиках объекта недвижимости",
 )
+EGRUL_MARKERS = ("выписка из единого государственного реестра юридических лиц",)
+EGRIP_MARKERS = ("выписка из единого государственного реестра индивидуальных предпринимателей",)
 SVID_MARKERS    = ("свидетельство о государственной регистрации права",
                    "свидетельство о праве")
 TEHPASP_MARKERS = ("технический паспорт",)
 TEHPLAN_MARKERS = ("технический план",)
 KUVI_RE     = re.compile(r"КУВИ-\d+/\d{4}-\d+")
+OGRN_RE     = re.compile(r"(?<!\d)(\d{13})(?!\d)")     # ОГРН ЮЛ
+OGRNIP_RE   = re.compile(r"(?<!\d)(\d{15})(?!\d)")     # ОГРНИП
+DDMMYYYY_RE = re.compile(r"(\d{2})\.(\d{2})\.(\d{4})")
 EGRN_OBJ_RE = re.compile(
     r"(Земельный участок|Помещение|Здание|Сооружение|Машино-место|"
     r"Объект незаверш[её]нного строительства)", re.IGNORECASE,
@@ -175,13 +180,15 @@ def read_pdf_head(pdf: Path, max_pages: int = 3) -> str:
 def detect_doc_kind(parent: str, name: str, body: str) -> str:
     """Определить вид документа по имени папки → имени файла → телу PDF."""
     p = (parent + " " + name).lower()
-    if "егрюл" in p or "egrul" in p: return "egrul"
-    if "егрип" in p or "egrip" in p: return "egrip"
+    if "егрюл" in p or "egrul" in p or p.strip().startswith("ul-"): return "egrul"
+    if "егрип" in p or "egrip" in p or p.strip().startswith("fl-"): return "egrip"
     if any(k in p for k in ("свидетел", "svid")):       return "svid"
     if any(k in p for k in ("техпасп", "технич_пасп", "tehpasp")): return "tehpasp"
     if any(k in p for k in ("техплан", "технич_план", "tehplan")):  return "tehplan"
     if "егрн" in p or "кадастр" in p or "egrn" in p:    return "egrn"
     bl = body.lower()
+    if any(m in bl for m in EGRUL_MARKERS):   return "egrul"
+    if any(m in bl for m in EGRIP_MARKERS):   return "egrip"
     if any(m in bl for m in EGRN_MARKERS):    return "egrn"
     if any(m in bl for m in SVID_MARKERS):    return "svid"
     if any(m in bl for m in TEHPASP_MARKERS): return "tehpasp"
@@ -193,6 +200,25 @@ def extract_obj_type(body: str) -> str | None:
     m = EGRN_OBJ_RE.search(body or "")
     if not m: return None
     return OBJ_TYPE_MAP.get(m.group(1).lower())
+
+
+def extract_doc_date(body: str, kind: str) -> str | None:
+    """Дата документа → ISO 'YYYY-MM-DD' или None."""
+    if not body: return None
+    if kind == "egrn":
+        m = re.search(r"(\d{2})\.(\d{2})\.(\d{4})\s*г?\.?\s*№\s*КУВИ", body)
+        if m: return f"{m.group(3)}-{m.group(2)}-{m.group(1)}"
+    if kind in ("egrul", "egrip"):
+        for pat in (
+            r"Дата формирования[^\n]*?(\d{2})\.(\d{2})\.(\d{4})",
+            r"[Сс]формирован[а-я]*[^\n]{0,40}(\d{2})\.(\d{2})\.(\d{4})",
+            r"Дата выписки[^\n]*?(\d{2})\.(\d{2})\.(\d{4})",
+        ):
+            m = re.search(pat, body)
+            if m: return f"{m.group(3)}-{m.group(2)}-{m.group(1)}"
+    m = DDMMYYYY_RE.search(body or "")
+    if m: return f"{m.group(3)}-{m.group(2)}-{m.group(1)}"
+    return None
 
 
 # ─── XML-парсер (приоритет над PDF при совпадении КУВИ + КН) ────────────────
@@ -273,52 +299,74 @@ def make_tree(root: Path) -> None:
 # ─── Классификация исходного PDF (имя + содержимое) ────────────────────────
 def classify_pdf(pdf: Path) -> dict:
     """
-    Возвращает: {"kind": "egrul|egrip|egrn|svid|tehpasp|tehplan|doc",
-                 "inn": str|None, "cad": str|None,
-                 "kuvi": str|None, "obj_type": str|None, "slug": str}
+    Возвращает: {"kind","inn","cad","kuvi","ogrn","obj_type",
+                 "doc_date" (ISO), "slug"}
     """
     name = pdf.stem
     parent = pdf.parent.name
-    body = read_pdf_head(pdf)  # пусто если fitz не установлен
+    body = read_pdf_head(pdf)
+    src  = name + "\n" + (body or "")
 
     kind = detect_doc_kind(parent, name, body)
 
-    # КН: сначала ищем в имени, затем в теле PDF
+    # КН — сначала имя/parent, затем тело
     cad = None
     m = CN_RE.search(name) or CN_RE.search(parent) or CN_RE.search(body or "")
     if m: cad = m.group(1)
 
-    # ИНН: только для ЕГРЮЛ/ЕГРИП
-    inn = None
-    if kind in ("egrul", "egrip", "doc"):
-        m12 = INN_FL_RE.search(name)
-        m10 = INN_UL_RE.search(name)
-        if m12 and kind != "egrul": inn = m12.group(1); kind = "egrip" if kind == "doc" else kind
-        elif m10 and kind != "egrip": inn = m10.group(1); kind = "egrul" if kind == "doc" else kind
+    # ИНН (имя + тело). ОГРН/ОГРНИП — только тело.
+    inn = ogrn = None
+    if kind == "egrul":
+        m = INN_UL_RE.search(src)
+        if m: inn = m.group(1)
+        m = OGRN_RE.search(src)
+        if m: ogrn = m.group(1)
+    elif kind == "egrip":
+        m = INN_FL_RE.search(src)
+        if m: inn = m.group(1)
+        m = OGRNIP_RE.search(src)
+        if m: ogrn = m.group(1)
+    elif kind == "doc":
+        m12 = INN_FL_RE.search(src); m10 = INN_UL_RE.search(src)
+        if m12: inn, kind = m12.group(1), "egrip"
+        elif m10: inn, kind = m10.group(1), "egrul"
 
     kuvi = None
     if kind == "egrn":
-        km = KUVI_RE.search(body)
+        km = KUVI_RE.search(body or "")
         if km: kuvi = km.group(0)
 
     obj_type = extract_obj_type(body) if kind in ("egrn", "svid", "tehpasp", "tehplan") else None
+    doc_date = extract_doc_date(body, kind)
 
-    return {"kind": kind, "inn": inn, "cad": cad, "kuvi": kuvi,
-            "obj_type": obj_type, "slug": slugify(name)[:40]}
+    return {"kind": kind, "inn": inn, "cad": cad, "kuvi": kuvi, "ogrn": ogrn,
+            "obj_type": obj_type, "doc_date": doc_date,
+            "slug": slugify(name)[:40]}
 
 
 KIND_PREFIX = {"egrn": "egrn", "svid": "svid",
                "tehpasp": "tehpasp", "tehplan": "tehplan"}
 
+def _date_token(iso: str | None) -> str:
+    """'2026-05-17' → '_d20260517'; иначе пусто."""
+    if not iso or len(iso) < 10: return ""
+    return f"_d{iso[:4]}{iso[5:7]}{iso[8:10]}"
+
 def target_name(meta: dict, page: int) -> str:
+    """
+    Имя стабильное и идемпотентное. Дата документа включается в имя — два
+    PDF одного субъекта/объекта с разными датами дадут разные имена и не
+    затрут друг друга. Совпадающий PDF (та же дата) даст то же имя.
+    """
     p = f"p{page:02d}"
+    dt = _date_token(meta.get("doc_date"))
     if meta["kind"] == "egrul" and meta["inn"]:
-        return f"egrul_inn{meta['inn']}_{p}.jpg"
+        return f"egrul_inn{meta['inn']}{dt}_{p}.jpg"
     if meta["kind"] == "egrip" and meta["inn"]:
-        return f"egrip_innfl{meta['inn']}_{p}.jpg"
+        return f"egrip_innfl{meta['inn']}{dt}_{p}.jpg"
     if meta["kind"] in KIND_PREFIX and meta["cad"]:
-        return f"{KIND_PREFIX[meta['kind']]}_{cad_to_token(meta['cad'])}_{p}.jpg"
-    return f"doc_{meta['slug']}_{p}.jpg"
+        return f"{KIND_PREFIX[meta['kind']]}_{cad_to_token(meta['cad'])}{dt}_{p}.jpg"
+    return f"doc_{meta['slug']}{dt}_{p}.jpg"
 
 
 def target_dir(root: Path, kind: str) -> Path:
@@ -550,10 +598,12 @@ def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
             descr = f"{meta['kind'].upper()} стр.{page_idx+1} | {pdf.name}"
             ucomment = {
                 "app": "ekcelo", "kind": meta["kind"],
-                "inn": meta["inn"], "cad": meta["cad"],
+                "inn": meta["inn"], "ogrn": meta.get("ogrn"),
+                "cad": meta["cad"],
                 "obj_id": obj_id, "bu_id": bu_id,
                 "object_type": meta.get("obj_type"),
                 "extract_number": meta.get("kuvi"),
+                "doc_date": meta.get("doc_date"),
                 "xml_matched": bool(xml_meta),
                 "xml_extract_date": (xml_meta or {}).get("extract_date"),
                 "src": pdf.name,
@@ -565,34 +615,86 @@ def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
         doc.close()
 
 
-# ─── main ───────────────────────────────────────────────────────────────────
-def main() -> None:
-    cp("=" * 64, C.B)
-    cp(" GOLDEN_PATH init — pirushin_sosn_rocha_07_init_project_v1", C.B)
-    cp("=" * 64, C.B)
+# ─── Буфер обмена (Windows clip.exe, иначе pbcopy / xclip / pyperclip) ─────
+import subprocess
 
+def to_clipboard(text: str) -> bool:
+    try:
+        if sys.platform.startswith("win"):
+            p = subprocess.run("clip", input=text.encode("utf-16le"),
+                               shell=True, check=False)
+            return p.returncode == 0
+        for cmd in (["pbcopy"], ["xclip", "-selection", "clipboard"], ["wl-copy"]):
+            try:
+                subprocess.run(cmd, input=text.encode(), check=True); return True
+            except FileNotFoundError: continue
+        import pyperclip   # последний фолбэк
+        pyperclip.copy(text); return True
+    except Exception:
+        return False
+
+
+# ─── main / меню ────────────────────────────────────────────────────────────
+def action_create() -> Path | None:
+    """Создать новую болванку структуры. Вернёт путь к ней (или None)."""
     default_root = r"D:\ОБЪЕКТЫ"
     raw = input(
         f"\nВыберите папку для создания в ней новой болванки структуры "
         f"недвижимости ekcelo, [Enter — {default_root}]: "
     ).strip() or default_root
-    name = input("Название проекта (папка внутри): ").strip()
+    name = input("Как назвать папку проекта: ").strip()
     if not name:
-        cp("Название не указано — выход.", C.R); sys.exit(1)
-
+        cp("Название не указано — отмена.", C.R); return None
     root = Path(raw) / name
     cp(f"\nСоздаю структуру: {root}", C.CY)
     make_tree(root)
     cp("  дерево создано.", C.G)
+    if to_clipboard(str(root)):
+        cp(f"  путь скопирован в буфер обмена.", C.G)
+    else:
+        cp(f"  (буфер обмена недоступен в этой ОС)", C.Y)
+    return root
 
-    ans = input("\nКонвертировать PDF из 10_Выписки_PDF/ в JPG? [Y/n]: ").strip().lower()
-    if ans in ("", "y", "yes", "д", "да"):
-        idx = build_index(root)
-        if not idx["cad"] and not idx["inn"]:
-            cp("  structure.json не найден — JPG без GPS, только машиночитаемые имена.", C.Y)
-        convert_pdfs(root, idx)
 
-    cp("\nГотово.", C.B)
+def action_convert(last_root: Path | None) -> None:
+    """Конвертация PDF → JPG из 10_Выписки_PDF/ выбранного проекта."""
+    default = str(last_root) if last_root else ""
+    prompt = (f"\nИз какой папки проекта конвертировать "
+              f"(содержит 10_Выписки_PDF/) "
+              f"[Enter — {default}]: " if default
+              else "\nПуть к папке проекта (содержит 10_Выписки_PDF/): ")
+    raw = input(prompt).strip() or default
+    if not raw:
+        cp("Путь не указан — отмена.", C.R); return
+    root = Path(raw)
+    if not (root / "10_Выписки_PDF").exists():
+        cp(f"Не нашёл {root/'10_Выписки_PDF'}.", C.R); return
+
+    idx = build_index(root)
+    if not idx["cad"] and not idx["inn"]:
+        cp("  structure.json не найден — JPG без GPS, только машиночитаемые имена.", C.Y)
+    convert_pdfs(root, idx)
+
+
+def main() -> None:
+    cp("=" * 64, C.B)
+    cp(" pirushin_sosn_rocha_07_init_project_v1 — структура + конвертация", C.B)
+    cp("=" * 64, C.B)
+    last_root: Path | None = None
+    while True:
+        cp("\n  1  Создание структуры (новая болванка)", C.CY)
+        cp("  2  Конвертация PDF → JPG (из 10_Выписки_PDF/)", C.CY)
+        cp("  3  Выход", C.CY)
+        ch = input("\nВаш выбор: ").strip()
+        if ch == "1":
+            r = action_create()
+            if r: last_root = r
+        elif ch == "2":
+            action_convert(last_root)
+        elif ch in ("3", "q", "exit", ""):
+            cp("Готово.", C.B); return
+        else:
+            cp("Введите 1, 2 или 3.", C.Y)
 
 
 if __name__ == "__main__":
