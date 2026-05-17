@@ -453,6 +453,24 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
      4. Check both light and dark themes (--map-bg differs).
      5. Verify Метки (markers), Контуры (contours), photo pins still
         render correctly — past "fixes" broke icons.
+
+   v2.9.62 FALLBACK (additive, zero-risk for Chrome/Firefox):
+     Some Yandex Browser builds ship an OLDER Chromium that lacks
+     `mix-blend-mode: plus-lighter`. There the keystone rule above is
+     silently ignored → the white grid returns (Chrome is newer = OK,
+     Firefox never had the bug). JS feature+engine detection adds
+     `html.tile-seam-fallback` ONLY when the engine is Blink AND
+     CSS.supports('mix-blend-mode','plus-lighter') === false. The five
+     rules above are NEVER touched, so the proven Chrome/Firefox path is
+     byte-identical (no regression possible). The fallback only adds:
+       html.tile-seam-fallback .leaflet-tile-pane { isolation:isolate }
+         → one isolated blending/compositing context for the whole pane
+           (complementary mechanism to plus-lighter)
+       html.tile-seam-fallback .leaflet-tile { outline-color:var(--map-bg) }
+         → reuses the EXISTING 1px outline (geometry unchanged — no z>19
+           catastrophe) but paints it in the pane colour so overlapping
+           per-tile frames over-paint the sub-pixel crack invisibly.
+     Still must be verified on a real old Yandex Browser per the 5 steps.
    ═══════════════════════════════════════════════════════════════════ */
 .leaflet-tile-pane{
   background: var(--map-bg);
@@ -466,6 +484,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
   filter: none !important;
   outline: 1px solid transparent;
 }
+/* v2.9.62 — см. «v2.9.62 FALLBACK» в комментарии выше. Применяется ТОЛЬКО при
+   html.tile-seam-fallback (старый Chromium Яндекс.Браузера без plus-lighter).
+   Пять правил выше НЕ изменены → путь Chrome/Firefox байт-в-байт прежний. */
+html.tile-seam-fallback .leaflet-tile-pane{ isolation:isolate; }
+html.tile-seam-fallback .leaflet-tile{ outline-color:var(--map-bg); }
 .leaflet-control-zoom a{background:var(--surface) !important;color:var(--text) !important;border-color:var(--border) !important}
 .leaflet-control-zoom a:hover{background:var(--surface2) !important}
 .leaflet-control-attribution{background:rgba(var(--bg-rgb,13,15,20),.75) !important;color:var(--muted) !important;font-size:10px !important;z-index:540 !important}
@@ -1510,9 +1533,21 @@ L.control.scale({imperial:false,metric:true,position:'bottomleft'}).addTo(map);
 // At z > maxNativeZoom Leaflet upscales each tile slot to 2048×2048 px;
 // hardcoded 257×257 inline shrinks the bitmap inside the slot, leaving giant
 // rectangles of pane background visible — the white grid the user reported.
-// The IIFE is preserved as a no-op for diff readability; the only reliable
-// fix is to NOT touch tile dimensions and let Leaflet position via translate3d.
-(function fixTileSeams(){ /* intentionally empty — see CSS comment in TILE SEAM FIX block */ })();
+// The IIFE no longer touches tile dimensions. v2.9.62: it ONLY feature/engine-
+// detects old Chromium (Yandex Browser) lacking `mix-blend-mode: plus-lighter`
+// and, in that case ONLY, adds html.tile-seam-fallback so the additive CSS
+// fallback applies. Chrome/Firefox: no class → proven 5-rule path is unchanged.
+// See the «v2.9.62 FALLBACK» section of the TILE SEAM FIX comment above.
+(function fixTileSeams(){
+  try{
+    const ua = navigator.userAgent || '';
+    const isBlink = /Chrome|Chromium|YaBrowser/.test(ua) && !/Firefox|FxiOS/.test(ua);
+    const hasPlusLighter = !!(window.CSS && CSS.supports && CSS.supports('mix-blend-mode','plus-lighter'));
+    if(isBlink && !hasPlusLighter){
+      document.documentElement.classList.add('tile-seam-fallback');
+    }
+  }catch(_){}
+})();
 // OSM tileLayer — no createTile patch needed.
 // Setting referrerPolicy on img caused white tiles in Chrome/Yandex when opening
 // from file:// (no-referrer-when-downgrade = no Referer → OSM 403 → blank tile).
