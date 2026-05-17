@@ -453,6 +453,24 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
      4. Check both light and dark themes (--map-bg differs).
      5. Verify Метки (markers), Контуры (contours), photo pins still
         render correctly — past "fixes" broke icons.
+
+   v2.9.62 FALLBACK (additive, zero-risk for Chrome/Firefox):
+     Some Yandex Browser builds ship an OLDER Chromium that lacks
+     `mix-blend-mode: plus-lighter`. There the keystone rule above is
+     silently ignored → the white grid returns (Chrome is newer = OK,
+     Firefox never had the bug). JS feature+engine detection adds
+     `html.tile-seam-fallback` ONLY when the engine is Blink AND
+     CSS.supports('mix-blend-mode','plus-lighter') === false. The five
+     rules above are NEVER touched, so the proven Chrome/Firefox path is
+     byte-identical (no regression possible). The fallback only adds:
+       html.tile-seam-fallback .leaflet-tile-pane { isolation:isolate }
+         → one isolated blending/compositing context for the whole pane
+           (complementary mechanism to plus-lighter)
+       html.tile-seam-fallback .leaflet-tile { outline-color:var(--map-bg) }
+         → reuses the EXISTING 1px outline (geometry unchanged — no z>19
+           catastrophe) but paints it in the pane colour so overlapping
+           per-tile frames over-paint the sub-pixel crack invisibly.
+     Still must be verified on a real old Yandex Browser per the 5 steps.
    ═══════════════════════════════════════════════════════════════════ */
 .leaflet-tile-pane{
   background: var(--map-bg);
@@ -466,6 +484,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
   filter: none !important;
   outline: 1px solid transparent;
 }
+/* v2.9.62 — см. «v2.9.62 FALLBACK» в комментарии выше. Применяется ТОЛЬКО при
+   html.tile-seam-fallback (старый Chromium Яндекс.Браузера без plus-lighter).
+   Пять правил выше НЕ изменены → путь Chrome/Firefox байт-в-байт прежний. */
+html.tile-seam-fallback .leaflet-tile-pane{ isolation:isolate; }
+html.tile-seam-fallback .leaflet-tile{ outline-color:var(--map-bg); }
 .leaflet-control-zoom a{background:var(--surface) !important;color:var(--text) !important;border-color:var(--border) !important}
 .leaflet-control-zoom a:hover{background:var(--surface2) !important}
 .leaflet-control-attribution{background:rgba(var(--bg-rgb,13,15,20),.75) !important;color:var(--muted) !important;font-size:10px !important;z-index:540 !important}
@@ -1510,9 +1533,21 @@ L.control.scale({imperial:false,metric:true,position:'bottomleft'}).addTo(map);
 // At z > maxNativeZoom Leaflet upscales each tile slot to 2048×2048 px;
 // hardcoded 257×257 inline shrinks the bitmap inside the slot, leaving giant
 // rectangles of pane background visible — the white grid the user reported.
-// The IIFE is preserved as a no-op for diff readability; the only reliable
-// fix is to NOT touch tile dimensions and let Leaflet position via translate3d.
-(function fixTileSeams(){ /* intentionally empty — see CSS comment in TILE SEAM FIX block */ })();
+// The IIFE no longer touches tile dimensions. v2.9.62: it ONLY feature/engine-
+// detects old Chromium (Yandex Browser) lacking `mix-blend-mode: plus-lighter`
+// and, in that case ONLY, adds html.tile-seam-fallback so the additive CSS
+// fallback applies. Chrome/Firefox: no class → proven 5-rule path is unchanged.
+// See the «v2.9.62 FALLBACK» section of the TILE SEAM FIX comment above.
+(function fixTileSeams(){
+  try{
+    const ua = navigator.userAgent || '';
+    const isBlink = /Chrome|Chromium|YaBrowser/.test(ua) && !/Firefox|FxiOS/.test(ua);
+    const hasPlusLighter = !!(window.CSS && CSS.supports && CSS.supports('mix-blend-mode','plus-lighter'));
+    if(isBlink && !hasPlusLighter){
+      document.documentElement.classList.add('tile-seam-fallback');
+    }
+  }catch(_){}
+})();
 // OSM tileLayer — no createTile patch needed.
 // Setting referrerPolicy on img caused white tiles in Chrome/Yandex when opening
 // from file:// (no-referrer-when-downgrade = no Referer → OSM 403 → blank tile).
@@ -2881,6 +2916,9 @@ function _shiftDragEnd(){
   _shiftDragStart = null;
   map.off('mousemove', _shiftDragMove);
   map.off('mouseup',   _shiftDragEnd);
+  // Без этого после сдвига контура карта остаётся «замороженной» (drag=pan не работает),
+  // пока пользователь снова не выйдет из режима сдвига. Mirrors ruler dragend pattern.
+  try{ if(!_shiftModeActive) map.dragging.enable(); }catch(_){}
 }
 
 function _exitShiftDrag(){
@@ -2891,6 +2929,7 @@ function _exitShiftDrag(){
   map.off('mousedown', _shiftDragBegin);
   map.off('mousemove', _shiftDragMove);
   map.off('mouseup',   _shiftDragEnd);
+  try{ map.dragging.enable(); }catch(_){}
 }
 
 window.finishContourEditor = function(){
@@ -2902,7 +2941,10 @@ window.finishContourEditor = function(){
   coords.push(coords[0]);
   const newGeom = { type:'Polygon', coordinates:[coords] };
   const { type, cadNum, prefillDesc } = _ce;
+  const sm = _ce.sourceMarker;
   _disposeContourEditor();
+  // Существующий объект — сохраняем на месте без диалога. Новый — обычный диалог.
+  if(sm && _commitEditedGeometryInPlace(sm, newGeom, 'Контур')) return;
   showKMLSaveDialog(newGeom, type, cadNum, prefillDesc);
 };
 
@@ -3214,7 +3256,48 @@ function _disposeContourEditor(){
   _ce = null;
   _hideEditorToolbar();
   map.closePopup();
+  // Гарантия: панорамирование карты всегда восстановлено при выходе из редактора
+  // (любой путь: Завершить/Отмена/Удалить/Переместить), а не только через кнопку сдвига.
+  try{ map.dragging.enable(); }catch(_){}
   if(wantVisible && !_photosVisible) setPhotoMarkersVisible(true);
+}
+
+// Редактирование СУЩЕСТВУЮЩЕГО объекта (контур/точка-пояснение): после «Завершить»
+// перезаписываем геометрию на месте в его слое БЕЗ диалога сохранения нового объекта.
+// Логика зеркалит проверенный путь deleteContourShape (locate cp → заменить geom →
+// пересоздать leaflet-слой → _rebuildLayerKMLText → persist). Если у слоя есть FSA-handle,
+// тихо переписываем исходный файл (_writeKMLToHandle). Возвращает true, если коммит
+// выполнен; false — источник не найден (вызывающий показывает обычный диалог).
+function _commitEditedGeometryInPlace(sm, newGeom, kindLabel){
+  if(!sm) return false;
+  let foundLayer = null, foundCp = null;
+  for(const layer of (kmlLayers||[])){
+    if(!layer.cadPlacemarks) continue;
+    const cp = layer.cadPlacemarks.find(c =>
+      c === sm.pmRef || (sm.cadNum && c.cadNum === sm.cadNum) || c.geom === sm.pmRef?.geom
+    );
+    if(cp){ foundLayer = layer; foundCp = cp; break; }
+  }
+  if(!foundCp) return false;
+  if(foundCp._leafletLayer){ try{ map.removeLayer(foundCp._leafletLayer); }catch(_){} }
+  foundCp.geom = newGeom;
+  const newLyr = _makeCadLayer(foundCp.geom, foundCp.type, true);
+  if(newLyr){
+    if(typeof _attachCadEvents === 'function') _attachCadEvents(newLyr, foundCp.cadNum||'', foundCp.type, foundCp.lines||[]);
+    if(foundLayer.layerGroup) newLyr.addTo(foundLayer.layerGroup);
+    foundCp._leafletLayer = newLyr;
+  }
+  if(typeof _rebuildLayerKMLText === 'function') _rebuildLayerKMLText(foundLayer);
+  else foundLayer.kmlText = null;
+  if(typeof saveKMLLayersToStorage === 'function') saveKMLLayersToStorage();
+  if(typeof renderMarksList === 'function' && _activeSidebarTab === 'marks') renderMarksList();
+  if(foundLayer.handle && foundLayer.kmlText){
+    const fn = foundLayer.filename || `${(foundLayer.docName||'kml').replace(/[^\wа-яА-Я.-]/g,'_')}.kml`;
+    _writeKMLToHandle(foundLayer.handle, foundLayer.kmlText, fn);   // тихая перезапись исходника
+  } else {
+    showToast(`✅ ${kindLabel} обновлён в «${foundLayer.docName||foundLayer.filename||'слое'}»`,'success',3500);
+  }
+  return true;
 }
 
 
@@ -3229,7 +3312,7 @@ function _disposeContourEditor(){
 
 let _ep = null;  // {marker, savedHandlers}
 
-window.startExplanationPoint = function(lat, lng){
+window.startExplanationPoint = function(lat, lng, sourceMarker){
   _disposeExplanationPoint();
   map.closePopup();
   // Photo markers compete visually with a single pin; same auto-hide pattern as
@@ -3252,7 +3335,7 @@ window.startExplanationPoint = function(lat, lng){
     finishExplanationPoint();
   });
 
-  _ep = { marker, photosWereVisible };
+  _ep = { marker, photosWereVisible, sourceMarker: sourceMarker || null };
   _showExplanationToolbar();
   showToast('💬 Тяните точку, затем «Сохранить»','info',3500);
 };
@@ -3285,7 +3368,10 @@ window.finishExplanationPoint = function(){
   // radius (8 px) in _makeCadLayer — 2× the area of a photo dot (11×11 px).
   // The KML <Style> emitted in kdConfirm uses cyan fill + dark-blue outline so the
   // saved file renders the same way in Google Earth / Yandex Maps Constructor.
+  const sm = _ep.sourceMarker;
   _disposeExplanationPoint();
+  // Существующая точка — сохраняем на месте без диалога. Новая — обычный диалог.
+  if(sm && _commitEditedGeometryInPlace(sm, geom, 'Точка')) return;
   showKMLSaveDialog(geom, 'exp', '', '');
 };
 
@@ -3301,6 +3387,7 @@ function _disposeExplanationPoint(){
   const wantVisible = _ep.photosWereVisible !== false;
   _ep = null;
   _hideExplanationToolbar();
+  try{ map.dragging.enable(); }catch(_){}
   if(wantVisible && !_photosVisible) setPhotoMarkersVisible(true);
 }
 
@@ -3819,7 +3906,7 @@ window._editExpCoordFromCard = function(markerId){
   closeAllInfoCards();
   const coords = m.pmRef.coords || (m.pmRef.geom?.type==='Point' ? [m.pmRef.geom.coordinates[1], m.pmRef.geom.coordinates[0]] : null);
   if(!coords){ showToast('Нет координат для редактирования','warn',3000); return; }
-  startExplanationPoint(coords[0], coords[1]);
+  startExplanationPoint(coords[0], coords[1], m);   // m → in-place save on «Завершить»
 };
 
 window._copyToClip = function(text, btn){
@@ -3962,7 +4049,7 @@ document.addEventListener('click',()=>{closeUploadMenu();closeKMLMenu();});
 async function triggerFolderUpload(){
   if('showDirectoryPicker' in window){
     try{
-      const dh=await window.showDirectoryPicker({mode:'read'});
+      const dh=await window.showDirectoryPicker({mode:'readwrite'});
       _savePathHint(_LS_PATH_PHOTO, dh.name);
       _captureFirstSessionName('photo', dh.name);
       showToast('⏳ Сканирование…','info',6000);
@@ -6686,6 +6773,17 @@ function decToDMS(dec,axis){const ref=axis==='lat'?(dec>=0?'N':'S'):(dec>=0?'E':
 function blobToDataUrl(blob){return new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=()=>rej(new Error('FileReader'));r.readAsDataURL(blob);});}
 function dataUrlToBlob(du){const[m,b64]=du.split(',');const mime=(m.match(/:(.*?);/)||[])[1]||'image/jpeg';const bin=atob(b64),arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return new Blob([arr],{type:mime});}
 
+// Гарантируем readwrite-доступ к FSA-handle перед перезаписью файла.
+// Папка открывается через showDirectoryPicker({mode:'readwrite'}) → queryPermission
+// уже 'granted' (без повторного запроса). Для старых сессий/handle — requestPermission.
+async function _ensureHandleRW(h){
+  try{
+    if(h.queryPermission){ if(await h.queryPermission({mode:'readwrite'})==='granted') return true; }
+    if(h.requestPermission){ return (await h.requestPermission({mode:'readwrite'}))==='granted'; }
+    return true;  // старые реализации без Permissions API — createWritable сам бросит при отказе
+  }catch(_){ return false; }
+}
+
 async function writeEXIFWithGPS(){
   if(tempLat===null||tempLon===null){showToast('❌ Сначала укажите координаты','error');return;}
   const idx=manualModePhotoIndex,p=photos[idx];if(!p)return;
@@ -6705,7 +6803,7 @@ async function writeEXIFWithGPS(){
   if(!exifObj['Exif'])exifObj['Exif']={};exifObj['Exif'][piexif.ExifIFD.UserComment]=gppPay;
   let newDataUrl;try{newDataUrl=piexif.insert(piexif.dump(exifObj),dataUrl);}catch(err){showToast(`❌ EXIF: ${err.message}`,'error',6000);document.getElementById('mgps-save-btn').disabled=false;return;}
   const newBlob=dataUrlToBlob(newDataUrl);
-  if(!p.isRemote&&p.fileHandle&&typeof p.fileHandle.createWritable==='function'){try{const w=await p.fileHandle.createWritable();await w.write(newBlob);await w.close();showToast('✅ Файл перезаписан на диске','success',3000);}catch(e){const a=document.createElement('a');a.href=newDataUrl;a.download=p.name;a.click();showToast('✅ EXIF записан (скачан)','success',3000);}}
+  if(!p.isRemote&&p.fileHandle&&typeof p.fileHandle.createWritable==='function'){try{if(!(await _ensureHandleRW(p.fileHandle)))throw new Error('нет прав на запись');const w=await p.fileHandle.createWritable();await w.write(newBlob);await w.close();showToast('✅ Файл перезаписан на диске','success',3000);}catch(e){const a=document.createElement('a');a.href=newDataUrl;a.download=p.name;a.click();showToast('✅ EXIF записан (скачан)','success',3000);}}
   else if(p.isRemote){const a=document.createElement('a');a.href=newDataUrl;a.download=p.name;a.click();showToast('✅ Скачан (источник только чтение)','success',4000);}
   else{const a=document.createElement('a');a.href=newDataUrl;a.download=p.name;a.click();showToast('✅ Скачайте и замените исходный файл','success',3000);}
   const newBlobUrl=URL.createObjectURL(newBlob);
