@@ -329,7 +329,7 @@ def build_kmz(root: Path) -> Path:
     doc_by_cad: dict[str, list[Path]] = {}
     doc_by_inn: dict[str, list[Path]] = {}
     cad_doc_re = re.compile(
-        r"^(egrn|svid|tehpasp|tehplan)_(\d{2})_(\d{2})_(\d{1,8})_(\d{1,8})"
+        r"^(egrn|svid|tehpasp|tehplan|doc)_(\d{2})_(\d{2})_(\d{1,8})_(\d{1,8})"
     )
     for jpg in sorted(docs_dir.rglob("*.jpg")):
         m = cad_doc_re.search(jpg.name)

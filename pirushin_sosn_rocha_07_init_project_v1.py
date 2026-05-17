@@ -35,7 +35,11 @@ from __future__ import annotations
 import io
 import json
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -179,6 +183,68 @@ def read_pdf_head(pdf: Path, max_pages: int = 3) -> str:
         return ""
 
 
+# ─── LibreOffice headless: .doc/.docx → PDF ─────────────────────────────────
+def find_soffice() -> str | None:
+    """Возвращает путь к LibreOffice CLI или None."""
+    for cand in ("soffice", "soffice.exe", "libreoffice"):
+        path = shutil.which(cand)
+        if path: return path
+    for p in (r"C:\Program Files\LibreOffice\program\soffice.exe",
+              r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
+              "/usr/bin/soffice", "/usr/bin/libreoffice",
+              "/Applications/LibreOffice.app/Contents/MacOS/soffice"):
+        if Path(p).exists(): return p
+    return None
+
+
+def doc_to_pdf(src: Path, out_dir: Path) -> Path | None:
+    """LibreOffice headless: <src.doc|docx> → <out_dir>/<src.stem>.pdf"""
+    soffice = find_soffice()
+    if not soffice: return None
+    try:
+        r = subprocess.run(
+            [soffice, "--headless", "--nologo", "--nofirststartwizard",
+             "--convert-to", "pdf", "--outdir", str(out_dir), str(src)],
+            capture_output=True, timeout=180,
+        )
+        if r.returncode != 0: return None
+    except Exception:
+        return None
+    out = out_dir / (src.stem + ".pdf")
+    return out if out.exists() else None
+
+
+def extract_text_any(path: Path) -> str:
+    """Текст из .pdf/.docx/.doc для классификации (поиск КН/ИНН/маркеров)."""
+    sfx = path.suffix.lower()
+    if sfx == ".pdf":
+        return read_pdf_head(path)
+    if sfx == ".docx":
+        try:
+            with zipfile.ZipFile(path) as zf:
+                xml = zf.read("word/document.xml").decode("utf-8", "ignore")
+            return re.sub(r"<[^>]+>", " ", xml)
+        except Exception:
+            return ""
+    if sfx == ".doc":
+        # без LibreOffice текст не достанем — но это не критично, имя
+        # будет сделано из стэма; КН будет искаться в PDF после рендера
+        soffice = find_soffice()
+        if not soffice: return ""
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                subprocess.run(
+                    [soffice, "--headless", "--nologo", "--convert-to",
+                     "txt:Text", "--outdir", td, str(path)],
+                    capture_output=True, timeout=120,
+                )
+                txt = Path(td) / (path.stem + ".txt")
+                return txt.read_text(encoding="utf-8", errors="ignore") if txt.exists() else ""
+        except Exception:
+            return ""
+    return ""
+
+
 def detect_doc_kind(parent: str, name: str, body: str) -> str:
     """Определить вид документа по имени папки → имени файла → телу PDF."""
     parent_lo = parent.lower()
@@ -314,15 +380,27 @@ def make_tree(root: Path) -> None:
         db.touch()
 
 
-# ─── Классификация исходного PDF (имя + содержимое) ────────────────────────
-def classify_pdf(pdf: Path) -> dict:
+# ─── Классификация исходного документа (имя + содержимое) ──────────────────
+def classify_pdf(orig: Path, pdf_for_body: Path | None = None) -> dict:
     """
+    Классифицирует .pdf/.doc/.docx по имени папки/файла + телу.
+    orig          — оригинальный файл (для имени и parent).
+    pdf_for_body  — PDF, из которого читать body (для doc/docx — рендер
+                    LibreOffice; для pdf — сам файл). Если None — берём из orig.
+
     Возвращает: {"kind","inn","cad","kuvi","ogrn","obj_type",
                  "doc_date" (ISO), "slug"}
     """
-    name = pdf.stem
-    parent = pdf.parent.name
-    body = read_pdf_head(pdf)
+    name = orig.stem
+    parent = orig.parent.name
+    # body: для PDF берём из pdf_for_body (быстрее), для doc/docx —
+    # сначала пробуем «нативно» (zip+XML), иначе из соответствующего PDF
+    if orig.suffix.lower() in (".doc", ".docx"):
+        body = extract_text_any(orig)
+        if not body and pdf_for_body:
+            body = read_pdf_head(pdf_for_body)
+    else:
+        body = read_pdf_head(pdf_for_body or orig)
     src  = name + "\n" + (body or "")
 
     kind = detect_doc_kind(parent, name, body)
@@ -384,6 +462,8 @@ def target_name(meta: dict, page: int) -> str:
         return f"egrip_innfl{meta['inn']}{dt}_{p}.jpg"
     if meta["kind"] in KIND_PREFIX and meta["cad"]:
         return f"{KIND_PREFIX[meta['kind']]}_{cad_to_token(meta['cad'])}{dt}_{p}.jpg"
+    if meta["kind"] == "doc" and meta["cad"]:
+        return f"doc_{cad_to_token(meta['cad'])}{dt}_{p}.jpg"
     return f"doc_{meta['slug']}{dt}_{p}.jpg"
 
 
@@ -554,17 +634,28 @@ def _floors_from_info(info: dict) -> int | None:
 
 
 # ─── Конвертация PDF → JPG ──────────────────────────────────────────────────
+SUPPORTED_EXTS = (".pdf", ".docx", ".doc")
+
 def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
     src = root / "10_Выписки_PDF"
-    pdfs = [p for p in src.rglob("*.pdf") if p.is_file()]
-    if not pdfs:
-        cp("  PDF не найдены — пропускаю конвертацию.", C.Y); return
+    files = sorted([p for p in src.rglob("*")
+                    if p.is_file() and p.suffix.lower() in SUPPORTED_EXTS])
+    if not files:
+        cp("  файлы (.pdf/.doc/.docx) не найдены — пропускаю конвертацию.", C.Y); return
     if fitz is None or Image is None:
         cp("  PyMuPDF/Pillow не установлены — `pip install pymupdf pillow piexif`", C.R); return
 
     zoom = dpi / 72.0
     mtx  = fitz.Matrix(zoom, zoom)
-    cp(f"  PDF к конвертации: {len(pdfs)}", C.CY)
+    cp(f"  файлов к конвертации: {len(files)}", C.CY)
+
+    # .doc/.docx требуют LibreOffice (бесплатный) для рендера в PDF
+    n_office = sum(1 for p in files if p.suffix.lower() in (".doc", ".docx"))
+    soffice_ok = find_soffice() is not None if n_office else True
+    if n_office and not soffice_ok:
+        cp(f"  ⚠ найдено {n_office} .doc/.docx, но LibreOffice не установлен.\n"
+           "     поставь https://www.libreoffice.org/ — после этого эти файлы\n"
+           "     сконвертируются. Сейчас пропускаю их.", C.Y)
 
     xml_idx = build_xml_index(root)
     if xml_idx:
@@ -577,8 +668,21 @@ def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
             json.dumps(by_cad, ensure_ascii=False, indent=2), encoding="utf-8")
 
     n_new = n_skip = n_err = 0
-    for pdf in pdfs:
-        meta = classify_pdf(pdf)
+    tmpdir = Path(tempfile.mkdtemp(prefix="ekcelo_doc2pdf_"))
+    try:
+      for orig in files:
+        # Получить PDF для рендеринга: либо сам файл, либо результат soffice
+        ext = orig.suffix.lower()
+        if ext == ".pdf":
+            pdf = orig
+        else:
+            if not soffice_ok:
+                n_err += 1; continue
+            pdf = doc_to_pdf(orig, tmpdir)
+            if not pdf:
+                cp(f"    [err]  не могу сконвертировать через LibreOffice: {orig.name}", C.R)
+                n_err += 1; continue
+        meta = classify_pdf(orig, pdf_for_body=pdf)
 
         # XML-пара: при совпадении (КУВИ, КН) — XML переписывает данные
         xml_meta = None
@@ -616,7 +720,7 @@ def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
             img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
             img.save(jpg, "JPEG", quality=88, optimize=True)
 
-            descr = f"{meta['kind'].upper()} стр.{page_idx+1} | {pdf.name}"
+            descr = f"{meta['kind'].upper()} стр.{page_idx+1} | {orig.name}"
             ucomment = {
                 "app": "ekcelo", "kind": meta["kind"],
                 "inn": meta["inn"], "ogrn": meta.get("ogrn"),
@@ -627,7 +731,8 @@ def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
                 "doc_date": meta.get("doc_date"),
                 "xml_matched": bool(xml_meta),
                 "xml_extract_date": (xml_meta or {}).get("extract_date"),
-                "src": pdf.name,
+                "src": orig.name,
+                "src_ext": orig.suffix.lower().lstrip("."),
                 "page": page_idx + 1,
                 "ts": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
             }
@@ -636,7 +741,9 @@ def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
             pdf_new += 1; n_new += 1
         doc.close()
         if pdf_new == 0 and pdf_skip > 0:
-            cp(f"    [skip] {pdf.name}  ({pdf_skip} стр. уже сконвертированы)", C.CY)
+            cp(f"    [skip] {orig.name}  ({pdf_skip} стр. уже сконвертированы)", C.CY)
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
     cp(f"\n  итого: создано {n_new}, пропущено {n_skip}"
        + (f", ошибок {n_err}" if n_err else ""),
@@ -644,8 +751,6 @@ def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
 
 
 # ─── Буфер обмена (Windows clip.exe, иначе pbcopy / xclip / pyperclip) ─────
-import subprocess
-
 def to_clipboard(text: str) -> bool:
     try:
         if sys.platform.startswith("win"):
