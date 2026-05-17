@@ -3346,6 +3346,15 @@ function _commitEditedGeometryInPlace(sm, newGeom, kindLabel, type){
   const t      = type || (oldCad?.type) || 'oks';
   const safeType = (t==='str') ? 'oks' : t;
 
+  // Явно сообщаем КУДА сохраняем (объект привязан к исходному слою-источнику),
+  // чтобы не было ощущения «скрипт не помнит куда сохранять».
+  const _srcName = tgt.docName || tgt.filename || 'слой';
+  if(tgt.handle){
+    showToast(`💾 «${kindLabel}» → перезапись исходника «${_srcName}»`,'info',2500);
+  } else {
+    showToast(`💾 «${kindLabel}» → слой «${_srcName}» (файл без прямого доступа: укажите путь один раз)`,'info',4000);
+  }
+
   // Переиспользуем проверенный коммит сохранения в выбранный слой, минуя модалку.
   _kdDest = 'layer';
   _kdLayerIdx = srcIdx;
@@ -3913,9 +3922,11 @@ window._editContourFromCard = function(markerId){
   if(!m){ showToast('Объект не найден','warn',2000); return; }
 
   // Determine cadastre type for styling
-  const grp = (m.type==='zu') ? 'zu'
-            : (m.id?.includes(':zu:') || m.id?.startsWith('zu')) ? 'zu'
-            : 'oks';
+  // m.type — корзина из _gatherMarkers ('zu'|'oks'|'exp'), теперь всегда задана.
+  // Раньше m.type был undefined → grp всегда 'oks' → ЗУ сохранялся как ОКС.
+  const grp = (m.type === 'zu' || m.type === 'oks' || m.type === 'exp')
+            ? m.type
+            : (m.pmRef?.type === 'zu' ? 'zu' : 'oks');
   const cadNum = m.cadNum || m.name || '';
   const pm = m.pmRef;
 
@@ -5790,6 +5801,7 @@ function _gatherMarkers(){
       // and add/remove the underlying leaflet sublayer (pm._leafletLayer).
       buckets[bucket].push({
         id:        `cad:${layerIdx}:${i}`,
+        type:      bucket,   // 'zu'|'oks'|'exp' — без этого _editContourFromCard всегда брал 'oks'
         layerIdx, source:'cad', innerIdx:i,
         name:      (matched?.name && matched.name !== pm.cadNum) ? matched.name : (pm.cadNum || '(без номера)'),
         desc:      _markerDescFromLines(pm.lines) || matched?.desc || '',
@@ -5830,6 +5842,7 @@ function _gatherMarkers(){
       const ll = pm.coords ? (pm.type === 'Point' ? pm.coords : pm.coords[0]) : null;
       buckets[bucket].push({
         id:        `pm:${layerIdx}:${i}`,
+        type:      bucket,   // 'zu'|'oks'|'exp' — иначе правка ЗУ/Пояснения сохранялась как ОКС
         layerIdx, source:'pm', innerIdx:i,
         name:      pm.name || pm.desc?.split(' · ')?.[0] || '(без названия)',
         desc:      pm.desc || '',
