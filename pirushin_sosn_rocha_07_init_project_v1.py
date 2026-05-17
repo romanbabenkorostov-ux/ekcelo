@@ -38,6 +38,7 @@ Python 3.13+, Windows 10.
 from __future__ import annotations
 import io
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -1303,6 +1304,109 @@ def action_convert(last_root: Path | None) -> None:
 
 
 # ─── Сортировка хаотичной папки Не_распределено/ в нормализованное дерево ──
+# Маршрутизация по расширению (для не-фото файлов)
+PDF_KIND_TO_SUBDIR = {
+    "egrn":    "ЕГРН",
+    "egrul":   "ЕГРЮЛ-ЕГРИП", "egrip": "ЕГРЮЛ-ЕГРИП",
+    "svid":    "Свидетельства_о_праве",
+    "tehpasp": "Технические_паспорта",
+    "tehplan": "Техпланы",
+    "doc":     "Прочее",
+}
+
+def _is_photo(path: Path) -> bool:
+    return path.suffix.lower() in (".jpg", ".jpeg")
+
+def _route_non_photo(root: Path, src: Path) -> Path | None:
+    """Куда перенести файл, не являющийся фото. None — оставить как есть."""
+    sfx = src.suffix.lower()
+    if sfx == ".pdf":
+        meta = classify_pdf(src)
+        sub = PDF_KIND_TO_SUBDIR.get(meta["kind"], "Прочее")
+        return root / "Выписки_PDF" / sub / src.name
+    if sfx == ".xml":
+        # XML обычно парный к PDF из той же папки. Если рядом есть PDF —
+        # подбираем подпапку по нему; иначе считаем выпиской ЕГРН.
+        sibling_pdf = None
+        for s in src.parent.iterdir():
+            if s.suffix.lower() == ".pdf" and s.stem.split(".")[0] == src.stem.split(".")[0]:
+                sibling_pdf = s; break
+        if sibling_pdf:
+            sub = PDF_KIND_TO_SUBDIR.get(classify_pdf(sibling_pdf)["kind"], "Прочее")
+        else:
+            sub = "ЕГРН"
+        return root / "Выписки_PDF" / sub / src.name
+    if sfx in (".doc", ".docx"):
+        return root / "doc" / src.name
+    if sfx in (".xls", ".xlsx"):
+        return root / "XLSX" / src.name
+    if sfx == ".db":
+        return root / "DB" / src.name
+    if sfx in (".html", ".htm"):
+        return root / "HTML" / src.name
+    if sfx == ".json":
+        return root / "json" / src.name
+    if sfx in (".kml", ".kmz"):
+        return root / "KMZ-KML" / src.name
+    if sfx in (".sig", ".asc"):
+        # ЭП-подписи переезжают вслед за основным файлом — упростим:
+        # положим в ту же подпапку Выписки_PDF/Прочее.
+        return root / "Выписки_PDF" / "Прочее" / src.name
+    return None  # неизвестный тип — не трогаем
+
+
+def annotate_photo_exif(jpg: Path, cn: str | None, category: str | None,
+                        semantic: str | None, source_path: str) -> None:
+    """Дописывает в EXIF JPG привязку к КН/категории/семантике, СОХРАНЯЯ:
+       - оригинальные DateTime/DateTimeOriginal/DateTimeDigitized,
+       - оригинальные GPS-координаты,
+       - mtime/atime файла на диске.
+    Меняем только: ImageDescription (добавляется), UserComment (записывается)."""
+    if piexif is None or UserComment is None:
+        return
+    try:
+        stat = jpg.stat()
+    except Exception:
+        stat = None
+    try:
+        exif = piexif.load(str(jpg))
+    except Exception:
+        exif = {"0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": None}
+
+    # ImageDescription — добавляем, не затирая
+    descr_new = "ekcelo: " + " · ".join(filter(None, [cn, category, semantic]))
+    existing = exif.get("0th", {}).get(piexif.ImageIFD.ImageDescription, b"")
+    try:
+        existing_s = existing.decode("utf-8", "ignore") if isinstance(existing, bytes) else str(existing)
+    except Exception:
+        existing_s = ""
+    if existing_s and "ekcelo:" not in existing_s:
+        descr_new = f"{existing_s} | {descr_new}"
+    exif["0th"][piexif.ImageIFD.ImageDescription] = descr_new.encode("utf-8")
+
+    # UserComment — JSON с метаданными миграции; ts_migrated отдельно от ts_photo
+    ucomment = {
+        "app": "ekcelo", "kind": "photo",
+        "cad": cn, "category": category, "semantic": semantic,
+        "source": source_path,
+        "migrated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")
+                              .replace("+00:00", "Z"),
+    }
+    exif.setdefault("Exif", {})[piexif.ExifIFD.UserComment] = UserComment.dump(
+        json.dumps(ucomment, ensure_ascii=False), encoding="unicode")
+
+    # GPS, DateTime*, Software — НЕ ТРОГАЕМ (остаются от оригинала)
+    try:
+        piexif.insert(piexif.dump(exif), str(jpg))
+    except Exception as e:
+        cp(f"    [exif] не записан в {jpg.name}: {e}", C.Y)
+
+    # Восстанавливаем mtime/atime — иначе move/insert обновит их
+    if stat is not None:
+        try: os.utime(jpg, (stat.st_atime, stat.st_mtime))
+        except Exception: pass
+
+
 def scan_unsorted(root: Path) -> dict:
     """Просматривает Фотографии/Не_распределено/, формирует план миграции.
 
@@ -1330,12 +1434,36 @@ def scan_unsorted(root: Path) -> dict:
 
     obj_types, obj_addrs = load_objects_index(root)
 
-    for jpg in sorted(src.rglob("*.jpg")):
-        rel = jpg.relative_to(src)
+    for f in sorted(src.rglob("*")):
+        if not f.is_file(): continue
+        rel = f.relative_to(src)
         parts = list(rel.parts)
         full_text = " ".join(parts)
         evidence: list[str] = []
+        kind_label = "photo" if _is_photo(f) else f.suffix.lower().lstrip(".") or "file"
 
+        # Не-фото файлы: PDF/XML/DOC/XLS/DB/HTML/JSON/KML/KMZ → отдельные корни.
+        # Их КН/категория не нужны: они идут в Выписки_PDF/<подпапка>, doc/,
+        # XLSX/, DB/, HTML/, json/, KMZ-KML/ — независимо от КН.
+        if not _is_photo(f):
+            target = _route_non_photo(root, f)
+            if target is None:
+                plan["items"].append({
+                    "from": str(f.relative_to(root)).replace("\\", "/"),
+                    "to":   None,
+                    "kind": kind_label,
+                    "reason": "неизвестный тип файла",
+                })
+                continue
+            plan["items"].append({
+                "from": str(f.relative_to(root)).replace("\\", "/"),
+                "to":   str(target.relative_to(root)).replace("\\", "/"),
+                "kind": kind_label,
+                "evidence": ["routing_by_extension"],
+            })
+            continue
+
+        # ──── фото: ищем КН и семантику ────
         # 1) КН в полном пути
         cads = find_cads_in_text(full_text)
         cn = cads[0] if cads else None
@@ -1343,10 +1471,13 @@ def scan_unsorted(root: Path) -> dict:
 
         # 2) КН в братских PDF/XML
         if not cn:
-            for sibling in jpg.parent.iterdir():
+            for sibling in f.parent.iterdir():
                 if sibling.suffix.lower() in (".pdf", ".xml"):
-                    body = extract_text_any(sibling) if sibling.suffix.lower() == ".pdf" \
-                           else sibling.read_text(encoding="utf-8", errors="ignore")
+                    if sibling.suffix.lower() == ".pdf":
+                        body = extract_text_any(sibling)
+                    else:
+                        try: body = sibling.read_text(encoding="utf-8", errors="ignore")
+                        except Exception: body = ""
                     sib_cads = find_cads_in_text(body)
                     if sib_cads:
                         cn = sib_cads[0]
@@ -1387,17 +1518,19 @@ def scan_unsorted(root: Path) -> dict:
             target = (root / "Фотографии" / "Недвижимость" / category /
                       cn.replace(":", "_"))
             if sem_path: target = target / sem_path
-            target = target / jpg.name
+            target = target / f.name
             plan["items"].append({
-                "from": str(jpg.relative_to(root)).replace("\\", "/"),
+                "from": str(f.relative_to(root)).replace("\\", "/"),
                 "to":   str(target.relative_to(root)).replace("\\", "/"),
+                "kind": "photo",
                 "cn": cn, "category": category, "semantic": sem_path,
                 "evidence": evidence,
             })
         else:
             plan["items"].append({
-                "from": str(jpg.relative_to(root)).replace("\\", "/"),
+                "from": str(f.relative_to(root)).replace("\\", "/"),
                 "to":   None,
+                "kind": "photo",
                 "reason": "КН/категория не определены",
                 "evidence": evidence,
             })
@@ -1442,17 +1575,23 @@ def action_sort(last_root: Path | None) -> None:
     if not matched:
         cp("  переносить нечего.", C.Y); return
 
-    cp("\nПримеры (первые 6 из плана):", C.B)
-    for it in matched[:6]:
-        cp(f"  {it['from']}")
+    # Сводка по типам
+    by_kind: dict[str, int] = {}
+    for it in matched: by_kind[it.get("kind", "photo")] = by_kind.get(it.get("kind", "photo"), 0) + 1
+    cp(f"\n  по типам: " + ", ".join(f"{k}={v}" for k, v in sorted(by_kind.items())),
+       C.CY)
+
+    cp("\nПримеры (первые 8 из плана):", C.B)
+    for it in matched[:8]:
+        cp(f"  [{it.get('kind','?')}] {it['from']}")
         cp(f"    → {it['to']}", C.G)
 
-    ans = input(f"\nПрименить план (переместить {len(matched)} фото)? [y/N]: "
+    ans = input(f"\nПрименить план (перенести {len(matched)} файлов)? [y/N]: "
                 ).strip().lower()
     if ans not in ("y", "yes", "д", "да"):
-        cp("Отмена. План сохранён, фото не перемещены.", C.CY); return
+        cp("Отмена. План сохранён, файлы не перенесены.", C.CY); return
 
-    moved = err = 0
+    moved = err = annotated = 0
     for it in matched:
         src_p = root / it["from"]
         dst_p = root / it["to"]
@@ -1460,10 +1599,23 @@ def action_sort(last_root: Path | None) -> None:
         if dst_p.exists():
             continue  # идемпотентно
         try:
+            # Сохраняем исходные mtime/atime, чтобы move не сдвинул
+            try: stat = src_p.stat()
+            except Exception: stat = None
             shutil.move(str(src_p), str(dst_p)); moved += 1
+            if stat is not None:
+                try: os.utime(dst_p, (stat.st_atime, stat.st_mtime))
+                except Exception: pass
+            # Дописываем привязку в EXIF только для JPG; даты съёмки и GPS
+            # оригинала сохраняются. Для не-фото — ничего не меняем.
+            if it.get("kind") == "photo" and it.get("cn"):
+                annotate_photo_exif(dst_p, it["cn"], it.get("category"),
+                                    it.get("semantic"), it["from"])
+                annotated += 1
         except Exception as e:
             cp(f"  [err] {src_p.name}: {e}", C.R); err += 1
-    cp(f"\n  перемещено: {moved}" + (f", ошибок: {err}" if err else ""), C.G)
+    cp(f"\n  перенесено: {moved}, фото с записью EXIF: {annotated}"
+       + (f", ошибок: {err}" if err else ""), C.G)
 
 
 def main() -> None:
