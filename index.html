@@ -2944,7 +2944,7 @@ window.finishContourEditor = function(){
   const sm = _ce.sourceMarker;
   _disposeContourEditor();
   // Существующий объект — сохраняем на месте без диалога. Новый — обычный диалог.
-  if(sm && _commitEditedGeometryInPlace(sm, newGeom, 'Контур')) return;
+  if(sm && _commitEditedGeometryInPlace(sm, newGeom, 'Контур', type)) return;
   showKMLSaveDialog(newGeom, type, cadNum, prefillDesc);
 };
 
@@ -3263,39 +3263,59 @@ function _disposeContourEditor(){
 }
 
 // Редактирование СУЩЕСТВУЮЩЕГО объекта (контур/точка-пояснение): после «Завершить»
-// перезаписываем геометрию на месте в его слое БЕЗ диалога сохранения нового объекта.
-// Логика зеркалит проверенный путь deleteContourShape (locate cp → заменить geom →
-// пересоздать leaflet-слой → _rebuildLayerKMLText → persist). Если у слоя есть FSA-handle,
-// тихо переписываем исходный файл (_writeKMLToHandle). Возвращает true, если коммит
-// выполнен; false — источник не найден (вызывающий показывает обычный диалог).
-function _commitEditedGeometryInPlace(sm, newGeom, kindLabel){
+// сохраняем геометрию в ИСХОДНЫЙ слой БЕЗ диалога выбора назначения/дубликата.
+// Источник может быть и app-cadPlacemark, и импортированный parsedData.placemark
+// (контур/точка из загруженного .kml) — раньше второй случай не находился и
+// показывался диалог как для нового объекта. Теперь: находим слой-владелец,
+// убираем старый объект и переиспользуем ПРОВЕРЕННЫЙ путь _kdConfirmInner
+// (_kdDest='layer') — он сам пишет в слой, обновляет kmlText, persist в storage
+// и тихо переписывает файл через FSA-handle, если он есть. Возвращает true при
+// успехе; false — слой-владелец не найден (вызывающий показывает обычный диалог).
+function _commitEditedGeometryInPlace(sm, newGeom, kindLabel, type){
   if(!sm) return false;
-  let foundLayer = null, foundCp = null;
-  for(const layer of (kmlLayers||[])){
-    if(!layer.cadPlacemarks) continue;
-    const cp = layer.cadPlacemarks.find(c =>
+  const layers = kmlLayers || [];
+  let srcIdx = -1, oldCad = null, oldPm = null;
+  for(let i=0;i<layers.length;i++){
+    const layer = layers[i];
+    const cp = (layer.cadPlacemarks||[]).find(c =>
       c === sm.pmRef || (sm.cadNum && c.cadNum === sm.cadNum) || c.geom === sm.pmRef?.geom
     );
-    if(cp){ foundLayer = layer; foundCp = cp; break; }
+    if(cp){ srcIdx=i; oldCad=cp; break; }
+    const pp = (layer.parsedData?.placemarks||[]).find(p =>
+      p === sm.pmRef || (sm.cadNum && (p.cadNum===sm.cadNum || p.name===sm.cadNum))
+    );
+    if(pp){ srcIdx=i; oldPm=pp; break; }
   }
-  if(!foundCp) return false;
-  if(foundCp._leafletLayer){ try{ map.removeLayer(foundCp._leafletLayer); }catch(_){} }
-  foundCp.geom = newGeom;
-  const newLyr = _makeCadLayer(foundCp.geom, foundCp.type, true);
-  if(newLyr){
-    if(typeof _attachCadEvents === 'function') _attachCadEvents(newLyr, foundCp.cadNum||'', foundCp.type, foundCp.lines||[]);
-    if(foundLayer.layerGroup) newLyr.addTo(foundLayer.layerGroup);
-    foundCp._leafletLayer = newLyr;
+  if(srcIdx < 0) return false;
+  const tgt = layers[srcIdx];
+
+  // Убрать старый объект, чтобы не задвоился
+  if(oldCad){
+    if(oldCad._leafletLayer){ try{ map.removeLayer(oldCad._leafletLayer); }catch(_){} }
+    const k = tgt.cadPlacemarks.indexOf(oldCad);
+    if(k>=0){ tgt.cadPlacemarks.splice(k,1); tgt.placemarkCount=Math.max(0,(tgt.placemarkCount||1)-1); }
+    if(tgt.kmlText) _rebuildLayerKMLText(tgt);   // выкидывает старый cad-placemark из XML
+  } else if(oldPm){
+    if(oldPm._leafletLayer){ try{ (oldPm._parentGroup||map).removeLayer(oldPm._leafletLayer); }catch(_){} }
+    oldPm._visible = false;   // импорт-дедуп по cadnum схлопнёт старый с новым при ре-эмиссии
   }
-  if(typeof _rebuildLayerKMLText === 'function') _rebuildLayerKMLText(foundLayer);
-  else foundLayer.kmlText = null;
-  if(typeof saveKMLLayersToStorage === 'function') saveKMLLayersToStorage();
-  if(typeof renderMarksList === 'function' && _activeSidebarTab === 'marks') renderMarksList();
-  if(foundLayer.handle && foundLayer.kmlText){
-    const fn = foundLayer.filename || `${(foundLayer.docName||'kml').replace(/[^\wа-яА-Я.-]/g,'_')}.kml`;
-    _writeKMLToHandle(foundLayer.handle, foundLayer.kmlText, fn);   // тихая перезапись исходника
-  } else {
-    showToast(`✅ ${kindLabel} обновлён в «${foundLayer.docName||foundLayer.filename||'слое'}»`,'success',3500);
+
+  // Идентичность сохраняем = исходный кадномер/имя (чтобы дедуп при экспорте
+  // схлопывал старый parsed-placemark с новым cad-placemark по cadnum).
+  const cadNum = (sm.cadNum || sm.pmRef?.cadNum || sm.name || sm.pmRef?.name || '').toString();
+  const name   = (sm.name || sm.pmRef?.name || cadNum || '').toString();
+  const desc   = (sm.pmRef?.desc || sm.pmRef?.description || '').toString();
+  const t      = type || (oldCad?.type) || 'oks';
+  const safeType = (t==='str') ? 'oks' : t;
+
+  // Переиспользуем проверенный коммит сохранения в выбранный слой, минуя модалку.
+  _kdDest = 'layer';
+  _kdLayerIdx = srcIdx;
+  try{
+    _kdConfirmInner({ cadNum, name, desc, type:t, geom:newGeom, safeType });
+  }catch(e){
+    console.warn('[edit-inplace]', e);
+    return false;   // не удалось — пусть покажется обычный диалог
   }
   return true;
 }
@@ -3371,7 +3391,7 @@ window.finishExplanationPoint = function(){
   const sm = _ep.sourceMarker;
   _disposeExplanationPoint();
   // Существующая точка — сохраняем на месте без диалога. Новая — обычный диалог.
-  if(sm && _commitEditedGeometryInPlace(sm, geom, 'Точка')) return;
+  if(sm && _commitEditedGeometryInPlace(sm, geom, 'Точка', 'exp')) return;
   showKMLSaveDialog(geom, 'exp', '', '');
 };
 
@@ -4054,7 +4074,7 @@ async function triggerFolderUpload(){
       _captureFirstSessionName('photo', dh.name);
       showToast('⏳ Сканирование…','info',6000);
       const{photos:pe,kmls:ke}=await collectFilesFromHandle(dh,'',dh.name);
-      for(const k of ke)await loadKMLFromFile(k.file,k.name);
+      for(const k of ke)await loadKMLFromFile(k.file,k.name,k.fileHandle);
       if(pe.length)await handleFileEntries(pe,dh.name);
       else if(!ke.length)showToast('Файлов не найдено','warn');
     }catch(e){if(e.name!=='AbortError')document.getElementById('folder-input-fallback').click();}
@@ -4066,7 +4086,7 @@ async function collectFilesFromHandle(dh,relPath,rootName){
   for await(const[name,entry]of dh.entries()){
     if(entry.kind==='file'){
       if(/\.jpe?g$/i.test(name)){const f=await entry.getFile();photos.push({file:f,locPath:relPath,fileHandle:entry});}
-      else if(/\.kml$/i.test(name)){const f=await entry.getFile();kmls.push({file:f,name,relPath});}
+      else if(/\.kml$/i.test(name)){const f=await entry.getFile();kmls.push({file:f,name,relPath,fileHandle:entry});}
     }else if(entry.kind==='directory'){
       const sub=await collectFilesFromHandle(entry,relPath?`${relPath}/${name}`:name,rootName);
       photos.push(...sub.photos);kmls.push(...sub.kmls);
