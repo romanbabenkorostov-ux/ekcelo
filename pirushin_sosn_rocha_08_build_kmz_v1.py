@@ -32,7 +32,7 @@ import re
 import sys
 import zipfile
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from xml.sax.saxutils import escape as xml_escape
 
@@ -406,7 +406,7 @@ def build_kmz(root: Path) -> Path:
     # ── Сборка KML ────────────────────────────────────────────────────────
     ent = st.get("enterprise", {}) or {}
     kml_name = f"{ent.get('name_short', root.name)} — KMZ"
-    ts_iso = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+    ts_iso = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     out = [KML_HEAD.format(name=xml_escape(kml_name), ts=ts_iso)]
 
     # 1. Кадастровые объекты по категориям

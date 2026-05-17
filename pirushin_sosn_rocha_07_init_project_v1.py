@@ -36,7 +36,7 @@ import io
 import json
 import re
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Опциональные импорты — скрипт умеет создавать дерево даже без них
@@ -64,7 +64,7 @@ def cp(t="", c=""): print(f"{c}{t}{C.X}" if c else t)
 
 
 # ─── Структура папок ────────────────────────────────────────────────────────
-DOC_KINDS_DIRS = ["ЕГРЮЛ", "ЕГРИП", "ЕГРН",
+DOC_KINDS_DIRS = ["ЕГРЮЛ-ЕГРИП", "ЕГРН",
                   "Свидетельства_о_праве", "Технические_паспорта",
                   "Техпланы", "Прочее"]
 
@@ -103,14 +103,16 @@ README = """# {name}
 
 KMZ совместим с Google Earth Pro и https://romanbabenkorostov-ux.github.io/ekcelo/
 
-Машиночитаемые имена документов:
-  ЕГРЮЛ:           egrul_inn<ИНН>_p<NN>.jpg
-  ЕГРИП:           egrip_innfl<ИНН>_p<NN>.jpg
-  ЕГРН:            egrn_<КН с _>_p<NN>.jpg     (напр. egrn_61_44_0050706_31_p01.jpg)
-  Свидетельство:   svid_<КН>_p<NN>.jpg
-  Техпаспорт:      tehpasp_<КН>_p<NN>.jpg
-  Техплан:         tehplan_<КН>_p<NN>.jpg
-  Прочее:          doc_<slug>_p<NN>.jpg
+Машиночитаемые имена документов (дата документа `_dYYYYMMDD` подставляется,
+если её удалось вынуть из тела PDF):
+
+  ЕГРЮЛ:           egrul_inn<ИНН>[_dYYYYMMDD]_p<NN>.jpg     → 09_Документы_JPG/ЕГРЮЛ-ЕГРИП/
+  ЕГРИП:           egrip_innfl<ИНН>[_dYYYYMMDD]_p<NN>.jpg   → 09_Документы_JPG/ЕГРЮЛ-ЕГРИП/
+  ЕГРН:            egrn_<КН с _>[_dYYYYMMDD]_p<NN>.jpg      (напр. egrn_61_44_0050706_31_d20260427_p01.jpg)
+  Свидетельство:   svid_<КН>[_dYYYYMMDD]_p<NN>.jpg
+  Техпаспорт:      tehpasp_<КН>[_dYYYYMMDD]_p<NN>.jpg
+  Техплан:         tehplan_<КН>[_dYYYYMMDD]_p<NN>.jpg
+  Прочее:          doc_<slug>[_dYYYYMMDD]_p<NN>.jpg
 
 Если рядом с PDF-выпиской ЕГРН лежит парный XML (тот же №КУВИ и КН) — XML
 имеет приоритет: точные значения адреса, площади, типа объекта,
@@ -179,14 +181,30 @@ def read_pdf_head(pdf: Path, max_pages: int = 3) -> str:
 
 def detect_doc_kind(parent: str, name: str, body: str) -> str:
     """Определить вид документа по имени папки → имени файла → телу PDF."""
-    p = (parent + " " + name).lower()
-    if "егрюл" in p or "egrul" in p or p.strip().startswith("ul-"): return "egrul"
-    if "егрип" in p or "egrip" in p or p.strip().startswith("fl-"): return "egrip"
+    parent_lo = parent.lower()
+    name_lo = name.lower()
+    bl = (body or "").lower()
+
+    # 1) Если parent — совмещённая папка «ЕГРЮЛ-ЕГРИП», kind определяется
+    #    ТОЛЬКО по имени файла или телу (маркеры/префикс ul-|fl-).
+    if "егрюл-егрип" in parent_lo or "egrul-egrip" in parent_lo:
+        if name_lo.startswith("ul-") or any(m in bl for m in EGRUL_MARKERS): return "egrul"
+        if name_lo.startswith("fl-") or any(m in bl for m in EGRIP_MARKERS): return "egrip"
+        # фолбэк: по разрядности ИНН в имени (10 → ЮЛ, 12 → ИП)
+        if INN_FL_RE.search(name): return "egrip"
+        if INN_UL_RE.search(name): return "egrul"
+        return "doc"
+
+    # 2) Прочие отдельные папки
+    p = parent_lo + " " + name_lo
+    if "егрюл" in p or "egrul" in p or name_lo.startswith("ul-"): return "egrul"
+    if "егрип" in p or "egrip" in p or name_lo.startswith("fl-"): return "egrip"
     if any(k in p for k in ("свидетел", "svid")):       return "svid"
     if any(k in p for k in ("техпасп", "технич_пасп", "tehpasp")): return "tehpasp"
     if any(k in p for k in ("техплан", "технич_план", "tehplan")):  return "tehplan"
     if "егрн" in p or "кадастр" in p or "egrn" in p:    return "egrn"
-    bl = body.lower()
+
+    # 3) Маркеры из тела PDF (когда папка не подсказывает)
     if any(m in bl for m in EGRUL_MARKERS):   return "egrul"
     if any(m in bl for m in EGRIP_MARKERS):   return "egrip"
     if any(m in bl for m in EGRN_MARKERS):    return "egrn"
@@ -370,7 +388,7 @@ def target_name(meta: dict, page: int) -> str:
 
 
 def target_dir(root: Path, kind: str) -> Path:
-    sub = {"egrul": "ЕГРЮЛ", "egrip": "ЕГРИП", "egrn": "ЕГРН",
+    sub = {"egrul": "ЕГРЮЛ-ЕГРИП", "egrip": "ЕГРЮЛ-ЕГРИП", "egrn": "ЕГРН",
            "svid": "Свидетельства_о_праве",
            "tehpasp": "Технические_паспорта",
            "tehplan": "Техпланы"}.get(kind, "Прочее")
@@ -558,6 +576,7 @@ def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
         (root / "_data" / "egrn_xml.json").write_text(
             json.dumps(by_cad, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    n_new = n_skip = n_err = 0
     for pdf in pdfs:
         meta = classify_pdf(pdf)
 
@@ -583,13 +602,15 @@ def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
         try:
             doc = fitz.open(pdf)
         except Exception as e:
-            cp(f"    [skip] {pdf.name}: {e}", C.R); continue
+            cp(f"    [err]  {pdf.name}: {e}", C.R); n_err += 1; continue
 
+        pdf_new = pdf_skip = 0
         for page_idx in range(doc.page_count):
             page = doc.load_page(page_idx)
             jpg_name = target_name(meta, page_idx + 1)
             jpg = out_dir / jpg_name
             if jpg.exists():
+                pdf_skip += 1; n_skip += 1
                 continue  # идемпотентно
             pix = page.get_pixmap(matrix=mtx, alpha=False)
             img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
@@ -608,11 +629,18 @@ def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
                 "xml_extract_date": (xml_meta or {}).get("extract_date"),
                 "src": pdf.name,
                 "page": page_idx + 1,
-                "ts": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                "ts": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
             }
             write_exif(jpg, lat, lon, alt, descr, ucomment)
-            cp(f"    [ok] {jpg.relative_to(root)}", C.G)
+            cp(f"    [ok]   {jpg.relative_to(root)}", C.G)
+            pdf_new += 1; n_new += 1
         doc.close()
+        if pdf_new == 0 and pdf_skip > 0:
+            cp(f"    [skip] {pdf.name}  ({pdf_skip} стр. уже сконвертированы)", C.CY)
+
+    cp(f"\n  итого: создано {n_new}, пропущено {n_skip}"
+       + (f", ошибок {n_err}" if n_err else ""),
+       C.G if n_new else C.CY)
 
 
 # ─── Буфер обмена (Windows clip.exe, иначе pbcopy / xclip / pyperclip) ─────
@@ -672,7 +700,9 @@ def action_convert(last_root: Path | None) -> None:
 
     idx = build_index(root)
     if not idx["cad"] and not idx["inn"]:
-        cp("  structure.json не найден — JPG без GPS, только машиночитаемые имена.", C.Y)
+        cp("  (structure.json пока не создан — это нормально для свежей "
+           "болванки; JPG получат машиночитаемые имена, GPS добавится "
+           "позже после 052_make_structure.)", C.CY)
     convert_pdfs(root, idx)
 
 
