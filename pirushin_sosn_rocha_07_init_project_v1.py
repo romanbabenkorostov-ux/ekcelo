@@ -164,7 +164,121 @@ EXIF UserComment (JSON) у каждого JPG-документа:
 INN_UL_RE  = re.compile(r"(?<!\d)(\d{10})(?!\d)")           # 10 цифр — ЮЛ
 INN_FL_RE  = re.compile(r"(?<!\d)(\d{12})(?!\d)")           # 12 цифр — ФЛ/ИП
 CN_RE      = re.compile(r"(\d{2}:\d{2}:\d{1,8}:\d{1,8})")
+CN_UND_RE  = re.compile(r"(?<!\d)(\d{2})_(\d{2})_(\d{1,8})_(\d{1,8})(?!\d)")
+CN_FLAT_RE = re.compile(r"(?<!\d)(\d{2})(\d{2})(\d{7})(\d{1,4})(?!\d)")  # 12-15 цифр
 SLUG_RE    = re.compile(r"[^A-Za-zА-Яа-я0-9._-]+")
+
+
+def find_cads_in_text(text: str) -> list[str]:
+    """Извлекает КН в стандартной форме '61:44:0050706:31' из текста.
+    Поддерживает три написания: с двоеточиями, с подчёркиваниями
+    (61_44_0050706_31), и «плоское» 12-15 цифр подряд (61440040713308)."""
+    if not text: return []
+    out: list[str] = []
+    for m in CN_RE.finditer(text):
+        out.append(m.group(1))
+    for m in CN_UND_RE.finditer(text):
+        out.append(f"{m.group(1)}:{m.group(2)}:{m.group(3)}:{m.group(4)}")
+    for m in CN_FLAT_RE.finditer(text):
+        out.append(f"{m.group(1)}:{m.group(2)}:{m.group(3)}:{m.group(4)}")
+    return list(dict.fromkeys(out))
+
+
+# Сокращения и опечатки для типа недвижимости
+LAND_HINT_RE      = re.compile(
+    r"\b(?:зу|з/у|з\.у\.|зем(?:ельн\w*)?\s*участ\w*|земучаст\w*|"
+    r"участ\w*\s*зем|зучест\w*)\b|земельный\s*участок", re.IGNORECASE)
+BUILDING_HINT_RE  = re.compile(r"жилой\s*дом|многокварт|здан|строен", re.IGNORECASE)
+ROOM_HINT_RE      = re.compile(r"квартир|\bкв\.?\b|помещен|нежил\w*\s*помещ|кладов", re.IGNORECASE)
+STRUCTURE_HINT_RE = re.compile(r"сооруж", re.IGNORECASE)
+ONS_HINT_RE       = re.compile(r"\b(?:онс|онз)\b|незаверш", re.IGNORECASE)
+
+def detect_category_from_text(text: str) -> str | None:
+    """Распознаёт object_type по русским сокращениям/опечаткам.
+    Порядок приоритета: квартира/помещение → здание → сооружение → ОНЗ → ЗУ."""
+    if not text: return None
+    if ROOM_HINT_RE.search(text):      return "room"
+    if BUILDING_HINT_RE.search(text):  return "building"
+    if STRUCTURE_HINT_RE.search(text): return "structure"
+    if ONS_HINT_RE.search(text):       return "ons"
+    if LAND_HINT_RE.search(text):      return "land"
+    return None
+
+
+# Нормализация имён семантических подпапок (Вход, Подвал, Кухня, Этаж, …)
+SEMANTIC_STATIC = [
+    (re.compile(r"входн\w*\s*в\s*объект|входн\w*\s*дверь|^\s*вход\s*$|^вход\b", re.I),
+     "Вход_в_объект"),
+    (re.compile(r"общий\s*вид\s*адрес", re.I),         "Общий_вид_адреса"),
+    (re.compile(r"общий\s*вид", re.I),                  "Общий_вид"),
+    (re.compile(r"прилегающ\w*\s*территор", re.I),      "Прилегающая_территория"),
+    (re.compile(r"окружен\w*\s*квартал|окружен", re.I), "Окружение_квартала"),
+    (re.compile(r"состояние\s*внутри|внутри\b", re.I),  "Состояние_внутри"),
+    (re.compile(r"состояние\s*отделки|отделк", re.I),   "Состояние_отделки"),
+    (re.compile(r"состояние\s*(?:на\s*)?объект", re.I), "Состояние_объекта"),
+    (re.compile(r"подвал|подавал", re.I),               "Подвал"),
+    (re.compile(r"чердак|мансард", re.I),               "Чердак"),
+    (re.compile(r"(?:вид\s*(?:от|из)\s*окна|из\s*окна)", re.I), "Вид_от_окна"),
+    (re.compile(r"план\s*эвакуац", re.I),               "План_эвакуации"),
+    (re.compile(r"экспликац", re.I),                    "Экспликация"),
+    (re.compile(r"планы?|чертеж", re.I),                "Планы"),
+    (re.compile(r"кухн", re.I),                         "Кухня"),
+    (re.compile(r"санузел|туалет|ванная|с/у", re.I),    "Санузел"),
+    (re.compile(r"фасад", re.I),                        "Фасад"),
+    (re.compile(r"коммерч\w*\s*аналог|^аналог", re.I),  "Аналоги"),
+    (re.compile(r"^документ", re.I),                    "Документы_фото"),
+    (re.compile(r"^фото$|^foto$", re.I),                None),  # игнор — это контейнер
+]
+SEMANTIC_DYNAMIC = [
+    (re.compile(r"\bлит\.?\s*([а-я])\b", re.I),                                "Литер_{0}"),
+    (re.compile(r"\bкв\.?\s*(\d+\s*[а-я]?(?:\s*[,+]\s*\d+\s*[а-я]?)*)", re.I), "Кв_{0}"),
+    (re.compile(r"\bэтаж\s*(\d+)", re.I),                                       "Этаж_{0}"),
+]
+
+def folder_semantic(name: str) -> str | None:
+    """Имя папки → нормализованная семантическая метка (None — игнорируем)."""
+    if not name: return None
+    n = name.replace("_", " ").strip()
+    for rx, sem in SEMANTIC_STATIC:
+        if rx.search(n): return sem
+    for rx, tmpl in SEMANTIC_DYNAMIC:
+        m = rx.search(n)
+        if m:
+            arg = re.sub(r"[\s,+]+", "_", m.group(1)).strip("_").lower()
+            return tmpl.format(arg)
+    return None
+
+
+def address_tokens(addr: str) -> set[str]:
+    """Информативные токены адреса (нижний регистр, не служебные слова)."""
+    if not addr: return set()
+    stop = {"д", "дом", "кв", "корп", "стр", "обл", "область", "р-н", "район",
+            "г", "город", "ул", "улица", "пер", "переулок", "пр", "проспект",
+            "шоссе", "пом", "россия", "почтовый", "адрес", "ориентира",
+            "местоположение", "относительно", "расположенного", "границах",
+            "участка", "литер", "лит", "этаж", "квартира"}
+    out: set[str] = set()
+    for t in re.findall(r"[\wа-я-]+", addr.lower()):
+        t = t.strip("-")
+        if not t or t in stop: continue
+        if t.isdigit() and len(t) > 3: continue  # год вроде 2006
+        out.add(t)
+    return out
+
+
+def load_objects_index(root: Path) -> tuple[dict[str, str], dict[str, set[str]]]:
+    """Грузит json/objects/*.json → ({cn: object_type}, {cn: address_tokens})."""
+    objdir = root / "json" / "objects"
+    types: dict[str, str] = {}
+    addrs: dict[str, set[str]] = {}
+    if not objdir.exists(): return types, addrs
+    for f in objdir.glob("*.json"):
+        try: data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception: continue
+        cn = data.get("cadastral_number") or f.stem.replace("_", ":")
+        if data.get("object_type"): types[cn] = data["object_type"]
+        if data.get("address"):     addrs[cn] = address_tokens(data["address"])
+    return types, addrs
 
 # Парсинг тела PDF-документов (взято из 05_parse_egrn_folder_to_xlsx)
 EGRN_MARKERS = (
@@ -1188,6 +1302,170 @@ def action_convert(last_root: Path | None) -> None:
     sync_photo_tree(root)
 
 
+# ─── Сортировка хаотичной папки Не_распределено/ в нормализованное дерево ──
+def scan_unsorted(root: Path) -> dict:
+    """Просматривает Фотографии/Не_распределено/, формирует план миграции.
+
+    Для каждого *.jpg ищет КН по приоритету:
+      1) КН в цепочке родительских папок (включая 12-15-значный «плоский»);
+      2) КН в братском PDF/XML той же папки;
+      3) адресный матчинг по верхней папке (≥2 общих токена). Если по адресу
+         больше 1 КН и в пути нет уточняющего КН — фото остаётся, в логе
+         фиксируется неоднозначность.
+
+    Тип объекта берётся из json/objects/<КН>.json; при отсутствии — из
+    текста пути (квартира→room, жилой дом→building, ЗУ/зу/земучасток→land).
+
+    Семантические подпапки нормализуются по словарю (Вход_в_объект,
+    Подвал, Состояние_внутри, Вид_от_окна, Кухня, Санузел, …) и
+    сохраняются в полном виде иерархии."""
+    src = root / "Фотографии" / "Не_распределено"
+    plan: dict = {
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")
+                                .replace("+00:00", "Z"),
+        "items": [],
+        "address_ambiguous": {},
+    }
+    if not src.exists(): return plan
+
+    obj_types, obj_addrs = load_objects_index(root)
+
+    for jpg in sorted(src.rglob("*.jpg")):
+        rel = jpg.relative_to(src)
+        parts = list(rel.parts)
+        full_text = " ".join(parts)
+        evidence: list[str] = []
+
+        # 1) КН в полном пути
+        cads = find_cads_in_text(full_text)
+        cn = cads[0] if cads else None
+        if cn: evidence.append(f"cn_in_path:{cn}")
+
+        # 2) КН в братских PDF/XML
+        if not cn:
+            for sibling in jpg.parent.iterdir():
+                if sibling.suffix.lower() in (".pdf", ".xml"):
+                    body = extract_text_any(sibling) if sibling.suffix.lower() == ".pdf" \
+                           else sibling.read_text(encoding="utf-8", errors="ignore")
+                    sib_cads = find_cads_in_text(body)
+                    if sib_cads:
+                        cn = sib_cads[0]
+                        evidence.append(f"cn_in_sibling:{sibling.name}"); break
+
+        # 3) Адресный матчинг по верхней папке
+        addr_folder = parts[0] if parts else ""
+        if not cn and obj_addrs:
+            folder_t = address_tokens(addr_folder.replace("_", " ").replace("-", " "))
+            cands = [(c, len(folder_t & ta)) for c, ta in obj_addrs.items()
+                     if len(folder_t & ta) >= 2]
+            cands.sort(key=lambda x: -x[1])
+            if len(cands) == 1:
+                cn = cands[0][0]; evidence.append(f"address_unique:{addr_folder}")
+            elif len(cands) > 1:
+                plan["address_ambiguous"].setdefault(addr_folder, {
+                    "candidates": [c for c, _ in cands], "photos": 0,
+                })
+                plan["address_ambiguous"][addr_folder]["photos"] += 1
+
+        # 4) Категория
+        category = None
+        if cn:
+            category = OBJ_TYPE_TO_CAT.get(obj_types.get(cn, "").lower())
+            if not category:
+                t = detect_category_from_text(full_text)
+                if t: category = OBJ_TYPE_TO_CAT.get(t)
+
+        # 5) Семантическая цепочка (полная иерархия)
+        sem_chain: list[str] = []
+        for p in parts[:-1]:
+            sem = folder_semantic(p)
+            if sem and (not sem_chain or sem_chain[-1] != sem):
+                sem_chain.append(sem)
+        sem_path = "/".join(sem_chain) if sem_chain else None
+
+        if cn and category:
+            target = (root / "Фотографии" / "Недвижимость" / category /
+                      cn.replace(":", "_"))
+            if sem_path: target = target / sem_path
+            target = target / jpg.name
+            plan["items"].append({
+                "from": str(jpg.relative_to(root)).replace("\\", "/"),
+                "to":   str(target.relative_to(root)).replace("\\", "/"),
+                "cn": cn, "category": category, "semantic": sem_path,
+                "evidence": evidence,
+            })
+        else:
+            plan["items"].append({
+                "from": str(jpg.relative_to(root)).replace("\\", "/"),
+                "to":   None,
+                "reason": "КН/категория не определены",
+                "evidence": evidence,
+            })
+
+    return plan
+
+
+def action_sort(last_root: Path | None) -> None:
+    """Меню 3: dry-run сортировка фото из Не_распределено."""
+    default = str(last_root) if last_root else ""
+    prompt = (f"\nПуть к проекту [Enter — {default}]: " if default
+              else "\nПуть к проекту: ")
+    raw = input(prompt).strip() or default
+    if not raw:
+        cp("Путь не указан — отмена.", C.R); return
+    root = Path(raw)
+    if not (root / "Фотографии" / "Не_распределено").exists():
+        cp(f"Не нашёл {root/'Фотографии'/'Не_распределено'}.", C.R); return
+
+    cp("\nСканирую Фотографии/Не_распределено/ …", C.CY)
+    plan = scan_unsorted(root)
+    items = plan["items"]
+    matched = [i for i in items if i.get("to")]
+    cp(f"  фото проанализировано: {len(items)}", C.CY)
+    cp(f"  с уверенной привязкой:  {len(matched)}",
+       C.G if matched else C.Y)
+    cp(f"  без привязки (останутся как есть): {len(items) - len(matched)}",
+       C.CY)
+    if plan["address_ambiguous"]:
+        cp("\n  ⚠ адресные конфликты — несколько КН по одному адресу,"
+           " переноса не будет:", C.Y)
+        for folder, info in plan["address_ambiguous"].items():
+            cp(f"     {folder}: фото {info['photos']}, кандидаты "
+               + ", ".join(info["candidates"]), C.Y)
+
+    plan_file = root / "json" / "photo_migration_plan.json"
+    plan_file.parent.mkdir(parents=True, exist_ok=True)
+    plan_file.write_text(json.dumps(plan, ensure_ascii=False, indent=2),
+                         encoding="utf-8")
+    cp(f"\n  план сохранён: {plan_file.relative_to(root)}", C.CY)
+
+    if not matched:
+        cp("  переносить нечего.", C.Y); return
+
+    cp("\nПримеры (первые 6 из плана):", C.B)
+    for it in matched[:6]:
+        cp(f"  {it['from']}")
+        cp(f"    → {it['to']}", C.G)
+
+    ans = input(f"\nПрименить план (переместить {len(matched)} фото)? [y/N]: "
+                ).strip().lower()
+    if ans not in ("y", "yes", "д", "да"):
+        cp("Отмена. План сохранён, фото не перемещены.", C.CY); return
+
+    moved = err = 0
+    for it in matched:
+        src_p = root / it["from"]
+        dst_p = root / it["to"]
+        dst_p.parent.mkdir(parents=True, exist_ok=True)
+        if dst_p.exists():
+            continue  # идемпотентно
+        try:
+            shutil.move(str(src_p), str(dst_p)); moved += 1
+        except Exception as e:
+            cp(f"  [err] {src_p.name}: {e}", C.R); err += 1
+    cp(f"\n  перемещено: {moved}" + (f", ошибок: {err}" if err else ""), C.G)
+
+
 def main() -> None:
     cp("=" * 64, C.B)
     cp(" pirushin_sosn_rocha_07_init_project_v1 — структура + конвертация", C.B)
@@ -1196,14 +1474,17 @@ def main() -> None:
     while True:
         cp("\n  1  Создание структуры (новая болванка)", C.CY)
         cp("  2  Конвертация PDF → JPG (из Выписки_PDF/)", C.CY)
-        cp("  3  Выход", C.CY)
+        cp("  3  Сортировка фото из Фотографии/Не_распределено/", C.CY)
+        cp("  4  Выход", C.CY)
         ch = input("\nВаш выбор: ").strip()
         if ch == "1":
             r = action_create()
             if r: last_root = r
         elif ch == "2":
             action_convert(last_root)
-        elif ch in ("3", "q", "exit", ""):
+        elif ch == "3":
+            action_sort(last_root)
+        elif ch in ("4", "q", "exit", ""):
             cp("Готово.", C.B); return
         else:
             cp("Введите 1, 2 или 3.", C.Y)
