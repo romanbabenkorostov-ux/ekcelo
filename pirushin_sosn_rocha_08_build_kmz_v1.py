@@ -325,7 +325,7 @@ def build_kmz(root: Path) -> Path:
     # ── Документы, привязка КН/ИНН → файлы ────────────────────────────────
     #   egrn_ / svid_ / tehpasp_ / tehplan_  → к КН (баллон объекта)
     #   egrul_ / egrip_                       → к ИНН → к BU (без Point)
-    docs_dir = root / "09_Документы_JPG"
+    docs_dir = root / "Документы_JPG"
     doc_by_cad: dict[str, list[Path]] = {}
     doc_by_inn: dict[str, list[Path]] = {}
     cad_doc_re = re.compile(
@@ -347,12 +347,15 @@ def build_kmz(root: Path) -> Path:
         except Exception: xml_facts = {}
 
     # ── Фотографии: привязка либо по EXIF GPS, либо по структуре папок.
-    # Распознаваемые пути (после `08_Фотографии/`):
-    #   По_объектам/<КН>/...        — КН в формате 61_44_0050706_31
-    #   По_оборудованию/<инв>/...   — инвентарный № как имя папки
-    #   По_BU/<slug>/...            — slug бизнес-единицы (см. structure.json)
-    #   00_Нераспределенные/...     — без привязки
-    photos_dir = root / "08_Фотографии"
+    # Распознаваемые пути (после `Фотографии/`):
+    #   Недвижимость/<категория>/<КН>/[План/]...   — КН 61_44_0050706_31,
+    #       категория ∈ {Земельные_участки,Строения,Сооружения,Помещения,ОНЗ}
+    #   Оборудование/<инв>/...                     — инвентарный № как имя папки
+    #   Бизнес_единицы/<slug>/...                  — slug BU
+    #   Не_распределено/...                        — без привязки
+    REALTY_CATS_SET = {"Земельные_участки", "Строения", "Сооружения",
+                       "Помещения", "ОНЗ"}
+    photos_dir = root / "Фотографии"
     photos: list[tuple[Path, dict, dict]] = []  # (path, gps_meta, tag)
     photos_by_cad: dict[str, list[Path]] = {}
     photos_by_eq: dict[str, list[Path]]  = {}
@@ -364,12 +367,12 @@ def build_kmz(root: Path) -> Path:
         parts = rel.parts
         if len(parts) < 2: return {}
         top = parts[0]
-        if top == "По_объектам":
-            cn = parts[1].replace("_", ":")  # 61_44_0050706_31 → 61:44:0050706:31
-            return {"kind": "cad", "cad": cn}
-        if top == "По_оборудованию":
+        if top == "Недвижимость" and len(parts) >= 3 and parts[1] in REALTY_CATS_SET:
+            cn = parts[2].replace("_", ":")  # 61_44_0050706_31 → 61:44:0050706:31
+            return {"kind": "cad", "cad": cn, "category": parts[1]}
+        if top == "Оборудование":
             return {"kind": "eq", "eq": parts[1]}
-        if top == "По_BU":
+        if top == "Бизнес_единицы":
             return {"kind": "bu", "bu": parts[1]}
         return {}
 
@@ -523,13 +526,14 @@ def build_kmz(root: Path) -> Path:
     # 3. Фотографии (Point + <img src="images/...">), сгруппированы по привязке.
     if photos:
         groups_p: dict[str, list[tuple[Path, dict, dict]]] = {
-            "По объектам": [], "По оборудованию": [], "По BU": [], "Без привязки": []}
+            "Недвижимость": [], "Оборудование": [], "Бизнес-единицы": [],
+            "Не распределено": []}
         for item in photos:
             t = item[2].get("kind")
-            if t == "cad": groups_p["По объектам"].append(item)
-            elif t == "eq":  groups_p["По оборудованию"].append(item)
-            elif t == "bu":  groups_p["По BU"].append(item)
-            else: groups_p["Без привязки"].append(item)
+            if t == "cad": groups_p["Недвижимость"].append(item)
+            elif t == "eq":  groups_p["Оборудование"].append(item)
+            elif t == "bu":  groups_p["Бизнес-единицы"].append(item)
+            else: groups_p["Не распределено"].append(item)
         out.append(folder_open(f"Фотографии ({len(photos)})"))
         for gname, items in groups_p.items():
             if not items: continue
@@ -550,7 +554,7 @@ def build_kmz(root: Path) -> Path:
         out.append("</Folder>")
 
     # 4. Граф связей (04_nspd_graph) — отдельный Placemark с balloon-iframe
-    graph_html = root / "_data" / "graph.html"
+    graph_html = root / "HTML" / "graph.html"
     if graph_html.exists():
         # ставим точку в центр всех геометрий
         all_pts = []
@@ -575,7 +579,7 @@ def build_kmz(root: Path) -> Path:
     kml_text = "".join(out)
 
     # ── Сборка KMZ ────────────────────────────────────────────────────────
-    exp = root / "_exports"; exp.mkdir(parents=True, exist_ok=True)
+    exp = root / "KMZ-KML"; exp.mkdir(parents=True, exist_ok=True)
     kmz = exp / "project.kmz"
     tmp = kmz.with_suffix(".kmz.tmp")
     # Идемпотентность: одинаковая дата у файлов внутри zip → одинаковый hash

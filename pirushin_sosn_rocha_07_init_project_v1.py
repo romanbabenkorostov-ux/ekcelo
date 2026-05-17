@@ -3,28 +3,32 @@
 """
 pirushin_sosn_rocha_07_init_project_v1.py
 
-Инициализация GOLDEN_PATH-структуры проекта объекта:
+Инициализация и поддержка GOLDEN_PATH-структуры проекта объекта (v3):
 
     D:\\ОБЪЕКТЫ\\<Название_проекта>\\
-        _data/         — входы и кеш (osv.xlsx, structure.json, nspd_cache, db)
-        _exports/      — артефакты (project.kmz, project.xlsx, graph.html)
-        00_Нераспределенные/
-        01_Земельные_участки/  02_Здания/  03_Сооружения/
-        04_Помещения/  05_ОНС/
-        06_Бизнес_единицы/     07_Оборудование/
-        08_Фотографии/         (централизованно — отдаваема одной папкой)
-            00_Нераспределенные/  По_объектам/<КН>/  По_оборудованию/<inv>/  По_BU/<bu>/
-        09_Документы_JPG/      (выписки, конвертированные в JPG + EXIF)
-            ЕГРЮЛ/  ЕГРИП/  ЕГРН/  Прочее/
-        10_Выписки_PDF/        (исходники до конвертации)
-            ЕГРЮЛ/  ЕГРИП/  ЕГРН/  Прочее/
+        _data/, _data/nspd_cache/    — служебный кэш
+        ОСВ/                          — оборотно-сальдовая ведомость 1С
+        XLSX/                         — выгрузки/отчёты
+        DB/                           — project.db (SQLite)
+        Документы_JPG/{ЕГРЮЛ-ЕГРИП,ЕГРН,Свидетельства_о_праве,
+                       Технические_паспорта,Техпланы,Прочее}/
+        Выписки_PDF/<те же подпапки>/  — исходники + KML/KMZ
+        Фотографии/
+            Не_распределено/
+            Недвижимость/{Земельные_участки,Строения,Сооружения,Помещения,ОНЗ}/
+            Оборудование/<инв№>/      Бизнес_единицы/<slug>/
+        Бизнес_единицы/                — пользовательские материалы по BU
+        KMZ-KML/                       — выход 08_build_kmz + сторонние KML
+        HTML/                          — выход 04_nspd_graph
 
-Дополнительно:
-  • Опц. конвертирует все PDF из 10_Выписки_PDF/ → 09_Документы_JPG/ с
-    машиночитаемыми именами (`egrul_inn<ИНН>_p01.jpg`, `egrn_<КН>_p01.jpg` …).
-  • Если в _data/structure.json есть привязка ИНН↔BU↔КН и для КН найдены
-    координаты — дописывает в EXIF JPG: GPS lat/lon (центроид связанного
-    объекта), ImageDescription, UserComment={JSON для машинной сшивки}.
+Меню скрипта:
+  1) Создание структуры — болванка по приведённой схеме + путь в буфер обмена.
+  2) Конвертация документов — PDF/DOC/DOCX → JPG (рендер: PyMuPDF, для
+     DOC/DOCX — LibreOffice или MS Word) с машиночитаемыми именами и
+     EXIF/UserComment. После конвертации синхронизирует фото-дерево из
+     обнаруженных документов: создаёт `Фотографии/Недвижимость/<категория>/
+     <КН с _>/[План/]` для каждого распознанного КН.
+  3) Выход.
 
 Зависимости:  PyMuPDF (fitz), Pillow, piexif
 
@@ -71,47 +75,72 @@ def cp(t="", c=""): print(f"{c}{t}{C.X}" if c else t)
 DOC_KINDS_DIRS = ["ЕГРЮЛ-ЕГРИП", "ЕГРН",
                   "Свидетельства_о_праве", "Технические_паспорта",
                   "Техпланы", "Прочее"]
+REALTY_CATS    = ["Земельные_участки", "Строения", "Сооружения",
+                  "Помещения", "ОНЗ"]
+PLAN_CATS      = ("Строения", "Сооружения", "ОНЗ")  # доп. подпапка «План»
 
 DIRS = [
-    "_data",
-    "_data/nspd_cache",
-    "_exports",
-    "00_Нераспределенные",
-    "01_Земельные_участки",
-    "02_Здания",
-    "03_Сооружения",
-    "04_Помещения",
-    "05_ОНС",
-    "06_Бизнес_единицы",
-    "07_Оборудование",
-    "08_Фотографии",
-    "08_Фотографии/00_Нераспределенные",
-    "08_Фотографии/По_объектам",
-    "08_Фотографии/По_оборудованию",
-    "08_Фотографии/По_BU",
-    "09_Документы_JPG",
-    "10_Выписки_PDF",
-    *[f"09_Документы_JPG/{k}" for k in DOC_KINDS_DIRS],
-    *[f"10_Выписки_PDF/{k}"  for k in DOC_KINDS_DIRS],
+    "_data", "_data/nspd_cache",          # служебный кэш (NSPD, XML-выписки)
+    "ОСВ",                                # вход: оборотно-сальдовая ведомость 1С
+    "XLSX",                               # выгрузки/отчёты
+    "DB",                                 # SQLite-БД проекта
+    "KMZ-KML",                            # выход 08_build_kmz и исходные KML/KMZ
+    "HTML",                               # граф 04_nspd_graph
+    "Бизнес_единицы",
+    "Документы_JPG",
+    "Выписки_PDF",
+    *[f"Документы_JPG/{k}" for k in DOC_KINDS_DIRS],
+    *[f"Выписки_PDF/{k}"   for k in DOC_KINDS_DIRS],
+    "Фотографии",
+    "Фотографии/Не_распределено",
+    "Фотографии/Недвижимость",
+    *[f"Фотографии/Недвижимость/{c}" for c in REALTY_CATS],
+    "Фотографии/Оборудование",
+    "Фотографии/Бизнес_единицы",
 ]
 
 README = """# {name}
 
-Структура GOLDEN_PATH (создана pirushin_sosn_rocha_07_init_project_v1.py).
+Структура GOLDEN_PATH v3 (создана pirushin_sosn_rocha_07_init_project_v1.py).
+
+Корневые папки:
+  ОСВ/             — оборотно-сальдовая ведомость 1С (вход для 052_make_structure)
+  XLSX/            — пользовательские выгрузки/отчёты
+  DB/              — project.db (SQLite)
+  Документы_JPG/   — JPG-снимки документов (генерит 07: PDF/DOC/DOCX → JPG)
+  Выписки_PDF/     — исходники документов (включая XML-пары ЕГРН и KML/KMZ)
+  Фотографии/      — фотоматериалы (см. ниже)
+  Бизнес_единицы/  — материалы по BU
+  KMZ-KML/         — выход 08_build_kmz + сторонние KML
+  HTML/            — выход 04_nspd_graph
+  _data/           — служебный кэш (nspd_cache/, egrn_xml.json, structure.json)
 
 Поток данных:
-  10_Выписки_PDF/  → (скрипт 07) → 09_Документы_JPG/  (EXIF: GPS, UserComment JSON)
-  _data/osv.xlsx   → (скрипт 052) → _data/structure.json
-  _data/structure.json → (скрипт 04_nspd_graph) → _data/graph.html
-  всё выше + 08_Фотографии/ → (скрипт 08) → _exports/project.kmz
+  Выписки_PDF/   → (07)  → Документы_JPG/  (EXIF: GPS, UserComment JSON)
+  ОСВ/osv.xlsx   → (052) → _data/structure.json
+  _data/structure.json → (04_nspd_graph) → HTML/graph.html
+  всё выше + Фотографии/ → (08) → KMZ-KML/project.kmz
+
+Фото-дерево (07 создаёт + идемпотентно синхронизирует из обнаруженных
+документов: КН из XML-выписок, имён JPG-документов, KML/KMZ-файлов):
+  Фотографии/
+    Не_распределено/                            — общие виды, без привязки
+    Недвижимость/
+      Земельные_участки/<КН с _>/
+      Строения/<КН с _>/<КН с _>/План/         — План создаётся автоматом
+      Сооружения/<КН с _>/<КН с _>/План/
+      Помещения/<КН с _>/
+      ОНЗ/<КН с _>/<КН с _>/План/
+    Оборудование/<инв №>/
+    Бизнес_единицы/<slug>/
 
 KMZ совместим с Google Earth Pro и https://romanbabenkorostov-ux.github.io/ekcelo/
 
 Машиночитаемые имена документов (дата документа `_dYYYYMMDD` подставляется,
 если её удалось вынуть из тела PDF):
 
-  ЕГРЮЛ:           egrul_inn<ИНН>[_dYYYYMMDD]_p<NN>.jpg     → 09_Документы_JPG/ЕГРЮЛ-ЕГРИП/
-  ЕГРИП:           egrip_innfl<ИНН>[_dYYYYMMDD]_p<NN>.jpg   → 09_Документы_JPG/ЕГРЮЛ-ЕГРИП/
+  ЕГРЮЛ:           egrul_inn<ИНН>[_dYYYYMMDD]_p<NN>.jpg     → Документы_JPG/ЕГРЮЛ-ЕГРИП/
+  ЕГРИП:           egrip_innfl<ИНН>[_dYYYYMMDD]_p<NN>.jpg   → Документы_JPG/ЕГРЮЛ-ЕГРИП/
   ЕГРН:            egrn_<КН с _>[_dYYYYMMDD]_p<NN>.jpg      (напр. egrn_61_44_0050706_31_d20260427_p01.jpg)
   Свидетельство:   svid_<КН>[_dYYYYMMDD]_p<NN>.jpg
   Техпаспорт:      tehpasp_<КН>[_dYYYYMMDD]_p<NN>.jpg
@@ -400,7 +429,7 @@ def parse_egrn_xml(xml: Path) -> dict | None:
 def build_xml_index(root: Path) -> dict:
     """{(kuvi, cad) → xml_meta}; используется для подмены PDF-данных."""
     idx: dict = {}
-    base = root / "10_Выписки_PDF"
+    base = root / "Выписки_PDF"
     if not base.exists(): return idx
     for xml in base.rglob("*.xml"):
         meta = parse_egrn_xml(xml)
@@ -417,8 +446,8 @@ def make_tree(root: Path) -> None:
     rdm = root / "README.md"
     if not rdm.exists():
         rdm.write_text(README.format(name=root.name), encoding="utf-8")
-    # Пустой sqlite-плейсхолдер (создаст 052 / другие скрипты)
-    db = root / "_data" / "project.db"
+    # Пустой sqlite-плейсхолдер (заполняется 052 и др.)
+    db = root / "DB" / "project.db"
     if not db.exists():
         db.touch()
 
@@ -515,7 +544,7 @@ def target_dir(root: Path, kind: str) -> Path:
            "svid": "Свидетельства_о_праве",
            "tehpasp": "Технические_паспорта",
            "tehplan": "Техпланы"}.get(kind, "Прочее")
-    return root / "09_Документы_JPG" / sub
+    return root / "Документы_JPG" / sub
 
 
 # ─── EXIF: запись GPS + UserComment + ImageDescription ──────────────────────
@@ -686,7 +715,7 @@ def _floors_from_info(info: dict) -> int | None:
 SUPPORTED_EXTS = (".pdf", ".docx", ".doc")
 
 def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
-    src = root / "10_Выписки_PDF"
+    src = root / "Выписки_PDF"
     files = sorted([p for p in src.rglob("*")
                     if p.is_file() and p.suffix.lower() in SUPPORTED_EXTS])
     if not files:
@@ -815,6 +844,138 @@ def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
        C.G if n_new else C.CY)
 
 
+# ─── Идемпотентная синхронизация фото-дерева из обнаруженных документов ────
+OBJ_TYPE_TO_CAT = {
+    "land": "Земельные_участки", "building": "Строения",
+    "structure": "Сооружения", "room": "Помещения",
+    "parking": "Помещения", "ons": "ОНЗ",
+}
+
+
+def _read_jpg_object_type(jpg: Path) -> str | None:
+    """Читает EXIF.UserComment.object_type из JPG-документа (если есть)."""
+    if piexif is None or UserComment is None: return None
+    try:
+        exif = piexif.load(str(jpg))
+        uc = exif.get("Exif", {}).get(piexif.ExifIFD.UserComment)
+        if not uc: return None
+        s = UserComment.load(uc)
+        meta = json.loads(s) if isinstance(s, str) else None
+        return (meta or {}).get("object_type")
+    except Exception:
+        return None
+
+
+def _extract_cads_from_kml(path: Path) -> set[str]:
+    """КН из KML или KMZ (внутри zip — doc.kml)."""
+    try:
+        if path.suffix.lower() == ".kmz":
+            with zipfile.ZipFile(path) as z:
+                for n in z.namelist():
+                    if n.lower().endswith(".kml"):
+                        return set(CN_RE.findall(
+                            z.read(n).decode("utf-8", "ignore")))
+        else:
+            return set(CN_RE.findall(
+                path.read_text(encoding="utf-8", errors="ignore")))
+    except Exception:
+        pass
+    return set()
+
+
+def sync_photo_tree(root: Path) -> None:
+    """
+    Собирает множества КН из обнаруженных источников и идемпотентно
+    создаёт подпапки в Фотографии/Недвижимость/<категория>/<КН>/[План/].
+
+    Источники в порядке убывания точности типа объекта:
+      1) _data/egrn_xml.json (точный obj_type)
+      2) _data/structure.json (cadastre_objects + object_type)
+      3) EXIF.UserComment.object_type в Документы_JPG/**/*.jpg
+      4) Имена JPG-документов egrn_/svid_/tehpasp_/tehplan_/doc_ — без типа
+      5) KML/KMZ в Выписки_PDF/ и KMZ-KML/ — без типа
+    КН без распознанного типа попадают в Не_распределено (папка не
+    создаётся под каждый КН — это не нужно).
+    """
+    photos_root = root / "Фотографии" / "Недвижимость"
+    cad_type: dict[str, str | None] = {}
+
+    def add(cn: str, t: str | None):
+        # Уже есть тип — не перезаписываем None'ом
+        if cn in cad_type and cad_type[cn] and not t: return
+        cad_type[cn] = t or cad_type.get(cn)
+
+    # 1) XML-факты ЕГРН
+    xfp = root / "_data" / "egrn_xml.json"
+    if xfp.exists():
+        try:
+            for cn, meta in json.loads(xfp.read_text(encoding="utf-8")).items():
+                add(cn, (meta or {}).get("obj_type"))
+        except Exception: pass
+
+    # 2) structure.json — точные типы из 052_make_structure
+    for sp in [root / "_data" / "structure.json",
+               *sorted((root / "_data").glob("structure_*.json"))]:
+        if not sp.exists(): continue
+        try:
+            st = json.loads(sp.read_text(encoding="utf-8"))
+            for cad in st.get("cadastre_objects", []):
+                cn = cad.get("cadastral_number")
+                if not cn: continue
+                ot = (cad.get("object_type") or "").lower()
+                t = None
+                if "земельн" in ot:        t = "land"
+                elif "помещ" in ot:        t = "room"
+                elif "здан" in ot:         t = "building"
+                elif "сооруж" in ot:       t = "structure"
+                elif "незаверш" in ot:     t = "ons"
+                elif "машино" in ot:       t = "parking"
+                add(cn, t)
+        except Exception: pass
+
+    # 3+4) Имена JPG-документов + EXIF object_type
+    docs_dir = root / "Документы_JPG"
+    cad_doc_re = re.compile(
+        r"^(egrn|svid|tehpasp|tehplan|doc)_(\d{2})_(\d{2})_(\d{1,8})_(\d{1,8})"
+    )
+    if docs_dir.exists():
+        for jpg in docs_dir.rglob("*.jpg"):
+            m = cad_doc_re.search(jpg.name)
+            if not m: continue
+            cn = f"{m.group(2)}:{m.group(3)}:{m.group(4)}:{m.group(5)}"
+            ot = _read_jpg_object_type(jpg)
+            add(cn, ot)
+
+    # 5) KML/KMZ
+    for d in (root / "Выписки_PDF", root / "KMZ-KML"):
+        if not d.exists(): continue
+        for k in list(d.rglob("*.kml")) + list(d.rglob("*.kmz")):
+            for cn in _extract_cads_from_kml(k):
+                add(cn, None)
+
+    # ─ создаём папки ─
+    n_dir = n_plan = 0
+    for cn, t in cad_type.items():
+        cat = OBJ_TYPE_TO_CAT.get(t or "")
+        if not cat: continue  # без типа — не помещаем в категорию
+        token = cn.replace(":", "_")
+        d = photos_root / cat / token
+        if not d.exists():
+            d.mkdir(parents=True, exist_ok=True); n_dir += 1
+        if cat in PLAN_CATS:
+            plan = d / "План"
+            if not plan.exists():
+                plan.mkdir(parents=True, exist_ok=True); n_plan += 1
+    untyped = sum(1 for t in cad_type.values() if not t)
+    cp(f"  фото-дерево: КН распознано {len(cad_type)}"
+       f" (с типом {len(cad_type)-untyped}, без типа {untyped})", C.CY)
+    if n_dir or n_plan:
+        cp(f"  фото-дерево: создано {n_dir} КН-подпапок"
+           + (f", {n_plan} «План»" if n_plan else ""), C.G)
+    else:
+        cp("  фото-дерево: всё уже на месте.", C.CY)
+
+
 # ─── Буфер обмена (Windows clip.exe, иначе pbcopy / xclip / pyperclip) ─────
 def to_clipboard(text: str) -> bool:
     try:
@@ -855,17 +1016,17 @@ def action_create() -> Path | None:
 
 
 def action_convert(last_root: Path | None) -> None:
-    """Конвертация PDF → JPG из 10_Выписки_PDF/ выбранного проекта."""
+    """Конвертация PDF → JPG из Выписки_PDF/ выбранного проекта."""
     default = str(last_root) if last_root else ""
     prompt = (f"\nИз какой папки проекта конвертировать "
-              f"(содержит 10_Выписки_PDF/) "
+              f"(содержит Выписки_PDF/) "
               f"[Enter — {default}]: " if default
-              else "\nПуть к папке проекта (содержит 10_Выписки_PDF/): ")
+              else "\nПуть к папке проекта (содержит Выписки_PDF/): ")
     raw = input(prompt).strip() or default
     if not raw:
         cp("Путь не указан — отмена.", C.R); return
     root = Path(raw)
-    if not (root / "10_Выписки_PDF").exists():
+    if not (root / "Выписки_PDF").exists():
         cp(f"Не нашёл {root/'10_Выписки_PDF'}.", C.R); return
 
     idx = build_index(root)
@@ -874,6 +1035,8 @@ def action_convert(last_root: Path | None) -> None:
            "болванки; JPG получат машиночитаемые имена, GPS добавится "
            "позже после 052_make_structure.)", C.CY)
     convert_pdfs(root, idx)
+    cp("\n  синхронизация фото-дерева…", C.CY)
+    sync_photo_tree(root)
 
 
 def main() -> None:
@@ -883,7 +1046,7 @@ def main() -> None:
     last_root: Path | None = None
     while True:
         cp("\n  1  Создание структуры (новая болванка)", C.CY)
-        cp("  2  Конвертация PDF → JPG (из 10_Выписки_PDF/)", C.CY)
+        cp("  2  Конвертация PDF → JPG (из Выписки_PDF/)", C.CY)
         cp("  3  Выход", C.CY)
         ch = input("\nВаш выбор: ").strip()
         if ch == "1":
