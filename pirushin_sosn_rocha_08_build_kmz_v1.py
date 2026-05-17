@@ -554,7 +554,7 @@ def build_kmz(root: Path) -> Path:
         out.append("</Folder>")
 
     # 4. Граф связей (04_nspd_graph) — отдельный Placemark с balloon-iframe
-    graph_html = root / "HTML" / "graph.html"
+    graph_html = root / "html" / "graph.html"
     if graph_html.exists():
         # ставим точку в центр всех геометрий
         all_pts = []
@@ -579,7 +579,7 @@ def build_kmz(root: Path) -> Path:
     kml_text = "".join(out)
 
     # ── Сборка KMZ ────────────────────────────────────────────────────────
-    exp = root / "KMZ-KML"; exp.mkdir(parents=True, exist_ok=True)
+    exp = root / "kmz-kml"; exp.mkdir(parents=True, exist_ok=True)
     kmz = exp / "project.kmz"
     tmp = kmz.with_suffix(".kmz.tmp")
     # Идемпотентность: одинаковая дата у файлов внутри zip → одинаковый hash
