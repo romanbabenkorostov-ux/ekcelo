@@ -197,7 +197,7 @@ def find_soffice() -> str | None:
     return None
 
 
-def doc_to_pdf(src: Path, out_dir: Path) -> Path | None:
+def _soffice_to_pdf(src: Path, out_dir: Path) -> Path | None:
     """LibreOffice headless: <src.doc|docx> → <out_dir>/<src.stem>.pdf"""
     soffice = find_soffice()
     if not soffice: return None
@@ -212,6 +212,49 @@ def doc_to_pdf(src: Path, out_dir: Path) -> Path | None:
         return None
     out = out_dir / (src.stem + ".pdf")
     return out if out.exists() else None
+
+
+def _msword_to_pdf(src: Path, out_dir: Path) -> Path | None:
+    """MS Word (COM-автоматизация через comtypes) — fallback для Windows."""
+    if not sys.platform.startswith("win"): return None
+    try:
+        import comtypes.client  # pip install comtypes
+    except ImportError:
+        return None
+    out = (out_dir / (src.stem + ".pdf")).resolve()
+    word = None
+    try:
+        word = comtypes.client.CreateObject("Word.Application")
+        word.Visible = False
+        doc = word.Documents.Open(str(src.resolve()), ReadOnly=True)
+        # 17 = wdExportFormatPDF
+        doc.SaveAs(str(out), FileFormat=17)
+        doc.Close(False)
+        return out if out.exists() else None
+    except Exception:
+        return None
+    finally:
+        try:
+            if word is not None: word.Quit()
+        except Exception:
+            pass
+
+
+def doc_to_pdf(src: Path, out_dir: Path) -> Path | None:
+    """Конвертер .doc/.docx → PDF. Сначала LibreOffice, затем MS Word."""
+    return _soffice_to_pdf(src, out_dir) or _msword_to_pdf(src, out_dir)
+
+
+def find_office_converter() -> str | None:
+    """Имя доступного конвертера для пользовательских сообщений."""
+    if find_soffice(): return "LibreOffice"
+    if sys.platform.startswith("win"):
+        try:
+            import comtypes.client  # noqa
+            return "MS Word"
+        except ImportError:
+            return None
+    return None
 
 
 def extract_text_any(path: Path) -> str:
@@ -486,7 +529,13 @@ def deg_to_rational(d: float):
     return [(deg, 1), (mins, 1), (sec, 100)]
 
 def write_exif(jpg: Path, lat: float | None, lon: float | None,
-               alt: float | None, descr: str, ucomment: dict) -> None:
+               altitude_amsl: float | None, descr: str, ucomment: dict) -> None:
+    """
+    GPS: широта/долгота центра объекта + GPSAltitude (если задана) —
+    стандарт EXIF трактует GPSAltitude как высоту НАД УРОВНЕМ МОРЯ (AMSL).
+    Высота объекта над землёй (height_m) и AMSL также продублированы в
+    UserComment JSON для машинного потребления.
+    """
     if piexif is None:
         return
     try:
@@ -507,9 +556,9 @@ def write_exif(jpg: Path, lat: float | None, lon: float | None,
             piexif.GPSIFD.GPSLongitudeRef: b"E" if lon >= 0 else b"W",
             piexif.GPSIFD.GPSLongitude: deg_to_rational(lon),
         }
-        if alt is not None:
-            gps[piexif.GPSIFD.GPSAltitudeRef] = 0 if alt >= 0 else 1
-            gps[piexif.GPSIFD.GPSAltitude] = (int(round(abs(alt) * 100)), 100)
+        if altitude_amsl is not None:
+            gps[piexif.GPSIFD.GPSAltitudeRef] = 0 if altitude_amsl >= 0 else 1
+            gps[piexif.GPSIFD.GPSAltitude] = (int(round(abs(altitude_amsl) * 100)), 100)
         exif["GPS"] = gps
 
     try:
@@ -649,13 +698,18 @@ def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
     mtx  = fitz.Matrix(zoom, zoom)
     cp(f"  файлов к конвертации: {len(files)}", C.CY)
 
-    # .doc/.docx требуют LibreOffice (бесплатный) для рендера в PDF
+    # .doc/.docx → PDF: сначала LibreOffice, затем MS Word (Windows + comtypes)
     n_office = sum(1 for p in files if p.suffix.lower() in (".doc", ".docx"))
-    soffice_ok = find_soffice() is not None if n_office else True
-    if n_office and not soffice_ok:
-        cp(f"  ⚠ найдено {n_office} .doc/.docx, но LibreOffice не установлен.\n"
-           "     поставь https://www.libreoffice.org/ — после этого эти файлы\n"
-           "     сконвертируются. Сейчас пропускаю их.", C.Y)
+    converter = find_office_converter() if n_office else "—"
+    office_ok = bool(converter)
+    if n_office:
+        if office_ok:
+            cp(f"  .doc/.docx найдено: {n_office} (конвертер: {converter})", C.CY)
+        else:
+            cp(f"  ⚠ найдено {n_office} .doc/.docx, но не найден ни LibreOffice, "
+               "ни MS Word.\n     Поставь LibreOffice (https://www.libreoffice.org/) "
+               "или, если на Windows есть Word — установи `pip install comtypes`.\n"
+               "     Сейчас .doc/.docx пропускаются.", C.Y)
 
     xml_idx = build_xml_index(root)
     if xml_idx:
@@ -676,7 +730,7 @@ def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
         if ext == ".pdf":
             pdf = orig
         else:
-            if not soffice_ok:
+            if not office_ok:
                 n_err += 1; continue
             pdf = doc_to_pdf(orig, tmpdir)
             if not pdf:
@@ -692,14 +746,17 @@ def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
                 meta["obj_type"] = xml_meta.get("obj_type") or meta["obj_type"]
 
         out_dir = target_dir(root, meta["kind"])
-        # Геопривязка: GPS только для документов с распознанным КН
-        # (ЕГРН, свидетельства, техпаспорта, техпланы).
-        # ЕГРЮЛ/ЕГРИП — без GPS, связь с BU через UserComment.inn.
-        lat = lon = alt = None; obj_id = None; bu_id = None
+        # Гео: GPS только для документов с распознанным КН. ЕГРЮЛ/ЕГРИП —
+        # без GPS, связь с BU через UserComment.inn.
+        center_lat = center_lon = height_m = altitude_amsl_m = None
+        obj_id = bu_id = None
         if meta["kind"] in ("egrn", "svid", "tehpasp", "tehplan", "doc") \
                 and meta["cad"] and meta["cad"] in idx["cad"]:
             c = idx["cad"][meta["cad"]]
-            lat, lon, alt, obj_id = c["lat"], c["lon"], c.get("alt"), c["obj_id"]
+            center_lat, center_lon = c["lat"], c["lon"]
+            height_m = c.get("alt")           # высота объекта над землёй
+            altitude_amsl_m = c.get("amsl")   # абс. отметка (None — на будущее)
+            obj_id = c["obj_id"]
         if meta["inn"] and meta["inn"] in idx["inn"]:
             bu_id = idx["inn"][meta["inn"]].get("bu_id")
 
@@ -708,8 +765,9 @@ def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
         except Exception as e:
             cp(f"    [err]  {pdf.name}: {e}", C.R); n_err += 1; continue
 
+        page_count = doc.page_count
         pdf_new = pdf_skip = 0
-        for page_idx in range(doc.page_count):
+        for page_idx in range(page_count):
             page = doc.load_page(page_idx)
             jpg_name = target_name(meta, page_idx + 1)
             jpg = out_dir / jpg_name
@@ -720,7 +778,8 @@ def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
             img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
             img.save(jpg, "JPEG", quality=88, optimize=True)
 
-            descr = f"{meta['kind'].upper()} стр.{page_idx+1} | {orig.name}"
+            descr = (f"{meta['kind'].upper()} стр.{page_idx+1}/{page_count} | "
+                     f"{orig.name}")
             ucomment = {
                 "app": "ekcelo", "kind": meta["kind"],
                 "inn": meta["inn"], "ogrn": meta.get("ogrn"),
@@ -734,9 +793,15 @@ def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
                 "src": orig.name,
                 "src_ext": orig.suffix.lower().lstrip("."),
                 "page": page_idx + 1,
+                "page_count": page_count,
+                # Гео-факты объекта (продублированы в GPS-секции EXIF):
+                "center_lat": center_lat,
+                "center_lon": center_lon,
+                "height_m": height_m,             # высота объекта над землёй
+                "altitude_amsl_m": altitude_amsl_m,  # AMSL (этаж/потолок) — на будущее
                 "ts": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
             }
-            write_exif(jpg, lat, lon, alt, descr, ucomment)
+            write_exif(jpg, center_lat, center_lon, altitude_amsl_m, descr, ucomment)
             cp(f"    [ok]   {jpg.relative_to(root)}", C.G)
             pdf_new += 1; n_new += 1
         doc.close()
