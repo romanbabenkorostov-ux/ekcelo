@@ -250,10 +250,13 @@ def placemark(name: str, descr_html: str, style_id: str, geom_xml: str,
 
 # ─── Сборка балунов ─────────────────────────────────────────────────────────
 def cad_balloon(cad: dict, docs_for_cad: list[Path],
-                photos_for_cad: list[Path] | None = None) -> str:
+                photos_for_cad: list[Path] | None = None,
+                xml_meta: dict | None = None) -> str:
     rows = []
     for k in ("cadastral_number", "object_type", "address"):
         v = cad.get(k)
+        if k == "address" and xml_meta and xml_meta.get("address"):
+            v = xml_meta["address"]  # XML точнее, чем NSPD-кеш
         if v: rows.append(f"<tr><td><b>{xml_escape(k)}</b></td>"
                           f"<td>{xml_escape(str(v))}</td></tr>")
     info = cad.get("_raw_info") or {}
@@ -261,6 +264,16 @@ def cad_balloon(cad: dict, docs_for_cad: list[Path],
         v = info.get(k) if isinstance(info, dict) else None
         if v: rows.append(f"<tr><td>{xml_escape(k)}</td>"
                           f"<td>{xml_escape(str(v))}</td></tr>")
+    if xml_meta:
+        rows.append("<tr><td colspan='2'><b>Из XML-выписки ЕГРН:</b></td></tr>")
+        for label, key in (("№ выписки", "kuvi"), ("Дата", "extract_date"),
+                           ("Площадь", "area"), ("Кад. стоимость", "cad_value"),
+                           ("Правообладатель", "holder_name"),
+                           ("ИНН", "holder_inn"), ("ОГРН", "holder_ogrn"),
+                           ("Вид права", "right_type")):
+            v = xml_meta.get(key)
+            if v: rows.append(f"<tr><td>{xml_escape(label)}</td>"
+                              f"<td>{xml_escape(str(v))}</td></tr>")
     body = ("<table style='font-family:Arial;font-size:12px;"
             "border-collapse:collapse'>" + "".join(rows) + "</table>")
     if docs_for_cad:
@@ -310,18 +323,28 @@ def build_kmz(root: Path) -> Path:
                      "_floors": floors, "_info": info}
 
     # ── Документы, привязка КН/ИНН → файлы ────────────────────────────────
-    #   ЕГРН (egrn_*)   → к КН (баллон объекта)
-    #   ЕГРЮЛ/ЕГРИП    → к ИНН → к BU (баллон BU + баллоны её КН), без Point
+    #   egrn_ / svid_ / tehpasp_ / tehplan_  → к КН (баллон объекта)
+    #   egrul_ / egrip_                       → к ИНН → к BU (без Point)
     docs_dir = root / "09_Документы_JPG"
     doc_by_cad: dict[str, list[Path]] = {}
     doc_by_inn: dict[str, list[Path]] = {}
+    cad_doc_re = re.compile(
+        r"^(egrn|svid|tehpasp|tehplan)_(\d{2})_(\d{2})_(\d{1,8})_(\d{1,8})"
+    )
     for jpg in sorted(docs_dir.rglob("*.jpg")):
-        m = re.search(r"egrn_(\d{2})_(\d{2})_(\d{1,8})_(\d{1,8})", jpg.name)
+        m = cad_doc_re.search(jpg.name)
         if m:
-            cn = f"{m.group(1)}:{m.group(2)}:{m.group(3)}:{m.group(4)}"
+            cn = f"{m.group(2)}:{m.group(3)}:{m.group(4)}:{m.group(5)}"
             doc_by_cad.setdefault(cn, []).append(jpg); continue
         m = re.search(r"egr(?:ul|ip)_inn(?:fl)?(\d{10,12})", jpg.name)
         if m: doc_by_inn.setdefault(m.group(1), []).append(jpg); continue
+
+    # Точные данные из XML-выписок (создаётся 07-скриптом)
+    xml_facts: dict[str, dict] = {}
+    xfp = root / "_data" / "egrn_xml.json"
+    if xfp.exists():
+        try: xml_facts = json.loads(xfp.read_text(encoding="utf-8"))
+        except Exception: xml_facts = {}
 
     # ── Фотографии: привязка либо по EXIF GPS, либо по структуре папок.
     # Распознаваемые пути (после `08_Фотографии/`):
@@ -423,7 +446,8 @@ def build_kmz(root: Path) -> Path:
             for inn in cad_to_inns.get(cn, []):
                 docs.extend(doc_by_inn.get(inn, []))
             name = f"{cn}" + (f" · {cad.get('address')}" if cad.get("address") else "")
-            balloon = cad_balloon(cad, docs, photos_by_cad.get(cn))
+            balloon = cad_balloon(cad, docs, photos_by_cad.get(cn),
+                                  xml_meta=xml_facts.get(cn))
             style = style_map[gname]
             extrude = (gname in ("Здания", "Сооружения", "ОНС"))
             z = cad.get("_z", 0.0)

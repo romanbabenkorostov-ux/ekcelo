@@ -64,6 +64,10 @@ def cp(t="", c=""): print(f"{c}{t}{C.X}" if c else t)
 
 
 # ─── Структура папок ────────────────────────────────────────────────────────
+DOC_KINDS_DIRS = ["ЕГРЮЛ", "ЕГРИП", "ЕГРН",
+                  "Свидетельства_о_праве", "Технические_паспорта",
+                  "Техпланы", "Прочее"]
+
 DIRS = [
     "_data",
     "_data/nspd_cache",
@@ -82,15 +86,9 @@ DIRS = [
     "08_Фотографии/По_оборудованию",
     "08_Фотографии/По_BU",
     "09_Документы_JPG",
-    "09_Документы_JPG/ЕГРЮЛ",
-    "09_Документы_JPG/ЕГРИП",
-    "09_Документы_JPG/ЕГРН",
-    "09_Документы_JPG/Прочее",
     "10_Выписки_PDF",
-    "10_Выписки_PDF/ЕГРЮЛ",
-    "10_Выписки_PDF/ЕГРИП",
-    "10_Выписки_PDF/ЕГРН",
-    "10_Выписки_PDF/Прочее",
+    *[f"09_Документы_JPG/{k}" for k in DOC_KINDS_DIRS],
+    *[f"10_Выписки_PDF/{k}"  for k in DOC_KINDS_DIRS],
 ]
 
 README = """# {name}
@@ -106,14 +104,24 @@ README = """# {name}
 KMZ совместим с Google Earth Pro и https://romanbabenkorostov-ux.github.io/ekcelo/
 
 Машиночитаемые имена документов:
-  ЕГРЮЛ:  egrul_inn<ИНН>_p<NN>.jpg
-  ЕГРИП:  egrip_innfl<ИНН>_p<NN>.jpg
-  ЕГРН:   egrn_<КН с _>_p<NN>.jpg            (напр. egrn_61_44_0050706_31_p01.jpg)
-  Прочее: doc_<slug>_p<NN>.jpg
+  ЕГРЮЛ:           egrul_inn<ИНН>_p<NN>.jpg
+  ЕГРИП:           egrip_innfl<ИНН>_p<NN>.jpg
+  ЕГРН:            egrn_<КН с _>_p<NN>.jpg     (напр. egrn_61_44_0050706_31_p01.jpg)
+  Свидетельство:   svid_<КН>_p<NN>.jpg
+  Техпаспорт:      tehpasp_<КН>_p<NN>.jpg
+  Техплан:         tehplan_<КН>_p<NN>.jpg
+  Прочее:          doc_<slug>_p<NN>.jpg
+
+Если рядом с PDF-выпиской ЕГРН лежит парный XML (тот же №КУВИ и КН) — XML
+имеет приоритет: точные значения адреса, площади, типа объекта,
+правообладателя и т.п. берутся из XML, PDF используется только как
+рендеримый источник изображения.
 
 EXIF UserComment (JSON) у каждого JPG-документа:
-  {{"app":"ekcelo","kind":"egrul|egrip|egrn|doc",
-    "inn":"...","cad":"...","obj_id":"...","bu_id":"..."}}
+  {{"app":"ekcelo","kind":"egrul|egrip|egrn|svid|tehpasp|tehplan|doc",
+    "inn":"...","cad":"...","obj_id":"...","bu_id":"...",
+    "object_type":"land|building|room|structure|ons|null",
+    "xml_matched":true|false,"extract_number":"КУВИ-..."}}
 """
 
 # Регэкспы для распознавания имени исходного PDF
@@ -122,11 +130,130 @@ INN_FL_RE  = re.compile(r"(?<!\d)(\d{12})(?!\d)")           # 12 цифр — Ф
 CN_RE      = re.compile(r"(\d{2}:\d{2}:\d{1,8}:\d{1,8})")
 SLUG_RE    = re.compile(r"[^A-Za-zА-Яа-я0-9._-]+")
 
+# Парсинг тела PDF-документов (взято из 05_parse_egrn_folder_to_xlsx)
+EGRN_MARKERS = (
+    "выписка из единого государственного реестра недвижимости",
+    "роскадастр", "росреестр",
+    "сведения о характеристиках объекта недвижимости",
+)
+SVID_MARKERS    = ("свидетельство о государственной регистрации права",
+                   "свидетельство о праве")
+TEHPASP_MARKERS = ("технический паспорт",)
+TEHPLAN_MARKERS = ("технический план",)
+KUVI_RE     = re.compile(r"КУВИ-\d+/\d{4}-\d+")
+EGRN_OBJ_RE = re.compile(
+    r"(Земельный участок|Помещение|Здание|Сооружение|Машино-место|"
+    r"Объект незаверш[её]нного строительства)", re.IGNORECASE,
+)
+OBJ_TYPE_MAP = {
+    "земельный участок": "land", "помещение": "room", "здание": "building",
+    "сооружение": "structure", "машино-место": "parking",
+    "объект незавершённого строительства": "ons",
+    "объект незавершенного строительства": "ons",
+}
+
 def slugify(s: str) -> str:
     return SLUG_RE.sub("_", s).strip("_").lower() or "x"
 
 def cad_to_token(cn: str) -> str:
     return cn.replace(":", "_").replace("/", "-")
+
+
+def read_pdf_head(pdf: Path, max_pages: int = 3) -> str:
+    """Безопасное чтение первых страниц PDF через PyMuPDF."""
+    if fitz is None: return ""
+    try:
+        doc = fitz.open(pdf)
+        text = "\n".join(doc.load_page(i).get_text()
+                         for i in range(min(max_pages, doc.page_count)))
+        doc.close()
+        return text
+    except Exception:
+        return ""
+
+
+def detect_doc_kind(parent: str, name: str, body: str) -> str:
+    """Определить вид документа по имени папки → имени файла → телу PDF."""
+    p = (parent + " " + name).lower()
+    if "егрюл" in p or "egrul" in p: return "egrul"
+    if "егрип" in p or "egrip" in p: return "egrip"
+    if any(k in p for k in ("свидетел", "svid")):       return "svid"
+    if any(k in p for k in ("техпасп", "технич_пасп", "tehpasp")): return "tehpasp"
+    if any(k in p for k in ("техплан", "технич_план", "tehplan")):  return "tehplan"
+    if "егрн" in p or "кадастр" in p or "egrn" in p:    return "egrn"
+    bl = body.lower()
+    if any(m in bl for m in EGRN_MARKERS):    return "egrn"
+    if any(m in bl for m in SVID_MARKERS):    return "svid"
+    if any(m in bl for m in TEHPASP_MARKERS): return "tehpasp"
+    if any(m in bl for m in TEHPLAN_MARKERS): return "tehplan"
+    return "doc"
+
+
+def extract_obj_type(body: str) -> str | None:
+    m = EGRN_OBJ_RE.search(body or "")
+    if not m: return None
+    return OBJ_TYPE_MAP.get(m.group(1).lower())
+
+
+# ─── XML-парсер (приоритет над PDF при совпадении КУВИ + КН) ────────────────
+import xml.etree.ElementTree as _ET
+
+XML_TAG_TO_OBJ = {  # корневой тег → object_type
+    "extract_about_property_land":      "land",
+    "extract_about_property_building":  "building",
+    "extract_about_property_room":      "room",
+    "extract_about_property_structure": "structure",
+    "extract_about_property_ons":       "ons",
+    "extract_about_property_parking":   "parking",
+}
+
+def parse_egrn_xml(xml: Path) -> dict | None:
+    """Извлечь канонические данные из XML-выписки ЕГРН (формат Росреестра)."""
+    try:
+        root = _ET.parse(xml).getroot()
+    except Exception:
+        return None
+    obj_type = None
+    rtag = root.tag.lower()
+    for k, v in XML_TAG_TO_OBJ.items():
+        if k in rtag: obj_type = v; break
+
+    def first(*paths):
+        for p in paths:
+            e = root.find(".//" + p)
+            if e is not None and (e.text or "").strip():
+                return e.text.strip()
+        return None
+
+    return {
+        "kuvi":          first("registration_number"),
+        "extract_date":  first("date_formation", "date_received_request"),
+        "cad":           first("cad_number"),
+        "obj_type":      obj_type,
+        "address":       first("readable_address", "position_description"),
+        "area":          first("area"),
+        "purpose":       first("purpose/value", "purpose"),
+        "name":          first("name"),
+        "right_type":    first("right_type/value"),
+        "right_number":  first("right_number"),
+        "holder_name":   first("resident/name", "individual/full_name"),
+        "holder_inn":    first("inn"),
+        "holder_ogrn":   first("ogrn"),
+        "cad_value":     first("cost/value"),
+        "_source_xml":   xml.name,
+    }
+
+
+def build_xml_index(root: Path) -> dict:
+    """{(kuvi, cad) → xml_meta}; используется для подмены PDF-данных."""
+    idx: dict = {}
+    base = root / "10_Выписки_PDF"
+    if not base.exists(): return idx
+    for xml in base.rglob("*.xml"):
+        meta = parse_egrn_xml(xml)
+        if meta and meta.get("kuvi") and meta.get("cad"):
+            idx[(meta["kuvi"], meta["cad"])] = meta
+    return idx
 
 
 # ─── Создание структуры ─────────────────────────────────────────────────────
@@ -143,45 +270,45 @@ def make_tree(root: Path) -> None:
         db.touch()
 
 
-# ─── Классификация исходного PDF по имени файла + пути ─────────────────────
+# ─── Классификация исходного PDF (имя + содержимое) ────────────────────────
 def classify_pdf(pdf: Path) -> dict:
     """
-    Возвращает: {"kind": "egrul|egrip|egrn|doc",
-                 "inn": str|None, "cad": str|None, "slug": str}
+    Возвращает: {"kind": "egrul|egrip|egrn|svid|tehpasp|tehplan|doc",
+                 "inn": str|None, "cad": str|None,
+                 "kuvi": str|None, "obj_type": str|None, "slug": str}
     """
     name = pdf.stem
-    parent = pdf.parent.name.lower()
-    text = name + " " + parent
+    parent = pdf.parent.name
+    body = read_pdf_head(pdf)  # пусто если fitz не установлен
 
+    kind = detect_doc_kind(parent, name, body)
+
+    # КН: сначала ищем в имени, затем в теле PDF
     cad = None
-    m = CN_RE.search(text)
-    if m:
-        cad = m.group(1)
+    m = CN_RE.search(name) or CN_RE.search(parent) or CN_RE.search(body or "")
+    if m: cad = m.group(1)
 
-    # Сначала смотрим парент-папку
-    kind = None
-    if "егрюл" in parent or "egrul" in parent:
-        kind = "egrul"
-    elif "егрип" in parent or "egrip" in parent:
-        kind = "egrip"
-    elif "егрн" in parent or "кадастр" in parent or "egrn" in parent or cad:
-        kind = "egrn"
-
+    # ИНН: только для ЕГРЮЛ/ЕГРИП
     inn = None
-    m10 = INN_UL_RE.search(name)
-    m12 = INN_FL_RE.search(name)
-    if m12 and (kind == "egrip" or not kind):
-        inn = m12.group(1)
-        kind = kind or "egrip"
-    elif m10 and (kind == "egrul" or not kind):
-        inn = m10.group(1)
-        kind = kind or "egrul"
+    if kind in ("egrul", "egrip", "doc"):
+        m12 = INN_FL_RE.search(name)
+        m10 = INN_UL_RE.search(name)
+        if m12 and kind != "egrul": inn = m12.group(1); kind = "egrip" if kind == "doc" else kind
+        elif m10 and kind != "egrip": inn = m10.group(1); kind = "egrul" if kind == "doc" else kind
 
-    if not kind:
-        kind = "doc"
+    kuvi = None
+    if kind == "egrn":
+        km = KUVI_RE.search(body)
+        if km: kuvi = km.group(0)
 
-    return {"kind": kind, "inn": inn, "cad": cad, "slug": slugify(name)[:40]}
+    obj_type = extract_obj_type(body) if kind in ("egrn", "svid", "tehpasp", "tehplan") else None
 
+    return {"kind": kind, "inn": inn, "cad": cad, "kuvi": kuvi,
+            "obj_type": obj_type, "slug": slugify(name)[:40]}
+
+
+KIND_PREFIX = {"egrn": "egrn", "svid": "svid",
+               "tehpasp": "tehpasp", "tehplan": "tehplan"}
 
 def target_name(meta: dict, page: int) -> str:
     p = f"p{page:02d}"
@@ -189,15 +316,17 @@ def target_name(meta: dict, page: int) -> str:
         return f"egrul_inn{meta['inn']}_{p}.jpg"
     if meta["kind"] == "egrip" and meta["inn"]:
         return f"egrip_innfl{meta['inn']}_{p}.jpg"
-    if meta["kind"] == "egrn" and meta["cad"]:
-        return f"egrn_{cad_to_token(meta['cad'])}_{p}.jpg"
+    if meta["kind"] in KIND_PREFIX and meta["cad"]:
+        return f"{KIND_PREFIX[meta['kind']]}_{cad_to_token(meta['cad'])}_{p}.jpg"
     return f"doc_{meta['slug']}_{p}.jpg"
 
 
 def target_dir(root: Path, kind: str) -> Path:
-    return root / "09_Документы_JPG" / {
-        "egrul": "ЕГРЮЛ", "egrip": "ЕГРИП", "egrn": "ЕГРН"
-    }.get(kind, "Прочее")
+    sub = {"egrul": "ЕГРЮЛ", "egrip": "ЕГРИП", "egrn": "ЕГРН",
+           "svid": "Свидетельства_о_праве",
+           "tehpasp": "Технические_паспорта",
+           "tehplan": "Техпланы"}.get(kind, "Прочее")
+    return root / "09_Документы_JPG" / sub
 
 
 # ─── EXIF: запись GPS + UserComment + ImageDescription ──────────────────────
@@ -371,14 +500,33 @@ def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
     mtx  = fitz.Matrix(zoom, zoom)
     cp(f"  PDF к конвертации: {len(pdfs)}", C.CY)
 
+    xml_idx = build_xml_index(root)
+    if xml_idx:
+        cp(f"  XML-выписок проиндексировано: {len(xml_idx)} (приоритет над PDF)", C.CY)
+        # cad → xml_meta в _data/egrn_xml.json — точные данные для KMZ-сборки
+        by_cad: dict = {}
+        for (_kuvi, cad), meta in xml_idx.items():
+            by_cad[cad] = meta
+        (root / "_data" / "egrn_xml.json").write_text(
+            json.dumps(by_cad, ensure_ascii=False, indent=2), encoding="utf-8")
+
     for pdf in pdfs:
         meta = classify_pdf(pdf)
+
+        # XML-пара: при совпадении (КУВИ, КН) — XML переписывает данные
+        xml_meta = None
+        if meta["kind"] == "egrn" and meta["kuvi"] and meta["cad"]:
+            xml_meta = xml_idx.get((meta["kuvi"], meta["cad"]))
+            if xml_meta:
+                meta["obj_type"] = xml_meta.get("obj_type") or meta["obj_type"]
+
         out_dir = target_dir(root, meta["kind"])
-        # Геопривязка: только для документов недвижимости (ЕГРН) и прочих, у
-        # которых распознан КН. ЕГРЮЛ/ЕГРИП — без GPS (бенефициары → BU, не
-        # точка на карте). Связь с BU остаётся через UserComment.inn.
+        # Геопривязка: GPS только для документов с распознанным КН
+        # (ЕГРН, свидетельства, техпаспорта, техпланы).
+        # ЕГРЮЛ/ЕГРИП — без GPS, связь с BU через UserComment.inn.
         lat = lon = alt = None; obj_id = None; bu_id = None
-        if meta["kind"] in ("egrn", "doc") and meta["cad"] and meta["cad"] in idx["cad"]:
+        if meta["kind"] in ("egrn", "svid", "tehpasp", "tehplan", "doc") \
+                and meta["cad"] and meta["cad"] in idx["cad"]:
             c = idx["cad"][meta["cad"]]
             lat, lon, alt, obj_id = c["lat"], c["lon"], c.get("alt"), c["obj_id"]
         if meta["inn"] and meta["inn"] in idx["inn"]:
@@ -403,7 +551,12 @@ def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
             ucomment = {
                 "app": "ekcelo", "kind": meta["kind"],
                 "inn": meta["inn"], "cad": meta["cad"],
-                "obj_id": obj_id, "bu_id": bu_id, "src": pdf.name,
+                "obj_id": obj_id, "bu_id": bu_id,
+                "object_type": meta.get("obj_type"),
+                "extract_number": meta.get("kuvi"),
+                "xml_matched": bool(xml_meta),
+                "xml_extract_date": (xml_meta or {}).get("extract_date"),
+                "src": pdf.name,
                 "page": page_idx + 1,
                 "ts": datetime.utcnow().isoformat(timespec="seconds") + "Z",
             }
@@ -419,7 +572,10 @@ def main() -> None:
     cp("=" * 64, C.B)
 
     default_root = r"D:\ОБЪЕКТЫ"
-    raw = input(f"\nКорневая папка [{default_root}]: ").strip() or default_root
+    raw = input(
+        f"\nВыберите папку для создания в ней новой болванки структуры "
+        f"недвижимости ekcelo, [Enter — {default_root}]: "
+    ).strip() or default_root
     name = input("Название проекта (папка внутри): ").strip()
     if not name:
         cp("Название не указано — выход.", C.R); sys.exit(1)
