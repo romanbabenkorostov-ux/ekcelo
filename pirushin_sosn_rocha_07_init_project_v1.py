@@ -86,6 +86,8 @@ DIRS = [
     "DB",                                 # SQLite-БД проекта
     "KMZ-KML",                            # выход 08_build_kmz и исходные KML/KMZ
     "HTML",                               # граф 04_nspd_graph
+    "doc",                                # произвольные пользовательские .doc/.docx
+    "json", "json/objects",               # агрегированные паспорта объектов
     "Бизнес_единицы",
     "Документы_JPG",
     "Выписки_PDF",
@@ -93,8 +95,7 @@ DIRS = [
     *[f"Выписки_PDF/{k}"   for k in DOC_KINDS_DIRS],
     "Фотографии",
     "Фотографии/Не_распределено",
-    "Фотографии/Недвижимость",
-    *[f"Фотографии/Недвижимость/{c}" for c in REALTY_CATS],
+    "Фотографии/Недвижимость",            # подкатегории создаются динамически
     "Фотографии/Оборудование",
     "Фотографии/Бизнес_единицы",
 ]
@@ -789,6 +790,16 @@ def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
         if meta["inn"] and meta["inn"] in idx["inn"]:
             bu_id = idx["inn"][meta["inn"]].get("bu_id")
 
+        # Дедупликация задвоенных документов: если в out_dir уже есть JPG'и с
+        # тем же базовым именем (kind+КН+дата, без `_pNN`), не разворачиваем
+        # вторую копию по страницам.
+        base_stem = target_name(meta, 1).rsplit("_p", 1)[0]
+        existing_pages = sorted(out_dir.glob(f"{base_stem}_p*.jpg"))
+        if existing_pages:
+            cp(f"    [skip] {orig.name}  (дубль, уже сконвертирован: "
+               f"{len(existing_pages)} стр.)", C.CY)
+            n_skip += len(existing_pages); continue
+
         try:
             doc = fitz.open(pdf)
         except Exception as e:
@@ -851,6 +862,117 @@ OBJ_TYPE_TO_CAT = {
     "parking": "Помещения", "ons": "ОНЗ",
 }
 
+# Поля JSON-узлов, в которых ищем КН (graph.json, egrn_*.json, structure.json)
+_CAD_KEYS = ("cadNumber", "cad_number", "cadastral_number", "cn")
+_OBJ_TYPE_KEYS = ("type", "objectClass", "object_type")
+# Узлы, которые не являются недвижимостью
+_NON_REALTY_TYPES = {"holder", "entity", "right", "encumbrance",
+                     "restriction", "person", "company"}
+
+
+def _walk_json_for_cads(obj, acc: dict[str, dict]) -> None:
+    """Рекурсивно ищет dict-узлы с кадастровым номером. Накапливает в acc:
+       acc[КН] = {object_type, address, area, cadastral_value, geometry, ...}"""
+    if isinstance(obj, dict):
+        cn = None
+        for k in _CAD_KEYS:
+            v = obj.get(k)
+            if isinstance(v, str) and CN_RE.fullmatch(v):
+                cn = v; break
+        if cn:
+            rec = acc.setdefault(cn, {})
+            # тип объекта
+            for k in _OBJ_TYPE_KEYS:
+                tv = obj.get(k)
+                if isinstance(tv, str) and tv.lower() in OBJ_TYPE_TO_CAT:
+                    rec.setdefault("object_type", tv.lower()); break
+                if isinstance(tv, str) and tv.lower() in _NON_REALTY_TYPES:
+                    return  # это узел владельца/права, не недвижимости
+            # скаляры
+            for k_in, k_out in (("address", "address"), ("area", "area"),
+                                ("cadastralValue", "cadastral_value"),
+                                ("cadastral_value", "cadastral_value"),
+                                ("name", "name"), ("purpose", "purpose"),
+                                ("permittedUse", "permitted_use"),
+                                ("permitted_uses", "permitted_use"),
+                                ("floorsAboveGround", "floors_above_ground"),
+                                ("undergroundFloors", "underground_floors")):
+                v = obj.get(k_in)
+                if v not in (None, "", []) and rec.get(k_out) in (None, "", []):
+                    rec[k_out] = v
+            # геометрия (lat/lon/wkt)
+            g = obj.get("geometry")
+            if isinstance(g, dict):
+                if g.get("lat") is not None and not rec.get("geometry"):
+                    rec["geometry"] = {"lat": g["lat"], "lon": g.get("lon")}
+                if g.get("wkt") and not rec.get("wkt"):
+                    rec["wkt"] = g["wkt"]
+        for v in obj.values():
+            _walk_json_for_cads(v, acc)
+    elif isinstance(obj, list):
+        for v in obj:
+            _walk_json_for_cads(v, acc)
+
+
+def _scan_user_json(root: Path) -> dict[str, dict]:
+    """Собирает данные из всех *.json в json/ и _data/ (graph.json,
+    egrn_*.json, structure.json, любые пользовательские)."""
+    acc: dict[str, dict] = {}
+    for d in (root / "json", root / "_data"):
+        if not d.exists(): continue
+        for jf in d.rglob("*.json"):
+            try:
+                data = json.loads(jf.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            _walk_json_for_cads(data, acc)
+    return acc
+
+
+def _write_object_passport(root: Path, cn: str, rec: dict,
+                           jpg_names: list[str]) -> None:
+    """Идемпотентно пишет/обновляет json/objects/<КН>.json — паспорт
+    объекта (тип, адрес, площадь, геометрия, высоты, список JPG-документов)."""
+    objdir = root / "json" / "objects"
+    objdir.mkdir(parents=True, exist_ok=True)
+    f = objdir / f"{cn.replace(':', '_')}.json"
+    # height_m из этажности (если есть)
+    height_m = None
+    fag = rec.get("floors_above_ground")
+    try:
+        if fag is not None: height_m = float(fag) * 3.0
+    except Exception: pass
+    passport = {
+        "cadastral_number":     cn,
+        "object_type":          rec.get("object_type"),
+        "address":              rec.get("address"),
+        "area":                 rec.get("area"),
+        "cadastral_value":      rec.get("cadastral_value"),
+        "name":                 rec.get("name"),
+        "purpose":              rec.get("purpose"),
+        "permitted_use":        rec.get("permitted_use"),
+        "floors_above_ground":  rec.get("floors_above_ground"),
+        "underground_floors":   rec.get("underground_floors"),
+        "geometry":             rec.get("geometry"),
+        "wkt":                  rec.get("wkt"),
+        "height_m":             height_m,
+        "altitude_amsl_m":      None,
+        "documents":            sorted(jpg_names),
+        "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")
+                              .replace("+00:00", "Z"),
+    }
+    if f.exists():
+        # merge: новые непустые поля переопределяют старые None,
+        # старые непустые поля сохраняются если новых нет
+        try:
+            old = json.loads(f.read_text(encoding="utf-8"))
+            for k, v in old.items():
+                if passport.get(k) in (None, [], "") and v not in (None, [], ""):
+                    passport[k] = v
+        except Exception: pass
+    f.write_text(json.dumps(passport, ensure_ascii=False, indent=2),
+                 encoding="utf-8")
+
 
 def _read_jpg_object_type(jpg: Path) -> str | None:
     """Читает EXIF.UserComment.object_type из JPG-документа (если есть)."""
@@ -885,32 +1007,44 @@ def _extract_cads_from_kml(path: Path) -> set[str]:
 
 def sync_photo_tree(root: Path) -> None:
     """
-    Собирает множества КН из обнаруженных источников и идемпотентно
-    создаёт подпапки в Фотографии/Недвижимость/<категория>/<КН>/[План/].
+    Идемпотентно создаёт подпапки в Фотографии/Недвижимость/<категория>/<КН>/
+    и записывает json/objects/<КН>.json (паспорт объекта) на основе:
 
-    Источники в порядке убывания точности типа объекта:
-      1) _data/egrn_xml.json (точный obj_type)
-      2) _data/structure.json (cadastre_objects + object_type)
-      3) EXIF.UserComment.object_type в Документы_JPG/**/*.jpg
-      4) Имена JPG-документов egrn_/svid_/tehpasp_/tehplan_/doc_ — без типа
-      5) KML/KMZ в Выписки_PDF/ и KMZ-KML/ — без типа
-    КН без распознанного типа попадают в Не_распределено (папка не
-    создаётся под каждый КН — это не нужно).
+      1) _data/egrn_xml.json (точный obj_type из XML Росреестра)
+      2) _data/structure.json (cadastre_objects)
+      3) Любые *.json в json/ — graph.json, egrn_*.json, выгрузки 1С и т.п.;
+         рекурсивно извлекаются КН, тип, адрес, площадь, координаты, высоты.
+      4) EXIF.UserComment.object_type в Документы_JPG/**/*.jpg
+      5) Имена JPG-документов egrn_/svid_/tehpasp_/tehplan_/doc_
+      6) KML/KMZ в Выписки_PDF/ и KMZ-KML/
+
+    Категории и подпапки создаются по требованию (если КН такого типа есть).
+    Пустые категории не создаются — болванка остаётся компактной.
     """
     photos_root = root / "Фотографии" / "Недвижимость"
-    cad_type: dict[str, str | None] = {}
+    cad_data: dict[str, dict] = {}
 
-    def add(cn: str, t: str | None):
-        # Уже есть тип — не перезаписываем None'ом
-        if cn in cad_type and cad_type[cn] and not t: return
-        cad_type[cn] = t or cad_type.get(cn)
+    def add_type(cn: str, t: str | None):
+        rec = cad_data.setdefault(cn, {})
+        if t and not rec.get("object_type"):
+            rec["object_type"] = t
 
     # 1) XML-факты ЕГРН
     xfp = root / "_data" / "egrn_xml.json"
     if xfp.exists():
         try:
             for cn, meta in json.loads(xfp.read_text(encoding="utf-8")).items():
-                add(cn, (meta or {}).get("obj_type"))
+                add_type(cn, (meta or {}).get("obj_type"))
+                if meta:
+                    rec = cad_data[cn]
+                    for k_in, k_out in (("address", "address"),
+                                         ("area", "area"),
+                                         ("cad_value", "cadastral_value"),
+                                         ("name", "name"),
+                                         ("purpose", "purpose")):
+                        v = meta.get(k_in)
+                        if v not in (None, "") and not rec.get(k_out):
+                            rec[k_out] = v
         except Exception: pass
 
     # 2) structure.json — точные типы из 052_make_structure
@@ -930,50 +1064,65 @@ def sync_photo_tree(root: Path) -> None:
                 elif "сооруж" in ot:       t = "structure"
                 elif "незаверш" in ot:     t = "ons"
                 elif "машино" in ot:       t = "parking"
-                add(cn, t)
+                add_type(cn, t)
+                rec = cad_data[cn]
+                for k_in, k_out in (("address", "address"),):
+                    v = cad.get(k_in)
+                    if v and not rec.get(k_out): rec[k_out] = v
         except Exception: pass
 
-    # 3+4) Имена JPG-документов + EXIF object_type
+    # 3) Пользовательские JSON в json/ + _data
+    for cn, rec in _scan_user_json(root).items():
+        merged = cad_data.setdefault(cn, {})
+        for k, v in rec.items():
+            if v not in (None, "", []) and not merged.get(k):
+                merged[k] = v
+
+    # 4+5) Имена JPG-документов + EXIF object_type
     docs_dir = root / "Документы_JPG"
     cad_doc_re = re.compile(
         r"^(egrn|svid|tehpasp|tehplan|doc)_(\d{2})_(\d{2})_(\d{1,8})_(\d{1,8})"
     )
+    docs_by_cad: dict[str, list[str]] = {}
     if docs_dir.exists():
         for jpg in docs_dir.rglob("*.jpg"):
             m = cad_doc_re.search(jpg.name)
             if not m: continue
             cn = f"{m.group(2)}:{m.group(3)}:{m.group(4)}:{m.group(5)}"
             ot = _read_jpg_object_type(jpg)
-            add(cn, ot)
+            add_type(cn, ot)
+            docs_by_cad.setdefault(cn, []).append(jpg.name)
 
-    # 5) KML/KMZ
+    # 6) KML/KMZ
     for d in (root / "Выписки_PDF", root / "KMZ-KML"):
         if not d.exists(): continue
         for k in list(d.rglob("*.kml")) + list(d.rglob("*.kmz")):
             for cn in _extract_cads_from_kml(k):
-                add(cn, None)
+                cad_data.setdefault(cn, {})
 
-    # ─ создаём папки ─
-    n_dir = n_plan = 0
-    for cn, t in cad_type.items():
-        cat = OBJ_TYPE_TO_CAT.get(t or "")
-        if not cat: continue  # без типа — не помещаем в категорию
+    # ─ Создаём папки + пишем паспорта ─
+    n_dir = n_plan = n_passport = 0
+    for cn, rec in cad_data.items():
+        cat = OBJ_TYPE_TO_CAT.get((rec.get("object_type") or "").lower())
         token = cn.replace(":", "_")
-        d = photos_root / cat / token
-        if not d.exists():
-            d.mkdir(parents=True, exist_ok=True); n_dir += 1
-        if cat in PLAN_CATS:
-            plan = d / "План"
-            if not plan.exists():
-                plan.mkdir(parents=True, exist_ok=True); n_plan += 1
-    untyped = sum(1 for t in cad_type.values() if not t)
-    cp(f"  фото-дерево: КН распознано {len(cad_type)}"
-       f" (с типом {len(cad_type)-untyped}, без типа {untyped})", C.CY)
+        if cat:
+            d = photos_root / cat / token
+            if not d.exists():
+                d.mkdir(parents=True, exist_ok=True); n_dir += 1
+            if cat in PLAN_CATS:
+                plan = d / "План"
+                if not plan.exists():
+                    plan.mkdir(parents=True, exist_ok=True); n_plan += 1
+        _write_object_passport(root, cn, rec, docs_by_cad.get(cn, []))
+        n_passport += 1
+
     if n_dir or n_plan:
-        cp(f"  фото-дерево: создано {n_dir} КН-подпапок"
-           + (f", {n_plan} «План»" if n_plan else ""), C.G)
-    else:
-        cp("  фото-дерево: всё уже на месте.", C.CY)
+        bits = [f"{n_dir} КН-папок"]
+        if n_plan: bits.append(f"{n_plan} «План»")
+        cp(f"  фото-дерево: создано {', '.join(bits)}", C.G)
+    if n_passport:
+        cp(f"  паспортов объектов записано/обновлено: {n_passport} "
+           f"→ json/objects/", C.CY)
 
 
 # ─── Буфер обмена (Windows clip.exe, иначе pbcopy / xclip / pyperclip) ─────
