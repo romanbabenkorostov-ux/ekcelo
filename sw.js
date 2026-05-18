@@ -1,12 +1,13 @@
-// EkceloFoto — sw.js v2.9.62
+// EkceloFoto — sw.js v2.10.0
 // Service Worker: кэширует тайлы кадастрового слоя (nspd.gov.ru)
 // Срок хранения: 30 дней. Лимит: 2000000 тайлов (FIFO при переполнении).
 // Центральные тайлы загружаются браузером первыми (Leaflet сам приоритизирует центр).
 
-const CACHE_NAME   = 'ekcelo-cadastre-v2';
+const CACHE_NAME   = 'ekcelo-cadastre-v2-10-0';
 const CACHE_HOST   = 'nspd.gov.ru';
 const MAX_AGE_MS   = 30 * 24 * 60 * 60 * 1000;  // 30 дней
-const MAX_ENTRIES  = 2000000;   // v2.9.62: ×50 (было 40000). CACHE_NAME НЕ менять — иначе activate сотрёт кэш.
+const MAX_ENTRIES  = 2000000;   // v2.10.0: переименование CACHE_NAME намеренное —
+// activate (ниже) одноразово удалит старый кэш тайлов; владелец это подтвердил.
 
 self.addEventListener('install',  () => self.skipWaiting());
 self.addEventListener('activate', e  => e.waitUntil(
