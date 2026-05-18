@@ -1,5 +1,7 @@
 WIKI.md
 README.md
+__pycache__/
+*.pyc
 node_modules/
 dev/node_modules/
 dev/tests/node_modules/
