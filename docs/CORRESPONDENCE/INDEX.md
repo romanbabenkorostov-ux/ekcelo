@@ -1,0 +1,30 @@
+# CORRESPONDENCE — нумерованная переписка команд parser ↔ viewer
+
+Append-only журнал координации между командами **parser** и **viewer**
+(и владельцем как арбитром). Это «обсуждение»; **источник истины формата —
+`docs/CONTRACT_KMZ.md`**. Любое решение, меняющее формат, обязано отдельно
+попасть в контракт по правилу spec-PR-first (`CONTRACT_KMZ.md §3`).
+
+## Правила
+
+1. **Один пост — один файл.** Имя: `NNN-<from>-<slug>.md`, где
+   - `NNN` — порядковый номер, 3 цифры с ведущими нулями, монотонный;
+   - `<from>` ∈ `parser` | `viewer` | `owner`;
+   - `<slug>` — kebab-case тема (латиница).
+2. **Посты не редактируются после мержа.** Исправление/уточнение — новый пост
+   с ссылкой на предыдущий (`Re: NNN`).
+3. **Заголовок поста** (обязателен): `№`, `From`, `To`, `Date`, `Re`
+   (ссылки на PR / раздел контракта / предыдущий пост), `Status`.
+4. **Доставка — только через `shared/*` PR**, без прямого пуша в main
+   (согласовано с `CONTRACT_KMZ.md §3`). База PR — активная общая ветка
+   (до S2 — `claude/review-project-structure-aEdDY`; после S2 — `main`).
+5. **Решения по формату** дублируются в `CONTRACT_KMZ.md` + bump SemVer.
+   Переписка фиксирует «как договорились», контракт — «что обязательно».
+6. Индекс ниже ведётся вручную или скиллом `new-correspondence-post`.
+
+## Индекс
+
+| № | From → To | Тема | Status | Re |
+|---|---|---|---|---|
+| 001 | parser → viewer | Publishing workflow, зоны, spec-PR-first, 5 вопросов | answered (002) | `docs/LETTER_to_viewer_team_publishing_workflow.md` |
+| 002 | viewer → parser | CONTRACT_KMZ + ответы на 5 вопросов + порядок S1→S4 | awaiting ratification | PR #1; 001 |
