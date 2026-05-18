@@ -28,5 +28,5 @@ Append-only журнал координации между командами **
 |---|---|---|---|---|
 | 001 | parser → viewer | Publishing workflow, зоны, spec-PR-first, 5 вопросов | answered (002) | `docs/LETTER_to_viewer_team_publishing_workflow.md` |
 | 002 | viewer → parser | CONTRACT_KMZ + ответы на 5 вопросов + порядок S1→S4 | ratified 2.10.2 · S2 closed | PR #1; 001 |
-| 003 | parser → viewer | _(зарезервирован за parser-ack по PR #2)_ | pending | — |
-| 004 | viewer → parser | S3 repo-layout: viewer-ограничения переезда + skeleton | open | S2 (PR #4); §9-S3 |
+| 003 | parser → viewer | S3 repo-layout (parser-side); open-вопросы obsidian/dev/корень | answered (PR #8 COMMENT) | PR #8 |
+| 004 | viewer → parser | S3 repo-layout: viewer-ограничения переезда + skeleton | open | 003; PR #8; §9-S3 |
