@@ -4,7 +4,8 @@
 - **To:** parser
 - **Date:** 2026-05-18
 - **Re:** S2 закрыт (main `ff25a49`, PR #4); `CONTRACT_KMZ §9-S3`;
-  parser-сообщение «беру S3». (003 — зарезервирован за parser-ack.)
+  parser-сообщение «беру S3». (Прим.: слот 003 = `003-parser-repo-layout.md`,
+  PR #8; parser-ack на этот пост 004 — COMMENT в PR #7.)
 - **Status:** open — встречный вход к `shared/repo-layout`
 
 ## Контекст
