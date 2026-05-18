@@ -1102,19 +1102,21 @@ html.tile-seam-yandex .leaflet-tile-pane{ will-change:transform; isolation:isola
 .kd-btn.primary:hover{background:#f0ff00}
 /* ── S4: роли pro/view/embed — мягкое гейтирование UI (не криптозащита, §2 spec) ── */
 html.role-view #export-wrap, html.role-embed #export-wrap{display:none!important}
-html.role-embed #header, html.role-embed #ver-switch, html.role-embed #ekcelo-role-lock{display:none!important}
-#ekcelo-role-lock{position:fixed;top:4px;right:6px;z-index:5001;font:11px 'JetBrains Mono',ui-monospace,monospace;background:var(--surface,#1b1f27);border:1px solid var(--border,#333);border-radius:6px;padding:2px 7px;opacity:.55;cursor:pointer;transition:opacity .15s;color:var(--accent2,#7fd6ff)}
+html.role-embed #app{grid-template-rows:0 1fr}
+html.role-embed #header{height:0!important;min-height:0!important;padding:0!important;border:0!important;overflow:hidden!important;visibility:hidden!important}
+html.role-embed #ver-switch{display:none!important}
+#ekcelo-role-lock{font:11px 'JetBrains Mono',ui-monospace,monospace;background:var(--surface,#1b1f27);border:1px solid var(--border,#333);border-radius:6px;padding:2px 7px;opacity:.7;cursor:pointer;transition:opacity .15s;color:var(--accent2,#7fd6ff);flex-shrink:0;margin-left:4px;white-space:nowrap}
 #ekcelo-role-lock:hover{opacity:1}
 </style>
 </head>
 <body>
 <div id="app">
 <div id="ver-switch" style="position:fixed;top:4px;left:50%;transform:translateX(-50%);z-index:5000;font:11px 'JetBrains Mono',ui-monospace,monospace;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:2px 9px;opacity:.55;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.55"><a href="./v2961.html" style="color:var(--accent2);text-decoration:none">↩ замороженная 2.9.61</a></div>
-<div id="ekcelo-role-lock" title="Переключатель интерфейса (pro/view) — не защита данных" onclick="__ekceloRoleToggle()">🔑 про…</div>
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
   <div id="logo">Ekcelo<span>Foto</span><small>v2.10.0</small></div>
+  <div id="ekcelo-role-lock" title="Переключатель интерфейса (pro/view) — не защита данных" onclick="__ekceloRoleToggle()">🔑 про…</div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -1696,6 +1698,7 @@ function clearCadastreCache(){navigator.serviceWorker?.controller?.postMessage('
 
 // ═══ MAP ══════════════════════════════════════════════════════════
 const map=L.map('map',{center:[55.75,37.61],zoom:5,zoomControl:true,maxZoom:22});
+if(window.__ekceloRole==='embed'){ window.addEventListener('load',function(){ try{ map.invalidateSize(true); }catch(_){ } }); setTimeout(function(){ try{ map.invalidateSize(true); }catch(_){ } },400); }
 // Prevent "white squares": stop Leaflet from loading missing marker-icon.png in SPA context.
 // Deleting _getIconUrl is enough — mergeOptions with empty strings breaks divIcon too.
 delete L.Icon.Default.prototype._getIconUrl;
