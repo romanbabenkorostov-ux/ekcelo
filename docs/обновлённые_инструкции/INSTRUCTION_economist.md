@@ -65,7 +65,7 @@
 папку `Не_распределено/` в корне болванки** и запустите:
 
 ```
-python pirushin_sosn_rocha_07_init_project_v1.py
+python parser/scripts/pirushin_sosn_rocha_07_init_project_v1.py
 ```
 → **меню → 3. Сортировка папки Не_распределено/**.
 
@@ -107,7 +107,7 @@ pip install openpyxl
 В терминале:
 
 ```powershell
-python pirushin_sosn_rocha_052_make_structure_v1.py
+python parser/scripts/pirushin_sosn_rocha_052_make_structure_v1.py
 ```
 
 Альтернатива: открыть файл скрипта в редакторе, нажать **▶ Run Python File**

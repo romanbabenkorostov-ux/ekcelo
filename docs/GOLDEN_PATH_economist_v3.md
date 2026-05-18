@@ -87,7 +87,7 @@ D:\ОБЪЕКТЫ\<Название_проекта>\
 ### Шаг 0. Создать новую болванку проекта
 
 ```powershell
-python pirushin_sosn_rocha_07_init_project_v1.py
+python parser/scripts/pirushin_sosn_rocha_07_init_project_v1.py
 ```
 → **меню → 1. Создание структуры** → корневая папка (Enter — `D:\ОБЪЕКТЫ`)
 → имя проекта → дерево создаётся, путь копируется в буфер обмена.
@@ -124,7 +124,7 @@ python pirushin_sosn_rocha_07_init_project_v1.py
 **Скрипт:** `pirushin_sosn_rocha_03_enrich_v14.py`
 
 ```powershell
-python 03_enrich_v14.py "D:\ОБЪЕКТЫ\<проект>\json\*"
+python parser/scripts/03_enrich_v14.py "D:\ОБЪЕКТЫ\<проект>\json\*"
 ```
 
 Или интерактивно — по одному файлу подряд, Enter для завершения.
@@ -140,7 +140,7 @@ python 03_enrich_v14.py "D:\ОБЪЕКТЫ\<проект>\json\*"
 
 **Скрипт:** `pirushin_sosn_rocha_052_make_structure_v1.py`
 **Вход:** `ОСВ\osv.xlsx`, файлы JSON в `json\`.
-**Запуск:** `python pirushin_sosn_rocha_052_make_structure_v1.py`,
+**Запуск:** `python parser/scripts/pirushin_sosn_rocha_052_make_structure_v1.py`,
 интерактивные ответы:
 1. Путь к `.xlsx` ОСВ.
 2. (Enter) или путь к предыдущему `structure_*.json` как базе.
@@ -173,7 +173,7 @@ python 03_enrich_v14.py "D:\ОБЪЕКТЫ\<проект>\json\*"
 ### Шаг 7. Конвертация документов в JPG и синхронизация фото-дерева
 
 ```powershell
-python pirushin_sosn_rocha_07_init_project_v1.py
+python parser/scripts/pirushin_sosn_rocha_07_init_project_v1.py
 ```
 → **меню → 2. Конвертация PDF → JPG** → Enter (берёт последний проект).
 
@@ -211,7 +211,7 @@ JPG-документов.
 `Выписки_PDF\`, `json\`), а затем запустите:
 
 ```powershell
-python pirushin_sosn_rocha_07_init_project_v1.py
+python parser/scripts/pirushin_sosn_rocha_07_init_project_v1.py
 ```
 → **меню → 3. Сортировка папки Не_распределено/** → Enter (последний проект).
 
@@ -284,14 +284,14 @@ python pirushin_sosn_rocha_07_init_project_v1.py
 
 **A. Только юридический граф:**
 ```powershell
-python 04_nspd_graph_v14.py "D:\…\json\enriched_<TS>.json"
+python parser/scripts/04_nspd_graph_v14.py "D:\…\json\enriched_<TS>.json"
 ```
 На графе: объекты, права, обременения, бенефициары, бизнес-единицы,
 учредители.
 
 **B. Полный граф с оборудованием и уровнями (рекомендуется):**
 ```powershell
-python 04_nspd_graph_v14.py "D:\…\json\enriched_<TS>.json" "D:\…\_data\structure.json"
+python parser/scripts/04_nspd_graph_v14.py "D:\…\json\enriched_<TS>.json" "D:\…\_data\structure.json"
 ```
 Или интерактивно: скрипт сначала спросит путь к enriched, затем путь к
 structure (Enter — пропустить).
@@ -425,32 +425,32 @@ output-файла.
 
 ```powershell
 # Шаг 0: создать болванку
-python pirushin_sosn_rocha_07_init_project_v1.py
+python parser/scripts/pirushin_sosn_rocha_07_init_project_v1.py
 # → 1 → корневая папка (Enter) → имя проекта
 
 # Шаг 5: сведение
-python 03_enrich_v14.py "D:\ОБЪЕКТЫ\<проект>\json\*.json"
+python parser/scripts/03_enrich_v14.py "D:\ОБЪЕКТЫ\<проект>\json\*.json"
 
 # Шаг 6: ОСВ → структура
-python pirushin_sosn_rocha_052_make_structure_v1.py
+python parser/scripts/pirushin_sosn_rocha_052_make_structure_v1.py
 #   ↓ интерактивно
 #   путь к ОСВ\osv.xlsx
 #   Enter / путь к prev structure.json
 #   путь к каталогу json\
 
 # Шаг 7: PDF/DOC/DOCX → JPG + sync фото-дерева
-python pirushin_sosn_rocha_07_init_project_v1.py
+python parser/scripts/pirushin_sosn_rocha_07_init_project_v1.py
 # → 2 → Enter (последний проект)
 
 # Шаг 7а: разобрать «хаотичный дамп» в КОРНЕВОЙ Не_распределено/
-python pirushin_sosn_rocha_07_init_project_v1.py
+python parser/scripts/pirushin_sosn_rocha_07_init_project_v1.py
 # → 3 → Enter (последний проект) → подтвердить перенос
 
 # Шаг 8B: полный граф
-python 04_nspd_graph_v14.py "...\json\enriched_<TS>.json" "...\_data\structure.json"
+python parser/scripts/04_nspd_graph_v14.py "...\json\enriched_<TS>.json" "...\_data\structure.json"
 
 # Шаг 9: KMZ
-python pirushin_sosn_rocha_08_build_kmz_v1.py
+python parser/scripts/pirushin_sosn_rocha_08_build_kmz_v1.py
 ```
 
 ---
