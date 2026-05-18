@@ -4,7 +4,7 @@ import math
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from pirushin_sosn_rocha_08_build_kmz_v2 import (
     spiral_points, _spiral_r_for, _spiral_phi_for,
     SPIRAL_R0_M, SPIRAL_DR_M, GOLDEN_DEG, LAT_M_PER_DEG,

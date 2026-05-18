@@ -13,7 +13,7 @@ if errorlevel 1 (
 python --version
 echo.
 echo Устанавливаем piexif и watchdog...
-pip install -r scripts\requirements.txt
+pip install -r utils\requirements.txt
 if errorlevel 1 (
     echo [ОШИБКА] Установка не удалась.
     pause & exit /b 1
