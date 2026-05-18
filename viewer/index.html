@@ -1765,7 +1765,7 @@ const L_NspdLayer = L.GridLayer.extend({
     const img = document.createElement('img');
     img.style.cssText = 'width:256px;height:256px;';
     const url = _nspdWmsUrl(this.options._layerId, coords);
-    fetch(url, {
+    fetch(proxyUrl(url), {
       referrer: 'https://nspd.gov.ru/',
       referrerPolicy: 'unsafe-url',
       headers: { Accept: 'image/png,image/*' },
@@ -1923,7 +1923,7 @@ function _prefetchCadastreZ17(token){
     if(i >= work.length) return Promise.resolve();
     const url = work[i++];
     _prefetchSeen.add(url);
-    return fetch(url, { referrer:'https://nspd.gov.ru/', referrerPolicy:'unsafe-url', headers:{ Accept:'image/png,image/*' } })
+    return fetch(proxyUrl(url), { referrer:'https://nspd.gov.ru/', referrerPolicy:'unsafe-url', headers:{ Accept:'image/png,image/*' } })
       .then(r=>r.ok?r.blob():null)
       .catch(()=>{})
       .then(()=>worker());
