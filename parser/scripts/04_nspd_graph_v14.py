@@ -651,7 +651,7 @@ def render_html(nodes, edges, source_name: str, html_name: str = "") -> str:
              f"{benef_count} бенефициаров · {bu_count} бизнес-единиц · "
              f"{stub_count} ссылок без данных · {len(edges)} связей")
 
-    vis_network_inline = (Path(__file__).parent / "vendor" / "vis-network-9.1.9.min.js").read_text(encoding="utf-8")
+    vis_network_inline = (Path(__file__).parent.parent / "vendor" / "vis-network-9.1.9.min.js").read_text(encoding="utf-8")
 
     return (rf"""<!DOCTYPE html>
 <html lang="ru">

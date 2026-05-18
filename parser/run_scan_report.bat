@@ -15,7 +15,7 @@ echo Сканируем: %PHOTO_ROOT%
 echo БД:        %DB_PATH%
 echo.
 
-python scripts\watchdog_exif.py ^
+python utils\watchdog_exif.py ^
     --root      "%PHOTO_ROOT%" ^
     --db        "%DB_PATH%"   ^
     --scan-only ^
@@ -23,7 +23,7 @@ python scripts\watchdog_exif.py ^
 
 echo.
 echo Генерируем HTML-отчёт...
-python scripts\report_html.py ^
+python utils\report_html.py ^
     --db  "%DB_PATH%"   ^
     --out "%REPORT_PATH%"
 

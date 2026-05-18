@@ -1,4 +1,4 @@
-# vendor/ — сторонние библиотеки, бандленные локально
+# parser/vendor/ — сторонние библиотеки, бандленные локально
 
 Эта папка содержит сторонние JS-библиотеки, **встраиваемые** парсером в
 генерируемые HTML-артефакты (`graph.html`). Цель — выполнить контрактный
@@ -14,7 +14,7 @@
 - **Дата получения:** 2026-05-18
 - **Лицензия:** dual MIT / Apache-2.0 (см. `vis-network-LICENSE-MIT.txt` и
   `vis-network-LICENSE-APACHE-2.0.txt`)
-- **Потребитель:** `04_nspd_graph_v14.py:render_html()` — читает этот файл и
+- **Потребитель:** `parser/scripts/04_nspd_graph_v14.py:render_html()` — читает этот файл и
   встраивает в HTML через `<script>…</script>` вместо
   `<script src="https://cdn.jsdelivr.net/…">`
 
