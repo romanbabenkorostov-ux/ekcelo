@@ -1,0 +1,1 @@
+PDF + XML -> Merge (Latest Date priority) -> Store Sections 1 & 2 only

@@ -7,7 +7,7 @@
      from file:// context (origin=null → strict-origin sends literal "null" → OSM blocks).
      Chrome was unaffected (sends no Referer from file://, OSM accepts Chrome UA).
      Each tile layer sets its own referrerPolicy via img.referrerPolicy attribute. -->
-<title>EkceloFoto v2.10.0</title>
+<title>EkceloFoto v2.9.61</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f14'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='17' font-weight='900' font-family='Arial Black' fill='%23e8ff47'%3EEF%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -301,12 +301,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .mg-icon-zu{color:#5cff8a}
 .mg-icon-oks{color:#d6a3ff}
 .mg-icon-exp{color:#7adcff}
-.mg-icon-room{color:#ffd166}
-.mg-icon-str{color:#8ad4ff}
-.mg-icon-ons{color:#ff9f7a}
-.mg-icon-bu{color:#c0ff8a}
-.mg-icon-eq{color:#ff8ad4}
-.mg-icon-ben{color:#b0b0ff}
 .mg-title{flex:1;font-size:12px;font-weight:800;color:var(--text);letter-spacing:0.3px;text-transform:uppercase}
 .mg-count{font-size:10px;font-weight:700;color:var(--text);background:var(--bg);border:1px solid var(--accent2);padding:1px 7px;border-radius:9px;min-width:20px;text-align:center}
 .marks-group-body{flex:1;overflow-y:auto;min-height:0;padding:2px 0}
@@ -459,46 +453,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
      4. Check both light and dark themes (--map-bg differs).
      5. Verify Метки (markers), Контуры (contours), photo pins still
         render correctly — past "fixes" broke icons.
-
-   v2.9.62 FALLBACK (additive, zero-risk for Chrome/Firefox):
-     Some Yandex Browser builds ship an OLDER Chromium that lacks
-     `mix-blend-mode: plus-lighter`. There the keystone rule above is
-     silently ignored → the white grid returns (Chrome is newer = OK,
-     Firefox never had the bug). JS feature+engine detection adds
-     `html.tile-seam-fallback` ONLY when the engine is Blink AND
-     CSS.supports('mix-blend-mode','plus-lighter') === false. The five
-     rules above are NEVER touched, so the proven Chrome/Firefox path is
-     byte-identical (no regression possible). The fallback only adds:
-       html.tile-seam-fallback .leaflet-tile-pane { isolation:isolate }
-         → one isolated blending/compositing context for the whole pane
-           (complementary mechanism to plus-lighter)
-       html.tile-seam-fallback .leaflet-tile { outline-color:var(--map-bg) }
-         → reuses the EXISTING 1px outline (geometry unchanged — no z>19
-           catastrophe) but paints it in the pane colour so overlapping
-           per-tile frames over-paint the sub-pixel crack invisibly.
-     Still must be verified on a real old Yandex Browser per the 5 steps.
-
-   v2.9.62b UPDATE (diagnostic-driven): on the reporting user's Yandex
-   Browser, CSS.supports('mix-blend-mode','plus-lighter') === TRUE, yet
-   the white grid still appears on OSM AND Esri, in both themes. So the
-   plus-lighter hypothesis above is NOT this user's cause. Conclusion:
-   Yandex's compositor does not collapse .leaflet-tile-pane into a single
-   layer (an identity --map-filter under system-light theme can be
-   optimized away; translateZ(0) alone is not always enough in YaBrowser),
-   so per-tile layers + translate3d sub-pixel rounding leave a 1px void
-   that plus-lighter cannot bridge (nothing to blend across separate
-   layers). Additive, UA-gated fix (YaBrowser ONLY → Chrome/Firefox
-   byte-identical, zero regression):
-       html.tile-seam-yandex .leaflet-tile-pane { will-change:transform;
-                                                   isolation:isolate }
-         → pins the pane to ONE composite layer (will-change on the PANE,
-           NOT on tiles — v2.9.50's failure was will-change on TILES,
-           which made MORE per-tile layers; pane-level is the opposite)
-           so plus-lighter can finally merge adjacent <img> tiles. No
-           geometry/size change → no z>19 catastrophe.
-     MUST be verified on the actual Yandex Browser; if the grid persists,
-     the residual is a Leaflet tile-position rounding issue that needs a
-     JS-level GridLayer patch (larger change), not more CSS.
    ═══════════════════════════════════════════════════════════════════ */
 .leaflet-tile-pane{
   background: var(--map-bg);
@@ -512,17 +466,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
   filter: none !important;
   outline: 1px solid transparent;
 }
-/* v2.9.62 — см. «v2.9.62 FALLBACK» в комментарии выше. Применяется ТОЛЬКО при
-   html.tile-seam-fallback (старый Chromium Яндекс.Браузера без plus-lighter).
-   Пять правил выше НЕ изменены → путь Chrome/Firefox байт-в-байт прежний. */
-html.tile-seam-fallback .leaflet-tile-pane{ isolation:isolate; }
-html.tile-seam-fallback .leaflet-tile{ outline-color:var(--map-bg); }
-/* v2.9.62b — Яндекс.Браузер ПОДДЕРЖИВАЕТ plus-lighter, но щель остаётся:
-   принудительно держим .leaflet-tile-pane единым композитным слоем (will-change
-   на ПАНЕЛИ, не на плитках — провал v2.9.50 был will-change на ПЛИТКАХ), чтобы
-   plus-lighter мог слить соседние <img>. UA-гейт ТОЛЬКО YaBrowser → Chrome/
-   Firefox не затронуты (нулевой риск регрессии). Требует проверки на устройстве. */
-html.tile-seam-yandex .leaflet-tile-pane{ will-change:transform; isolation:isolate; }
 .leaflet-control-zoom a{background:var(--surface) !important;color:var(--text) !important;border-color:var(--border) !important}
 .leaflet-control-zoom a:hover{background:var(--surface2) !important}
 .leaflet-control-attribution{background:rgba(var(--bg-rgb,13,15,20),.75) !important;color:var(--muted) !important;font-size:10px !important;z-index:540 !important}
@@ -860,19 +803,6 @@ html.tile-seam-yandex .leaflet-tile-pane{ will-change:transform; isolation:isola
 .info-card .ic-header.ic-zu{background:rgba(0,180,50,0.16);border-bottom-color:rgba(0,180,50,.4)}
 .info-card .ic-header.ic-oks{background:rgba(160,32,240,0.16);border-bottom-color:rgba(160,32,240,.4)}
 .info-card .ic-header.ic-exp{background:rgba(71,200,255,0.16);border-bottom-color:rgba(71,200,255,.4)}
-.info-card .ic-header.ic-room{background:rgba(255,209,102,0.16);border-bottom-color:rgba(255,209,102,.4)}
-.info-card .ic-header.ic-str{background:rgba(138,212,255,0.16);border-bottom-color:rgba(138,212,255,.4)}
-.info-card .ic-header.ic-ons{background:rgba(255,159,122,0.16);border-bottom-color:rgba(255,159,122,.4)}
-.info-card .ic-header.ic-bu{background:rgba(192,255,138,0.16);border-bottom-color:rgba(192,255,138,.4)}
-.info-card .ic-header.ic-eq{background:rgba(255,138,212,0.16);border-bottom-color:rgba(255,138,212,.4)}
-.info-card .ic-header.ic-ben{background:rgba(176,176,255,0.16);border-bottom-color:rgba(176,176,255,.4)}
-.info-card .ic-attach{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
-.info-card .ic-att-thumb{width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid var(--border);cursor:pointer;background:#000}
-.info-card .ic-att-chip{display:inline-flex;align-items:center;gap:3px;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;padding:3px 7px;border-radius:9px;border:1px solid var(--accent2);background:var(--bg);color:var(--text);cursor:pointer}
-.info-card .ic-att-chip.ic-att-missing{opacity:.5;cursor:default;border-color:var(--border)}
-#att-lightbox{position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;cursor:zoom-out}
-#att-lightbox.open{display:flex}
-#att-lightbox img{max-width:94vw;max-height:94vh;object-fit:contain;box-shadow:0 0 30px rgba(0,0,0,.6)}
 .info-card .ic-title{flex:1;font-size:10.5px;font-weight:700;color:var(--text);letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* Header mini-buttons: copy (⎘) and close (×). Same compact size, no border to keep the bar slim. */
 .info-card .ic-icobtn,.info-card .ic-close{background:transparent;border:none;color:var(--muted);font-size:13px;cursor:pointer;padding:2px 4px;line-height:1;border-radius:3px;flex-shrink:0;transition:color .12s,background .12s;display:inline-flex;align-items:center;justify-content:center}
@@ -1104,11 +1034,10 @@ html.tile-seam-yandex .leaflet-tile-pane{ will-change:transform; isolation:isola
 </head>
 <body>
 <div id="app">
-<div id="ver-switch" style="position:fixed;top:4px;left:50%;transform:translateX(-50%);z-index:5000;font:11px 'JetBrains Mono',ui-monospace,monospace;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:2px 9px;opacity:.55;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.55"><a href="./v2961.html" style="color:var(--accent2);text-decoration:none">↩ замороженная 2.9.61</a></div>
 <div id="load-progress"><div id="load-progress-bar"></div></div>
 
 <header id="header">
-  <div id="logo">Ekcelo<span>Foto</span><small>v2.10.0</small></div>
+  <div id="logo">Ekcelo<span>Foto</span><small>v2.9.61</small></div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -1128,7 +1057,6 @@ html.tile-seam-yandex .leaflet-tile-pane{ will-change:transform; isolation:isola
       <button onclick="closeUploadMenu();pickKMLViaMenu()">🗺 Добавить из .KML</button>
       <button onclick="closeUploadMenu();pickKMZViaMenu()">📦 Добавить KMZ (Google Earth)…</button>
       <button onclick="closeUploadMenu();pickXlsxCatalog()">📋 Загрузить кад.номера (XLSX)…</button>
-      <button onclick="closeUploadMenu();_pickCadastreTilePack()" title="Загрузить пакет чужих тайлов кадастра (z17) в локальный кэш — обогащение, без перезаписи">📥 Загрузить чужие тайлы z17</button>
       <!-- Path hints (Task 1): persistent reminders of last opened locations.
            Browsers don't expose absolute paths; we show the file/folder NAME so the
            user can verify they're working with the right source. Hidden when empty. -->
@@ -1140,7 +1068,6 @@ html.tile-seam-yandex .leaflet-tile-pane{ will-change:transform; isolation:isola
   <input type="file" id="kml-file-input"        multiple accept=".kml"/>
   <input type="file" id="kmz-file-input"        multiple accept=".kmz"/>
   <input type="file" id="xlsx-file-input"       accept=".xlsx,.xls" style="display:none" onchange="onXlsxFileChosen(this)"/>
-  <input type="file" id="tilepack-file-input"   accept=".zip" style="display:none" onchange="_onTilePackChosen(this)"/>
   <label id="auto-save-label" title="Авто-запись EXIF при навигации">
     <input type="checkbox" id="auto-save-cb" onchange="onAutoSaveCbChange(this)"/>
     EXIF авто
@@ -1228,19 +1155,16 @@ html.tile-seam-yandex .leaflet-tile-pane{ will-change:transform; isolation:isola
   <div id="sidebar-tabs">
     <button class="sb-tab active" data-tab="photos" onclick="switchSidebarTab('photos')">📸 Фото</button>
     <button class="sb-tab"        data-tab="marks"  onclick="switchSidebarTab('marks')">🏷 Метки</button>
-    <button class="sb-tab"        data-tab="graph"  id="sb-tab-graph" onclick="switchSidebarTab('graph')" style="display:none">🕸 Граф</button>
   </div>
 
   <div id="photo-list" class="sidebar-panel"></div>
 
-  <!-- Markers panel — v2.10.0: 9 vertical scrollable subgroups (KML contract).
-       Order matches the parser's strict <Folder> order. zu/oks/exp expanded,
-       the six v2.10 groups collapsed by default to keep the panel usable. -->
+  <!-- Markers panel — split into 3 vertical scrollable subgroups -->
   <div id="marks-list" class="sidebar-panel" style="display:none">
     <div class="marks-group" id="marks-group-zu">
       <div class="marks-group-header" onclick="toggleMarksGroup('zu')">
         <span id="marks-arrow-zu">▼</span>
-        <span class="mg-icon mg-icon-zu" title="Земельные участки">■</span>
+        <span class="mg-icon mg-icon-zu" title="Земельные участки — заполненный квадрат">■</span>
         <span class="mg-title">Зем.участки</span>
         <span class="mg-count" id="marks-count-zu">0</span>
       </div>
@@ -1249,65 +1173,11 @@ html.tile-seam-yandex .leaflet-tile-pane{ will-change:transform; isolation:isola
     <div class="marks-group" id="marks-group-oks">
       <div class="marks-group-header" onclick="toggleMarksGroup('oks')">
         <span id="marks-arrow-oks">▼</span>
-        <span class="mg-icon mg-icon-oks" title="ОКС (здания)">▢</span>
-        <span class="mg-title">ОКС</span>
+        <span class="mg-icon mg-icon-oks" title="ОКСы — пустой квадрат">▢</span>
+        <span class="mg-title">ОКСы</span>
         <span class="mg-count" id="marks-count-oks">0</span>
       </div>
       <div class="marks-group-body" id="marks-body-oks"></div>
-    </div>
-    <div class="marks-group collapsed" id="marks-group-room">
-      <div class="marks-group-header" onclick="toggleMarksGroup('room')">
-        <span id="marks-arrow-room">▶</span>
-        <span class="mg-icon mg-icon-room" title="Помещения">◧</span>
-        <span class="mg-title">Помещения</span>
-        <span class="mg-count" id="marks-count-room">0</span>
-      </div>
-      <div class="marks-group-body" id="marks-body-room"></div>
-    </div>
-    <div class="marks-group collapsed" id="marks-group-str">
-      <div class="marks-group-header" onclick="toggleMarksGroup('str')">
-        <span id="marks-arrow-str">▶</span>
-        <span class="mg-icon mg-icon-str" title="Сооружения">▭</span>
-        <span class="mg-title">Сооружения</span>
-        <span class="mg-count" id="marks-count-str">0</span>
-      </div>
-      <div class="marks-group-body" id="marks-body-str"></div>
-    </div>
-    <div class="marks-group collapsed" id="marks-group-ons">
-      <div class="marks-group-header" onclick="toggleMarksGroup('ons')">
-        <span id="marks-arrow-ons">▶</span>
-        <span class="mg-icon mg-icon-ons" title="Объекты незавершённого строительства">◳</span>
-        <span class="mg-title">ОНС</span>
-        <span class="mg-count" id="marks-count-ons">0</span>
-      </div>
-      <div class="marks-group-body" id="marks-body-ons"></div>
-    </div>
-    <div class="marks-group collapsed" id="marks-group-bu">
-      <div class="marks-group-header" onclick="toggleMarksGroup('bu')">
-        <span id="marks-arrow-bu">▶</span>
-        <span class="mg-icon mg-icon-bu" title="Бизнес-единицы">◉</span>
-        <span class="mg-title">Бизнес-ед.</span>
-        <span class="mg-count" id="marks-count-bu">0</span>
-      </div>
-      <div class="marks-group-body" id="marks-body-bu"></div>
-    </div>
-    <div class="marks-group collapsed" id="marks-group-eq">
-      <div class="marks-group-header" onclick="toggleMarksGroup('eq')">
-        <span id="marks-arrow-eq">▶</span>
-        <span class="mg-icon mg-icon-eq" title="Оборудование">◆</span>
-        <span class="mg-title">Оборуд.</span>
-        <span class="mg-count" id="marks-count-eq">0</span>
-      </div>
-      <div class="marks-group-body" id="marks-body-eq"></div>
-    </div>
-    <div class="marks-group collapsed" id="marks-group-ben">
-      <div class="marks-group-header" onclick="toggleMarksGroup('ben')">
-        <span id="marks-arrow-ben">▶</span>
-        <span class="mg-icon mg-icon-ben" title="Бенефициары">☗</span>
-        <span class="mg-title">Бенефициары</span>
-        <span class="mg-count" id="marks-count-ben">0</span>
-      </div>
-      <div class="marks-group-body" id="marks-body-ben"></div>
     </div>
     <div class="marks-group" id="marks-group-exp">
       <div class="marks-group-header" onclick="toggleMarksGroup('exp')">
@@ -1318,11 +1188,6 @@ html.tile-seam-yandex .leaflet-tile-pane{ will-change:transform; isolation:isola
       </div>
       <div class="marks-group-body" id="marks-body-exp"></div>
     </div>
-  </div>
-  <!-- v2.10.0: «Граф связей» panel — sandboxed graph.html from the KMZ -->
-  <div id="graph-list" class="sidebar-panel" style="display:none">
-    <iframe id="graph-frame" sandbox="allow-scripts" referrerpolicy="no-referrer"
-            style="border:0;width:100%;height:100%;background:#fff"></iframe>
   </div>
 
   <!-- FOLDER TREE (bottom of sidebar) -->
@@ -1529,10 +1394,6 @@ html.tile-seam-yandex .leaflet-tile-pane{ will-change:transform; isolation:isola
 </div>
 
 <!-- FULLSCREEN VIEWER -->
-<!-- v2.10.0: generic attachment image overlay (separate from #viewer, which is
-     bound to photos[]). Click anywhere to close. -->
-<div id="att-lightbox" onclick="_closeAttImage()"><img id="att-lightbox-img" alt=""></div>
-
 <div id="viewer">
   <button id="viewer-close" onclick="closeViewer()">&#215;</button>
   <!-- Item 4: zoom controls -->
@@ -1557,63 +1418,15 @@ html.tile-seam-yandex .leaflet-tile-pane{ will-change:transform; isolation:isola
 'use strict';
 
 // ═══ SERVICE WORKER ════════════════════════════════════════════════
-let _storageState = { persisted:false, usageMB:0, quotaMB:0 };
-// reqId-correlation для запросов к SW с многочанковым ответом (dump/import тайлов)
-const _swPending = new Map();
-let _swReqSeq = 0;
-function _swPost(msg, transfer){
-  const c = navigator.serviceWorker?.controller;
-  if(!c) return false;
-  c.postMessage(msg, transfer||[]);
-  return true;
-}
-// onMessage(d, rec) вызывается на каждое SW-сообщение этого reqId; вернуть true когда завершено
-function _swRequest(msg, transfer, onMessage){
-  return new Promise((resolve,reject)=>{
-    const reqId = 'r'+(++_swReqSeq)+'_'+Date.now();
-    const rec = { reqId, resolve, reject, onMessage };
-    _swPending.set(reqId, rec);
-    if(!_swPost({...msg, reqId}, transfer)){ _swPending.delete(reqId); reject(new Error('no SW controller')); }
-  });
-}
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').then(()=>{updateCadastreCacheInfo();_requestPersistentStorage();}).catch(()=>{});
+  navigator.serviceWorker.register('./sw.js').then(()=>updateCadastreCacheInfo()).catch(()=>{});
   navigator.serviceWorker.addEventListener('message', e=>{
-    const d = e.data;
-    if (d?.type==='cacheSize') {
+    if (e.data?.type==='cacheSize') {
       const el=document.getElementById('cadastre-cache-info');
-      if (d.count>0){
-        let txt=`🗂 ${d.count} тайлов`;
-        if(_storageState.persisted) txt+=` · 🔒 ${_storageState.usageMB}/${_storageState.quotaMB} МБ`;
-        else txt+=' ⚠';
-        el.textContent=txt+' (очистить)';
-        el.title=_storageState.persisted
-          ? `Хранилище закреплено. Использовано ${_storageState.usageMB} МБ из ${_storageState.quotaMB} МБ. Нажмите для очистки.`
-          : 'Хранилище не закреплено — браузер может удалить кэш. Нажмите для очистки.';
-        el.classList.add('visible');
-      } else el.classList.remove('visible');
-      return;
-    }
-    if (d?.reqId && _swPending.has(d.reqId)) {
-      const rec = _swPending.get(d.reqId);
-      try { if (rec.onMessage(d, rec)) _swPending.delete(d.reqId); }
-      catch(err){ _swPending.delete(d.reqId); rec.reject(err); }
+      if (e.data.count>0){el.textContent=`🗂 ${e.data.count} тайлов (очистить)`;el.classList.add('visible');}
+      else el.classList.remove('visible');
     }
   });
-}
-async function _requestPersistentStorage(){
-  try{
-    if(navigator.storage?.persist){
-      const already = navigator.storage.persisted ? await navigator.storage.persisted() : false;
-      _storageState.persisted = already || await navigator.storage.persist();
-    }
-    if(navigator.storage?.estimate){
-      const est = await navigator.storage.estimate();
-      _storageState.usageMB = Math.round((est.usage||0)/1048576);
-      _storageState.quotaMB = Math.round((est.quota||0)/1048576);
-    }
-  }catch(_){}
-  updateCadastreCacheInfo();
 }
 function updateCadastreCacheInfo(){navigator.serviceWorker?.controller?.postMessage('getCacheSize');}
 function clearCadastreCache(){navigator.serviceWorker?.controller?.postMessage('clearCadastreCache');showToast('🗂 Кэш очищен','info',2500);document.getElementById('cadastre-cache-info').classList.remove('visible');}
@@ -1646,31 +1459,9 @@ L.control.scale({imperial:false,metric:true,position:'bottomleft'}).addTo(map);
 // At z > maxNativeZoom Leaflet upscales each tile slot to 2048×2048 px;
 // hardcoded 257×257 inline shrinks the bitmap inside the slot, leaving giant
 // rectangles of pane background visible — the white grid the user reported.
-// The IIFE no longer touches tile dimensions. v2.9.62: it ONLY feature/engine-
-// detects old Chromium (Yandex Browser) lacking `mix-blend-mode: plus-lighter`
-// and, in that case ONLY, adds html.tile-seam-fallback so the additive CSS
-// fallback applies. Chrome/Firefox: no class → proven 5-rule path is unchanged.
-// See the «v2.9.62 FALLBACK» section of the TILE SEAM FIX comment above.
-(function fixTileSeams(){
-  try{
-    const ua = navigator.userAgent || '';
-    const isBlink = /Chrome|Chromium|YaBrowser/.test(ua) && !/Firefox|FxiOS/.test(ua);
-    const hasPlusLighter = !!(window.CSS && CSS.supports && CSS.supports('mix-blend-mode','plus-lighter'));
-    if(isBlink && !hasPlusLighter){
-      document.documentElement.classList.add('tile-seam-fallback');
-    }
-    // v2.9.62b: диагностика показала — в Яндекс.Браузере plus-lighter
-    // ПОДДЕРЖИВАЕТСЯ (CSS.supports===true), но белая сетка всё равно есть на
-    // OSM+Спутник, обе темы. Значит plus-lighter нечего «склеивать»: компоновщик
-    // Яндекса НЕ сводит .leaflet-tile-pane в один слой (identity-filter в
-    // системной светлой теме может оптимизироваться), плитки остаются
-    // отдельными GPU-слоями → субпиксельная щель translate3d. UA-гейт ТОЛЬКО
-    // на YaBrowser → Chrome/Firefox байт-в-байт прежние (ноль регрессии).
-    if(/YaBrowser/.test(ua)){
-      document.documentElement.classList.add('tile-seam-yandex');
-    }
-  }catch(_){}
-})();
+// The IIFE is preserved as a no-op for diff readability; the only reliable
+// fix is to NOT touch tile dimensions and let Leaflet position via translate3d.
+(function fixTileSeams(){ /* intentionally empty — see CSS comment in TILE SEAM FIX block */ })();
 // OSM tileLayer — no createTile patch needed.
 // Setting referrerPolicy on img caused white tiles in Chrome/Yandex when opening
 // from file:// (no-referrer-when-downgrade = no Referer → OSM 403 → blank tile).
@@ -1737,23 +1528,6 @@ updateZoomIndicator();
 // the `referrer` init option sets Referer correctly (not a forbidden fetch header name).
 // Tile pipeline: fetch → blob → objectURL → img.src → onload → revokeObjectURL.
 // Works from file://, http://localhost, and any https:// origin.
-//
-// v2.9.62: единый билдер URL тайла. ОБЯЗАН использоваться и createTile, и префетчем z17 —
-// иначе ключ кэша SW (Request.url) не совпадёт и тайлы задвоятся (НЕ идемпотентно).
-// coords — L.Point с полем .z (как отдаёт GridLayer); для префетча: L.point(x,y) + .z=17.
-function _nspdWmsUrl(id, coords){
-  const crs = L.CRS.EPSG3857;
-  const nwLL = crs.pointToLatLng(coords.scaleBy(L.point(256,256)), coords.z);
-  const seLL = crs.pointToLatLng(coords.add([1,1]).scaleBy(L.point(256,256)), coords.z);
-  const nwM  = crs.project(nwLL);
-  const seM  = crs.project(seLL);
-  const minX = Math.min(nwM.x,seM.x), maxX = Math.max(nwM.x,seM.x);
-  const minY = Math.min(nwM.y,seM.y), maxY = Math.max(nwM.y,seM.y);
-  return `https://nspd.gov.ru/api/aeggis/v2/${id}/wms?`+
-    `SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true`+
-    `&LAYERS=${id}&STYLES=&authkey=0&WIDTH=256&HEIGHT=256&CRS=EPSG:3857`+
-    `&BBOX=${minX},${minY},${maxX},${maxY}`;
-}
 const L_NspdLayer = L.GridLayer.extend({
   options: {
     tileSize: 256, opacity: 1, zIndex: 450,
@@ -1764,7 +1538,19 @@ const L_NspdLayer = L.GridLayer.extend({
   createTile(coords, done){
     const img = document.createElement('img');
     img.style.cssText = 'width:256px;height:256px;';
-    const url = _nspdWmsUrl(this.options._layerId, coords);
+    // Project tile coords → EPSG:3857 BBOX using Leaflet's own CRS
+    const crs = L.CRS.EPSG3857;
+    const nwLL = crs.pointToLatLng(coords.scaleBy(L.point(256,256)), coords.z);
+    const seLL = crs.pointToLatLng(coords.add([1,1]).scaleBy(L.point(256,256)), coords.z);
+    const nwM  = crs.project(nwLL);
+    const seM  = crs.project(seLL);
+    const minX = Math.min(nwM.x,seM.x), maxX = Math.max(nwM.x,seM.x);
+    const minY = Math.min(nwM.y,seM.y), maxY = Math.max(nwM.y,seM.y);
+    const id  = this.options._layerId;
+    const url = `https://nspd.gov.ru/api/aeggis/v2/${id}/wms?`+
+      `SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true`+
+      `&LAYERS=${id}&STYLES=&authkey=0&WIDTH=256&HEIGHT=256&CRS=EPSG:3857`+
+      `&BBOX=${minX},${minY},${maxX},${maxY}`;
     fetch(url, {
       referrer: 'https://nspd.gov.ru/',
       referrerPolicy: 'unsafe-url',
@@ -1856,7 +1642,6 @@ function _applyCadastreLayers(){
   document.getElementById('cadastre-btn').classList.toggle('active', anyActive);
   if(anyActive && map.getZoom() < 13) showToast('Кадастр виден с zoom ≥ 16');
   setTimeout(updateCadastreCacheInfo, 4000);
-  if(cadastreActive) _scheduleCadastrePrefetch();
 }
 function toggleCadastre(){ toggleCadastreMenu(); }
 function setCadastreOpacity(val){
@@ -1867,70 +1652,6 @@ function setCadastreOpacity(val){
 
 // Legacy: rebuild if needed (used by setCadastreOpacity slider)
 function _buildGroupLayers(k){ _ensureGroupBuilt(k); }
-
-// ── ПРЕФЕТЧ z17 ДЛЯ ЦЕНТРАЛЬНЫХ 70% ───────────────────────────────
-// При включённом кадастре, НЕЗАВИСИМО от выбранного zoom, догружаем тайлы z17
-// для центральных 70% вьюпорта в SW-кэш. Обычный L_NspdLayer продолжает грузить
-// на выбранном zoom без изменений — префетч строго аддитивен.
-// Идемпотентность: повторный fetch уже закэшированного тайла отдаётся SW из кэша
-// (без сети). URL строится тем же _nspdWmsUrl, что и в createTile → ключ кэша совпадает.
-const _PREFETCH_MAX_PER_PASS = 120;   // потолок (тайлы × слои) за проход
-const _PREFETCH_CONCURRENCY  = 6;
-let _prefetchToken = 0;               // ++ на новый проход; устаревшие воркеры выходят
-let _prefetchTimer = null;
-const _prefetchSeen = new Set();      // дедуп in-flight в рамках сессии (троттлинг)
-
-function _scheduleCadastrePrefetch(){
-  if(_prefetchTimer) clearTimeout(_prefetchTimer);
-  _prefetchTimer = setTimeout(()=>{
-    _prefetchTimer = null;
-    if(!cadastreActive) return;
-    if(!_getActiveIds().length) return;
-    _prefetchToken++;
-    _prefetchCadastreZ17(_prefetchToken);
-  }, 400);
-}
-
-function _prefetchCadastreZ17(token){
-  const b = map.getBounds();
-  const n=b.getNorth(), s=b.getSouth(), e=b.getEast(), w=b.getWest();
-  const latC=(n+s)/2, lonC=(e+w)/2, latH=(n-s)*0.35, lonH=(e-w)*0.35;
-  // Индексы z17-тайлов берём из _tileInfo (Python-валидирован), BBOX — НЕ отсюда:
-  // URL строит _nspdWmsUrl (точная проекция createTile), иначе ключ кэша не совпадёт.
-  const tl = _tileInfo(latC+latH, lonC-lonH, 17);   // СЗ угол центральных 70%
-  const br = _tileInfo(latC-latH, lonC+lonH, 17);   // ЮВ угол
-  const x0=Math.min(tl.tileX,br.tileX), x1=Math.max(tl.tileX,br.tileX);
-  const y0=Math.min(tl.tileY,br.tileY), y1=Math.max(tl.tileY,br.tileY);
-  const ids = _getActiveIds();
-  const work = [];
-  for(let x=x0; x<=x1; x++){
-    for(let y=y0; y<=y1; y++){
-      const c = L.point(x,y); c.z = 17;
-      for(const id of ids){
-        const url = _nspdWmsUrl(id, c);
-        if(_prefetchSeen.has(url)) continue;
-        work.push(url);
-        if(work.length >= _PREFETCH_MAX_PER_PASS) break;
-      }
-      if(work.length >= _PREFETCH_MAX_PER_PASS) break;
-    }
-    if(work.length >= _PREFETCH_MAX_PER_PASS) break;
-  }
-  if(!work.length) return;
-  let i = 0;
-  const worker = ()=>{
-    if(token !== _prefetchToken) return Promise.resolve();   // проход устарел
-    if(i >= work.length) return Promise.resolve();
-    const url = work[i++];
-    _prefetchSeen.add(url);
-    return fetch(url, { referrer:'https://nspd.gov.ru/', referrerPolicy:'unsafe-url', headers:{ Accept:'image/png,image/*' } })
-      .then(r=>r.ok?r.blob():null)
-      .catch(()=>{})
-      .then(()=>worker());
-  };
-  for(let k=0; k<_PREFETCH_CONCURRENCY; k++) worker();
-}
-map.on('moveend zoomend', _scheduleCadastrePrefetch);
 
 // ── COORDINATE HELPERS ─────────────────────────────────────────────
 // Precise WebMercator ↔ tile coordinate math (validated by Python test)
@@ -3039,9 +2760,6 @@ function _shiftDragEnd(){
   _shiftDragStart = null;
   map.off('mousemove', _shiftDragMove);
   map.off('mouseup',   _shiftDragEnd);
-  // Без этого после сдвига контура карта остаётся «замороженной» (drag=pan не работает),
-  // пока пользователь снова не выйдет из режима сдвига. Mirrors ruler dragend pattern.
-  try{ if(!_shiftModeActive) map.dragging.enable(); }catch(_){}
 }
 
 function _exitShiftDrag(){
@@ -3052,7 +2770,6 @@ function _exitShiftDrag(){
   map.off('mousedown', _shiftDragBegin);
   map.off('mousemove', _shiftDragMove);
   map.off('mouseup',   _shiftDragEnd);
-  try{ map.dragging.enable(); }catch(_){}
 }
 
 window.finishContourEditor = function(){
@@ -3064,10 +2781,7 @@ window.finishContourEditor = function(){
   coords.push(coords[0]);
   const newGeom = { type:'Polygon', coordinates:[coords] };
   const { type, cadNum, prefillDesc } = _ce;
-  const sm = _ce.sourceMarker;
   _disposeContourEditor();
-  // Существующий объект — сохраняем на месте без диалога. Новый — обычный диалог.
-  if(sm && _commitEditedGeometryInPlace(sm, newGeom, 'Контур', type)) return;
   showKMLSaveDialog(newGeom, type, cadNum, prefillDesc);
 };
 
@@ -3379,77 +3093,7 @@ function _disposeContourEditor(){
   _ce = null;
   _hideEditorToolbar();
   map.closePopup();
-  // Гарантия: панорамирование карты всегда восстановлено при выходе из редактора
-  // (любой путь: Завершить/Отмена/Удалить/Переместить), а не только через кнопку сдвига.
-  try{ map.dragging.enable(); }catch(_){}
   if(wantVisible && !_photosVisible) setPhotoMarkersVisible(true);
-}
-
-// Редактирование СУЩЕСТВУЮЩЕГО объекта (контур/точка-пояснение): после «Завершить»
-// сохраняем геометрию в ИСХОДНЫЙ слой БЕЗ диалога выбора назначения/дубликата.
-// Источник может быть и app-cadPlacemark, и импортированный parsedData.placemark
-// (контур/точка из загруженного .kml) — раньше второй случай не находился и
-// показывался диалог как для нового объекта. Теперь: находим слой-владелец,
-// убираем старый объект и переиспользуем ПРОВЕРЕННЫЙ путь _kdConfirmInner
-// (_kdDest='layer') — он сам пишет в слой, обновляет kmlText, persist в storage
-// и тихо переписывает файл через FSA-handle, если он есть. Возвращает true при
-// успехе; false — слой-владелец не найден (вызывающий показывает обычный диалог).
-function _commitEditedGeometryInPlace(sm, newGeom, kindLabel, type){
-  if(!sm) return false;
-  const layers = kmlLayers || [];
-  let srcIdx = -1, oldCad = null, oldPm = null;
-  for(let i=0;i<layers.length;i++){
-    const layer = layers[i];
-    const cp = (layer.cadPlacemarks||[]).find(c =>
-      c === sm.pmRef || (sm.cadNum && c.cadNum === sm.cadNum) || c.geom === sm.pmRef?.geom
-    );
-    if(cp){ srcIdx=i; oldCad=cp; break; }
-    const pp = (layer.parsedData?.placemarks||[]).find(p =>
-      p === sm.pmRef || (sm.cadNum && (p.cadNum===sm.cadNum || p.name===sm.cadNum))
-    );
-    if(pp){ srcIdx=i; oldPm=pp; break; }
-  }
-  if(srcIdx < 0) return false;
-  const tgt = layers[srcIdx];
-
-  // Убрать старый объект, чтобы не задвоился
-  if(oldCad){
-    if(oldCad._leafletLayer){ try{ map.removeLayer(oldCad._leafletLayer); }catch(_){} }
-    const k = tgt.cadPlacemarks.indexOf(oldCad);
-    if(k>=0){ tgt.cadPlacemarks.splice(k,1); tgt.placemarkCount=Math.max(0,(tgt.placemarkCount||1)-1); }
-    if(tgt.kmlText) _rebuildLayerKMLText(tgt);   // выкидывает старый cad-placemark из XML
-  } else if(oldPm){
-    if(oldPm._leafletLayer){ try{ (oldPm._parentGroup||map).removeLayer(oldPm._leafletLayer); }catch(_){} }
-    oldPm._visible = false;   // импорт-дедуп по cadnum схлопнёт старый с новым при ре-эмиссии
-  }
-
-  // Идентичность сохраняем = исходный кадномер/имя (чтобы дедуп при экспорте
-  // схлопывал старый parsed-placemark с новым cad-placemark по cadnum).
-  const cadNum = (sm.cadNum || sm.pmRef?.cadNum || sm.name || sm.pmRef?.name || '').toString();
-  const name   = (sm.name || sm.pmRef?.name || cadNum || '').toString();
-  const desc   = (sm.pmRef?.desc || sm.pmRef?.description || '').toString();
-  const t      = type || (oldCad?.type) || 'oks';
-  const safeType = (t==='str') ? 'oks' : t;
-
-  // Явно сообщаем КУДА сохраняем (объект привязан к исходному слою-источнику),
-  // чтобы не было ощущения «скрипт не помнит куда сохранять».
-  const _srcName = tgt.docName || tgt.filename || 'слой';
-  if(tgt.handle){
-    showToast(`💾 «${kindLabel}» → перезапись исходника «${_srcName}»`,'info',2500);
-  } else {
-    showToast(`💾 «${kindLabel}» → слой «${_srcName}» (файл без прямого доступа: укажите путь один раз)`,'info',4000);
-  }
-
-  // Переиспользуем проверенный коммит сохранения в выбранный слой, минуя модалку.
-  _kdDest = 'layer';
-  _kdLayerIdx = srcIdx;
-  try{
-    _kdConfirmInner({ cadNum, name, desc, type:t, geom:newGeom, safeType });
-  }catch(e){
-    console.warn('[edit-inplace]', e);
-    return false;   // не удалось — пусть покажется обычный диалог
-  }
-  return true;
 }
 
 
@@ -3464,7 +3108,7 @@ function _commitEditedGeometryInPlace(sm, newGeom, kindLabel, type){
 
 let _ep = null;  // {marker, savedHandlers}
 
-window.startExplanationPoint = function(lat, lng, sourceMarker){
+window.startExplanationPoint = function(lat, lng){
   _disposeExplanationPoint();
   map.closePopup();
   // Photo markers compete visually with a single pin; same auto-hide pattern as
@@ -3487,7 +3131,7 @@ window.startExplanationPoint = function(lat, lng, sourceMarker){
     finishExplanationPoint();
   });
 
-  _ep = { marker, photosWereVisible, sourceMarker: sourceMarker || null };
+  _ep = { marker, photosWereVisible };
   _showExplanationToolbar();
   showToast('💬 Тяните точку, затем «Сохранить»','info',3500);
 };
@@ -3520,10 +3164,7 @@ window.finishExplanationPoint = function(){
   // radius (8 px) in _makeCadLayer — 2× the area of a photo dot (11×11 px).
   // The KML <Style> emitted in kdConfirm uses cyan fill + dark-blue outline so the
   // saved file renders the same way in Google Earth / Yandex Maps Constructor.
-  const sm = _ep.sourceMarker;
   _disposeExplanationPoint();
-  // Существующая точка — сохраняем на месте без диалога. Новая — обычный диалог.
-  if(sm && _commitEditedGeometryInPlace(sm, geom, 'Точка', 'exp')) return;
   showKMLSaveDialog(geom, 'exp', '', '');
 };
 
@@ -3539,7 +3180,6 @@ function _disposeExplanationPoint(){
   const wantVisible = _ep.photosWereVisible !== false;
   _ep = null;
   _hideExplanationToolbar();
-  try{ map.dragging.enable(); }catch(_){}
   if(wantVisible && !_photosVisible) setPhotoMarkersVisible(true);
 }
 
@@ -3698,7 +3338,7 @@ function _hitTestAllAtPoint(latlng){
   if(typeof _gatherMarkers !== 'function') return hits;
   const buckets = _gatherMarkers();
   // Polygon hits — keep all (a click may legitimately be inside multiple)
-  for(const grp of ['zu','oks','room','str','ons']){
+  for(const grp of ['zu','oks']){
     for(const m of buckets[grp]){
       if(_hitTestMarker(m, latlng.lat, latlng.lng)){
         hits.push({kind: grp, marker: m});
@@ -3710,7 +3350,7 @@ function _hitTestAllAtPoint(latlng){
   const PX_RADIUS = 18;
   let bestPoint = null, bestDist = Infinity;
   const clickPt = map.latLngToContainerPoint(latlng);
-  for(const grp of ['zu','oks','room','str','ons','bu','eq','exp']){
+  for(const grp of ['zu','oks','exp']){
     for(const m of buckets[grp]){
       const ll = _markerPointLatLng(m);
       if(!ll) continue;
@@ -3957,35 +3597,22 @@ function _renderObjectCard(hit, cardId){
   const m = hit.marker;
   // Register marker so edit buttons can access it directly (not via re-search)
   if(m.id) window._cardMarkerRegistry.set(m.id, m);
-  const groupTitle = _OBJ_LABELS_ONE[hit.kind] || 'Объект';
-  const groupClass = _OBJ_LABELS_ONE[hit.kind] ? ('ic-' + hit.kind) : 'ic-oks';
+  const groupTitle = hit.kind === 'zu'  ? 'Земельный участок'
+                  :  hit.kind === 'oks' ? 'ОКС / Сооружение'
+                  :                       'Пояснение';
+  const groupClass = hit.kind === 'zu'  ? 'ic-zu'
+                  :  hit.kind === 'oks' ? 'ic-oks'
+                  :                       'ic-exp';
   const safeName = _escapeHtml(m.name || '(без названия)');
-  const dp = _parseDescPairs(m.desc || '');
-  const safeDesc = _escapeHtml(dp.visibleText || '');
-  let attHtml = '';
-  if(dp.attachments.length){
-    attHtml = '<div class="ic-attach">' + dp.attachments.map(a => {
-      const nm = _escapeHtml(a.name || a.path);
-      if(a.kind === 'photo' && a.blobUrl){
-        return `<img class="ic-att-thumb" src="${a.blobUrl}" alt="${nm}" title="${nm}" onclick="_openAttImage('${a.blobUrl}')">`;
-      }
-      if(a.kind === 'doc' && a.blobUrl){
-        return `<button class="ic-att-chip" title="${nm}" onclick="window.open('${a.blobUrl}','_blank','noopener')">📄 ${nm}</button>`;
-      }
-      return `<span class="ic-att-chip ic-att-missing" title="${nm}">${a.kind==='photo'?'🖼':'📄'} ${nm}</span>`;
-    }).join('') + '</div>';
-  }
+  const safeDesc = _escapeHtml(m.desc || '');
   const fullText = `${m.name || ''}${m.desc ? '\n' + m.desc : ''}`;
   const fullTextEsc = fullText.replace(/'/g,"\\'").replace(/\n/g,'\\n').replace(/"/g,'&quot;');
   const mIdEsc = (m.id||'').replace(/'/g,"\\'");
   // Edit button: ✏ contour editor for ZU/OKS, coord editor for EXP — sits LEFT of copy ⎘
   const _pencilSvg=`<svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;transform:rotate(-45deg)"><path d="M9.5 2L12 4.5L5 11.5H2.5V9L9.5 2Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M7.5 3.5L10.5 6.5" stroke="currentColor" stroke-width="1.5"/></svg>`;
-  const _isPolyKind = (k) => k==='zu'||k==='oks'||k==='str'||k==='ons';
-  const editBtn = !m.latlng
-    ? ''   // geometry-less (cad_ben_*) — nothing to edit
-    : _isPolyKind(hit.kind)
-      ? `<button class="ic-icobtn ic-edit" title="Редактировать контур" onclick="_editContourFromCard('${mIdEsc}')">${_pencilSvg}</button>`
-      : `<button class="ic-icobtn ic-edit" title="Редактировать координату" onclick="_editExpCoordFromCard('${mIdEsc}')">${_pencilSvg}</button>`;
+  const editBtn = (hit.kind==='zu'||hit.kind==='oks')
+    ? `<button class="ic-icobtn ic-edit" title="Редактировать контур" onclick="_editContourFromCard('${mIdEsc}')">${_pencilSvg}</button>`
+    : `<button class="ic-icobtn ic-edit" title="Редактировать координату" onclick="_editExpCoordFromCard('${mIdEsc}')">${_pencilSvg}</button>`;
   return (
     `<div class="ic-header ${groupClass}">`+
       `<span class="ic-title">${groupTitle}</span>`+
@@ -3996,7 +3623,6 @@ function _renderObjectCard(hit, cardId){
     `<div class="ic-body">`+
       `<div class="ic-name">${safeName}</div>`+
       (safeDesc ? `<div class="ic-desc">${safeDesc}</div>` : '')+
-      attHtml+
     `</div>`
   );
 }
@@ -4012,8 +3638,8 @@ window._editContourFromCard = function(markerId){
     // Fallback: re-search _gatherMarkers
     const buckets = typeof _gatherMarkers === 'function' ? _gatherMarkers() : null;
     if(buckets){
-      for(const grp of ['zu','oks','room','str','ons']){
-        const found = buckets[grp]?.find(x => x.id === markerId);
+      for(const grp of ['zu','oks']){
+        const found = buckets[grp].find(x => x.id === markerId);
         if(found){ m = found; break; }
       }
     }
@@ -4021,11 +3647,9 @@ window._editContourFromCard = function(markerId){
   if(!m){ showToast('Объект не найден','warn',2000); return; }
 
   // Determine cadastre type for styling
-  // m.type — корзина из _gatherMarkers ('zu'|'oks'|'exp'), теперь всегда задана.
-  // Раньше m.type был undefined → grp всегда 'oks' → ЗУ сохранялся как ОКС.
-  const grp = (m.type === 'zu' || m.type === 'oks' || m.type === 'exp')
-            ? m.type
-            : (m.pmRef?.type === 'zu' ? 'zu' : 'oks');
+  const grp = (m.type==='zu') ? 'zu'
+            : (m.id?.includes(':zu:') || m.id?.startsWith('zu')) ? 'zu'
+            : 'oks';
   const cadNum = m.cadNum || m.name || '';
   const pm = m.pmRef;
 
@@ -4074,7 +3698,7 @@ window._editExpCoordFromCard = function(markerId){
   closeAllInfoCards();
   const coords = m.pmRef.coords || (m.pmRef.geom?.type==='Point' ? [m.pmRef.geom.coordinates[1], m.pmRef.geom.coordinates[0]] : null);
   if(!coords){ showToast('Нет координат для редактирования','warn',3000); return; }
-  startExplanationPoint(coords[0], coords[1], m);   // m → in-place save on «Завершить»
+  startExplanationPoint(coords[0], coords[1]);
 };
 
 window._copyToClip = function(text, btn){
@@ -4150,9 +3774,8 @@ function _handleMapAreaClick(latlng, directHit){
 function _markerForLeafletLayer(leafletLayer){
   if(!leafletLayer || typeof _gatherMarkers !== 'function') return null;
   const buckets = _gatherMarkers();
-  for(const g of _MARK_GROUPS){
-    const grp = g.key;
-    for(const m of (buckets[grp]||[])){
+  for(const grp of ['zu','oks','exp']){
+    for(const m of buckets[grp]){
       if(m.pmRef && m.pmRef._leafletLayer === leafletLayer){
         return {kind: grp, marker: m};
       }
@@ -4218,12 +3841,12 @@ document.addEventListener('click',()=>{closeUploadMenu();closeKMLMenu();});
 async function triggerFolderUpload(){
   if('showDirectoryPicker' in window){
     try{
-      const dh=await window.showDirectoryPicker({mode:'readwrite'});
+      const dh=await window.showDirectoryPicker({mode:'read'});
       _savePathHint(_LS_PATH_PHOTO, dh.name);
       _captureFirstSessionName('photo', dh.name);
       showToast('⏳ Сканирование…','info',6000);
       const{photos:pe,kmls:ke}=await collectFilesFromHandle(dh,'',dh.name);
-      for(const k of ke)await loadKMLFromFile(k.file,k.name,k.fileHandle);
+      for(const k of ke)await loadKMLFromFile(k.file,k.name);
       if(pe.length)await handleFileEntries(pe,dh.name);
       else if(!ke.length)showToast('Файлов не найдено','warn');
     }catch(e){if(e.name!=='AbortError')document.getElementById('folder-input-fallback').click();}
@@ -4235,7 +3858,7 @@ async function collectFilesFromHandle(dh,relPath,rootName){
   for await(const[name,entry]of dh.entries()){
     if(entry.kind==='file'){
       if(/\.jpe?g$/i.test(name)){const f=await entry.getFile();photos.push({file:f,locPath:relPath,fileHandle:entry});}
-      else if(/\.kml$/i.test(name)){const f=await entry.getFile();kmls.push({file:f,name,relPath,fileHandle:entry});}
+      else if(/\.kml$/i.test(name)){const f=await entry.getFile();kmls.push({file:f,name,relPath});}
     }else if(entry.kind==='directory'){
       const sub=await collectFilesFromHandle(entry,relPath?`${relPath}/${name}`:name,rootName);
       photos.push(...sub.photos);kmls.push(...sub.kmls);
@@ -4746,19 +4369,6 @@ function parseKML(xmlText,filename){
     const style = styles[styleUrl] || styles[styleUrl.replace(/^#/, '')] ||
                   {lineColor:'rgba(71,200,255,0.9)',lineWidth:2,fillColor:'rgba(71,200,255,0.12)',fillOpacity:0.12,hasFill:true};
 
-    // v2.10.0: ExtendedData parallel channel — secondary type anchor + meta
-    // (object_type, cad_number, parent_cad, bu_id, ben_inn, z_*). Document-level
-    // ExtendedData (kml_schema_version) is not needed for P1.
-    const ext = {};
-    const edEl = pm.getElementsByTagName('ExtendedData')[0];
-    if(edEl){
-      for(const d of edEl.getElementsByTagName('Data')){
-        const k = d.getAttribute('name'); if(!k) continue;
-        ext[k] = (d.getElementsByTagName('value')[0]?.textContent || '').trim();
-      }
-    }
-    let pushed = false;   // any geometry element present for this Placemark?
-
     // Helpers for coordinate parsing — KML stores "lon,lat[,alt]"
     const parseCoordList = txt => txt.trim().split(/\s+/).map(pair => {
       const p = pair.split(','); return [parseFloat(p[1]), parseFloat(p[0])]; // [lat, lon] for Leaflet
@@ -4766,12 +4376,11 @@ function parseKML(xmlText,filename){
 
     const pCoord = pm.getElementsByTagName('Point')[0]?.getElementsByTagName('coordinates')[0];
     if(pCoord){
-      pushed = true;
       const p = pCoord.textContent.trim().split(',');
       const lat = parseFloat(p[1]), lon = parseFloat(p[0]);
       if(!isNaN(lat) && !isNaN(lon)){
         const isPhoto = _detectPhotoPin(name, desc, styleUrl, 'Point');
-        placemarks.push({type:'Point', name, desc, style, styleUrl, coords:[lat,lon], ext, _isPhotoPin: isPhoto});
+        placemarks.push({type:'Point', name, desc, style, styleUrl, coords:[lat,lon], _isPhotoPin: isPhoto});
       }
     }
     const polyCoordsEl = pm.getElementsByTagName('Polygon')[0]
@@ -4779,20 +4388,13 @@ function parseKML(xmlText,filename){
                           ?.getElementsByTagName('LinearRing')[0]
                           ?.getElementsByTagName('coordinates')[0];
     if(polyCoordsEl){
-      pushed = true;
       const c = parseCoordList(polyCoordsEl.textContent);
-      if(c.length > 2) placemarks.push({type:'Polygon', name, desc, style, styleUrl, coords:c, ext});
+      if(c.length > 2) placemarks.push({type:'Polygon', name, desc, style, styleUrl, coords:c});
     }
     const lineEl = pm.getElementsByTagName('LineString')[0]?.getElementsByTagName('coordinates')[0];
     if(lineEl){
-      pushed = true;
       const c = parseCoordList(lineEl.textContent);
-      if(c.length > 1) placemarks.push({type:'LineString', name, desc, style, styleUrl, coords:c, ext});
-    }
-    // v2.10.0: geometry-less Placemark (e.g. cad_ben_* without <Point>) — keep
-    // it as a list-only object (no map layer, no fly-to) for the tree + dedup.
-    if(!pushed){
-      placemarks.push({type:'None', name, desc, style, styleUrl, coords:null, ext});
+      if(c.length > 1) placemarks.push({type:'LineString', name, desc, style, styleUrl, coords:c});
     }
   }
   return {docName, filename, placemarks};
@@ -4844,7 +4446,6 @@ function renderKMLOnMap(parsed){
       pm._duplicateSkippedAtRender = true;
       return;
     }
-    if(!pm.coords) return;   // v2.10.0: geometry-less object (cad_ben_*) — list-only
     let layer;
     if(pm.type==='Polygon')layer=L.polygon(pm.coords,{color:pm.style.lineColor,weight:pm.style.lineWidth,fillColor:pm.style.fillColor,fillOpacity:pm.style.fillOpacity??0.1});
     else if(pm.type==='LineString')layer=L.polyline(pm.coords,{color:pm.style.lineColor,weight:pm.style.lineWidth});
@@ -4901,13 +4502,6 @@ async function loadKMLFromFile(file,displayName,handle){
 
 // Thread-local blob map: filename → blob:// URL (valid for this page session only)
 let _kmzActiveBlobMap = {};
-// v2.10.0: persistent attachment blob map (docs/* + images/* by path & basename),
-// NOT cleared after load — info-card thumbnails (Ссылка_документ_/Ссылка_фото_)
-// need it post-load. Replaced wholesale on each KMZ load (old refs leak for the
-// session; bounded — a handful of doc scans per project).
-let _kmzAttachBlobs = {};
-// v2.10.0: graph.html (ownership graph) from the last loaded KMZ, in-memory only.
-let _kmzGraphHtml = null;
 
 // ── KMZ from remote URL (Yandex Disk / Google Drive / S3 / direct) ──
 // Shows a dialog: "Download to local folder?" before fetching.
@@ -5023,7 +4617,6 @@ async function loadKMZFromFile(file, displayName, localRootDir=null){
       blobMap[mp.split('/').pop()] = blobUrl; // also index by basename
     }
     _kmzActiveBlobMap = blobMap;
-    _kmzAttachBlobs = blobMap;   // persistent: survives the post-load reset below
 
     // ── 3. Detect photo placemarks BEFORE patching KML ───────────
     // Photo placemark = Point + description containing <img src="images/...">
@@ -5045,12 +4638,6 @@ async function loadKMZFromFile(file, displayName, localRootDir=null){
     // ── 5. Load KML layer (contours, annotations, etc.) ───────────
     const kmzLabel = label.replace(/\.kmz$/i,'');
     await _loadKMLFromText(patchedKML, kmzLabel, null);
-
-    // ── 5b. graph.html (v2.10.0) → «Граф связей» sidebar tab ──────
-    const ghKey = Object.keys(zip.files).find(k =>
-      !zip.files[k].dir && /(^|\/)graph\.html$/i.test(k));
-    _kmzGraphHtml = ghKey ? await zip.files[ghKey].async('string') : null;
-    if(typeof _refreshGraphTab === 'function') _refreshGraphTab();
 
     // ── 6. Register extracted photo placemarks as app photos ──────
     let photoAdded = 0;
@@ -5138,39 +4725,23 @@ function _extractKMZPhotoPlacemarks(kmlText, blobMap, sourceLabel){
     const lon = parseFloat(coordParts[0]), lat = parseFloat(coordParts[1]);
     if(isNaN(lat)||isNaN(lon)) continue;
 
-    // v2.10.0: resolve the image file via legacy <img src="images/.."> OR the
-    // new photoPin_ contract (no <img>; file in Ссылка_фото_ / Файл / <name>).
+    // Description must contain <img src="images/...">
     const descEl = pm.getElementsByTagName('description')[0];
-    const rawDesc = descEl ? (descEl.textContent || descEl.innerHTML || '') : '';
-    const styleUrl = (pm.getElementsByTagName('styleUrl')[0]?.textContent || '').trim();
-    const nameEl = pm.getElementsByTagName('name')[0];
-    const rawNameRaw = nameEl?.textContent?.trim() || '';
-    const _PHOTO_EXT_RE = /\.(jpg|jpeg|png|heic|heif|webp)\b/i;
-
-    let imgFilename = '';
+    if(!descEl) continue;
+    const rawDesc = descEl.textContent || descEl.innerHTML || '';
     const imgMatch = rawDesc.match(/<img[^>]+src=["']?images\/([^"'\s>]+)["']?/i);
-    if(imgMatch){
-      imgFilename = imgMatch[1];                       // legacy v1 path
-    } else {
-      const isV2Photo = /^#?photoPin_/i.test(styleUrl)
-                     || (rawNameRaw && _PHOTO_EXT_RE.test(rawNameRaw))
-                     || /(^|[;·\s])Файл\s*:/i.test(rawDesc)
-                     || /Источник\s+координат\s*:/i.test(rawDesc);
-      if(!isV2Photo) continue;
-      const mLink = rawDesc.match(/Ссылка_фото_\d+\s*:\s*([^;·\n]+)/i);
-      const mFile = rawDesc.match(/(?:^|[;·\s])Файл\s*:\s*([^;·\n]+)/i);
-      let cand = mLink ? mLink[1] : (mFile ? mFile[1]
-               : (rawNameRaw && _PHOTO_EXT_RE.test(rawNameRaw) ? rawNameRaw : ''));
-      cand = String(cand).trim().split(/[\\/]/).pop().trim();   // basename
-      if(!cand) continue;
-      imgFilename = cand;
-    }
+    if(!imgMatch) continue;
+
+    const imgFilename = imgMatch[1]; // e.g. "photo_0080.jpg"
 
     // Resolve blob URL (try with "images/" prefix and bare name)
     const blobUrl = blobMap['images/'+imgFilename]
                  || blobMap[imgFilename]
                  || null;
-    const rawName = rawNameRaw || imgFilename;
+
+    // Extract name
+    const nameEl = pm.getElementsByTagName('name')[0];
+    const rawName = nameEl?.textContent?.trim() || imgFilename;
 
     // Extract date: prefer <TimeStamp><when>, fallback "Снято: DATE" in description
     let date = '';
@@ -5185,19 +4756,10 @@ function _extractKMZPhotoPlacemarks(kmlText, blobMap, sourceLabel){
       if(mDate) date = mDate[1].trim();
     }
 
-    // Extract bearing — legacy "Направление: NNN°" or v2 "Угол: NNN" (if any)
+    // Extract bearing from description "Направление: NNN°" (if any)
     let bearing = null;
-    const mBear = rawDesc.match(/(?:Направление|Угол(?:\s+съ[её]мки)?)[^:]*:\s*([\d.]+)/i);
-    if(mBear){ const b = parseFloat(mBear[1]); if(!isNaN(b)) bearing = b; }
-
-    // v2.10.0 photoPin meta (carried for the gallery card; no UX requirement
-    // beyond pins + gallery, so render is optional).
-    const mSrc = rawDesc.match(/Источник\s+координат\s*:\s*([^;·\n]+)/i);
-    const mCad = rawDesc.match(/Кадастровый\s+объект\s*:\s*([^;·\n]+)/i);
-    const mR   = rawDesc.match(/r_meters\s*:\s*([\d.]+)/i);
-    const mPhi = rawDesc.match(/phi_deg\s*:\s*([\d.]+)/i);
-    const coordSource = mSrc ? mSrc[1].trim() : '';
-    const cadObject   = (mCad && mCad[1].trim() !== '—') ? mCad[1].trim() : '';
+    const mBear = rawDesc.match(/Направление[^:]*:\s*([\d.]+)/i);
+    if(mBear) bearing = parseFloat(mBear[1]);
 
     // Extract folder path from the KML folder structure (parent <Folder> names)
     let locPath = '';
@@ -5216,12 +4778,8 @@ function _extractKMZPhotoPlacemarks(kmlText, blobMap, sourceLabel){
     // rule as cleanPhotoPath in export), so round-trip is lossless.
     // "Фотографии/Ростов_62/кв.4а" → "Ростов_62/кв.4а"
     const _PHOTO_FOLDER_SKIP = /^(фото|фотографии|фотография|foto|photos?)$/i;
-    let _segs = locPath.split('/').filter(s => s.trim() && !_PHOTO_FOLDER_SKIP.test(s.trim()));
-    // v2.10.0: drop a leading parser sub-folder (Недвижимость / Оборудование /
-    // Бизнес_единицы / Не_распределено) only when a deeper segment remains.
-    const _V2_SUB = /^(Недвижимость|Оборудование|Бизнес_единицы|Не_распределено)$/i;
-    if(_segs.length > 1 && _V2_SUB.test(_segs[0])) _segs = _segs.slice(1);
-    locPath = _segs.join('/');
+    const normalizedParts = locPath.split('/').filter(s => s.trim() && !_PHOTO_FOLDER_SKIP.test(s.trim()));
+    locPath = normalizedParts.join('/');
 
     // Get blob for File-like object
     let fileBlob = null;
@@ -5238,9 +4796,6 @@ function _extractKMZPhotoPlacemarks(kmlText, blobMap, sourceLabel){
       size: 0,
       fileBlob: null, // placeholder; resolved in loadKMZFromFile
       _imgFilename: imgFilename,
-      coordSource, cadObject,
-      rMeters: mR ? parseFloat(mR[1]) : null,
-      phiDeg:  mPhi ? parseFloat(mPhi[1]) : null,
     });
   }
   return results;
@@ -5252,19 +4807,12 @@ function _stripKMZPhotoPlacemarks(kmlText){
   let dom;
   try{ dom = new DOMParser().parseFromString(kmlText,'application/xml'); } catch(e){ return kmlText; }
   const toRemove = [];
-  const _PHOTO_EXT_RE = /\.(jpg|jpeg|png|heic|heif|webp)\b/i;
   for(const pm of dom.getElementsByTagName('Placemark')){
     if(!pm.getElementsByTagName('Point')[0]) continue;
     const descEl = pm.getElementsByTagName('description')[0];
-    const raw = descEl ? (descEl.textContent || descEl.innerHTML || '') : '';
-    const su  = (pm.getElementsByTagName('styleUrl')[0]?.textContent || '').trim();
-    const nm  = (pm.getElementsByTagName('name')[0]?.textContent || '').trim();
-    const isPhoto = /<img[^>]+src=["']?images\//i.test(raw)   // legacy v1
-                 || /^#?photoPin_/i.test(su)                  // v2 photoPin
-                 || (nm && _PHOTO_EXT_RE.test(nm))
-                 || /Источник\s+координат\s*:/i.test(raw)
-                 || /(^|[;·\s])Файл\s*:/i.test(raw);
-    if(isPhoto) toRemove.push(pm);
+    if(!descEl) continue;
+    const raw = descEl.textContent || descEl.innerHTML || '';
+    if(/<img[^>]+src=["']?images\//i.test(raw)) toRemove.push(pm);
   }
   toRemove.forEach(pm => pm.parentElement?.removeChild(pm));
   return new XMLSerializer().serializeToString(dom);
@@ -5944,24 +5492,7 @@ window.switchSidebarTab = function(tab){
   });
   document.getElementById('photo-list').style.display = tab === 'photos' ? '' : 'none';
   document.getElementById('marks-list').style.display = tab === 'marks'  ? '' : 'none';
-  const gl = document.getElementById('graph-list');
-  if(gl) gl.style.display = tab === 'graph' ? '' : 'none';
-  if(tab === 'graph'){
-    const f = document.getElementById('graph-frame');
-    if(f && _kmzGraphHtml && f.srcdoc !== _kmzGraphHtml) f.srcdoc = _kmzGraphHtml;
-  }
   if(tab === 'marks') renderMarksList();
-};
-
-// v2.10.0: toggle the «Граф связей» tab based on whether the last loaded KMZ
-// carried graph.html; clear & fall back to «Метки» when absent.
-window._refreshGraphTab = function(){
-  const btn = document.getElementById('sb-tab-graph');
-  const has = !!_kmzGraphHtml;
-  if(btn) btn.style.display = has ? '' : 'none';
-  const f = document.getElementById('graph-frame');
-  if(f && !has) f.srcdoc = '';
-  if(!has && _activeSidebarTab === 'graph') switchSidebarTab('marks');
 };
 
 window.toggleMarksGroup = function(grp){
@@ -5980,73 +5511,8 @@ window.toggleMarksGroup = function(grp){
 //
 // Each entry stores a stable composite id `${layerIdx}:${kind}:${innerIdx}` so
 // click events on the map can re-find and highlight the row.
-// ── Canonical object-type classifier (v2.10.0 KML contract) ─────────────────
-// Single source of truth shared by _gatherMarkers, classifyParsed and
-// _xlsxObjectType. Returns zu|oks|room|str|ons|bu|eq|ben|exp|photo.
-// Hybrid order: styleUrl prefix (authoritative) → ExtendedData object_type
-// (secondary anchor) → legacy heuristics (byte-stable with v2.9.62 output).
-const _STYLE_PREFIX_TYPE = [
-  ['cad_zu_','zu'], ['cad_oks_','oks'], ['cad_room_','room'],
-  ['cad_str_','str'], ['cad_ons_','ons'], ['cad_bu_','bu'],
-  ['cad_eq_','eq'], ['cad_ben_','ben'], ['cad_exp_','exp'],
-  ['photopin_','photo'],
-];
-const _EXT_TYPE_MAP = {
-  zu:'zu', oks:'oks', room:'room', structure:'str', ons:'ons',
-  business_unit:'bu', equipment:'eq', beneficiary:'ben',
-  explanation:'exp', photo:'photo',
-};
-function _classifyObjectType(pm){
-  // 1. styleUrl prefix — primary, authoritative.
-  const su = String(pm && pm.styleUrl || '').replace(/^#/,'').toLowerCase();
-  if(su){
-    for(const [pref, t] of _STYLE_PREFIX_TYPE){ if(su.includes(pref)) return t; }
-  }
-  // 2. ExtendedData object_type — secondary anchor (P1 hybrid; strict mode = P2/47a).
-  const ot = pm && pm.ext && String(pm.ext.object_type||'').toLowerCase().trim();
-  if(ot && _EXT_TYPE_MAP[ot]) return _EXT_TYPE_MAP[ot];
-  // 3. Legacy heuristics — same ordering as v2.9.62 classifyParsed (byte-stable).
-  const blob = `${pm&&pm.name||''} | ${pm&&pm.desc||''}`.toLowerCase();
-  const looksLikeZU  = /(^|[^a-zа-яё])земл/i.test(blob);
-  const looksLikeExp = /пояснени|объяснени|комментари/i.test(blob);
-  if(pm && pm.styleUrl){
-    if(looksLikeZU)               return 'zu';
-    if(looksLikeExp)              return 'exp';
-    if(pm.type === 'Point')       return 'exp';
-    return 'oks';
-  }
-  if(looksLikeExp)                return 'exp';
-  if(pm && pm.type === 'Point')   return 'exp';
-  if(looksLikeZU)                 return 'zu';
-  return 'oks';
-}
-// Ordered «Метки» groups — matches the parser's strict <Folder> order
-// (photos excluded — they live in the photo gallery, not the marks tree).
-const _MARK_GROUPS = [
-  {key:'zu',  label:'Зем.участки'},
-  {key:'oks', label:'ОКС'},
-  {key:'room',label:'Помещения'},
-  {key:'str', label:'Сооружения'},
-  {key:'ons', label:'ОНС'},
-  {key:'bu',  label:'Бизнес-ед.'},
-  {key:'eq',  label:'Оборуд.'},
-  {key:'ben', label:'Бенефициары'},
-  {key:'exp', label:'Пояснения'},
-];
-const _OBJ_LABELS_ONE = {
-  zu:'Земельный участок', oks:'ОКС / Сооружение', room:'Помещение',
-  str:'Сооружение', ons:'ОНС', bu:'Бизнес-единица', eq:'Оборудование',
-  ben:'Бенефициар', exp:'Пояснение',
-};
-const _XLSX_TYPE_LABELS = {
-  zu:'Земельный участок', oks:'ОКС/Сооружение', str:'Сооружение',
-  room:'Помещение', ons:'ОНС', bu:'Бизнес-единица', eq:'Оборудование',
-  ben:'Бенефициар', exp:'Пояснение',
-};
-
 function _gatherMarkers(){
-  const buckets = {};
-  for(const g of _MARK_GROUPS) buckets[g.key] = [];
+  const buckets = { zu: [], oks: [], exp: [] };
   kmlLayers.forEach((layer, layerIdx) => {
     // (1) Contours saved via kdConfirm — explicit type, GeoJSON [lon,lat] geometry
     (layer.cadPlacemarks || []).forEach((pm, i) => {
@@ -6058,7 +5524,6 @@ function _gatherMarkers(){
       // and add/remove the underlying leaflet sublayer (pm._leafletLayer).
       buckets[bucket].push({
         id:        `cad:${layerIdx}:${i}`,
-        type:      bucket,   // 'zu'|'oks'|'exp' — без этого _editContourFromCard всегда брал 'oks'
         layerIdx, source:'cad', innerIdx:i,
         name:      (matched?.name && matched.name !== pm.cadNum) ? matched.name : (pm.cadNum || '(без номера)'),
         desc:      _markerDescFromLines(pm.lines) || matched?.desc || '',
@@ -6082,12 +5547,23 @@ function _gatherMarkers(){
       // "Земля под канаткой" / "Земельный участок" / "Земли населённых пунктов" /
       // "Пляж … 7022 кв.м · Земли" all in one regex. Word-boundary check (\b before
       // the prefix) avoids false positives on words like "примЗемлерь".
-      let bucket = _classifyObjectType(pm);
-      if(bucket === 'photo') return;   // double-cover: _isPhotoPin skipped above
+      let bucket = 'oks';
+      const blob = `${pm.name||''} | ${pm.desc||''}`.toLowerCase();
+      const looksLikeZU = /(^|[^a-zа-яё])земл/i.test(blob);
+      if(pm.styleUrl){
+        if(/cad_zu_/i.test(pm.styleUrl))       bucket = 'zu';
+        else if(/cad_exp_/i.test(pm.styleUrl)) bucket = 'exp';
+        else if(/cad_oks_/i.test(pm.styleUrl)) bucket = 'oks';
+        else if(looksLikeZU)                   bucket = 'zu';
+        else if(pm.type === 'Point')           bucket = 'exp';
+      } else if(pm.type === 'Point'){
+        bucket = 'exp';
+      } else if(looksLikeZU){
+        bucket = 'zu';
+      }
       const ll = pm.coords ? (pm.type === 'Point' ? pm.coords : pm.coords[0]) : null;
       buckets[bucket].push({
         id:        `pm:${layerIdx}:${i}`,
-        type:      bucket,   // 'zu'|'oks'|'exp' — иначе правка ЗУ/Пояснения сохранялась как ОКС
         layerIdx, source:'pm', innerIdx:i,
         name:      pm.name || pm.desc?.split(' · ')?.[0] || '(без названия)',
         desc:      pm.desc || '',
@@ -6107,8 +5583,7 @@ function _gatherMarkers(){
   // intentionally do NOT match on geometry alone — two distinct placemarks
   // can share the same coords (a building inside its parcel), only when name
   // AND description also match is it a real duplicate.
-  for(const g of _MARK_GROUPS){
-    const grp = g.key;
+  for(const grp of ['zu','oks','exp']){
     const seen = new Map();   // signature → first marker
     const deduped = [];
     for(const m of buckets[grp]){
@@ -6211,44 +5686,9 @@ function _markerDescFromPlacemark(pm){
   return pm?.desc || '';
 }
 
-// v2.10.0: parse a description into {pairs, attachments, visibleText}.
-// Handles BOTH separators: v2 "; " (semicolon+space) and legacy/manual " · ".
-// A token without ": " is kept verbatim (manual free-text descriptions are
-// NOT mangled). Ссылка_документ_<i>/Ссылка_фото_<i> become attachments and
-// are stripped from the visible text; the parser's duplicate
-// "Кадастровый номер:" pair is collapsed to the first occurrence.
-function _parseDescPairs(desc){
-  const out = { pairs: [], attachments: [], visibleText: '' };
-  const raw = String(desc || '').trim();
-  if(!raw) return out;
-  const tokens = raw.split(/\s*;\s|\s+·\s+/).map(s => s.trim()).filter(Boolean);
-  const visible = [];
-  let cadSeen = false;
-  for(const tk of tokens){
-    const ci = tk.indexOf(': ');
-    if(ci < 0){ visible.push(tk); out.pairs.push(['', tk]); continue; }
-    const key = tk.slice(0, ci).trim();
-    const val = tk.slice(ci + 2).trim();
-    out.pairs.push([key, val]);
-    if(/^Ссылка_документ_\d+$/i.test(key)){ out.attachments.push({kind:'doc',  path:val}); continue; }
-    if(/^Ссылка_фото_\d+$/i.test(key))    { out.attachments.push({kind:'photo',path:val}); continue; }
-    if(/^Кадастровый номер$/i.test(key)){ if(cadSeen) continue; cadSeen = true; }
-    visible.push(`${key}: ${val}`);
-  }
-  for(const a of out.attachments){
-    const base = String(a.path).split(/[\\/]/).pop();
-    a.name = base;
-    a.blobUrl = (typeof _kmzAttachBlobs === 'object' && _kmzAttachBlobs)
-      ? (_kmzAttachBlobs[a.path] || _kmzAttachBlobs[base] || null) : null;
-  }
-  out.visibleText = visible.join('; ');
-  return out;
-}
-
 function renderMarksList(){
   const buckets = _gatherMarkers();
-  for(const g of _MARK_GROUPS){
-    const grp = g.key;
+  for(const grp of ['zu','oks','exp']){
     const body = document.getElementById(`marks-body-${grp}`);
     const cnt  = document.getElementById(`marks-count-${grp}`);
     if(!body || !cnt) continue;
@@ -6264,7 +5704,9 @@ function renderMarksList(){
     if(!buckets[grp].length){
       const e = document.createElement('div');
       e.className = 'mark-empty';
-      e.textContent = 'Нет: ' + (g.label || grp).toLowerCase();
+      e.textContent = grp === 'zu' ? 'Нет земельных участков' :
+                      grp === 'oks' ? 'Нет ОКС/сооружений' :
+                                      'Нет пояснений-точек';
       body.appendChild(e);
       continue;
     }
@@ -6272,10 +5714,6 @@ function renderMarksList(){
       const item = document.createElement('div');
       item.className = 'mark-item';
       item.dataset.markId = m.id;
-      if(!m.latlng){   // v2.10.0: geometry-less object (e.g. cad_ben_*)
-        item.classList.add('mark-noloc');
-        item.title = 'Нет геометрии — только в перечне';
-      }
 
       // Per-marker checkbox (Task 1, v59): toggles visibility of THIS specific
       // placemark only. Independent of layer-level visibility — a hidden marker
@@ -6285,9 +5723,7 @@ function renderMarksList(){
       const cb = document.createElement('input');
       cb.type    = 'checkbox';
       cb.checked = m.markerVisible;
-      cb.disabled = !m.latlng;   // nothing to show/hide on the map
-      cb.title   = m.latlng ? 'Показать/скрыть этот объект на карте'
-                            : 'Нет геометрии — нечего показывать на карте';
+      cb.title   = 'Показать/скрыть этот объект на карте';
       cb.addEventListener('click', e => e.stopPropagation());  // don't fly-to on cb click
       cb.addEventListener('change', () => {
         setMarkerVisible(m.pmRef, cb.checked);
@@ -6296,10 +5732,9 @@ function renderMarksList(){
       });
       const content = document.createElement('div');
       content.className = 'mark-content';
-      const _vd = _parseDescPairs(m.desc || '').visibleText;
       content.innerHTML =
         `<div class="mark-name">${_escapeHtml(m.name)}</div>`+
-        (_vd ? `<div class="mark-desc">${_escapeHtml(_vd)}</div>` : '');
+        (m.desc ? `<div class="mark-desc">${_escapeHtml(m.desc)}</div>` : '');
       item.appendChild(cb);
       item.appendChild(content);
       // Click body → smoothly fly to marker, open coord popup with object info
@@ -6400,16 +5835,15 @@ window.activateMarkersAtLatLng = function(latlng){
   // Метки always match the open cards. _hitTestAllAtPoint returns nearest-only
   // for points + every overlapping polygon.
   const hits = _hitTestAllAtPoint(latlng);
-  const firstByGroup = {};
-  for(const g of _MARK_GROUPS) firstByGroup[g.key] = null;
+  const firstByGroup = { zu: null, oks: null, exp: null };
   for(const h of hits){
     const row = document.querySelector(`.mark-item[data-mark-id="${CSS.escape(h.marker.id)}"]`);
     if(!row) continue;
     row.classList.add('active');
     if(!firstByGroup[h.kind]) firstByGroup[h.kind] = row;
   }
-  for(const g of _MARK_GROUPS){
-    const row = firstByGroup[g.key];
+  for(const grp of ['zu','oks','exp']){
+    const row = firstByGroup[grp];
     if(row) _scrollRowIntoGroupBody(row);
   }
 };
@@ -7060,22 +6494,6 @@ function closeViewer(){
   if(activeIdx!=null){const p=photos[activeIdx];openLightbox(activeIdx,p.lat!=null?L.latLng(p.lat,p.lon):null);}
 }
 
-// v2.10.0: generic attachment-image overlay (info-card photo thumbnails).
-window._openAttImage = function(url){
-  if(!url) return;
-  const box = document.getElementById('att-lightbox');
-  const img = document.getElementById('att-lightbox-img');
-  if(!box || !img) return;
-  img.src = url;
-  box.classList.add('open');
-};
-window._closeAttImage = function(){
-  const box = document.getElementById('att-lightbox');
-  const img = document.getElementById('att-lightbox-img');
-  if(box) box.classList.remove('open');
-  if(img) img.src = '';
-};
-
 async function viewerNav(dir){
   if(document.getElementById('auto-save-cb').checked&&manualGPSActive&&tempLat!==null)await writeEXIFWithGPS();
   const order=getSortedNavOrder();if(!order.length)return;
@@ -7095,7 +6513,7 @@ async function viewerNav(dir){
 function updateStats(){document.getElementById('stat-total').textContent=photos.length;document.getElementById('stat-gps').textContent=photos.filter(p=>p.lat!=null).length;document.getElementById('stat-angle').textContent=photos.filter(p=>p.bearing!=null).length;}
 function onAutoSaveCbChange(cb){document.getElementById('auto-save-label').classList.toggle('active-label',cb.checked);try{localStorage.setItem('autoSaveEXIF',cb.checked?'1':'0');}catch(_){}}
 (function(){try{if(localStorage.getItem('autoSaveEXIF')==='1'){document.getElementById('auto-save-cb').checked=true;document.getElementById('auto-save-label').classList.add('active-label');}}catch(_){}})();
-function clearAll(){closeLightbox();closeViewer();exitManualGPSMode();photos.forEach(p=>{if(p.marker)map.removeLayer(p.marker);if(!p.isRemote&&p.displayUrl)URL.revokeObjectURL(p.displayUrl);});photos=[];activeIdx=null;remotePhotos=[];selectedFolderPath=null;folderTreeExpanded={};emptyFolders=[];document.getElementById('folder-filter-banner').classList.remove('visible');updateFolderTreePanel();updateStats();renderList();updateInviteButton();document.getElementById('map-hint').classList.remove('hidden');document.getElementById('share-btn').style.display='none';_kmzGraphHtml=null;if(typeof _refreshGraphTab==='function')_refreshGraphTab();showToast('Всё очищено');}
+function clearAll(){closeLightbox();closeViewer();exitManualGPSMode();photos.forEach(p=>{if(p.marker)map.removeLayer(p.marker);if(!p.isRemote&&p.displayUrl)URL.revokeObjectURL(p.displayUrl);});photos=[];activeIdx=null;remotePhotos=[];selectedFolderPath=null;folderTreeExpanded={};emptyFolders=[];document.getElementById('folder-filter-banner').classList.remove('visible');updateFolderTreePanel();updateStats();renderList();updateInviteButton();document.getElementById('map-hint').classList.remove('hidden');document.getElementById('share-btn').style.display='none';showToast('Всё очищено');}
 function setProgress(pct){document.getElementById('load-progress-bar').style.width=pct+'%';document.getElementById('load-progress').classList.toggle('active',pct>0&&pct<100);}
 let _tt=null;function showToast(msg,type='info',dur=2800,onClick=null){const t=document.getElementById('toast');t.innerHTML=msg;const bg={info:'var(--surface)',success:'#0f2a0f',error:'#2a0f0f',warn:'#2a200a'};const bc={info:'var(--border)',success:'#22c55e',error:'#ef4444',warn:'#f59e0b'};t.style.background=bg[type]||bg.info;t.style.borderColor=bc[type]||bc.info;t.style.cursor=onClick?'pointer':'';t.onclick=onClick||null;t.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>{t.classList.remove('show');t.onclick=null;t.style.cursor='';},dur);}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -7147,17 +6565,6 @@ function decToDMS(dec,axis){const ref=axis==='lat'?(dec>=0?'N':'S'):(dec>=0?'E':
 function blobToDataUrl(blob){return new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=()=>rej(new Error('FileReader'));r.readAsDataURL(blob);});}
 function dataUrlToBlob(du){const[m,b64]=du.split(',');const mime=(m.match(/:(.*?);/)||[])[1]||'image/jpeg';const bin=atob(b64),arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return new Blob([arr],{type:mime});}
 
-// Гарантируем readwrite-доступ к FSA-handle перед перезаписью файла.
-// Папка открывается через showDirectoryPicker({mode:'readwrite'}) → queryPermission
-// уже 'granted' (без повторного запроса). Для старых сессий/handle — requestPermission.
-async function _ensureHandleRW(h){
-  try{
-    if(h.queryPermission){ if(await h.queryPermission({mode:'readwrite'})==='granted') return true; }
-    if(h.requestPermission){ return (await h.requestPermission({mode:'readwrite'}))==='granted'; }
-    return true;  // старые реализации без Permissions API — createWritable сам бросит при отказе
-  }catch(_){ return false; }
-}
-
 async function writeEXIFWithGPS(){
   if(tempLat===null||tempLon===null){showToast('❌ Сначала укажите координаты','error');return;}
   const idx=manualModePhotoIndex,p=photos[idx];if(!p)return;
@@ -7177,7 +6584,7 @@ async function writeEXIFWithGPS(){
   if(!exifObj['Exif'])exifObj['Exif']={};exifObj['Exif'][piexif.ExifIFD.UserComment]=gppPay;
   let newDataUrl;try{newDataUrl=piexif.insert(piexif.dump(exifObj),dataUrl);}catch(err){showToast(`❌ EXIF: ${err.message}`,'error',6000);document.getElementById('mgps-save-btn').disabled=false;return;}
   const newBlob=dataUrlToBlob(newDataUrl);
-  if(!p.isRemote&&p.fileHandle&&typeof p.fileHandle.createWritable==='function'){try{if(!(await _ensureHandleRW(p.fileHandle)))throw new Error('нет прав на запись');const w=await p.fileHandle.createWritable();await w.write(newBlob);await w.close();showToast('✅ Файл перезаписан на диске','success',3000);}catch(e){const a=document.createElement('a');a.href=newDataUrl;a.download=p.name;a.click();showToast('✅ EXIF записан (скачан)','success',3000);}}
+  if(!p.isRemote&&p.fileHandle&&typeof p.fileHandle.createWritable==='function'){try{const w=await p.fileHandle.createWritable();await w.write(newBlob);await w.close();showToast('✅ Файл перезаписан на диске','success',3000);}catch(e){const a=document.createElement('a');a.href=newDataUrl;a.download=p.name;a.click();showToast('✅ EXIF записан (скачан)','success',3000);}}
   else if(p.isRemote){const a=document.createElement('a');a.href=newDataUrl;a.download=p.name;a.click();showToast('✅ Скачан (источник только чтение)','success',4000);}
   else{const a=document.createElement('a');a.href=newDataUrl;a.download=p.name;a.click();showToast('✅ Скачайте и замените исходный файл','success',3000);}
   const newBlobUrl=URL.createObjectURL(newBlob);
@@ -9172,7 +8579,22 @@ window.exportKMZ = async function(){
       // a thumbnail — see the user-reported bug shown in Yandex Maps Constructor
       // listing IMG_*.jpg under blue circles).
       if(isPhotoPlacemark(pm)) return 'photo';
-      return _classifyObjectType(pm);
+      const blob = `${pm.name||''} | ${pm.desc||''}`.toLowerCase();
+      const looksLikeZU = /(^|[^a-zа-яё])земл/i.test(blob);
+      const looksLikeExp = /пояснени|объяснени|комментари/i.test(blob);
+      if(pm.styleUrl){
+        if(/cad_zu_/i.test(pm.styleUrl))       return 'zu';
+        if(/cad_exp_/i.test(pm.styleUrl))      return 'exp';
+        if(/cad_oks_/i.test(pm.styleUrl))      return 'oks';
+        if(looksLikeZU)                        return 'zu';
+        if(looksLikeExp)                       return 'exp';
+        if(pm.type === 'Point')                return 'exp';
+        return 'oks';
+      }
+      if(looksLikeExp)                         return 'exp';
+      if(pm.type === 'Point')                  return 'exp';
+      if(looksLikeZU)                          return 'zu';
+      return 'oks';
     };
 
     // ── (1) Loaded KML layers ──────────────────────────────────────
@@ -9569,7 +8991,6 @@ window.toggleExportMenu = function(ev){
     `<button onclick="closeExportMenu();exportData('kmz')">📦 KMZ — Google Earth + фото</button>`+
     `<button onclick="closeExportMenu();exportData('kml')">🗺 KML — без фото (для Яндекс.Карт)</button>`+
     `<button onclick="closeExportMenu();exportData('xlsx')">📋 XLSX — таблица объектов</button>`+
-    `<button onclick="closeExportMenu();_exportCadastreTiles()" title="Выгрузить закэшированные тайлы кадастра (включая префетч z17) в ZIP для обмена">🗺 Выгрузить тайлы Росреестра z17</button>`+
     `<hr/>`;
   if(recent.length){
     html += `<div class="em-section">Перезаписать ранее сохранённые</div>`;
@@ -9592,89 +9013,6 @@ window.toggleExportMenu = function(ev){
 window.closeExportMenu = function(){
   document.getElementById('export-menu')?.classList.remove('open');
 };
-
-// ── ОБМЕН ТАЙЛАМИ КАДАСТРА (z17) ──────────────────────────────────
-// dump: SW отдаёт все закэшированные WMS-тайлы nspd чанками (transferable ArrayBuffer).
-function _swDumpCadastreTiles(onProgress){
-  const tiles = [];
-  return _swRequest({ type:'dumpZ17Tiles' }, [], (d, rec)=>{
-    if(d.type==='z17TilesDumpChunk'){ for(const t of d.tiles) tiles.push(t); onProgress&&onProgress(tiles.length); return false; }
-    if(d.type==='z17TilesDumpDone'){ rec.resolve({ tiles, count:d.count }); return true; }
-    return false;
-  });
-}
-// import: шлём тайлы в SW чанками; SW идемпотентно докладывает недостающие (обогащение).
-async function _swImportCadastreTiles(allTiles, onProgress){
-  const CH = 200; let added = 0, skipped = 0;
-  for(let i=0; i<allTiles.length; i+=CH){
-    const slice = allTiles.slice(i, i+CH);
-    const last  = i+CH >= allTiles.length;
-    const ack = await _swRequest(
-      { type:'importZ17Tiles', tiles:slice, seq:(i/CH)|0, last },
-      slice.map(t=>t.bytes),
-      (d, rec)=>{ if(d.type==='z17TilesImported'){ rec.resolve(d); return true; } return false; }
-    );
-    added += ack.added; skipped += ack.skipped;
-    onProgress && onProgress(Math.min(i+CH, allTiles.length), allTiles.length);
-  }
-  return { added, skipped };
-}
-async function _exportCadastreTiles(){
-  if(typeof JSZip === 'undefined'){ showToast('JSZip недоступен','error',4000); return; }
-  if(!navigator.serviceWorker?.controller){ showToast('Service Worker не активен — обновите страницу','warn',5000); return; }
-  showToast('⏳ Готовлю архив тайлов…','info',6000);
-  let dump;
-  try { dump = await _swDumpCadastreTiles(c=>{ if(c%400===0) showToast(`⏳ Собрано ${c} тайлов…`,'info',4000); }); }
-  catch(e){ showToast('Ошибка чтения кэша: '+e.message,'error',5000); return; }
-  if(!dump.tiles.length){ showToast('Нет закэшированных тайлов кадастра','warn',5000); return; }
-  const zip = new JSZip();
-  const manifest = [];
-  dump.tiles.forEach((t,i)=>{
-    const file = `tiles/${String(i+1).padStart(5,'0')}.png`;
-    zip.file(file, t.bytes);
-    manifest.push({ file, url:t.url });
-  });
-  zip.file('manifest.json', JSON.stringify(manifest));
-  zip.file('README.txt',
-    `EkceloFoto — пакет тайлов кадастра (Росреестр/НСПД), v2.9.62\n`+
-    `Тайлов: ${dump.tiles.length}\nСоздан: ${new Date().toISOString()}\n`+
-    `Загрузить: «Загрузить фото/объекты» → «Загрузить чужие тайлы z17».\n`);
-  const blob = await zip.generateAsync({ type:'blob', mimeType:'application/zip' });
-  const ts = new Date().toISOString().slice(0,16).replace(/[-:T]/g,'').replace(/(\d{8})(\d{4})/,'$1_$2');
-  await _pickAndWriteBlob(blob, `ekcelo-cadastre-tiles_${ts}.zip`, 'application/zip', '.zip');
-}
-async function _pickCadastreTilePack(){
-  document.getElementById('tilepack-file-input').click();
-}
-async function _onTilePackChosen(input){
-  const file = input.files && input.files[0];
-  input.value = '';
-  if(!file) return;
-  if(typeof JSZip === 'undefined'){ showToast('JSZip недоступен','error',4000); return; }
-  if(!navigator.serviceWorker?.controller){ showToast('Service Worker не активен — обновите страницу','warn',5000); return; }
-  showToast('⏳ Читаю архив тайлов…','info',6000);
-  let zip, manifest;
-  try {
-    zip = await JSZip.loadAsync(file);
-    const mf = zip.file('manifest.json');
-    if(!mf) throw new Error('нет manifest.json');
-    manifest = JSON.parse(await mf.async('string'));
-  } catch(e){ showToast('Некорректный пакет: '+e.message,'error',5000); return; }
-  const tiles = [];
-  for(const ent of manifest){
-    const f = zip.file(ent.file);
-    if(!f || !ent.url) continue;
-    tiles.push({ url:ent.url, bytes: await f.async('arraybuffer') });
-  }
-  if(!tiles.length){ showToast('В пакете нет тайлов','warn',5000); return; }
-  try {
-    const { added, skipped } = await _swImportCadastreTiles(tiles, (done,total)=>{
-      if(done%400===0||done===total) showToast(`⏳ ${done}/${total}…`,'info',4000);
-    });
-    showToast(`✅ Добавлено ${added}, пропущено ${skipped} тайлов`,'success',5000);
-    updateCadastreCacheInfo();
-  } catch(e){ showToast('Ошибка импорта: '+e.message,'error',5000); }
-}
 
 // Master export router. recentIdx (optional) — if set, reuse handle/name from
 // _loadRecentExports()[recentIdx] for idempotent overwrite.
@@ -10432,13 +9770,17 @@ function _xlsxObjectType(cpType, name, desc, styleUrl){
   if(cpType === 'zu')  return 'Земельный участок';
   if(cpType === 'oks') return 'ОКС/Сооружение';
   if(cpType === 'exp') return 'Пояснение';
-  // Loaded KML placemark: shared canonical classifier (styleUrl → ExtendedData
-  // → heuristics). ExtendedData is unavailable on this XLSX shim path — fine
-  // for P1 (strict ExtendedData mode is P2/47a).
-  const bucket = _classifyObjectType({ styleUrl, name, desc });
-  if(bucket !== 'oks' && _XLSX_TYPE_LABELS[bucket]) return _XLSX_TYPE_LABELS[bucket];
-  // Preserve the legacy "Бизнес-актив" heuristic only on the oks fallback.
-  if(/бизнес.?актив/i.test(blob)) return 'Бизнес-актив';
+  // Loaded KML placemark: classify by styleUrl pattern (matches the same
+  // logic as classifyParsed in KMZ export and renderMarksList grouping).
+  if(styleUrl){
+    if(/cad_zu_/i.test(styleUrl))  return 'Земельный участок';
+    if(/cad_oks_/i.test(styleUrl)) return 'ОКС/Сооружение';
+    if(/cad_exp_/i.test(styleUrl)) return 'Пояснение';
+  }
+  // Last-resort heuristics
+  if(/(^|[^a-zа-яё])земл/i.test(blob)) return 'Земельный участок';
+  if(/пояснени|объяснени/i.test(blob)) return 'Пояснение';
+  if(/бизнес.?актив/i.test(blob))      return 'Бизнес-актив';
   return 'ОКС/Сооружение';
 }
 

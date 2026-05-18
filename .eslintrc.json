@@ -1,0 +1,19 @@
+{
+  "root": true,
+  "env": { "browser": true, "es2022": true, "serviceworker": true },
+  "parserOptions": { "ecmaVersion": 2022, "sourceType": "script" },
+  "globals": {
+    "L": "readonly",
+    "JSZip": "readonly",
+    "XLSX": "readonly",
+    "piexif": "readonly",
+    "exifr": "readonly"
+  },
+  "rules": {
+    "no-undef": "error",
+    "no-redeclare": "error",
+    "no-dupe-keys": "error",
+    "no-unreachable": "error",
+    "no-unused-vars": ["warn", { "args": "none", "varsIgnorePattern": "^_" }]
+  }
+}

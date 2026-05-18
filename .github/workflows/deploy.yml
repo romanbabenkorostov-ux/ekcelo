@@ -11,6 +11,8 @@ on:
     branches: [main]
     paths:
       - "index.html"
+      - "v2961.html"
+      - "sw.js"
       - "worker.js"
       - "_config.yml"
       - ".github/workflows/deploy.yml"
