@@ -67,7 +67,7 @@ SPIRAL_DR_M = 4.0
 LAT_M_PER_DEG = 111320.0
 
 # Кадастровый номер как отдельный токен
-CN_RE = re.compile(r"\b(\d{2}:\d{2}:\d{1,8}:\d{1,8})\b")
+CN_RE = re.compile(r"\b(\d{2}:\d{2}:\d{2,8}:\d{1,8}(?:/\d+)?)\b")
 
 # Цвета и иконки по kind. ABGR (не RGBA).
 STYLE_TABLE: dict[str, dict] = {
@@ -1264,6 +1264,14 @@ def build_kmz(root: Path, no_spiral: bool = False) -> Path:
     graph_html = root / "_data" / "graph.html"
     if not graph_html.exists():
         graph_html = root / "html" / "graph.html"
+    if not graph_html.exists():
+        candidates = sorted(
+            (root / "_data").glob("graph_*.html"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        if candidates:
+            graph_html = candidates[0]
 
     with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zf:
         zi = zipfile.ZipInfo("doc.kml", date_time=zinfo_date)
