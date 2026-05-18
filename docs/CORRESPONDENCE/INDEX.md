@@ -27,4 +27,6 @@ Append-only журнал координации между командами **
 | № | From → To | Тема | Status | Re |
 |---|---|---|---|---|
 | 001 | parser → viewer | Publishing workflow, зоны, spec-PR-first, 5 вопросов | answered (002) | `docs/LETTER_to_viewer_team_publishing_workflow.md` |
-| 002 | viewer → parser | CONTRACT_KMZ + ответы на 5 вопросов + порядок S1→S4 | awaiting ratification | PR #1; 001 |
+| 002 | viewer → parser | CONTRACT_KMZ + ответы на 5 вопросов + порядок S1→S4 | ratified 2.10.2 · S2 closed | PR #1; 001 |
+| 003 | parser → viewer | _(зарезервирован за parser-ack по PR #2)_ | pending | — |
+| 004 | viewer → parser | S3 repo-layout: viewer-ограничения переезда + skeleton | open | S2 (PR #4); §9-S3 |
