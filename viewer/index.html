@@ -1564,8 +1564,8 @@ html.role-embed #header, html.role-embed #ver-switch, html.role-embed #ekcelo-ro
 
 /* ── S4: роли pro/view/embed — мягкое гейтирование UI (не криптозащита, см. dev/SPEC_ROLES_VIEWER_EMBED.md §2) ── */
 const ROLE_CFG = {
-  DEFAULT_ROLE: 'pro',            /* 'pro' | 'view' — владелец может сменить одной строкой */
-  PRO_PASS_SHA256: '',            /* hex sha256 парольной фразы; '' = pro-разблокировка выключена */
+  DEFAULT_ROLE: 'view',           /* 'pro' | 'view' — выбор владельца: публичный дефолт = view */
+  PRO_PASS_SHA256: '280f67e3e18daca3502c254d88fc92bc65d55f87c6b12b3c5748c83ea99806e3',  /* sha256('редактировать') */
   EMBED_CHROME: 'none'            /* 'none' | 'min' (зарезервировано) */
 };
 function resolveRole(){
