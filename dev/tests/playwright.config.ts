@@ -1,8 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 import * as path from 'path';
 
-// Статически отдаём корень репозитория (single HTML, без бэкенда).
-const repoRoot = path.resolve(__dirname, '..', '..');
+// Статически отдаём каталог viewer/ (S3: index.html/sw.js/v2961.html переехали туда).
+const repoRoot = path.resolve(__dirname, '..', '..', 'viewer');
 
 export default defineConfig({
   testDir: '.',

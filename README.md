@@ -198,8 +198,9 @@
 ## Развёртывание на GitHub Pages
 
 1. Форкните репозиторий или создайте новый
-2. Загрузите `index.html`, `README.md`, `worker.js`, `_config.yml` в корень
-3. В настройках репозитория → **Pages** → Source: `main` branch / `/ (root)`
+2. Веб-интерфейс лежит в `viewer/` (`index.html`, `sw.js`, `v2961.html`)
+3. В настройках репозитория → **Pages** → Source: **GitHub Actions**
+   (workflow `.github/workflows/deploy.yml` публикует каталог `viewer/`)
 4. Сайт доступен по адресу `https://{ваш-логин}.github.io/{репозиторий}/`
 
 ### Настройка CORS-прокси для Яндекс.Диска
@@ -208,4 +209,4 @@
 2. Назовите воркер `ekcelo-proxy`, нажмите Deploy
 3. Нажмите Edit code, замените содержимое на `worker.js` из репозитория
 4. Скопируйте URL воркера вида `https://ekcelo-proxy.YOUR.workers.dev`
-5. Вставьте в `index.html` в константу `YANDEX_PROXY` (первые строки `<script>`)
+5. Вставьте в `viewer/index.html` в константу `YANDEX_PROXY` (первые строки `<script>`)

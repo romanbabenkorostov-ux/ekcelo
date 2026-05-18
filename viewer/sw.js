@@ -3,11 +3,11 @@
 // Срок хранения: 30 дней. Лимит: 2000000 тайлов (FIFO при переполнении).
 // Центральные тайлы загружаются браузером первыми (Leaflet сам приоритизирует центр).
 
-const CACHE_NAME   = 'ekcelo-cadastre-v2-10-0';
+const CACHE_NAME   = 'ekcelo-cadastre-v3';
 const CACHE_HOST   = 'nspd.gov.ru';
 const MAX_AGE_MS   = 30 * 24 * 60 * 60 * 1000;  // 30 дней
-const MAX_ENTRIES  = 2000000;   // v2.10.0: переименование CACHE_NAME намеренное —
-// activate (ниже) одноразово удалит старый кэш тайлов; владелец это подтвердил.
+const MAX_ENTRIES  = 2000000;   // S3: bump CACHE_NAME v2→v3 — переезд sw.js в
+// viewer/ меняет его URL; activate (ниже) одноразово вычистит старый кэш тайлов.
 
 self.addEventListener('install',  () => self.skipWaiting());
 self.addEventListener('activate', e  => e.waitUntil(

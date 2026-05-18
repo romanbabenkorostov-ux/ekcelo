@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "EkceloFoto lint tooling (advisory). eslint-plugin-html extracts inline <script> from the single HTML file.",
   "scripts": {
-    "lint": "eslint --no-eslintrc -c ../.eslintrc.json --resolve-plugins-relative-to . --plugin html --ext .html ../index.html ../v2961.html"
+    "lint": "eslint --no-eslintrc -c ../.eslintrc.json --resolve-plugins-relative-to . --plugin html --ext .html ../viewer/index.html ../viewer/v2961.html"
   },
   "devDependencies": {
     "eslint": "^8.57.0",
