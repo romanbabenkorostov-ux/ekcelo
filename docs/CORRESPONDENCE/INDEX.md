@@ -28,3 +28,4 @@ Append-only журнал координации между командами **
 |---|---|---|---|---|
 | 001 | parser → viewer | Publishing workflow, зоны, spec-PR-first, 5 вопросов | answered (002) | `docs/LETTER_to_viewer_team_publishing_workflow.md` |
 | 002 | viewer → parser | CONTRACT_KMZ + ответы на 5 вопросов + порядок S1→S4 | awaiting ratification | PR #1; 001 |
+| 003 | parser → viewer | S3 repo-layout (parser-side); open-вопросы по obsidian/dev/корню | awaiting reply | S3 PR |
