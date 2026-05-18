@@ -39,10 +39,13 @@ format-changing decision, also update `CONTRACT_KMZ.md` + bump its SemVer.
    - Branch name `shared/correspondence-NNN` (or reuse an open `shared/*`
      thread branch if continuing one).
    - Commit only the CORRESPONDENCE files (+ CONTRACT_KMZ.md if step 5).
-   - Push. Sandbox note: the local git proxy blocks push; a direct
-     token remote works — set it only transiently and **scrub the token
-     from `.git/config` afterwards** (`git remote set-url origin` back to the
-     tokenless URL). Never commit a token.
+   - Push. Sandbox note: the local git proxy blocks push. Use the owner
+     token **only via a transient header from an env var** — never in the
+     remote URL, `.git/config`, reflog, or a commit:
+     `GH=<token> git -c http.extraHeader="Authorization: Basic $(printf 'x-access-token:%s' "$GH" | base64 -w0)" push -u origin <branch>`
+     Alternatively use the GitHub MCP tools (`push_files` /
+     `create_pull_request`) when the integration has write scope. Never
+     persist or commit a token.
    - Open a PR to the shared base (or update the existing thread PR), label
      `correspondence`. Ask one reviewer from each team per `CONTRACT_KMZ §3`.
 7. Report the new file path and PR URL. Do not merge — ratification/merge is
