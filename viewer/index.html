@@ -1108,6 +1108,15 @@ html.role-embed #header{height:0!important;min-height:0!important;padding:0!impo
 html.role-embed #ver-switch{display:none!important}
 #ekcelo-role-lock{font:11px 'JetBrains Mono',ui-monospace,monospace;background:var(--surface,#1b1f27);border:1px solid var(--border,#333);border-radius:6px;padding:2px 7px;opacity:.7;cursor:pointer;transition:opacity .15s;color:var(--accent2,#7fd6ff);flex-shrink:0;margin-left:4px;white-space:nowrap}
 #ekcelo-role-lock:hover{opacity:1}
+/* ── S5: overlay графа (CONTRACT_KMZ 2.11.0) — z-index 9600 (выше шапки/меню 9100/yandex 9500, ниже load-progress 9999 и lightbox 10000+) ── */
+#graph-overlay{position:fixed;inset:0;z-index:9600;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:24px}
+#graph-overlay.hidden{display:none}
+#graph-overlay-frame{width:100%;height:100%;max-width:1400px;border:0;border-radius:10px;background:#0d0f14;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+#graph-overlay-close{position:absolute;top:14px;right:18px;z-index:1;width:34px;height:34px;border-radius:50%;border:1px solid var(--border,#333);background:var(--surface,#1b1f27);color:var(--text,#e8e8e8);font-size:20px;line-height:1;cursor:pointer}
+#graph-overlay-close:hover{color:var(--accent2,#7fd6ff)}
+.mark-graph-btn{background:transparent;border:none;cursor:pointer;font-size:13px;padding:0 4px;flex-shrink:0;opacity:.6}
+.mark-graph-btn:hover{opacity:1}
+@media(max-width:640px){#graph-overlay{padding:0}#graph-overlay-frame{border-radius:0}}
 </style>
 </head>
 <body>
@@ -4069,10 +4078,15 @@ function _renderObjectCard(hit, cardId){
     : _isPolyKind(hit.kind)
       ? `<button class="ic-icobtn ic-edit" title="Редактировать контур" onclick="_editContourFromCard('${mIdEsc}')">${_pencilSvg}</button>`
       : `<button class="ic-icobtn ic-edit" title="Редактировать координату" onclick="_editExpCoordFromCard('${mIdEsc}')">${_pencilSvg}</button>`;
+  const _gid = (typeof _graphNodeIdOf === 'function') ? _graphNodeIdOf(m) : '';
+  const graphBtn = (_gid && typeof _kmzGraphHtml !== 'undefined' && _kmzGraphHtml)
+    ? `<button class="ic-icobtn" title="К узлу графа связей" onclick="_openGraphFor('${_gid.replace(/'/g,"\\'")}')">🕸</button>`
+    : '';
   return (
     `<div class="ic-header ${groupClass}">`+
       `<span class="ic-title">${groupTitle}</span>`+
       editBtn+
+      graphBtn+
       `<button class="ic-icobtn" title="Копировать текст" onclick="_copyToClip('${fullTextEsc}', this)">⎘</button>`+
       `<button class="ic-close" title="Закрыть">×</button>`+
     `</div>`+
@@ -4991,6 +5005,40 @@ let _kmzActiveBlobMap = {};
 let _kmzAttachBlobs = {};
 // v2.10.0: graph.html (ownership graph) from the last loaded KMZ, in-memory only.
 let _kmzGraphHtml = null;
+
+/* ── S5: overlay графа + переход маркер→узел (CONTRACT_KMZ 2.11.0) ── */
+function _graphNodeIdOf(m){
+  try{
+    if(!m) return '';
+    const e = (m.pmRef && m.pmRef.ext) || m.ext || null;
+    const v = e && e.graph_node_id;
+    return (v && /^[A-Za-z0-9_:/-]{1,256}$/.test(String(v))) ? String(v) : '';
+  }catch(_){ return ''; }
+}
+window._openGraphFor = function(nodeId){
+  if(!nodeId || !_kmzGraphHtml) return;
+  const ov = document.getElementById('graph-overlay');
+  const fr = document.getElementById('graph-overlay-frame');
+  if(!ov || !fr) return;
+  fr.onload = function(){
+    try{ fr.contentWindow.postMessage({ type:'ekcelo.graph.select', nodeId: String(nodeId) }, '*'); }catch(_){}
+  };
+  fr.srcdoc = _kmzGraphHtml;
+  ov.classList.remove('hidden');
+};
+window._closeGraphOverlay = function(){
+  const ov = document.getElementById('graph-overlay');
+  const fr = document.getElementById('graph-overlay-frame');
+  if(fr) fr.srcdoc = 'about:blank';   /* выгружаем vis-network — экономия памяти */
+  if(ov) ov.classList.add('hidden');
+};
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape'){
+    const ov = document.getElementById('graph-overlay');
+    if(ov && !ov.classList.contains('hidden')) window._closeGraphOverlay();
+  }
+});
+/* ── /S5 ── */
 
 // ── KMZ from remote URL (Yandex Disk / Google Drive / S3 / direct) ──
 // Shows a dialog: "Download to local folder?" before fetching.
@@ -6385,6 +6433,14 @@ function renderMarksList(){
         (_vd ? `<div class="mark-desc">${_escapeHtml(_vd)}</div>` : '');
       item.appendChild(cb);
       item.appendChild(content);
+      const _gid = (typeof _graphNodeIdOf === 'function') ? _graphNodeIdOf(m) : '';
+      if(_gid && typeof _kmzGraphHtml !== 'undefined' && _kmzGraphHtml){
+        const gb = document.createElement('button');
+        gb.type = 'button'; gb.className = 'mark-graph-btn';
+        gb.title = 'К узлу графа связей'; gb.textContent = '🕸';
+        gb.addEventListener('click', ev => { ev.stopPropagation(); window._openGraphFor(_gid); });
+        item.appendChild(gb);
+      }
       // Click body → smoothly fly to marker, open coord popup with object info
       item.addEventListener('click', () => _flyToMarker(m));
       body.appendChild(item);
@@ -11438,5 +11494,9 @@ queueMicrotask(() => {
       </div>
     </div>
   </div>
+<div id="graph-overlay" class="hidden" onclick="if(event.target===this)window._closeGraphOverlay()">
+  <button id="graph-overlay-close" type="button" aria-label="Закрыть" title="Закрыть (Esc)" onclick="window._closeGraphOverlay()">×</button>
+  <iframe id="graph-overlay-frame" sandbox="allow-scripts" referrerpolicy="no-referrer" title="Граф связей"></iframe>
+</div>
 </body>
 </html>
