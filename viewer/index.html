@@ -1100,6 +1100,14 @@ html.tile-seam-yandex .leaflet-tile-pane{ will-change:transform; isolation:isola
 .leaflet-popup.edit-ctx-popup .leaflet-popup-content{margin:4px 6px;color:#fff}
 .leaflet-popup.edit-ctx-popup .leaflet-popup-tip{background:#0d0f14}
 .kd-btn.primary:hover{background:#f0ff00}
+/* ── S4: роли pro/view/embed — мягкое гейтирование UI (не криптозащита, §2 spec) ── */
+html.role-view #export-wrap, html.role-embed #export-wrap{display:none!important}
+html.role-view #auto-save-label, html.role-embed #auto-save-label{display:none!important}
+html.role-embed #app{grid-template-rows:0 1fr}
+html.role-embed #header{height:0!important;min-height:0!important;padding:0!important;border:0!important;overflow:hidden!important;visibility:hidden!important}
+html.role-embed #ver-switch{display:none!important}
+#ekcelo-role-lock{font:11px 'JetBrains Mono',ui-monospace,monospace;background:var(--surface,#1b1f27);border:1px solid var(--border,#333);border-radius:6px;padding:2px 7px;opacity:.7;cursor:pointer;transition:opacity .15s;color:var(--accent2,#7fd6ff);flex-shrink:0;margin-left:4px;white-space:nowrap}
+#ekcelo-role-lock:hover{opacity:1}
 </style>
 </head>
 <body>
@@ -1109,6 +1117,7 @@ html.tile-seam-yandex .leaflet-tile-pane{ will-change:transform; isolation:isola
 
 <header id="header">
   <div id="logo">Ekcelo<span>Foto</span><small>v2.10.0</small></div>
+  <div id="ekcelo-role-lock" title="Переключатель интерфейса (pro/view) — не защита данных" onclick="__ekceloRoleToggle()">🔑 про…</div>
   <a id="invite-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     Основной сайт
@@ -1556,6 +1565,79 @@ html.tile-seam-yandex .leaflet-tile-pane{ will-change:transform; isolation:isola
 <script>
 'use strict';
 
+/* ── S4: роли pro/view/embed — мягкое гейтирование UI (не криптозащита, см. dev/SPEC_ROLES_VIEWER_EMBED.md §2) ── */
+const ROLE_CFG = {
+  DEFAULT_ROLE: 'pro',            /* 'pro' | 'view' — выбор владельца: дефолт = pro (регрессия-safe, view/embed только по ?mode=) */
+  PRO_PASS_SHA256: '280f67e3e18daca3502c254d88fc92bc65d55f87c6b12b3c5748c83ea99806e3',  /* sha256('редактировать') */
+  EMBED_CHROME: 'none'            /* 'none' | 'min' (зарезервировано) */
+};
+function resolveRole(){
+  try{
+    const m = new URLSearchParams(location.search).get('mode');
+    if(m === 'embed') return 'embed';
+    if(m === 'view')  return 'view';
+    if(m === 'pro')   return 'pro';
+    try{ if(localStorage.getItem('ekcelo_role') === 'pro') return 'pro'; }catch(_){}
+  }catch(_){}
+  return ROLE_CFG.DEFAULT_ROLE === 'view' ? 'view' : 'pro';
+}
+let __ekceloRole = resolveRole();
+function roleAllows(cap){ return __ekceloRole === 'pro'; }   /* cap ∈ {'edit','export'} */
+function applyRole(role){
+  __ekceloRole = role || resolveRole();
+  try{
+    const h = document.documentElement;
+    h.classList.remove('role-pro','role-view','role-embed');
+    h.classList.add('role-' + __ekceloRole);
+    if(__ekceloRole === 'embed') h.classList.add('role-view');
+  }catch(_){}
+  window.__ekceloRole = __ekceloRole;
+  if(typeof __ekceloRoleLockSync === 'function') __ekceloRoleLockSync();
+}
+if(__ekceloRole === 'embed'){
+  ['showDirectoryPicker','showSaveFilePicker','showOpenFilePicker'].forEach(function(k){
+    try{ delete window[k]; }catch(_){ try{ window[k] = undefined; }catch(__){} }
+  });
+}
+async function __ekceloSha256Hex(s){
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return Array.from(new Uint8Array(b)).map(function(x){ return x.toString(16).padStart(2,'0'); }).join('');
+}
+function __ekceloRoleLockSync(){
+  const el = document.getElementById('ekcelo-role-lock'); if(!el) return;
+  el.textContent = (__ekceloRole === 'pro') ? '🔓 про' : '🔑 про…';
+}
+function __ekceloSetModeParam(m){
+  try{ const u = new URL(location.href); u.searchParams.set('mode', m); history.replaceState(null, '', u); }catch(_){}
+}
+async function __ekceloRoleToggle(){
+  if(__ekceloRole === 'pro'){
+    try{ localStorage.removeItem('ekcelo_role'); }catch(_){}
+    __ekceloSetModeParam('view');
+    applyRole('view');
+    if(typeof showToast === 'function') showToast('Режим про выключен','info',2000);
+    return;
+  }
+  if(!ROLE_CFG.PRO_PASS_SHA256){
+    if(typeof showToast === 'function') showToast('Pro-разблокировка не настроена','warn',3000);
+    return;
+  }
+  const phrase = prompt('Фраза режима «про». Это переключатель интерфейса, не защита данных.');
+  if(phrase == null || phrase === '') return;
+  let hex = ''; try{ hex = await __ekceloSha256Hex(phrase); }catch(_){}
+  if(hex && hex === ROLE_CFG.PRO_PASS_SHA256.toLowerCase()){
+    try{ localStorage.setItem('ekcelo_role','pro'); }catch(_){}
+    __ekceloSetModeParam('pro');
+    applyRole('pro');
+    if(typeof showToast === 'function') showToast('Режим про включён','info',2000);
+  } else {
+    if(typeof showToast === 'function') showToast('Неверная фраза','warn',2500);
+  }
+}
+window.__ekceloRoleToggle = __ekceloRoleToggle;
+applyRole(__ekceloRole);
+/* ── /S4 role engine ── */
+
 // ═══ SERVICE WORKER ════════════════════════════════════════════════
 let _storageState = { persisted:false, usageMB:0, quotaMB:0 };
 // reqId-correlation для запросов к SW с многочанковым ответом (dump/import тайлов)
@@ -1620,6 +1702,7 @@ function clearCadastreCache(){navigator.serviceWorker?.controller?.postMessage('
 
 // ═══ MAP ══════════════════════════════════════════════════════════
 const map=L.map('map',{center:[55.75,37.61],zoom:5,zoomControl:true,maxZoom:22});
+if(window.__ekceloRole==='embed'){ window.addEventListener('load',function(){ try{ map.invalidateSize(true); }catch(_){ } }); setTimeout(function(){ try{ map.invalidateSize(true); }catch(_){ } },400); }
 // Prevent "white squares": stop Leaflet from loading missing marker-icon.png in SPA context.
 // Deleting _getIconUrl is enough — mergeOptions with empty strings breaks divIcon too.
 delete L.Icon.Default.prototype._getIconUrl;
@@ -2789,7 +2872,7 @@ ${parts.placemark}
 
 let _ce = null;  // {polygon, vertices[], midpoints[], type, cadNum, prefillDesc, originalLL, photosWereVisible}
 
-function startContourEditor(geom, type, cadNum, prefillDesc){
+function startContourEditor(geom, type, cadNum, prefillDesc){ if(!roleAllows('edit'))return;
   _disposeContourEditor();
 
   // Auto-hide photo markers — user explicitly asked: photo dots compete with
@@ -2982,7 +3065,7 @@ function _hideEditorToolbar(){
 let _shiftModeActive = false;
 let _shiftDragStart = null;  // {mouseX, mouseY, latlngs:[]}
 
-window.toggleContourShiftMode = function(){
+window.toggleContourShiftMode = function(){ if(!roleAllows('edit'))return;
   if(!_ce) return;
   _shiftModeActive = !_shiftModeActive;
   const btn = document.getElementById('contour-shift-btn');
@@ -3095,7 +3178,7 @@ window.revertContourEditor = function(){
 // the polygon centroid. This is what the user described: "ранее сохранённый
 // объект остаётся, но стирается его контур". The point still appears in Метки
 // and exports, just without polygon edges.
-window.deleteContourShape = function(){
+window.deleteContourShape = function(){ if(!roleAllows('edit'))return;
   if(!_ce) return;
   const sm = _ce.sourceMarker;
   if(!sm){
@@ -3161,7 +3244,7 @@ window.deleteContourShape = function(){
 // AND removes the placemark from the current session after successful save.
 // Implementation strategy: build a single-placemark export, write to disk via
 // the same _pickAndWrite helpers, then remove from kmlLayers and dispose editor.
-window.moveContourToOtherProject = async function(){
+window.moveContourToOtherProject = async function(){ if(!roleAllows('edit'))return;
   if(!_ce) return;
   const sm = _ce.sourceMarker;
   if(!sm){
@@ -3394,7 +3477,7 @@ function _disposeContourEditor(){
 // (_kdDest='layer') — он сам пишет в слой, обновляет kmlText, persist в storage
 // и тихо переписывает файл через FSA-handle, если он есть. Возвращает true при
 // успехе; false — слой-владелец не найден (вызывающий показывает обычный диалог).
-function _commitEditedGeometryInPlace(sm, newGeom, kindLabel, type){
+function _commitEditedGeometryInPlace(sm, newGeom, kindLabel, type){ if(!roleAllows('edit'))return;
   if(!sm) return false;
   const layers = kmlLayers || [];
   let srcIdx = -1, oldCad = null, oldPm = null;
@@ -3464,7 +3547,7 @@ function _commitEditedGeometryInPlace(sm, newGeom, kindLabel, type){
 
 let _ep = null;  // {marker, savedHandlers}
 
-window.startExplanationPoint = function(lat, lng, sourceMarker){
+window.startExplanationPoint = function(lat, lng, sourceMarker){ if(!roleAllows('edit'))return;
   _disposeExplanationPoint();
   map.closePopup();
   // Photo markers compete visually with a single pin; same auto-hide pattern as
@@ -4004,7 +4087,7 @@ function _renderObjectCard(hit, cardId){
 // Copy helper used by all info-card buttons. Briefly flashes the button to
 // confirm the action.
 // Edit-contour handler called from info-card ✏ button (ZU / OKS)
-window._editContourFromCard = function(markerId){
+window._editContourFromCard = function(markerId){ if(!roleAllows('edit'))return;
   if(!markerId) return;
   // Look up marker directly from registry (avoids stale re-search by id)
   let m = window._cardMarkerRegistry?.get(markerId);
@@ -4065,7 +4148,7 @@ window._editContourFromCard = function(markerId){
 };
 
 // Edit-coord handler called from info-card ✏ button (Пояснение / EXP)
-window._editExpCoordFromCard = function(markerId){
+window._editExpCoordFromCard = function(markerId){ if(!roleAllows('edit'))return;
   if(!markerId) return;
   const buckets = typeof _gatherMarkers === 'function' ? _gatherMarkers() : null;
   if(!buckets) return;
@@ -7158,7 +7241,7 @@ async function _ensureHandleRW(h){
   }catch(_){ return false; }
 }
 
-async function writeEXIFWithGPS(){
+async function writeEXIFWithGPS(){ if(!roleAllows('edit'))return;
   if(tempLat===null||tempLon===null){showToast('❌ Сначала укажите координаты','error');return;}
   const idx=manualModePhotoIndex,p=photos[idx];if(!p)return;
   document.getElementById('mgps-save-btn').disabled=true;showToast('⏳ Записываем EXIF…','info',8000);
@@ -9552,7 +9635,7 @@ function _autoExportName(ext){
   return `${stamp}_${safe}.${ext}`;
 }
 
-window.toggleExportMenu = function(ev){
+window.toggleExportMenu = function(ev){ if(!roleAllows('export'))return;
   if(ev) ev.stopPropagation();
   const menu = document.getElementById('export-menu');
   if(!menu) return;
@@ -9619,7 +9702,7 @@ async function _swImportCadastreTiles(allTiles, onProgress){
   }
   return { added, skipped };
 }
-async function _exportCadastreTiles(){
+async function _exportCadastreTiles(){ if(!roleAllows('export'))return;
   if(typeof JSZip === 'undefined'){ showToast('JSZip недоступен','error',4000); return; }
   if(!navigator.serviceWorker?.controller){ showToast('Service Worker не активен — обновите страницу','warn',5000); return; }
   showToast('⏳ Готовлю архив тайлов…','info',6000);
@@ -9681,7 +9764,7 @@ async function _onTilePackChosen(input){
 // v2.9.58 (Task 9): runs a duplicate-cadnum check before any format-specific
 // pipeline, so the user is warned about pending dedup, and the format
 // emitters can use _collectExportSkipCadnums() to know what to skip.
-window.exportData = async function(format, recentIdx=null){
+window.exportData = async function(format, recentIdx=null){ if(!roleAllows('export'))return;
   if(typeof _warnIfDuplicateCadnums === 'function') _warnIfDuplicateCadnums();
   if(format === 'kmz'){
     // Existing KMZ flow handles its own save dialog and toasts.
