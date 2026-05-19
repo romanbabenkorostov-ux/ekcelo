@@ -1765,11 +1765,7 @@ const L_NspdLayer = L.GridLayer.extend({
     const img = document.createElement('img');
     img.style.cssText = 'width:256px;height:256px;';
     const url = _nspdWmsUrl(this.options._layerId, coords);
-    fetch(url, {
-      referrer: 'https://nspd.gov.ru/',
-      referrerPolicy: 'unsafe-url',
-      headers: { Accept: 'image/png,image/*' },
-    })
+    _nspdTileFetch(url)
     .then(r => r.ok ? r.blob() : Promise.reject(r.status))
     .then(blob => {
       const burl = URL.createObjectURL(blob);
@@ -1923,7 +1919,7 @@ function _prefetchCadastreZ17(token){
     if(i >= work.length) return Promise.resolve();
     const url = work[i++];
     _prefetchSeen.add(url);
-    return fetch(url, { referrer:'https://nspd.gov.ru/', referrerPolicy:'unsafe-url', headers:{ Accept:'image/png,image/*' } })
+    return _nspdTileFetch(url)
       .then(r=>r.ok?r.blob():null)
       .catch(()=>{})
       .then(()=>worker());
@@ -7111,6 +7107,13 @@ const PUBLIC_PROXIES=[u=>`https://corsproxy.io/?url=${encodeURIComponent(u)}`,u=
 function detectRemoteType(url){return/drive\.google\.com/i.test(url)?'gdrive':/disk\.yandex\.(ru|com)|yadi\.sk/i.test(url)?'yandex':'other';}
 function extractGdriveId(url){return(url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)||url.match(/[?&]id=([a-zA-Z0-9_-]+)/))?.[1];}
 function proxyUrl(u){return YANDEX_PROXY?`${YANDEX_PROXY}?url=${encodeURIComponent(u)}`:PUBLIC_PROXIES[0](u);}
+// nspd.gov.ru принимает Origin прод-сайта, но НЕ http://localhost (CORS) — это
+// dev-артефакт, не продакшн-баг. На localhost кадастр-тайлы идём через CORS-прокси;
+// на проде — прямой fetch (без изменений, SW-кэш по nspd.gov.ru сохранён).
+function _isDevHost(){const h=location.hostname;return h==='localhost'||h==='127.0.0.1'||h==='[::1]'||h==='::1'||h.endsWith('.local');}
+function _nspdTileFetch(u){return _isDevHost()
+  ? fetch(proxyUrl(u), { headers:{ Accept:'image/png,image/*' } })
+  : fetch(u, { referrer:'https://nspd.gov.ru/', referrerPolicy:'unsafe-url', headers:{ Accept:'image/png,image/*' } });}
 async function fetchTimeout(url,ms=10000){const c=new AbortController();const t=setTimeout(()=>c.abort(),ms);try{return await fetch(url,{signal:c.signal});}finally{clearTimeout(t);}}
 async function resolveYandexHref(pub){const api=`https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=${encodeURIComponent(pub)}`;for(const mk of[u=>proxyUrl(u),...PUBLIC_PROXIES]){try{const r=await fetchTimeout(mk(api),8000);if(r.ok){const d=await r.json();if(d.href)return d.href;}}catch(_){}}throw new Error('Яндекс API недоступен');}
 async function fetchBlob(href){if(YANDEX_PROXY){const r=await fetchTimeout(proxyUrl(href),30000);if(r.ok)return r.blob();}for(const mk of PUBLIC_PROXIES){try{const r=await fetchTimeout(mk(href),20000);if(r.ok)return r.blob();}catch(_){}}throw new Error('Файл недоступен');}
