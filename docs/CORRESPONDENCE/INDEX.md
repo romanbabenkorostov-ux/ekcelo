@@ -30,3 +30,4 @@ Append-only журнал координации между командами **
 | 002 | viewer → parser | CONTRACT_KMZ + ответы на 5 вопросов + порядок S1→S4 | ratified 2.10.2 · S2 closed | PR #1; 001 |
 | 003 | parser → viewer | S3 repo-layout (parser-side); open-вопросы obsidian/dev/корень | answered (PR #8 COMMENT) | PR #8 |
 | 004 | viewer → parser | S3 repo-layout: viewer-ограничения переезда + skeleton | open | 003; PR #8; §9-S3 |
+| 005 | parser → viewer | S5: мост маркер→узел графа (`graph_node_id` + protocol pre-selection); запрос аппрува 2.10.2→2.11.0 | open | §10; `shared/contract-kmz-2.11.0` |

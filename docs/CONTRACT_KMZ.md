@@ -1,8 +1,8 @@
 # CONTRACT_KMZ — единый источник истины формата KMZ (Ekcelo)
 
 **Статус:** Ратифицирован (PR #1, мерж 2026-05-18).
-**Версия контракта:** 2.10.2 · **SemVer-политика:** см. §4.
-**Дата:** 2026-05-18 · **Арбитр:** владелец репозитория `romanbabenkorostov-ux`.
+**Версия контракта:** 2.11.0 · **SemVer-политика:** см. §4.
+**Дата:** 2026-05-19 · **Арбитр:** владелец репозитория `romanbabenkorostov-ux`.
 **Тех-тело (нормативная часть):** `docs/KML_INGESTION_SPEC_for_viewer_team_v2.10.0.md`
 (pin SHA `22407643969f0c66875b9b86e376d265e5b53987`).
 **Информативно (parser-internal, НЕ контракт):** `docs/CHANGELOG_052_v1_to_v2.md`.
@@ -98,9 +98,10 @@ SemVer `MAJOR.MINOR.PATCH` для контракта:
 
 ## 5. Нормативное тех-тело (по ссылке, не дублируется)
 
-Полная нормативная спецификация полей — `docs/KML_INGESTION_SPEC_for_viewer_team_v2.10.0.md`
-@ SHA `22407643969f0c66875b9b86e376d265e5b53987`. Кратко, что зафиксировано на
-2.10.0 (изменять только через §3):
+Полная нормативная спецификация базы 2.10.x — `docs/KML_INGESTION_SPEC_for_viewer_team_v2.10.0.md`
+@ SHA `22407643969f0c66875b9b86e376d265e5b53987`. Аддитивные изменения 2.11.0 описаны
+**в этом файле** ниже (новый pin тех-тела не выпускается — base + добавления). Кратко,
+что зафиксировано (изменять только через §3):
 
 - **9 префиксов** `styleUrl`/`Style id` (подстрока — сигнал типа):
   `cad_zu_`, `cad_oks_` (только здания), `cad_room_`, `cad_str_`, `cad_ons_`,
@@ -123,6 +124,22 @@ SemVer `MAJOR.MINOR.PATCH` для контракта:
   по `/(^|\/)graph\.html$/i`). Имя файла-источника в пайплайне парсера
   (напр. `graph_<source>_<ts>.html`) — parser-internal и контрактом не
   ограничивается; `08_build_kmz_v2` нормализует его в `graph.html` при упаковке.
+- **(2.11.0+)** `<ExtendedData>` каждого Placemark с префиксом
+  `cad_{zu,oks,room,str,ons,bu,eq,ben}_*` или `photoPin_*` СОДЕРЖИТ опциональный
+  ключ `graph_node_id` (string, непустой), точно равный `id` соответствующего узла
+  в `graph.html`. Для `photoPin_*` значение = кад.номер родительского КН. Для
+  `cad_exp_*` ключ зарезервирован под будущие расширения (геопривязка, инициаторы
+  новых КН), сейчас не эмитится. Значение непрозрачно для viewer'а — он передаёт
+  его в граф как opaque string.
+- **(2.11.0+)** `graph.html` ПОДДЕРЖИВАЕТ pre-selection узла двумя каналами:
+  (i) `window.addEventListener('message', e => /* {type:'ekcelo.graph.select', nodeId} */)` —
+      основной канал, viewer отправляет после `iframe.onload`;
+  (ii) `location.hash = '#node=<urlencoded id>'` — fallback при прямом открытии
+       `graph.html` вне viewer'а (например, из распакованного KMZ).
+  Граф буферизует входящий nodeId до `network.once('stabilizationIterationsDone')`
+  и применяет `network.selectNodes([id])` + `network.focus(id, {scale:1.2, animation:true})`.
+- **(2.11.0+)** `graph.html` СОДЕРЖИТ `<meta name="ekcelo-graph-protocol" content="1">` в `<head>`.
+- **(2.11.0+)** `kml_schema_version` в `<Document>` ОБНОВЛЯЕТСЯ `2.0` → `2.1` (MINOR wire-bump).
 - Детерминизм: одинаковый вход → побитово идентичный `sha256(project.kmz)`.
 
 ## 6. Контрактные инварианты (CI/линт обеих сторон)
@@ -145,6 +162,18 @@ SemVer `MAJOR.MINOR.PATCH` для контракта:
 - [ ] Идемпотентность: 2 прогона генератора на одинаковом входе → одинаковый
       `sha256(project.kmz)`.
 - [ ] Старый KMZ предыдущего MAJOR открывается текущим viewer (через fallback).
+- [ ] **(2.11.0+)** У каждого Placemark с префиксом `cad_{zu,oks,room,str,ons,bu,eq,ben}_*`
+      или `photoPin_*` в `<ExtendedData>` присутствует `graph_node_id` (непустая строка).
+      Исключение: `cad_ben_*` без `<Point>` (list-only) — допускается без `graph_node_id`,
+      если у бенефициара нет идентификатора (ИНН/ОГРН/имя ФЛ).
+- [ ] **(2.11.0+)** Для каждого значения `graph_node_id` существует узел с
+      `id == значение` в `graph.html` (cross-match инвариант, проверяется тестом).
+- [ ] **(2.11.0+)** `<meta name="ekcelo-graph-protocol" content="1">` присутствует в
+      `<head>` `graph.html`.
+- [ ] **(2.11.0+)** `graph.html` реализует listener `message`
+      (`ekcelo.graph.select`) и читает `location.hash` на старте; апплай отложен до
+      `stabilizationIterationsDone`.
+- [ ] **(2.11.0+)** `kml_schema_version` в `<Document>` = `2.1`.
 
 ## 7. Открытые вопросы — зафиксированные ответы
 
@@ -194,3 +223,4 @@ SemVer `MAJOR.MINOR.PATCH` для контракта:
 | 2.10.0 | 2026-05-18 | Первичная редакция; абсорбирует v2.10.0-спеку как тех-тело; фиксирует governance и ответы §7 | `shared/contract-kmz` (PR #1) |
 | 2.10.1 | 2026-05-18 | PATCH §3.6: легализация формы аппрува для single-owner режима (COMMENT-review с чеклистом ≡ formal Approve, пока обе команды под одним GitHub-аккаунтом); статус → «Ратифицирован» | `shared/contract-kmz-patch-governance` (PR #3) |
 | 2.10.2 | 2026-05-18 | PATCH: §6 регекс кад.№ → `\b\d{2}:\d{2}:\d{2,8}:\d{1,8}(?:/\d+)?\b` (3-й блок 2–8 цифр, суффикс части/контура `/N`); §5/§6 — запись KMZ обязана называться ровно `graph.html` (имя источника в пайплайне парсера — parser-internal); уточнён `kml_schema_version` (wire-схема генерации ≠ SemVer документа, viewer не гейтит) | `shared/contract-kmz-patch-2.10.2` |
+| 2.11.0 | 2026-05-19 | MINOR: `ExtendedData/graph_node_id` (opaque link маркер→узел графа) для `cad_{zu,oks,room,str,ons,bu,eq,ben}_*` и `photoPin_*`; протокол pre-selection (postMessage `ekcelo.graph.select` + hash `#node=<id>`); `<meta name="ekcelo-graph-protocol" content="1">` в `graph.html`; `kml_schema_version` 2.0 → 2.1. Аддитивно, обратно-совместимо: viewer 2.10.x просто не показывает highlight-кнопку, парсер 2.10.x генерит KMZ без поля и работает с viewer 2.11.x | `shared/contract-kmz-2.11.0` |
