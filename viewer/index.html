@@ -1112,7 +1112,7 @@ html.role-embed #ver-switch{display:none!important}
 #graph-overlay{position:fixed;inset:0;z-index:9600;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:24px}
 #graph-overlay.hidden{display:none}
 #graph-overlay-frame{width:100%;height:100%;max-width:1400px;border:0;border-radius:10px;background:#0d0f14;box-shadow:0 8px 40px rgba(0,0,0,.5)}
-#graph-overlay-close{position:absolute;top:14px;right:18px;z-index:1;width:34px;height:34px;border-radius:50%;border:1px solid var(--border,#333);background:var(--surface,#1b1f27);color:var(--text,#e8e8e8);font-size:20px;line-height:1;cursor:pointer}
+#graph-overlay-close{position:fixed;top:14px;right:18px;z-index:9601;width:34px;height:34px;border-radius:50%;border:1px solid var(--border,#333);background:var(--surface,#1b1f27);color:var(--text,#e8e8e8);font-size:20px;line-height:1;cursor:pointer}
 #graph-overlay-close:hover{color:var(--accent2,#7fd6ff)}
 .mark-graph-btn{background:transparent;border:none;cursor:pointer;font-size:13px;padding:0 4px;flex-shrink:0;opacity:.6}
 .mark-graph-btn:hover{opacity:1}
@@ -4079,7 +4079,7 @@ function _renderObjectCard(hit, cardId){
       ? `<button class="ic-icobtn ic-edit" title="Редактировать контур" onclick="_editContourFromCard('${mIdEsc}')">${_pencilSvg}</button>`
       : `<button class="ic-icobtn ic-edit" title="Редактировать координату" onclick="_editExpCoordFromCard('${mIdEsc}')">${_pencilSvg}</button>`;
   const _gid = (typeof _graphNodeIdOf === 'function') ? _graphNodeIdOf(m) : '';
-  const graphBtn = (_gid && typeof _kmzGraphHtml !== 'undefined' && _kmzGraphHtml)
+  const graphBtn = _gid
     ? `<button class="ic-icobtn" title="К узлу графа связей" onclick="_openGraphFor('${_gid.replace(/'/g,"\\'")}')">🕸</button>`
     : '';
   return (
@@ -5025,6 +5025,10 @@ window._openGraphFor = function(nodeId){
   };
   fr.srcdoc = _kmzGraphHtml;
   ov.classList.remove('hidden');
+  // держим фокус на родителе (кнопка ×) — иначе фокус уходит в sandbox-iframe
+  // и Esc-keydown не доходит до document. После клика внутрь графа Esc может
+  // не сработать (ожидаемо для cross-origin iframe) — закрывает × / клик-вне.
+  try{ const cb = document.getElementById('graph-overlay-close'); if(cb) cb.focus(); }catch(_){}
 };
 window._closeGraphOverlay = function(){
   const ov = document.getElementById('graph-overlay');
@@ -6434,7 +6438,7 @@ function renderMarksList(){
       item.appendChild(cb);
       item.appendChild(content);
       const _gid = (typeof _graphNodeIdOf === 'function') ? _graphNodeIdOf(m) : '';
-      if(_gid && typeof _kmzGraphHtml !== 'undefined' && _kmzGraphHtml){
+      if(_gid){
         const gb = document.createElement('button');
         gb.type = 'button'; gb.className = 'mark-graph-btn';
         gb.title = 'К узлу графа связей'; gb.textContent = '🕸';
