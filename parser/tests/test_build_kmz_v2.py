@@ -36,135 +36,7 @@ KML_NS = {"kml": "http://www.opengis.net/kml/2.2",
           "atom": "http://www.w3.org/2005/Atom"}
 
 
-@pytest.fixture
-def synthetic_root(tmp_path: Path) -> Path:
-    """Создаёт минимальный синтетический проект в tmp_path."""
-    root = tmp_path / "Тестовый_проект"
-    root.mkdir()
-    (root / "_data").mkdir()
-    (root / "_data" / "nspd_cache").mkdir()
-    (root / "Документы_JPG").mkdir()
-    (root / "Фотографии").mkdir()
-
-    # КН и БУ: 1 ЗУ, 1 здание (4 эт.), 2 помещения, 1 сооружение,
-    # 1 ОНС, 1 БУ, 2 оборудования, 1 бенефициар.
-    structure = {
-        "enterprise": {"name_short": "ТестЗАО", "name": "ТестЗАО"},
-        "cadastre_objects": [
-            {"id": "c1", "cadastral_number": "61:44:0050706:1",
-             "object_type": "Земельный участок",
-             "address": "г. Ростов-на-Дону, ул. Б.Садовая, 111"},
-            {"id": "c2", "cadastral_number": "61:44:0050706:31",
-             "object_type": "Здание",
-             "address": "г. Ростов-на-Дону, ул. Б.Садовая, 111"},
-            {"id": "c3", "cadastral_number": "61:44:0050706:119",
-             "object_type": "Квартира",
-             "address": "г. Ростов-на-Дону, ул. Б.Садовая, 111, кв. 12",
-             "parent_cad": "61:44:0050706:31", "_floor_index": 3},
-            {"id": "c4", "cadastral_number": "61:44:0050706:120",
-             "object_type": "Нежилое помещение",
-             "address": "г. Ростов-на-Дону, ул. Б.Садовая, 111, пом. 1",
-             "parent_cad": "61:44:0050706:31", "_floor_index": 1},
-            {"id": "c5", "cadastral_number": "61:44:0050706:77",
-             "object_type": "Сооружение",
-             "address": "г. Ростов-на-Дону, ул. Б.Садовая, 111"},
-            {"id": "c6", "cadastral_number": "61:44:0050706:31",  # ниже заменим
-             "object_type": "Объект незавершённого строительства"},
-        ],
-        "business_units": [
-            {"id": "bu1", "name": "Филиал Ростов",
-             "address": "г. Ростов-на-Дону, ул. Б.Садовая, 111",
-             "inns": ["6164012345"],
-             "cadastre_ids": ["c1", "c2", "c3"],
-             "equipment_ids": ["eq1", "eq2"],
-             "owners": [
-                 {"inn": "6164098765", "ogrn": "1026103098765",
-                  "name": "ООО Ромашка",
-                  "address": "г. Ростов-на-Дону, пр. Будённовский, 1",
-                  "share": "100%"}
-             ]}
-        ],
-        "equipment": [
-            {"id": "eq1", "name": "Котёл КЧМ-5",
-             "inv_number_hint": "004113", "account": "01.04",
-             "balance_value": "184500",
-             "links": {"cadastre_id": "c2",
-                       "level_ids": [{"level_index": 1}]}},
-            {"id": "eq2", "name": "Лифт",
-             "inv_number_hint": "004114", "account": "01.04",
-             "links": {"cadastre_id": "c2",
-                       "level_ids": [{"level_index": 2}]}},
-        ],
-    }
-    # c6 должен иметь уникальный КН
-    structure["cadastre_objects"][5]["cadastral_number"] = "61:44:0050706:99"
-
-    (root / "_data" / "structure.json").write_text(
-        json.dumps(structure, ensure_ascii=False), encoding="utf-8"
-    )
-
-    # NSPD-кеш с геометрией для каждого КН
-    cache = {"objects": {
-        "61:44:0050706:1": {"info": {
-            "geometry": {"type": "Polygon", "coordinates": [
-                [[39.7088, 47.2186], [39.7092, 47.2186],
-                 [39.7092, 47.2189], [39.7088, 47.2189], [39.7088, 47.2186]]
-            ]},
-            "Количество этажей": None,
-        }},
-        "61:44:0050706:31": {"info": {
-            "geometry": {"type": "Polygon", "coordinates": [
-                [[39.7089, 47.2187], [39.7091, 47.2187],
-                 [39.7091, 47.2188], [39.7089, 47.2188], [39.7089, 47.2187]]
-            ]},
-            "Количество этажей": "4",
-        }},
-        "61:44:0050706:119": {"info": {
-            "geometry": {"type": "Point", "coordinates": [39.7090, 47.21875]},
-        }},
-        "61:44:0050706:120": {"info": {
-            "geometry": {"type": "Point", "coordinates": [39.70905, 47.21878]},
-        }},
-        "61:44:0050706:77": {"info": {
-            "geometry": {"type": "Polygon", "coordinates": [
-                [[39.7093, 47.2186], [39.7095, 47.2186],
-                 [39.7095, 47.2188], [39.7093, 47.2188], [39.7093, 47.2186]]
-            ]},
-        }},
-        "61:44:0050706:99": {"info": {
-            "geometry": {"type": "Polygon", "coordinates": [
-                [[39.7087, 47.2185], [39.7089, 47.2185],
-                 [39.7089, 47.2186], [39.7087, 47.2186], [39.7087, 47.2185]]
-            ]},
-            "Количество этажей": "3",
-        }},
-    }}
-    (root / "_data" / "nspd_cache" / "cache.json").write_text(
-        json.dumps(cache, ensure_ascii=False), encoding="utf-8"
-    )
-
-    # graph.html
-    (root / "_data" / "graph.html").write_text(
-        "<!DOCTYPE html><html><body><h1>Граф связей</h1></body></html>",
-        encoding="utf-8"
-    )
-
-    # Документы
-    fake_jpg = (
-        b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01"
-        b"\x00\x01\x00\x00\xff\xdb\x00C\x00" + b"\x08" * 64 + b"\xff\xd9"
-    )
-    (root / "Документы_JPG" / "egrn_61_44_0050706_31.jpg").write_bytes(fake_jpg)
-    (root / "Документы_JPG" / "egrul_inn6164098765.jpg").write_bytes(fake_jpg)
-
-    # Фото без EXIF-GPS — должны попасть на спираль
-    realty_dir = (root / "Фотографии" / "Недвижимость" / "Строения"
-                  / "61_44_0050706_31" / "Фасад")
-    realty_dir.mkdir(parents=True)
-    for name in ("IMG_01.jpg", "IMG_02.jpg", "IMG_03.jpg"):
-        (realty_dir / name).write_bytes(fake_jpg)
-
-    return root
+# Фикстура `synthetic_root` теперь живёт в conftest.py (общая для всех parser-тестов).
 
 
 def _read_kml(kmz_path: Path) -> tuple[str, set[str], dict[str, bytes]]:
@@ -346,7 +218,8 @@ def test_schema_version_in_document(synthetic_root: Path):
     versions = [d.findtext("kml:value", "", KML_NS)
                 for d in ext.findall("kml:Data", KML_NS)
                 if d.attrib.get("name") == "kml_schema_version"]
-    assert "2.0" in versions
+    # Контракт KMZ 2.11.0 §5: kml_schema_version "2.0" → "2.1" (MINOR wire-bump).
+    assert "2.1" in versions, f"ожидаем kml_schema_version=2.1, получено {versions}"
     # atom:author
     author = doc.find("atom:author", KML_NS)
     assert author is not None, "Нет atom:author"

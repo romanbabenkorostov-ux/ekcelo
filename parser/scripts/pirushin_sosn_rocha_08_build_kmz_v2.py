@@ -57,7 +57,7 @@ except ImportError:
 
 # ─── Константы ──────────────────────────────────────────────────────────────
 
-KML_SCHEMA_VERSION = "2.0"
+KML_SCHEMA_VERSION = "2.1"
 GENERATOR_NAME = "pirushin_sosn_rocha_08_build_kmz_v2.py"
 
 # Spiral (см. spec v2.10.0 §A.7)
@@ -225,6 +225,26 @@ def load_structure(root: Path) -> dict:
         return json.loads(p.read_text(encoding="utf-8"))
     except Exception as e:
         cp(f"  structure.json не прочитан: {e}", C.R)
+        return {}
+
+
+def load_graph_index(root: Path) -> dict:
+    """Sidecar `graph_node_index.json` от `04_nspd_graph_v14.py`.
+
+    Контракт KMZ 2.11.0: маркер несёт `graph_node_id` = `id` узла графа.
+    Если sidecar не найден — старое поведение (без `graph_node_id`).
+    """
+    p = root / "_data" / "graph_node_index.json"
+    if not p.exists():
+        cands = sorted((root / "_data").glob("graph_node_index*.json"))
+        if cands:
+            p = cands[-1]
+    if not p.exists():
+        return {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception as e:
+        cp(f"  graph_node_index.json не прочитан: {e}", C.Y)
         return {}
 
 
@@ -861,6 +881,13 @@ def build_kmz(root: Path, no_spiral: bool = False) -> Path:
     if not st:
         cp("  пустой structure — KMZ будет минимальным.", C.Y)
     cache = load_nspd_cache(root)
+    gidx = load_graph_index(root)
+    gidx_cad      = gidx.get("by_cad_number", {}) if gidx else {}
+    gidx_bu_name  = gidx.get("by_bu_name",    {}) if gidx else {}
+    gidx_eq_id    = gidx.get("by_eq_id",      {}) if gidx else {}
+    gidx_ben_inn  = gidx.get("by_ben_inn",    {}) if gidx else {}
+    gidx_ben_ogrn = gidx.get("by_ben_ogrn",   {}) if gidx else {}
+    gidx_ben_name = gidx.get("by_ben_name",   {}) if gidx else {}
 
     # Объединённый «вид» по КН
     by_cn: dict[str, dict] = {}
@@ -1067,6 +1094,7 @@ def build_kmz(root: Path, no_spiral: bool = False) -> Path:
                 "z_meters_bottom": 0.0 if extrude else None,
                 "floors_above": cad.get("_floors") if kind in ("oks", "ons") else None,
                 "parent_cad": cad.get("parent_cad") if kind == "room" else None,
+                "graph_node_id": gidx_cad.get(cn) or cn,
                 "schema_version": KML_SCHEMA_VERSION,
             })
             out.append(placemark(name, balloon, style_id_for(kind, cn),
@@ -1104,6 +1132,7 @@ def build_kmz(root: Path, no_spiral: bool = False) -> Path:
                 "object_type": "bu",
                 "bu_id": bu_slug,
                 "ben_inn": ", ".join(inns) if inns else None,
+                "graph_node_id": gidx_bu_name.get(bu.get("name") or ""),
                 "schema_version": KML_SCHEMA_VERSION,
             })
             out.append(placemark(name, balloon, style_id_for("bu", name),
@@ -1153,12 +1182,15 @@ def build_kmz(root: Path, no_spiral: bool = False) -> Path:
             name = (eq.get("name") or "оборудование")[:80]
             extrude = z > 0
             geom_xml = point_kml(lon, lat, z, extrude)
+            eq_id_str = str(eq.get("id") or "")
             ext = extended_data({
                 "object_type": "eq",
                 "cad_number": parent_cn,
                 "bu_id": _slug(parent_bu, 48) if parent_bu else None,
                 "z_meters_top": z if extrude else None,
                 "z_source": "level",
+                "graph_node_id": (gidx_eq_id.get(eq_id_str)
+                                  or (f"eq::{eq_id_str}" if eq_id_str else None)),
                 "schema_version": KML_SCHEMA_VERSION,
             })
             out.append(placemark(name, balloon, style_id_for("eq", eq_key),
@@ -1183,9 +1215,17 @@ def build_kmz(root: Path, no_spiral: bool = False) -> Path:
             balloon = balloon_ben(ben, related_bus, docs)
             name = (ben.get("name") or ben.get("full_name") or "ЮЛ/ФЛ")[:100]
             # Без <Point>: Placemark в дереве, без точки на карте
+            ben_inn  = str(ben.get("inn")  or "")
+            ben_ogrn = str(ben.get("ogrn") or "")
+            ben_name_str = str(ben.get("name") or ben.get("full_name") or "")
             ext = extended_data({
                 "object_type": "ben",
                 "ben_inn": ben.get("inn"),
+                "graph_node_id": (gidx_ben_inn.get(ben_inn)
+                                  or gidx_ben_ogrn.get(ben_ogrn)
+                                  or gidx_ben_name.get(ben_name_str)
+                                  or (f"legal::inn::{ben_inn}" if ben_inn else
+                                      (f"legal::ogrn::{ben_ogrn}" if ben_ogrn else None))),
                 "schema_version": KML_SCHEMA_VERSION,
             })
             out.append(placemark(name, balloon, style_id_for("ben", ben_key),
@@ -1229,6 +1269,7 @@ def build_kmz(root: Path, no_spiral: bool = False) -> Path:
                     "object_type": "photo",
                     "cad_number": cad_ref,
                     "z_source": source,
+                    "graph_node_id": (gidx_cad.get(cad_ref) or cad_ref) if cad_ref else None,
                     "schema_version": KML_SCHEMA_VERSION,
                 })
                 out.append(placemark(jpg.name, balloon,

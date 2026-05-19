@@ -177,7 +177,15 @@ EXIF UserComment (JSON) у каждого JPG-документа:
   {{"app":"ekcelo","kind":"egrul|egrip|egrn|svid|tehpasp|tehplan|doc",
     "inn":"...","cad":"...","obj_id":"...","bu_id":"...",
     "object_type":"land|building|room|structure|ons|null",
-    "xml_matched":true|false,"extract_number":"КУВИ-..."}}
+    "xml_matched":true|false,"extract_number":"КУВИ-...",
+    "graph_node_id":"<id узла в graph.html>"}}
+
+`graph_node_id` (контракт KMZ 2.11.0 §5) — резолвится через sidecar
+`_data/graph_node_index.json` от `04_nspd_graph_v14.py`. Приоритет:
+cad → `by_cad_number[cn]` или `cn`;
+inn → `by_ben_inn[inn]` или `legal::inn::<inn>`;
+ogrn → `by_ben_ogrn[ogrn]` или `legal::ogrn::<ogrn>`.
+Если sidecar отсутствует — используется формула-fallback.
 """
 
 # Регэкспы для распознавания имени исходного PDF
@@ -849,6 +857,54 @@ def _floors_from_info(info: dict) -> int | None:
 # ─── Конвертация PDF → JPG ──────────────────────────────────────────────────
 SUPPORTED_EXTS = (".pdf", ".docx", ".doc")
 
+def load_graph_index(root: Path) -> dict:
+    """Sidecar `_data/graph_node_index.json` от `04_nspd_graph_v14.py`.
+
+    Контракт KMZ 2.11.0 §5: документ-JPG несёт `graph_node_id` в EXIF UserComment —
+    `id` узла графа, к которому он привязан (КН / БУ / бенефициар). Это позволит
+    08-генератору / viewer'у предлагать «открыть документ → перейти на узел графа».
+    Если sidecar отсутствует — fallback на формулы (см. `resolve_doc_graph_node_id`).
+    """
+    p = root / "_data" / "graph_node_index.json"
+    if not p.exists():
+        cands = sorted((root / "_data").glob("graph_node_index*.json"))
+        if cands:
+            p = cands[-1]
+    if not p.exists():
+        return {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception as e:
+        cp(f"  graph_node_index.json не прочитан: {e}", C.Y)
+        return {}
+
+
+def resolve_doc_graph_node_id(meta: dict, gidx: dict) -> str | None:
+    """Резолв `graph_node_id` для JPG-документа по приоритету источников.
+
+    Приоритет:
+      1. cad (привязка к КН-объекту) → `by_cad_number[cn]` или fallback `cn`;
+      2. inn ЮЛ/бенефициара → `by_ben_inn[inn]` или fallback `legal::inn::<inn>`;
+      3. ogrn → `by_ben_ogrn[ogrn]` или fallback `legal::ogrn::<ogrn>`.
+    `bu_id` от 07-индекса намеренно не используется: его формула в графе
+    (`bu::<sha1>(...)` от 04) не воспроизводима без sidecar.
+    """
+    cad = meta.get("cad")
+    if cad:
+        return (gidx.get("by_cad_number", {}) or {}).get(cad) or cad
+    inn = meta.get("inn")
+    if inn:
+        inn_s = str(inn)
+        return ((gidx.get("by_ben_inn", {}) or {}).get(inn_s)
+                or f"legal::inn::{inn_s}")
+    ogrn = meta.get("ogrn")
+    if ogrn:
+        ogrn_s = str(ogrn)
+        return ((gidx.get("by_ben_ogrn", {}) or {}).get(ogrn_s)
+                or f"legal::ogrn::{ogrn_s}")
+    return None
+
+
 def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
     src = root / "Выписки_PDF"
     files = sorted([p for p in src.rglob("*")
@@ -861,6 +917,14 @@ def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
     zoom = dpi / 72.0
     mtx  = fitz.Matrix(zoom, zoom)
     cp(f"  файлов к конвертации: {len(files)}", C.CY)
+
+    # Sidecar от 04_nspd_graph_v14 — резолв `graph_node_id` для документов
+    # (контракт KMZ 2.11.0 §5). Без файла — fallback на формулы.
+    gidx = load_graph_index(root)
+    if gidx:
+        cp(f"  graph_node_index.json: by_cad={len(gidx.get('by_cad_number', {}))} · "
+           f"by_inn={len(gidx.get('by_ben_inn', {}))} · "
+           f"by_ogrn={len(gidx.get('by_ben_ogrn', {}))}", C.CY)
 
     # .doc/.docx → PDF: сначала LibreOffice, затем MS Word (Windows + comtypes)
     n_office = sum(1 for p in files if p.suffix.lower() in (".doc", ".docx"))
@@ -973,6 +1037,10 @@ def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
                 "center_lon": center_lon,
                 "height_m": height_m,             # высота объекта над землёй
                 "altitude_amsl_m": altitude_amsl_m,  # AMSL (этаж/потолок) — на будущее
+                # Связь с узлом графа (контракт KMZ 2.11.0 §5). Если узел известен —
+                # значение совпадает с `id` узла в graph.html. Позволяет в будущем
+                # из-описания объекта/документа в viewer'е переходить на узел графа.
+                "graph_node_id": resolve_doc_graph_node_id(meta, gidx),
                 "ts": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
             }
             write_exif(jpg, center_lat, center_lon, altitude_amsl_m, descr, ucomment)
@@ -1377,7 +1445,8 @@ def _route_non_photo(root: Path, src: Path) -> Path | None:
 
 
 def annotate_photo_exif(jpg: Path, cn: str | None, category: str | None,
-                        semantic: str | None, source_path: str) -> None:
+                        semantic: str | None, source_path: str,
+                        gidx: dict | None = None) -> None:
     """Дописывает в EXIF JPG привязку к КН/категории/семантике, СОХРАНЯЯ:
        - оригинальные DateTime/DateTimeOriginal/DateTimeDigitized,
        - оригинальные GPS-координаты,
@@ -1405,11 +1474,16 @@ def annotate_photo_exif(jpg: Path, cn: str | None, category: str | None,
         descr_new = f"{existing_s} | {descr_new}"
     exif["0th"][piexif.ImageIFD.ImageDescription] = descr_new.encode("utf-8")
 
-    # UserComment — JSON с метаданными миграции; ts_migrated отдельно от ts_photo
+    # UserComment — JSON с метаданными миграции; ts_migrated отдельно от ts_photo.
+    # graph_node_id (контракт KMZ 2.11.0 §5): для фото к КН = сам КН (узел в графе).
+    graph_node_id = None
+    if cn:
+        graph_node_id = ((gidx or {}).get("by_cad_number", {}) or {}).get(cn) or cn
     ucomment = {
         "app": "ekcelo", "kind": "photo",
         "cad": cn, "category": category, "semantic": semantic,
         "source": source_path,
+        "graph_node_id": graph_node_id,
         "migrated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")
                               .replace("+00:00", "Z"),
     }
@@ -1724,6 +1798,9 @@ def action_sort(last_root: Path | None) -> None:
     if ans not in ("y", "yes", "д", "да"):
         cp("Отмена. План сохранён, файлы не перенесены.", C.CY); return
 
+    # Sidecar 04 → резолв graph_node_id для EXIF (контракт KMZ 2.11.0 §5)
+    gidx = load_graph_index(root)
+
     moved = err = annotated = 0
     for it in matched:
         src_p = root / it["from"]
@@ -1743,7 +1820,7 @@ def action_sort(last_root: Path | None) -> None:
             # оригинала сохраняются. Для не-фото — ничего не меняем.
             if it.get("kind") == "photo" and it.get("cn"):
                 annotate_photo_exif(dst_p, it["cn"], it.get("category"),
-                                    it.get("semantic"), it["from"])
+                                    it.get("semantic"), it["from"], gidx=gidx)
                 annotated += 1
         except Exception as e:
             cp(f"  [err] {src_p.name}: {e}", C.R); err += 1

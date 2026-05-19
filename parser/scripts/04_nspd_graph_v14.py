@@ -634,6 +634,51 @@ def build_graph(objects: dict, rights_records: list, encumbrances_records: list,
     return nodes, edges
 
 
+def build_graph_node_index(nodes: list) -> dict:
+    """Sidecar mapping для 08_build_kmz_v2: локально-известные ключи → graph node id.
+
+    Контракт KMZ 2.11.0 §5: маркер в KMZ несёт `graph_node_id` = `id` соответствующего
+    узла графа. 08 видит structure.json (где `bu.name`, `eq.id`, `owner.inn/ogrn/name`),
+    но не знает формул `legal::inn::<inn>` / `bu::<sha1>` / `eq::<id>`. 04 знает все
+    финальные `id` (это `node["id"]` собранных узлов) и эмитит обратный индекс по
+    локально-известным ключам, чтобы 08 мог lookup'нуть без дублирования формул.
+    """
+    idx: dict = {
+        "schema": 1,
+        "by_cad_number": {},
+        "by_bu_name":    {},
+        "by_eq_id":      {},
+        "by_ben_inn":    {},
+        "by_ben_ogrn":   {},
+        "by_ben_name":   {},
+    }
+    for n in nodes:
+        nid = n.get("id")
+        if not nid:
+            continue
+        kind = n.get("kind")
+        attrs = n.get("attrs") or {}
+        if kind == "object":
+            idx["by_cad_number"][nid] = nid
+        elif kind == "business_unit":
+            nm = attrs.get("Наименование") or ""
+            if nm:
+                idx["by_bu_name"][nm] = nid
+        elif kind == "equipment":
+            eq_id = attrs.get("id")
+            if eq_id is not None:
+                idx["by_eq_id"][str(eq_id)] = nid
+        elif kind == "beneficiary":
+            inner = attrs.get("attrs") or {}
+            inn  = inner.get("ИНН")  or attrs.get("ИНН")
+            ogrn = inner.get("ОГРН") or attrs.get("ОГРН")
+            nm   = attrs.get("Наименование (отображаемое)") or attrs.get("Наименование") or ""
+            if inn:  idx["by_ben_inn"][str(inn)] = nid
+            if ogrn: idx["by_ben_ogrn"][str(ogrn)] = nid
+            if nm:   idx["by_ben_name"][nm] = nid
+    return idx
+
+
 def render_html(nodes, edges, source_name: str, html_name: str = "") -> str:
     nodes_json = json.dumps(nodes, ensure_ascii=False)
     edges_json = json.dumps(edges, ensure_ascii=False)
@@ -657,6 +702,7 @@ def render_html(nodes, edges, source_name: str, html_name: str = "") -> str:
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
+<meta name="ekcelo-graph-protocol" content="1">
 <title>{title}</title>
 <script>__VIS_NETWORK_INLINE__</script>
 <style>
@@ -1555,6 +1601,35 @@ document.getElementById('search').addEventListener('input', (e) => {{
 
 network.once('stabilizationIterationsDone', () => {{ network.fit(); }});
 
+// ── ekcelo-graph-protocol v1: pre-selection через postMessage + location.hash ──
+(function(){{
+  var pending = null, ready = false;
+  function apply(id){{
+    if (!id) return;
+    if (!ready) {{ pending = id; return; }}
+    try {{
+      network.selectNodes([id]);
+      network.focus(id, {{ scale: 1.2, animation: true }});
+    }} catch (e) {{}}
+  }}
+  // (ii) location.hash на старте — fallback при прямом открытии файла
+  try {{
+    var m = (location.hash || '').match(/(?:^#|&)node=([^&]+)/);
+    if (m) pending = decodeURIComponent(m[1]);
+  }} catch (e) {{}}
+  // (i) postMessage — основной канал от viewer'а
+  window.addEventListener('message', function(ev){{
+    var d = ev && ev.data;
+    if (!d || d.type !== 'ekcelo.graph.select') return;
+    apply(String(d.nodeId || ''));
+  }});
+  // применить отложенный nodeId после стабилизации vis-network
+  network.once('stabilizationIterationsDone', function(){{
+    ready = true;
+    if (pending) {{ var p = pending; pending = null; apply(p); }}
+  }});
+}})();
+
 function brightness(hex) {{
   const m = /^#?([a-f\d]{{2}})([a-f\d]{{2}})([a-f\d]{{2}})$/i.exec(hex || '');
   if (!m) return 128;
@@ -2314,7 +2389,16 @@ def main():
     out_path = src.with_name(f"graph_{src.stem}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html")
     output_html = render_html(nodes, edges, src.name, out_path.name)
     out_path.write_text(output_html, encoding="utf-8")
+
+    # Sidecar для 08_build_kmz_v2 — контракт KMZ 2.11.0 §5/§6 (graph_node_id).
+    # Имя фиксированное: 08 ищет его рядом с graph.html в _data/.
+    idx_path = out_path.with_name("graph_node_index.json")
+    idx_path.write_text(json.dumps(build_graph_node_index(nodes),
+                                   ensure_ascii=False, indent=2,
+                                   sort_keys=True),
+                        encoding="utf-8")
     print(f"\n[+] Граф сохранён: {out_path}")
+    print(f"[+] Sidecar-индекс для KMZ: {idx_path}")
     print(f"    Откройте файл двойным кликом в любом современном браузере (Chrome, Edge, Firefox).")
     print(f"    Для отображения графа требуется интернет (загрузка vis-network с CDN).")
 
