@@ -1145,7 +1145,7 @@ html.role-embed #ver-switch{display:none!important}
     </div>
   </div>
   <input type="file" id="file-input"            multiple accept="image/jpeg,image/jpg,.jpg,.jpeg"/>
-  <input type="file" id="folder-input-fallback" multiple accept="image/jpeg,image/jpg,.jpg,.jpeg" webkitdirectory/>
+  <input type="file" id="folder-input-fallback" multiple accept="image/jpeg,image/jpg,.jpg,.jpeg,.kml,.kmz" webkitdirectory/>
   <input type="file" id="kml-file-input"        multiple accept=".kml"/>
   <input type="file" id="kmz-file-input"        multiple accept=".kmz"/>
   <input type="file" id="xlsx-file-input"       accept=".xlsx,.xls" style="display:none" onchange="onXlsxFileChosen(this)"/>
@@ -4329,7 +4329,7 @@ async function collectFilesFromHandle(dh,relPath,rootName){
 
 function triggerFileUpload(){document.getElementById('file-input').click();}
 document.getElementById('file-input').addEventListener('change',e=>{const ents=[...(e.target.files||[])].map(f=>({file:f,locPath:deriveFolderPath(f,''),fileHandle:null}));handleFileEntries(ents,'');e.target.value='';});
-document.getElementById('folder-input-fallback').addEventListener('change',e=>{const files=[...(e.target.files||[])];if(!files.length)return;const rn=(files[0].webkitRelativePath||'').split('/')[0]||'';if(rn){_captureFirstSessionName('photo',rn);_savePathHint(_LS_PATH_PHOTO,rn);}handleFileEntries(files.map(f=>({file:f,locPath:deriveFolderPath(f,rn),fileHandle:null})),rn);e.target.value='';});
+document.getElementById('folder-input-fallback').addEventListener('change',async e=>{const files=[...(e.target.files||[])];if(!files.length)return;const rn=(files[0].webkitRelativePath||'').split('/')[0]||'';if(rn){_captureFirstSessionName('photo',rn);_savePathHint(_LS_PATH_PHOTO,rn);}const ks=files.filter(f=>/\.kml$/i.test(f.name));const kzs=files.filter(f=>/\.kmz$/i.test(f.name));const ph=files.filter(f=>!/\.km[lz]$/i.test(f.name));for(const f of ks)await loadKMLFromFile(f,f.name);for(const f of kzs)await loadKMZFromFile(f,f.name);if(ph.length)await handleFileEntries(ph.map(f=>({file:f,locPath:deriveFolderPath(f,rn),fileHandle:null})),rn);e.target.value='';});
 document.getElementById('kml-file-input').addEventListener('change',async e=>{for(const f of e.target.files||[]){_captureFirstSessionName('kml',f.name);if(/\.kmz$/i.test(f.name))await loadKMZFromFile(f,f.name);else await loadKMLFromFile(f,f.name);}e.target.value='';});
 document.getElementById('kmz-file-input').addEventListener('change',async e=>{for(const f of e.target.files||[]){_captureFirstSessionName('kml',f.name);await loadKMZFromFile(f,f.name);}e.target.value='';});
 document.getElementById('map-wrap').addEventListener('dragover',e=>e.preventDefault());
