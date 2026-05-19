@@ -129,7 +129,9 @@ sidecar `_data/graph_node_index.json`, что и 08:
 В частности:
 1. Подойдёт ли `postMessage` с `{type:'ekcelo.graph.select', nodeId}` —
    или нужна другая семантика (например, `targetOrigin` ограничение)?
-2. CSS-класс `#graph-overlay` (рекомендованный z-index 9100, > `att-lightbox` 9000) —
+2. CSS-класс `#graph-overlay` (z-index — за viewer-team, не wire-инвариант;
+   первичная оценка ≈ 9600, выше шапки/меню/yandex-dialog 9500, ниже
+   load-progress 9999 и lightbox 10000+; см. ответ viewer-team в посте 006) —
    не конфликтует ли с существующими overlay в viewer'е?
 3. Размер opaque-`graph_node_id` (string ≤ 256 chars, ASCII + `:`/`_`/`-`/`/`) —
    ок ли как ограничение или надо явно прописать в §6?

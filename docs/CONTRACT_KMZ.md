@@ -183,6 +183,11 @@ SemVer `MAJOR.MINOR.PATCH` для контракта:
       (`ekcelo.graph.select`) и читает `location.hash` на старте; апплай отложен до
       `stabilizationIterationsDone`.
 - [ ] **(2.11.0+)** `kml_schema_version` в `<Document>` = `2.1`.
+- [ ] **(2.11.0+)** Формат `graph_node_id`: непустая строка, длина ≤ 256, символы
+      `[A-Za-z0-9_:/-]+` (regex `^[A-Za-z0-9_:/-]{1,256}$`). Защищает hash-fallback
+      (`#node=<urlencoded id>`) и детерминирует cross-match. Текущие формулы 04
+      соответствуют: `<cn>` (КН), `bu::<sha1>`, `eq::<id>`, `legal::inn::<inn>`,
+      `legal::ogrn::<ogrn>`.
 
 ## 7. Открытые вопросы — зафиксированные ответы
 
@@ -232,4 +237,4 @@ SemVer `MAJOR.MINOR.PATCH` для контракта:
 | 2.10.0 | 2026-05-18 | Первичная редакция; абсорбирует v2.10.0-спеку как тех-тело; фиксирует governance и ответы §7 | `shared/contract-kmz` (PR #1) |
 | 2.10.1 | 2026-05-18 | PATCH §3.6: легализация формы аппрува для single-owner режима (COMMENT-review с чеклистом ≡ formal Approve, пока обе команды под одним GitHub-аккаунтом); статус → «Ратифицирован» | `shared/contract-kmz-patch-governance` (PR #3) |
 | 2.10.2 | 2026-05-18 | PATCH: §6 регекс кад.№ → `\b\d{2}:\d{2}:\d{2,8}:\d{1,8}(?:/\d+)?\b` (3-й блок 2–8 цифр, суффикс части/контура `/N`); §5/§6 — запись KMZ обязана называться ровно `graph.html` (имя источника в пайплайне парсера — parser-internal); уточнён `kml_schema_version` (wire-схема генерации ≠ SemVer документа, viewer не гейтит) | `shared/contract-kmz-patch-2.10.2` |
-| 2.11.0 | 2026-05-19 | MINOR: `ExtendedData/graph_node_id` (opaque link маркер→узел графа) для `cad_{zu,oks,room,str,ons,bu,eq,ben}_*` и `photoPin_*`; протокол pre-selection (postMessage `ekcelo.graph.select` + hash `#node=<id>`); `<meta name="ekcelo-graph-protocol" content="1">` в `graph.html`; `kml_schema_version` 2.0 → 2.1. Аддитивно, обратно-совместимо: viewer 2.10.x просто не показывает highlight-кнопку, парсер 2.10.x генерит KMZ без поля и работает с viewer 2.11.x | `shared/contract-kmz-2.11.0` |
+| 2.11.0 | 2026-05-19 | MINOR: `ExtendedData/graph_node_id` (opaque link маркер→узел графа) для `cad_{zu,oks,room,str,ons,bu,eq,ben}_*` и `photoPin_*`; протокол pre-selection (postMessage `ekcelo.graph.select` + hash `#node=<id>`); `<meta name="ekcelo-graph-protocol" content="1">` в `graph.html`; `kml_schema_version` 2.0 → 2.1; формат `graph_node_id` (ASCII ≤256, `[A-Za-z0-9_:/-]+`, §6 — добавлено пре-мерж по уточнению viewer-team в посте 006); информативный пункт §5 про parser-internal EXIF UserComment.graph_node_id для JPG в `docs/`/`images/`. Аддитивно, обратно-совместимо: viewer 2.10.x просто не показывает highlight-кнопку, парсер 2.10.x генерит KMZ без поля и работает с viewer 2.11.x | `shared/contract-kmz-2.11.0` (PR #16) |
