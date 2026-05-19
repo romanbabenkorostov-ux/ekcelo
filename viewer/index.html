@@ -1605,14 +1605,16 @@ async function __ekceloSha256Hex(s){
 }
 function __ekceloRoleLockSync(){
   const el = document.getElementById('ekcelo-role-lock'); if(!el) return;
-  let pro = false; try{ pro = localStorage.getItem('ekcelo_role') === 'pro'; }catch(_){}
-  el.textContent = (pro || __ekceloRole === 'pro') ? '🔓 про' : '🔑 про…';
+  el.textContent = (__ekceloRole === 'pro') ? '🔓 про' : '🔑 про…';
+}
+function __ekceloSetModeParam(m){
+  try{ const u = new URL(location.href); u.searchParams.set('mode', m); history.replaceState(null, '', u); }catch(_){}
 }
 async function __ekceloRoleToggle(){
-  let pro = false; try{ pro = localStorage.getItem('ekcelo_role') === 'pro'; }catch(_){}
-  if(pro){
+  if(__ekceloRole === 'pro'){
     try{ localStorage.removeItem('ekcelo_role'); }catch(_){}
-    applyRole(resolveRole());
+    __ekceloSetModeParam('view');
+    applyRole('view');
     if(typeof showToast === 'function') showToast('Режим про выключен','info',2000);
     return;
   }
@@ -1625,6 +1627,7 @@ async function __ekceloRoleToggle(){
   let hex = ''; try{ hex = await __ekceloSha256Hex(phrase); }catch(_){}
   if(hex && hex === ROLE_CFG.PRO_PASS_SHA256.toLowerCase()){
     try{ localStorage.setItem('ekcelo_role','pro'); }catch(_){}
+    __ekceloSetModeParam('pro');
     applyRole('pro');
     if(typeof showToast === 'function') showToast('Режим про включён','info',2000);
   } else {
