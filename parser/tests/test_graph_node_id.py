@@ -24,6 +24,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from pirushin_sosn_rocha_08_build_kmz_v2 import build_kmz, KML_SCHEMA_VERSION
+from pirushin_sosn_rocha_07_init_project_v1 import (
+    resolve_doc_graph_node_id,
+    load_graph_index as load_graph_index_07,
+)
 
 # 04_nspd_graph_v14 импортируем напрямую (имя модуля начинается с цифры —
 # используем importlib).
@@ -257,3 +261,52 @@ def test_idempotent_with_sidecar(synthetic_root: Path):
     h1 = hashlib.sha256(build_kmz(synthetic_root).read_bytes()).hexdigest()
     h2 = hashlib.sha256(build_kmz(synthetic_root).read_bytes()).hexdigest()
     assert h1 == h2, f"идемпотентность нарушена: {h1} ≠ {h2}"
+
+
+# ─── 10/11/12. 07-side: resolve_doc_graph_node_id + load_graph_index ─────────
+
+def test_07_resolve_cad_priority():
+    """cad → by_cad_number[cn] или fallback `cn`."""
+    gidx = {"by_cad_number": {"61:44:0050706:31": "61:44:0050706:31"}}
+    assert resolve_doc_graph_node_id(
+        {"cad": "61:44:0050706:31"}, gidx) == "61:44:0050706:31"
+    # fallback без sidecar
+    assert resolve_doc_graph_node_id(
+        {"cad": "61:44:0050706:31"}, {}) == "61:44:0050706:31"
+
+
+def test_07_resolve_inn_then_ogrn():
+    gidx = {"by_ben_inn":  {"6164098765": "legal::inn::6164098765"},
+            "by_ben_ogrn": {"1026103098765": "legal::inn::6164098765"}}
+    # inn выигрывает у ogrn
+    assert resolve_doc_graph_node_id(
+        {"inn": "6164098765", "ogrn": "1026103098765"}, gidx
+    ) == "legal::inn::6164098765"
+    # только ogrn
+    assert resolve_doc_graph_node_id(
+        {"ogrn": "1026103098765"}, gidx) == "legal::inn::6164098765"
+    # fallback по формуле
+    assert resolve_doc_graph_node_id({"inn": "7707083893"}, {}) \
+        == "legal::inn::7707083893"
+    assert resolve_doc_graph_node_id({"ogrn": "1027700132195"}, {}) \
+        == "legal::ogrn::1027700132195"
+
+
+def test_07_resolve_returns_none_without_keys():
+    assert resolve_doc_graph_node_id({}, {}) is None
+    assert resolve_doc_graph_node_id({"bu_id": "bu1"}, {}) is None  # bu_id игнорируется
+
+
+def test_07_load_graph_index_reads_sidecar(synthetic_root: Path):
+    """`load_graph_index` 07 читает тот же sidecar, что и 08."""
+    idx_written = _write_sidecar_into(synthetic_root)
+    idx_loaded = load_graph_index_07(synthetic_root)
+    assert idx_loaded.get("schema") == idx_written["schema"]
+    assert idx_loaded["by_cad_number"] == idx_written["by_cad_number"]
+    assert idx_loaded["by_ben_inn"] == idx_written["by_ben_inn"]
+
+
+def test_07_load_graph_index_missing_returns_empty(tmp_path: Path):
+    """Без файла — возвращается пустой dict (graceful)."""
+    (tmp_path / "_data").mkdir()
+    assert load_graph_index_07(tmp_path) == {}
