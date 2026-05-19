@@ -1109,14 +1109,14 @@ html.role-embed #ver-switch{display:none!important}
 #ekcelo-role-lock{font:11px 'JetBrains Mono',ui-monospace,monospace;background:var(--surface,#1b1f27);border:1px solid var(--border,#333);border-radius:6px;padding:2px 7px;opacity:.7;cursor:pointer;transition:opacity .15s;color:var(--accent2,#7fd6ff);flex-shrink:0;margin-left:4px;white-space:nowrap}
 #ekcelo-role-lock:hover{opacity:1}
 /* ── S5: overlay графа (CONTRACT_KMZ 2.11.0) — z-index 9600 (выше шапки/меню 9100/yandex 9500, ниже load-progress 9999 и lightbox 10000+) ── */
-#graph-overlay{position:fixed;inset:0;z-index:9600;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:24px}
+#graph-overlay{position:fixed;inset:0;z-index:9600;background:#0d0f14;display:flex;flex-direction:column}
 #graph-overlay.hidden{display:none}
-#graph-overlay-frame{width:100%;height:100%;max-width:1400px;border:0;border-radius:10px;background:#0d0f14;box-shadow:0 8px 40px rgba(0,0,0,.5)}
-#graph-overlay-close{position:fixed;top:14px;right:18px;z-index:9601;width:34px;height:34px;border-radius:50%;border:1px solid var(--border,#333);background:var(--surface,#1b1f27);color:var(--text,#e8e8e8);font-size:20px;line-height:1;cursor:pointer}
-#graph-overlay-close:hover{color:var(--accent2,#7fd6ff)}
+#graph-overlay-bar{flex:0 0 auto;display:flex;justify-content:flex-end;align-items:center;padding:8px 12px;background:var(--surface,#1b1f27);border-bottom:1px solid var(--border,#333)}
+#graph-overlay-frame{flex:1 1 auto;width:100%;border:0;background:#0d0f14}
+#graph-overlay-close{appearance:none;border:1px solid var(--border,#333);background:transparent;color:var(--text,#e8e8e8);font:600 13px 'JetBrains Mono',ui-monospace,monospace;padding:6px 14px;border-radius:8px;cursor:pointer}
+#graph-overlay-close:hover{color:var(--accent2,#7fd6ff);border-color:var(--accent2,#7fd6ff)}
 .mark-graph-btn{background:transparent;border:none;cursor:pointer;font-size:13px;padding:0 4px;flex-shrink:0;opacity:.6}
 .mark-graph-btn:hover{opacity:1}
-@media(max-width:640px){#graph-overlay{padding:0}#graph-overlay-frame{border-radius:0}}
 </style>
 </head>
 <body>
@@ -5011,7 +5011,7 @@ function _graphNodeIdOf(m){
   try{
     if(!m) return '';
     const e = (m.pmRef && m.pmRef.ext) || m.ext || null;
-    const v = e && e.graph_node_id;
+    const v = (e && e.graph_node_id) || m.graphNodeId || '';
     return (v && /^[A-Za-z0-9_:/-]{1,256}$/.test(String(v))) ? String(v) : '';
   }catch(_){ return ''; }
 }
@@ -5028,7 +5028,7 @@ window._openGraphFor = function(nodeId){
   // держим фокус на родителе (кнопка ×) — иначе фокус уходит в sandbox-iframe
   // и Esc-keydown не доходит до document. После клика внутрь графа Esc может
   // не сработать (ожидаемо для cross-origin iframe) — закрывает × / клик-вне.
-  try{ const cb = document.getElementById('graph-overlay-close'); if(cb) cb.focus(); }catch(_){}
+  requestAnimationFrame(function(){ try{ const cb = document.getElementById('graph-overlay-close'); if(cb) cb.focus(); }catch(_){} });
 };
 window._closeGraphOverlay = function(){
   const ov = document.getElementById('graph-overlay');
@@ -6193,6 +6193,7 @@ function _gatherMarkers(){
       // and add/remove the underlying leaflet sublayer (pm._leafletLayer).
       buckets[bucket].push({
         id:        `cad:${layerIdx}:${i}`,
+        graphNodeId: (matched && matched.ext && matched.ext.graph_node_id) || (pm.ext && pm.ext.graph_node_id) || '',
         type:      bucket,   // 'zu'|'oks'|'exp' — без этого _editContourFromCard всегда брал 'oks'
         layerIdx, source:'cad', innerIdx:i,
         name:      (matched?.name && matched.name !== pm.cadNum) ? matched.name : (pm.cadNum || '(без номера)'),
@@ -6222,6 +6223,7 @@ function _gatherMarkers(){
       const ll = pm.coords ? (pm.type === 'Point' ? pm.coords : pm.coords[0]) : null;
       buckets[bucket].push({
         id:        `pm:${layerIdx}:${i}`,
+        graphNodeId: (pm.ext && pm.ext.graph_node_id) || '',
         type:      bucket,   // 'zu'|'oks'|'exp' — иначе правка ЗУ/Пояснения сохранялась как ОКС
         layerIdx, source:'pm', innerIdx:i,
         name:      pm.name || pm.desc?.split(' · ')?.[0] || '(без названия)',
@@ -11498,8 +11500,10 @@ queueMicrotask(() => {
       </div>
     </div>
   </div>
-<div id="graph-overlay" class="hidden" onclick="if(event.target===this)window._closeGraphOverlay()">
-  <button id="graph-overlay-close" type="button" aria-label="Закрыть" title="Закрыть (Esc)" onclick="window._closeGraphOverlay()">×</button>
+<div id="graph-overlay" class="hidden">
+  <div id="graph-overlay-bar">
+    <button id="graph-overlay-close" type="button" aria-label="Закрыть" title="Закрыть (Esc)" onclick="window._closeGraphOverlay()">✕ закрыть</button>
+  </div>
   <iframe id="graph-overlay-frame" sandbox="allow-scripts" referrerpolicy="no-referrer" title="Граф связей"></iframe>
 </div>
 </body>
