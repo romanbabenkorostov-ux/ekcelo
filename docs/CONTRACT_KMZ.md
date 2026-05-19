@@ -140,6 +140,15 @@ SemVer `MAJOR.MINOR.PATCH` для контракта:
   и применяет `network.selectNodes([id])` + `network.focus(id, {scale:1.2, animation:true})`.
 - **(2.11.0+)** `graph.html` СОДЕРЖИТ `<meta name="ekcelo-graph-protocol" content="1">` в `<head>`.
 - **(2.11.0+)** `kml_schema_version` в `<Document>` ОБНОВЛЯЕТСЯ `2.0` → `2.1` (MINOR wire-bump).
+- **(2.11.0+, информативно — parser-internal, НЕ контрактный инвариант).** JPG-файлы
+  внутри `docs/<f>` и `images/<f>` ОПЦИОНАЛЬНО несут `graph_node_id` в EXIF
+  `UserComment` (JSON-payload, поле `graph_node_id`) — то же значение, что у узла
+  графа, к которому документ/фото привязан. Источник истины — sidecar
+  `_data/graph_node_index.json` от `04_nspd_graph_v14.py`; генерируется
+  `07_init_project_v1.py` при конвертации PDF→JPG и при сортировке
+  `Не_распределено/`. Поле parser-internal: viewer не обязан парсить EXIF JPG,
+  но при наличии может использовать для синхронизации «открыть документ ↔
+  перейти на узел графа». Wire-формат KMZ от этого поля не зависит.
 - Детерминизм: одинаковый вход → побитово идентичный `sha256(project.kmz)`.
 
 ## 6. Контрактные инварианты (CI/линт обеих сторон)

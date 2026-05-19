@@ -87,11 +87,31 @@ window._openGraphFor = function(nodeId){
 | PR | Зона | Содержание |
 |---|---|---|
 | PR-A `shared/contract-kmz-2.11.0` | spec (joint) | этот пост + правки §5/§6/§10 контракта |
-| PR-B `parser/graph-node-id-emit` | parser | `03_enrich`: эмит `_b_key`/`_eq_key`; `04_nspd_graph`: IIFE-listener + meta; `08_build_kmz_v2`: `graph_node_id` в 5 классах ExtendedData; mini-fixture + 6 тестов cross-match |
+| PR-B `parser/graph-node-id-emit` | parser | `04_nspd_graph`: IIFE-listener + meta + sidecar `graph_node_index.json`; `07_init_project_v1`: `graph_node_id` в EXIF UserComment JPG-документов и фото; `08_build_kmz_v2`: `graph_node_id` в 5 классах ExtendedData; mini-fixture + 14 тестов (cross-match KMZ↔sidecar, EXIF-резолв 07, idempotency) |
 | PR-C `viewer/graph-preselect-overlay` | viewer | DOM `#graph-overlay`, JS `_openGraphFor`/`_closeGraphOverlay`, кнопка 🕸 в `_renderObjectCard` + `renderMarksList`, ESC-handler |
 
 Порядок мержа: A first (joint COMMENT-аппрув обеих команд), затем B и C
 параллельно (рекомендуем C после B для ручного теста на свежей mini-fixture).
+
+## Дополнение: 07_init_project и EXIF-привязка документов/фото
+
+`pirushin_sosn_rocha_07_init_project_v1.py` (PDF→JPG постранично + сортировка
+`Не_распределено/`) в S5 расширен: каждый JPG-документ и каждое JPG-фото несёт
+`graph_node_id` в EXIF `UserComment` (JSON-payload). Резолв через тот же
+sidecar `_data/graph_node_index.json`, что и 08:
+
+- документ ЕГРН/Свидетельства/Техпаспорт/Техплан → `graph_node_id = cn` (КН-узел);
+- ЕГРЮЛ/ЕГРИП → `graph_node_id = legal::inn::<inn>` (или `legal::ogrn::<ogrn>`);
+- фото к КН → `graph_node_id = cn`.
+
+Это **parser-internal** поле (не часть wire-формата KMZ — см. §5 информативный
+пункт). Wire-инвариант от него не зависит, viewer не обязан читать EXIF JPG.
+Но открывает дорогу к UX-сценарию «клик на документ в lightbox → переход на
+узел графа» без расширения схемы KMZ.
+
+Тесты `parser/tests/test_graph_node_id.py` покрывают:
+`resolve_doc_graph_node_id` (приоритет cad → inn → ogrn, fallback formula),
+`load_graph_index` 07 (читает sidecar / graceful empty без файла).
 
 ## Что **не** в этой итерации (S6+)
 
