@@ -310,3 +310,65 @@ def test_07_load_graph_index_missing_returns_empty(tmp_path: Path):
     """Без файла — возвращается пустой dict (graceful)."""
     (tmp_path / "_data").mkdir()
     assert load_graph_index_07(tmp_path) == {}
+
+
+# ─── 15. Регекс-инвариант: graph_node_id ∈ [A-Za-z0-9_:/-]{1,256} ─────────────
+# Контракт KMZ 2.11.0 §6 (по уточнению viewer-team в CORRESPONDENCE/006):
+# защищает hash-fallback `#node=<urlencoded id>` и детерминирует cross-match.
+
+GRAPH_NODE_ID_RE = re.compile(r"^[A-Za-z0-9_:/-]{1,256}$")
+
+
+def test_graph_node_id_regex_invariant_in_kmz(synthetic_root: Path):
+    """Каждый `graph_node_id` в Placemark'ах KMZ соответствует §6-регексу."""
+    _write_sidecar_into(synthetic_root)
+    kmz = build_kmz(synthetic_root)
+    kml = _read_kml(kmz)
+    root = ET.fromstring(kml)
+
+    seen: list[str] = []
+    for pm in root.iter("{http://www.opengis.net/kml/2.2}Placemark"):
+        gid = _get_ext(pm, "graph_node_id")
+        if not gid:
+            continue
+        seen.append(gid)
+        assert GRAPH_NODE_ID_RE.fullmatch(gid), (
+            f"graph_node_id={gid!r} не соответствует §6-регексу "
+            f"`^[A-Za-z0-9_:/-]{{1,256}}$`")
+    assert seen, "ни одного graph_node_id в KMZ — sidecar не подцепился?"
+
+
+def test_graph_node_id_regex_invariant_in_sidecar():
+    """Все значения, эмитируемые `build_graph_node_index`, соответствуют §6-регексу."""
+    nodes = [
+        {"id": "47:14:0000001:1", "kind": "object", "attrs": {}},
+        {"id": "bu::1a2b3c4d5e6f7890", "kind": "business_unit",
+         "attrs": {"Наименование": "Test"}},
+        {"id": "eq::eq-001/A_1", "kind": "equipment",
+         "attrs": {"id": "eq-001/A_1"}},
+        {"id": "legal::inn::7707083893", "kind": "beneficiary",
+         "attrs": {"attrs": {"ИНН": "7707083893"}, "Наименование (отображаемое)": "ООО"}},
+        {"id": "legal::ogrn::1027700132195", "kind": "beneficiary",
+         "attrs": {"attrs": {"ОГРН": "1027700132195"}, "Наименование (отображаемое)": "ПАО"}},
+    ]
+    idx = _nspd_graph.build_graph_node_index(nodes)
+    for sub in ("by_cad_number", "by_bu_name", "by_eq_id",
+                "by_ben_inn", "by_ben_ogrn", "by_ben_name"):
+        for value in idx.get(sub, {}).values():
+            assert GRAPH_NODE_ID_RE.fullmatch(value), (
+                f"sidecar[{sub}] value={value!r} не соответствует §6-регексу")
+
+
+def test_07_resolve_produces_regex_compliant():
+    """`resolve_doc_graph_node_id` для типичных входов выдаёт §6-валидные id."""
+    gidx_empty: dict = {}
+    cases = [
+        {"cad": "47:14:0000001:1"},                          # cad fallback → cn
+        {"cad": "47:14:0000001:1/2"},                        # cad с частью /N
+        {"inn": "7707083893"},                                # → legal::inn::<inn>
+        {"ogrn": "1027700132195"},                            # → legal::ogrn::<ogrn>
+    ]
+    for meta in cases:
+        gid = resolve_doc_graph_node_id(meta, gidx_empty)
+        assert gid and GRAPH_NODE_ID_RE.fullmatch(gid), (
+            f"resolve_doc_graph_node_id({meta}) → {gid!r}, не соответствует §6")
