@@ -207,6 +207,6 @@
 
 1. Перейдите на [Cloudflare Workers](https://dash.cloudflare.com) → Create Worker
 2. Назовите воркер `ekcelo-proxy`, нажмите Deploy
-3. Нажмите Edit code, замените содержимое на `worker.js` из репозитория
+3. Нажмите Edit code, замените содержимое на `infra/cloudflare-worker/worker.js` из репозитория
 4. Скопируйте URL воркера вида `https://ekcelo-proxy.YOUR.workers.dev`
 5. Вставьте в `viewer/index.html` в константу `YANDEX_PROXY` (первые строки `<script>`)
