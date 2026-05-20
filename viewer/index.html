@@ -5010,8 +5010,26 @@ let _kmzGraphHtml = null;
 function _graphNodeIdOf(m){
   try{
     if(!m) return '';
-    const e = (m.pmRef && m.pmRef.ext) || m.ext || null;
-    const v = (e && e.graph_node_id) || m.graphNodeId || '';
+    // 1) explicit field on record (set by _gatherMarkers)
+    let v = m.graphNodeId;
+    // 2) pmRef.ext / m.ext (parsed placemark with ExtendedData)
+    if(!v && m.pmRef && m.pmRef.ext) v = m.pmRef.ext.graph_node_id;
+    if(!v && m.ext) v = m.ext.graph_node_id;
+    // 3) Fallback: look up via layer.parsedData by innerIdx (Source-2) or cadNum (Source-1)
+    if(!v && typeof kmlLayers !== 'undefined' && Number.isInteger(m.layerIdx)){
+      const layer = kmlLayers[m.layerIdx];
+      const pms = (layer && layer.parsedData && layer.parsedData.placemarks) || [];
+      if(m.source === 'pm' && Number.isInteger(m.innerIdx) && pms[m.innerIdx] && pms[m.innerIdx].ext){
+        v = pms[m.innerIdx].ext.graph_node_id;
+      }
+      if(!v){
+        const cn = m.cadNum || (m.pmRef && m.pmRef.cadNum) || '';
+        if(cn){
+          const matched = pms.find(p => (p.name||'').includes(cn) || (p.desc||'').includes(cn));
+          if(matched && matched.ext) v = matched.ext.graph_node_id;
+        }
+      }
+    }
     return (v && /^[A-Za-z0-9_:/-]{1,256}$/.test(String(v))) ? String(v) : '';
   }catch(_){ return ''; }
 }
