@@ -4056,16 +4056,19 @@ function _renderObjectCard(hit, cardId){
   const safeDesc = _escapeHtml(dp.visibleText || '');
   let attHtml = '';
   if(dp.attachments.length){
-    attHtml = '<div class="ic-attach">' + dp.attachments.map(a => {
-      const nm = _escapeHtml(a.name || a.path);
-      if(a.kind === 'photo' && a.blobUrl){
-        return `<img class="ic-att-thumb" src="${a.blobUrl}" alt="${nm}" title="${nm}" onclick="_openAttImage('${a.blobUrl}')">`;
-      }
-      if(a.kind === 'doc' && a.blobUrl){
-        return `<button class="ic-att-chip" title="${nm}" onclick="window.open('${a.blobUrl}','_blank','noopener')">📄 ${nm}</button>`;
-      }
-      return `<span class="ic-att-chip ic-att-missing" title="${nm}">${a.kind==='photo'?'🖼':'📄'} ${nm}</span>`;
-    }).join('') + '</div>';
+    // Фото-привязки (Ссылка_фото_<i>) показываются отдельными photoPin_*-маркерами
+    // на карте; дублировать миниатюры в карточке объекта = шум. Скрываем фото,
+    // оставляем документы (Ссылка_документ_<i>) как chips.
+    const docOnly = dp.attachments.filter(a => a.kind !== 'photo');
+    if(docOnly.length){
+      attHtml = '<div class="ic-attach">' + docOnly.map(a => {
+        const nm = _escapeHtml(a.name || a.path);
+        if(a.kind === 'doc' && a.blobUrl){
+          return `<button class="ic-att-chip" title="${nm}" onclick="window.open('${a.blobUrl}','_blank','noopener')">📄 ${nm}</button>`;
+        }
+        return `<span class="ic-att-chip ic-att-missing" title="${nm}">📄 ${nm}</span>`;
+      }).join('') + '</div>';
+    }
   }
   const fullText = `${m.name || ''}${m.desc ? '\n' + m.desc : ''}`;
   const fullTextEsc = fullText.replace(/'/g,"\\'").replace(/\n/g,'\\n').replace(/"/g,'&quot;');
