@@ -3792,6 +3792,7 @@ function _hitTestAllAtPoint(latlng){
   // Polygon hits — keep all (a click may legitimately be inside multiple)
   for(const grp of ['zu','oks','room','str','ons']){
     for(const m of buckets[grp]){
+      if(m.markerVisible === false) continue;   // skip duplicates hidden by _dedupParsedPlacemarks
       if(_hitTestMarker(m, latlng.lat, latlng.lng)){
         hits.push({kind: grp, marker: m});
       }
@@ -3804,6 +3805,7 @@ function _hitTestAllAtPoint(latlng){
   const clickPt = map.latLngToContainerPoint(latlng);
   for(const grp of ['zu','oks','room','str','ons','bu','eq','exp']){
     for(const m of buckets[grp]){
+      if(m.markerVisible === false) continue;   // skip duplicates hidden by _dedupParsedPlacemarks
       const ll = _markerPointLatLng(m);
       if(!ll) continue;
       const pt = map.latLngToContainerPoint(ll);
@@ -5030,6 +5032,20 @@ function _graphNodeIdOf(m){
         }
       }
     }
+    // 4) Cross-layer fallback: same cadnum может встречаться в нескольких файлах,
+    //    причём graph_node_id заэмиттил только один (parser 2.11.0). Ищем по всем
+    //    kmlLayers — это обеспечивает propagation 🕸 на дедуплицированные записи.
+    if(!v && typeof kmlLayers !== 'undefined'){
+      const cn = m.cadNum || (m.pmRef && m.pmRef.cadNum) || '';
+      if(cn){
+        for(const L of kmlLayers){
+          const ps = (L && L.parsedData && L.parsedData.placemarks) || [];
+          const match = ps.find(p => p && p.ext && p.ext.graph_node_id &&
+            ((p.name||'').includes(cn) || (p.desc||'').includes(cn)));
+          if(match){ v = match.ext.graph_node_id; break; }
+        }
+      }
+    }
     return (v && /^[A-Za-z0-9_:/-]{1,256}$/.test(String(v))) ? String(v) : '';
   }catch(_){ return ''; }
 }
@@ -5709,6 +5725,13 @@ function _dedupParsedPlacemarks(parsed, displayName){
     if(hit.kind === 'parsed'){
       hit.pm.desc = _pickRicherDesc(hit.pm.desc, pm.desc);
       if(!hit.pm.name && pm.name) hit.pm.name = pm.name;
+      // Propagate graph_node_id (CONTRACT_KMZ 2.11.0): если у одного из дублей
+      // он есть, а у kept-плейсмарка нет — копируем. Это гарантирует появление
+      // 🕸-кнопки на дедуплицированной записи.
+      if(pm.ext && pm.ext.graph_node_id){
+        hit.pm.ext = hit.pm.ext || {};
+        if(!hit.pm.ext.graph_node_id) hit.pm.ext.graph_node_id = pm.ext.graph_node_id;
+      }
     } else {
       const newDesc = _normalizeDesc(pm.desc||'');
       if(newDesc){
@@ -6441,7 +6464,8 @@ function renderMarksList(){
     const body = document.getElementById(`marks-body-${grp}`);
     const cnt  = document.getElementById(`marks-count-${grp}`);
     if(!body || !cnt) continue;
-    cnt.textContent = buckets[grp].length;
+    // Считаем только видимые записи (дубли с _visible:false не учитывает).
+    cnt.textContent = buckets[grp].filter(m => m.markerVisible !== false).length;
     body.innerHTML = '';
 
     // Group-header checkbox: bulk-toggle every marker in this subgroup at once.
@@ -6458,6 +6482,7 @@ function renderMarksList(){
       continue;
     }
     for(const m of buckets[grp]){
+      if(m.markerVisible === false) continue;   // дубли (_dedupParsedPlacemarks → _visible:false) не показываем в списке
       const item = document.createElement('div');
       item.className = 'mark-item';
       item.dataset.markId = m.id;
