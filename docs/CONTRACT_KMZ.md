@@ -223,12 +223,19 @@ SemVer `MAJOR.MINOR.PATCH` для контракта:
 
 ## 9. Порядок интеграции (живёт здесь, обновляется через §3)
 
-- **S1** Ратификация этого файла (PR `shared/contract-kmz`, аппрув обеих).
+- **S1** Ратификация этого файла (PR `shared/contract-kmz`, аппрув обеих). ✅
 - **S2** Merge формата в main: PR viewer `c20fb56` + PR парсера (см. §7.1).
-  → связка формата зелёная.
-- **S3** PR `shared/repo-layout` (git mv → `viewer/`,`worker/`,`schema/`).
+  → связка формата зелёная. ✅
+- **S3** PR `shared/repo-layout` (git mv → `viewer/`,`worker/`,`schema/`). ✅
 - **S4** Разделение ролей/функционала (pro/view/embed) — отдельная итерация
-  после S3 (`dev/SPEC_ROLES_VIEWER_EMBED.md`).
+  после S3 (`dev/SPEC_ROLES_VIEWER_EMBED.md`). ✅
+- **S5** Мост маркер↔узел графа (контракт 2.10.2 → 2.11.0): `graph_node_id`
+  в `<ExtendedData>` + protocol pre-selection (postMessage + hash) +
+  `<meta ekcelo-graph-protocol>` + EXIF UserComment (parser-internal). ✅
+  PR-A #16 (`e132a8b`), PR-B #17 (`30c380b`), PR-C #18 (`fc23ccb`/`092c710`).
+- **S6+** Открытые направления (не в scope ни одной активной итерации):
+  multi-level Z для помещений (MAJOR); ingesters ОСВ/ЕГРЮЛ/ЕГРИП;
+  EXIF-роутинг lightbox (viewer-инициатива); MessageChannel; de-sandbox.
 
 ## 10. Изменения
 
