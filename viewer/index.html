@@ -5668,14 +5668,24 @@ function _pickRicherDesc(descA, descB){
 // Build a quick lookup of all known cadnums currently in kmlLayers.
 // Returns Map<cadnum, {layer, pm, kind: 'parsed'|'cad'}> — first occurrence wins.
 function _buildCadnumIndex(){
+  // Композитный ключ `type|cn` — без этого eq/ben/photoPin с cad_number
+  // родителя (по контракту parent_cad) ошибочно матчатся с ZU/OKS того
+  // же cadnum'а и весь класс «исчезает» из меток. Type-aware дедуп
+  // схлопывает только одноимённые объекты (ZU↔ZU и т.д.).
   const idx = new Map();
+  const keyFor = (cn, type) => `${type||'?'} ${cn}`;
   for(const layer of (kmlLayers||[])){
     for(const pm of (layer.parsedData?.placemarks||[])){
       const cn = _extractCadNum(pm.name) || _extractCadNum(pm.desc);
-      if(cn && !idx.has(cn)) idx.set(cn, {layer, pm, kind:'parsed'});
+      if(!cn) continue;
+      const type = (typeof _classifyObjectType === 'function') ? _classifyObjectType(pm) : '?';
+      const k = keyFor(cn, type);
+      if(!idx.has(k)) idx.set(k, {layer, pm, kind:'parsed', type, cn});
     }
     for(const cp of (layer.cadPlacemarks||[])){
-      if(cp.cadNum && !idx.has(cp.cadNum)) idx.set(cp.cadNum, {layer, pm:cp, kind:'cad'});
+      if(!cp.cadNum) continue;
+      const k = keyFor(cp.cadNum, cp.type || 'oks');
+      if(!idx.has(k)) idx.set(k, {layer, pm:cp, kind:'cad', type:cp.type||'oks', cn:cp.cadNum});
     }
   }
   return idx;
@@ -5714,10 +5724,11 @@ function _dedupParsedPlacemarks(parsed, displayName){
       suppressed++;
       continue;
     }
-    // ── (b) cadnum-based dedup against other layers ──────────────
+    // ── (b) cadnum+type dedup against other layers — type-aware (см. _buildCadnumIndex).
     const cn = _extractCadNum(pm.name) || _extractCadNum(pm.desc);
     if(!cn) continue;
-    const hit = idx.get(cn);
+    const type = (typeof _classifyObjectType === 'function') ? _classifyObjectType(pm) : '?';
+    const hit = idx.get(`${type||'?'} ${cn}`);
     if(!hit) continue;
     pm._duplicateOf = hit.layer.filename || '(unknown)';
     pm._visible = false;
