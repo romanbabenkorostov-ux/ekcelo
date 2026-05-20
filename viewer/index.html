@@ -4838,7 +4838,7 @@ function parseKML(xmlText,filename){
   const pmList = doc.getElementsByTagName('Placemark');
   for(const pm of pmList){
     const name = childText(pm, 'name') || childText(pm, 'n') || '';
-    const desc = childText(pm, 'description') || '';
+    const desc = _normalizeDesc(childText(pm, 'description') || '');
     const styleUrl = childText(pm, 'styleUrl');
     const style = styles[styleUrl] || styles[styleUrl.replace(/^#/, '')] ||
                   {lineColor:'rgba(71,200,255,0.9)',lineWidth:2,fillColor:'rgba(71,200,255,0.12)',fillOpacity:0.12,hasFill:true};
@@ -5710,11 +5710,15 @@ function _dedupParsedPlacemarks(parsed, displayName){
       hit.pm.desc = _pickRicherDesc(hit.pm.desc, pm.desc);
       if(!hit.pm.name && pm.name) hit.pm.name = pm.name;
     } else {
-      const newDesc = String(pm.desc||'').trim();
+      const newDesc = _normalizeDesc(pm.desc||'');
       if(newDesc){
         const lines = hit.pm.lines = (hit.pm.lines||[]);
-        if(!lines.some(L => L[1] === newDesc)){
-          lines.push(['Доп. источник', `${displayName||'KML'}: ${newDesc}`]);
+        const pushVal = `${displayName||'KML'}: ${newDesc}`;
+        // Fix: dedup compared L[1] to RAW newDesc but pushed the prefixed value
+        // — never matched → re-import grew lines indefinitely. Compare against
+        // the actual push value (Доп. источник + same prefix+value).
+        if(!lines.some(L => L[0] === 'Доп. источник' && L[1] === pushVal)){
+          lines.push(['Доп. источник', pushVal]);
         }
       }
     }
@@ -6372,9 +6376,39 @@ function _markerDescFromPlacemark(pm){
 // NOT mangled). Ссылка_документ_<i>/Ссылка_фото_<i> become attachments and
 // are stripped from the visible text; the parser's duplicate
 // "Кадастровый номер:" pair is collapsed to the first occurrence.
+//
+// Idempotency normalizer (CONTRACT_KMZ §5: no HTML, "K: V; " pairs):
+// 1) Replace HTML breaks (<br/>, <p>, <div>) — KML data sometimes carries
+//    legacy HTML — with the canonical pair-separator "; ".
+// 2) Collapse consecutive separators and entities (&nbsp; → space).
+// 3) Dedup exact-duplicate tokens (idempotent re-import / multi-source
+//    concatenation). Used by parseKML on input AND by _parseDescPairs at
+//    display — defense-in-depth so any path produces a clean stable
+//    description, also yielding idempotent KML/XLSX export.
+function _normalizeDesc(desc){
+  let s = String(desc || '')
+    .replace(/<br\s*\/?>/gi, '; ')
+    .replace(/<\/?p\b[^>]*>/gi, '; ')
+    .replace(/<\/?div\b[^>]*>/gi, '; ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s*;\s*;\s*/g, '; ')
+    .replace(/\s*·\s*·\s*/g, ' · ')
+    .trim();
+  if(!s) return '';
+  const tokens = s.split(/\s*;\s|\s+·\s+/).map(t => t.trim()).filter(Boolean);
+  const seen = new Set();
+  const out = [];
+  for(const t of tokens){
+    const sig = t.toLowerCase();
+    if(seen.has(sig)) continue;
+    seen.add(sig);
+    out.push(t);
+  }
+  return out.join('; ');
+}
 function _parseDescPairs(desc){
   const out = { pairs: [], attachments: [], visibleText: '' };
-  const raw = String(desc || '').trim();
+  const raw = _normalizeDesc(desc);
   if(!raw) return out;
   const tokens = raw.split(/\s*;\s|\s+·\s+/).map(s => s.trim()).filter(Boolean);
   const visible = [];
