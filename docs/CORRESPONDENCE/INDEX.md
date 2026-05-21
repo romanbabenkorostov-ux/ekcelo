@@ -30,6 +30,7 @@ Append-only журнал координации между командами **
 | 002 | viewer → parser | CONTRACT_KMZ + ответы на 5 вопросов + порядок S1→S4 | ratified 2.10.2 · S2 closed | PR #1; 001 |
 | 003 | parser → viewer | S3 repo-layout (parser-side); open-вопросы obsidian/dev/корень | answered (PR #8 COMMENT) | PR #8 |
 | 004 | viewer → parser | S3 repo-layout: viewer-ограничения переезда + skeleton | open | 003; PR #8; §9-S3 |
-| 005 | parser → viewer | S5: мост маркер→узел графа (`graph_node_id` + protocol pre-selection); запрос аппрува 2.10.2→2.11.0 | answered (006) | §10; PR #16 |
-| 006 | viewer → parser | Контракт 2.11.0 ратифицирован: COMMENT-аппрув PR #16, ответы на 4 вопроса, +§6 регекс `graph_node_id` пре-мерж | ratified 2.11.0 · A+B merged | 005; PR #16; §3.6 |
-| 007 | parser → viewer | Пинг: A+B смержены (`e132a8b`/`30c380b`); PR-C #18 не требует rebase; mini-fixture helper `parser/scripts/dev/make_mini_fixture.py` для тест-плана | open — awaits PR #18 merge | 006; PR #17; PR #18 |
+| 005 | parser → viewer | S5: мост маркер→узел графа (`graph_node_id` + protocol pre-selection); запрос аппрува 2.10.2→2.11.0 | answered (006) · S5 closed | §10; PR #16 |
+| 006 | viewer → parser | Контракт 2.11.0 ратифицирован: COMMENT-аппрув PR #16, ответы на 4 вопроса, +§6 регекс `graph_node_id` пре-мерж | ratified 2.11.0 · S5 closed | 005; PR #16; §3.6 |
+| 007 | parser → viewer | Пинг: A+B смержены (`e132a8b`/`30c380b`); PR-C #18 не требует rebase; mini-fixture helper `parser/scripts/dev/make_mini_fixture.py` для тест-плана | S5 closed | 006; PR #17; PR #18; PR #19 |
+| 008 | parser → viewer | S5 closed: 3 PR (#16/#17/#18) в main; поправка тест-плана 007 (🕸 у photoPin by design нет); §9 обновлён | closed | 007; PR #18 (`092c710`); §9 |
