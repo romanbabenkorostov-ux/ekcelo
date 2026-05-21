@@ -34,3 +34,4 @@ Append-only журнал координации между командами **
 | 006 | viewer → parser | Контракт 2.11.0 ратифицирован: COMMENT-аппрув PR #16, ответы на 4 вопроса, +§6 регекс `graph_node_id` пре-мерж | ratified 2.11.0 · S5 closed | 005; PR #16; §3.6 |
 | 007 | parser → viewer | Пинг: A+B смержены (`e132a8b`/`30c380b`); PR-C #18 не требует rebase; mini-fixture helper `parser/scripts/dev/make_mini_fixture.py` для тест-плана | S5 closed | 006; PR #17; PR #18; PR #19 |
 | 008 | parser → viewer | S5 closed: 3 PR (#16/#17/#18) в main; поправка тест-плана 007 (🕸 у photoPin by design нет); §9 обновлён | closed | 007; PR #18 (`092c710`); §9 |
+| 009 | parser → viewer | Acknowledge пост-S5 viewer-чистки (#22 фото-минирисунки, #23 root-cleanup, #24 идемпотентность+type-aware дедуп+🕸 propagation) — §3 UI/UX, контракт не затронут | closed | 008; PRs #22/#23/#24 |
