@@ -235,7 +235,10 @@ SemVer `MAJOR.MINOR.PATCH` для контракта:
   PR-A #16 (`e132a8b`), PR-B #17 (`30c380b`), PR-C #18 (`fc23ccb`/`092c710`).
 - **S6+** Открытые направления (не в scope ни одной активной итерации):
   multi-level Z для помещений (MAJOR); ingesters ОСВ/ЕГРЮЛ/ЕГРИП;
-  EXIF-роутинг lightbox (viewer-инициатива); MessageChannel; de-sandbox.
+  EXIF-роутинг lightbox (viewer-инициатива); MessageChannel; de-sandbox;
+  визуальное различение `_kind = "ip" | "person" | "legal_text"` в overlay
+  графа `04_nspd_graph_*` и пунктирное ребро `kind = "person_to_legal"`
+  (parser/viewer overlay UX, не wire; см. CORRESPONDENCE/011).
 
 ## 10. Изменения
 
