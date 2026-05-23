@@ -31,7 +31,7 @@ def _load(name: str, filename: str):
 
 _kmz = _load("_kmz_v2_2", "pirushin_sosn_rocha_08_build_kmz_v2_2.py")
 _init = _load("_init_v2", "pirushin_sosn_rocha_07_init_project_v2.py")
-_struct = _load("_struct_v2_1", "pirushin_sosn_rocha_052_make_structure_v2_1.py")
+_struct = _load("_struct_v2_2", "pirushin_sosn_rocha_052_make_structure_v2_2.py")
 
 
 # ── 08_build_kmz_v2_2 ───────────────────────────────────────────────────────
