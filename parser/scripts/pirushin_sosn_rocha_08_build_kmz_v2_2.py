@@ -893,7 +893,40 @@ def place_photos(photos_dir: Path, by_cn: dict[str, dict],
 
 
 # ─── Главная сборка ─────────────────────────────────────────────────────────
-def build_kmz(root: Path, no_spiral: bool = False) -> Path:
+def _load_extract_date(root: Path) -> str | None:
+    """Контракт KMZ 2.12.0 §5: true source-of-truth для даты выписки ЕГРН.
+
+    Источник приоритетов:
+      1) `<project>/_data/documents.json` — max(doc_date) среди записей
+         kind ∈ {egrn_extract, egrul_extract, egrip_extract}.
+      2) None если файл отсутствует или нет выписочных kind'ов (вызывающий
+         сам решит fallback на today() / не эмитить поле).
+
+    Формат: ISO `YYYY-MM-DD` (валидируется по регексу §6).
+    """
+    docs_path = root / "_data" / "documents.json"
+    if not docs_path.exists():
+        return None
+    try:
+        data = json.loads(docs_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    extracts = [
+        d.get("doc_date")
+        for d in (data.get("documents") or [])
+        if isinstance(d, dict)
+        and d.get("kind") in {"egrn_extract", "egrul_extract", "egrip_extract"}
+        and isinstance(d.get("doc_date"), str)
+        and re.fullmatch(r"\d{4}-\d{2}-\d{2}", d["doc_date"])
+    ]
+    return max(extracts) if extracts else None
+
+
+def build_kmz(
+    root: Path,
+    no_spiral: bool = False,
+    extract_date: str | None = None,
+) -> Path:
     st = load_structure(root)
     if not st:
         cp("  пустой structure — KMZ будет минимальным.", C.Y)
@@ -1046,6 +1079,21 @@ def build_kmz(root: Path, no_spiral: bool = False) -> Path:
     # до дня (так повторный запуск в тот же день даёт идентичный sha256).
     today_iso = datetime.now(timezone.utc).date().isoformat() + "T00:00:00Z"
 
+    # Контракт KMZ 2.12.0 §5: опциональный <Data extract_date> — true
+    # source-of-truth для даты выписки ЕГРН (multi-extract phase 1).
+    ed_doc: dict[str, str] = {
+        "kml_schema_version": KML_SCHEMA_VERSION,
+        "generator": GENERATOR_NAME,
+        "generated_at": today_iso,
+    }
+    resolved_extract = extract_date or _load_extract_date(root)
+    if resolved_extract:
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", resolved_extract):
+            raise ValueError(
+                f"extract_date должен быть ISO YYYY-MM-DD, получено: {resolved_extract!r}"
+            )
+        ed_doc["extract_date"] = resolved_extract
+
     doc_header = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<kml xmlns="http://www.opengis.net/kml/2.2" '
@@ -1057,11 +1105,7 @@ def build_kmz(root: Path, no_spiral: bool = False) -> Path:
         '  <atom:author>\n'
         f'    <atom:name>{xml_escape(GENERATOR_NAME)}</atom:name>\n'
         '  </atom:author>\n'
-        + extended_data({
-            "kml_schema_version": KML_SCHEMA_VERSION,
-            "generator": GENERATOR_NAME,
-            "generated_at": today_iso,
-        }) + "\n"
+        + extended_data(ed_doc) + "\n"
     )
 
     out: list[str] = [doc_header]
@@ -1347,6 +1391,15 @@ def build_kmz(root: Path, no_spiral: bool = False) -> Path:
             zi = zipfile.ZipInfo("graph.html", date_time=zinfo_date)
             zi.compress_type = zipfile.ZIP_DEFLATED
             zf.writestr(zi, graph_html.read_bytes())
+
+        # Контракт KMZ 2.12.0 §5: опциональный sidecar `_data/documents.json`.
+        # Путь зарезервирован в wire (см. контракт + dev/SPEC_TEMPORAL_REPORTS.md §4.2).
+        # Копируем как есть из <project>/_data/documents.json, если файл существует.
+        docs_json = root / "_data" / "documents.json"
+        if docs_json.exists():
+            zi = zipfile.ZipInfo("_data/documents.json", date_time=zinfo_date)
+            zi.compress_type = zipfile.ZIP_DEFLATED
+            zf.writestr(zi, docs_json.read_bytes())
 
     tmp.replace(kmz)
     return kmz

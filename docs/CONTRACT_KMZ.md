@@ -1,8 +1,8 @@
 # CONTRACT_KMZ — единый источник истины формата KMZ (Ekcelo)
 
-**Статус:** Ратифицирован (PR #1, мерж 2026-05-18).
-**Версия контракта:** 2.11.0 · **SemVer-политика:** см. §4.
-**Дата:** 2026-05-19 · **Арбитр:** владелец репозитория `romanbabenkorostov-ux`.
+**Статус:** Ратифицирован (PR #1, мерж 2026-05-18); 2.12.0 — `shared/contract-kmz-2.12.0`.
+**Версия контракта:** 2.12.0 · **SemVer-политика:** см. §4.
+**Дата:** 2026-05-25 · **Арбитр:** владелец репозитория `romanbabenkorostov-ux`.
 **Тех-тело (нормативная часть):** `docs/KML_INGESTION_SPEC_for_viewer_team_v2.10.0.md`
 (pin SHA `22407643969f0c66875b9b86e376d265e5b53987`).
 **Информативно (parser-internal, НЕ контракт):** `docs/CHANGELOG_052_v1_to_v2.md`.
@@ -149,6 +149,21 @@ SemVer `MAJOR.MINOR.PATCH` для контракта:
   `Не_распределено/`. Поле parser-internal: viewer не обязан парсить EXIF JPG,
   но при наличии может использовать для синхронизации «открыть документ ↔
   перейти на узел графа». Wire-формат KMZ от этого поля не зависит.
+- **(2.12.0+)** `<Document>/<ExtendedData>` ОПЦИОНАЛЬНО содержит ключ
+  `extract_date` (string, ISO `YYYY-MM-DD`) — true source-of-truth для
+  даты выписки ЕГРН, на которую сгенерирован этот KMZ-снапшот. Используется
+  viewer'ом для multi-extract timeline-UI (см. CORRESPONDENCE/014-016).
+  **Опционально**: viewer 2.11.x просто игнорирует поле и берёт дату из
+  имени файла (`<project_slug>_<YYYY-MM-DD>.kmz` convention); viewer 2.12.x
+  читает поле, fallback на имя файла, fallback на EXIF любой photoPin'ы.
+- **(2.12.0+, информативно — parser-internal соглашение, путь
+  зарезервирован в wire).** KMZ-архив ОПЦИОНАЛЬНО содержит файл
+  `_data/documents.json` — sidecar реестра документов (выписки ЕГРН/ЕГРЮЛ/
+  ЕГРИП + overlay-документы типа договоров, нотариальных снятий ареста и
+  т.п.). Полная схема — `dev/SPEC_TEMPORAL_REPORTS.md` §4.2. Wire-инвариант:
+  только путь (`_data/documents.json` в корне KMZ-архива) и формат
+  (валидный JSON, UTF-8). Содержимое — соглашение между `052_make_structure`
+  (генератор) и viewer-lightbox (потребитель `external_url`/`doc_id`-lookup).
 - Детерминизм: одинаковый вход → побитово идентичный `sha256(project.kmz)`.
 
 ## 6. Контрактные инварианты (CI/линт обеих сторон)
@@ -187,7 +202,13 @@ SemVer `MAJOR.MINOR.PATCH` для контракта:
       `[A-Za-z0-9_:/-]+` (regex `^[A-Za-z0-9_:/-]{1,256}$`). Защищает hash-fallback
       (`#node=<urlencoded id>`) и детерминирует cross-match. Текущие формулы 04
       соответствуют: `<cn>` (КН), `bu::<sha1>`, `eq::<id>`, `legal::inn::<inn>`,
-      `legal::ogrn::<ogrn>`.
+      `legal::ogrn::<ogrn>`, `doc::<doc_id>` (2.12.0+).
+- [ ] **(2.12.0+)** Если `<Document>/<ExtendedData>` содержит `extract_date` —
+      значение соответствует ISO `^\d{4}-\d{2}-\d{2}$`. Поле опционально:
+      отсутствие НЕ нарушает контракт; viewer fallback на имя файла.
+- [ ] **(2.12.0+)** Если KMZ-архив содержит `_data/documents.json` —
+      это валидный JSON UTF-8. Содержимое — `dev/SPEC_TEMPORAL_REPORTS.md` §4.2.
+      Файл опционален; viewer fallback на toast если документ не найден.
 
 ## 7. Открытые вопросы — зафиксированные ответы
 
@@ -251,3 +272,4 @@ SemVer `MAJOR.MINOR.PATCH` для контракта:
 | 2.10.1 | 2026-05-18 | PATCH §3.6: легализация формы аппрува для single-owner режима (COMMENT-review с чеклистом ≡ formal Approve, пока обе команды под одним GitHub-аккаунтом); статус → «Ратифицирован» | `shared/contract-kmz-patch-governance` (PR #3) |
 | 2.10.2 | 2026-05-18 | PATCH: §6 регекс кад.№ → `\b\d{2}:\d{2}:\d{2,8}:\d{1,8}(?:/\d+)?\b` (3-й блок 2–8 цифр, суффикс части/контура `/N`); §5/§6 — запись KMZ обязана называться ровно `graph.html` (имя источника в пайплайне парсера — parser-internal); уточнён `kml_schema_version` (wire-схема генерации ≠ SemVer документа, viewer не гейтит) | `shared/contract-kmz-patch-2.10.2` |
 | 2.11.0 | 2026-05-19 | MINOR: `ExtendedData/graph_node_id` (opaque link маркер→узел графа) для `cad_{zu,oks,room,str,ons,bu,eq,ben}_*` и `photoPin_*`; протокол pre-selection (postMessage `ekcelo.graph.select` + hash `#node=<id>`); `<meta name="ekcelo-graph-protocol" content="1">` в `graph.html`; `kml_schema_version` 2.0 → 2.1; формат `graph_node_id` (ASCII ≤256, `[A-Za-z0-9_:/-]+`, §6 — добавлено пре-мерж по уточнению viewer-team в посте 006); информативный пункт §5 про parser-internal EXIF UserComment.graph_node_id для JPG в `docs/`/`images/`. Аддитивно, обратно-совместимо: viewer 2.10.x просто не показывает highlight-кнопку, парсер 2.10.x генерит KMZ без поля и работает с viewer 2.11.x | `shared/contract-kmz-2.11.0` (PR #16) |
+| 2.12.0 | 2026-05-25 | MINOR: опциональный `<Data name="extract_date">YYYY-MM-DD</Data>` в `<Document>/<ExtendedData>` — true source-of-truth для даты выписки ЕГРН (multi-extract phase 1, договорено CORRESPONDENCE/014-016); опциональный sidecar `_data/documents.json` внутри KMZ-архива (path зарезервирован в wire; полная схема в `dev/SPEC_TEMPORAL_REPORTS.md` §4.2 — parser-internal); расширение списка формул §6 `graph_node_id` — добавлена `doc::<doc_id>` для документ-узлов графа; `docs/EXIF_USERCOMMENT_SCHEMA.md` bump v1 → v1.1 (поле `doc_id` + формула резолва `doc::<doc_id>`). Аддитивно: viewer 2.11.x игнорирует новые поля, fallback на имя файла; parser 2.11.x не эмитит `<Data extract_date>` и `_data/documents.json` — работает с viewer 2.12.x | `shared/contract-kmz-2.12.0` (PR-θ) |

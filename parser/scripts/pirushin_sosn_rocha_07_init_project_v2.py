@@ -922,16 +922,81 @@ def load_graph_index(root: Path) -> dict:
         return {}
 
 
+def load_documents_index(root: Path) -> dict:
+    """Sidecar `<project>/_data/documents.json` (схема — dev/SPEC_TEMPORAL_REPORTS.md §4.2).
+
+    Возвращает индекс для resolve `doc_id` JPG-файла:
+      out["by_artifact_file"][filename]  → doc_id
+      out["by_extract_cad"][(cad, kind)] → doc_id (для выписок ЕГРН/ЕГРЮЛ/ЕГРИП
+                                          без artifact-match — fallback по subjects)
+
+    Если файл отсутствует/невалиден — возвращает пустой dict
+    (graceful fallback: doc_id = None в EXIF, старая семантика v1).
+    """
+    out: dict = {"by_artifact_file": {}, "by_extract_cad": {}}
+    p = root / "_data" / "documents.json"
+    if not p.exists():
+        return out
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except Exception as e:
+        cp(f"  documents.json не прочитан: {e}", C.Y)
+        return out
+    for d in data.get("documents") or []:
+        if not isinstance(d, dict):
+            continue
+        doc_id = d.get("doc_id")
+        if not doc_id:
+            continue
+        for art in d.get("artifacts") or []:
+            f = (art or {}).get("file")
+            if isinstance(f, str):
+                # Сохраняем по basename (имя файла без папки) — EXIF пишется
+                # для самого JPG, у нас path = jpg.name.
+                out["by_artifact_file"][Path(f).name] = doc_id
+        kind = d.get("kind")
+        if kind in ("egrn_extract", "egrul_extract", "egrip_extract"):
+            for cn in (d.get("subjects") or {}).get("cadastrals") or []:
+                out["by_extract_cad"][(str(cn), kind)] = doc_id
+    return out
+
+
+def resolve_doc_id(meta: dict, doc_index: dict, jpg_name: str | None = None) -> str | None:
+    """Резолв `doc_id` для JPG по приоритету источников (контракт EXIF v1.1).
+
+    Приоритет:
+      1. by_artifact_file[<jpg_name>] — точная привязка через documents.json.
+      2. by_extract_cad[(cad, kind)] — для выписок: первая ЕГРН-выписка для
+         этого КН (fallback когда artifacts не зафиксированы поименно).
+      3. None — поле остаётся `null` (старая семантика v1).
+    """
+    if jpg_name and jpg_name in (doc_index.get("by_artifact_file") or {}):
+        return doc_index["by_artifact_file"][jpg_name]
+    cad = meta.get("cad")
+    kind = meta.get("kind")
+    kind_map = {"egrn": "egrn_extract", "egrul": "egrul_extract",
+                "egrip": "egrip_extract"}
+    mapped_kind = kind_map.get(kind)
+    if cad and mapped_kind:
+        return (doc_index.get("by_extract_cad") or {}).get((str(cad), mapped_kind))
+    return None
+
+
 def resolve_doc_graph_node_id(meta: dict, gidx: dict) -> str | None:
     """Резолв `graph_node_id` для JPG-документа по приоритету источников.
 
-    Приоритет:
-      1. cad (привязка к КН-объекту) → `by_cad_number[cn]` или fallback `cn`;
-      2. inn ЮЛ/бенефициара → `by_ben_inn[inn]` или fallback `legal::inn::<inn>`;
-      3. ogrn → `by_ben_ogrn[ogrn]` или fallback `legal::ogrn::<ogrn>`.
+    Приоритет (EXIF schema v1.1 + контракт KMZ 2.12.0 §6):
+      1. doc_id → `doc::<doc_id>` (стабильная формула документ-узла, не
+         требует sidecar; v1.1+);
+      2. cad (привязка к КН-объекту) → `by_cad_number[cn]` или fallback `cn`;
+      3. inn ЮЛ/бенефициара → `by_ben_inn[inn]` или fallback `legal::inn::<inn>`;
+      4. ogrn → `by_ben_ogrn[ogrn]` или fallback `legal::ogrn::<ogrn>`.
     `bu_id` от 07-индекса намеренно не используется: его формула в графе
     (`bu::<sha1>(...)` от 04) не воспроизводима без sidecar.
     """
+    doc_id = meta.get("doc_id")
+    if doc_id:
+        return f"doc::{doc_id}"
     cad = meta.get("cad")
     if cad:
         return (gidx.get("by_cad_number", {}) or {}).get(cad) or cad
@@ -968,6 +1033,13 @@ def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
         cp(f"  graph_node_index.json: by_cad={len(gidx.get('by_cad_number', {}))} · "
            f"by_inn={len(gidx.get('by_ben_inn', {}))} · "
            f"by_ogrn={len(gidx.get('by_ben_ogrn', {}))}", C.CY)
+
+    # Sidecar documents.json — резолв `doc_id` для JPG (EXIF v1.1, контракт
+    # KMZ 2.12.0 §5). Без файла — поле `doc_id` остаётся null (старая семантика).
+    doc_index = load_documents_index(root)
+    if doc_index.get("by_artifact_file") or doc_index.get("by_extract_cad"):
+        cp(f"  documents.json: by_file={len(doc_index['by_artifact_file'])} · "
+           f"by_extract_cad={len(doc_index['by_extract_cad'])}", C.CY)
 
     # .doc/.docx → PDF: сначала LibreOffice, затем MS Word (Windows + comtypes)
     n_office = sum(1 for p in files if p.suffix.lower() in (".doc", ".docx"))
@@ -1080,10 +1152,16 @@ def convert_pdfs(root: Path, idx: dict, dpi: int = 200) -> None:
                 "center_lon": center_lon,
                 "height_m": height_m,             # высота объекта над землёй
                 "altitude_amsl_m": altitude_amsl_m,  # AMSL (этаж/потолок) — на будущее
-                # Связь с узлом графа (контракт KMZ 2.11.0 §5). Если узел известен —
-                # значение совпадает с `id` узла в graph.html. Позволяет в будущем
-                # из-описания объекта/документа в viewer'е переходить на узел графа.
-                "graph_node_id": resolve_doc_graph_node_id(meta, gidx),
+                # doc_id — ссылка на запись в documents.json (EXIF v1.1+,
+                # контракт KMZ 2.12.0 §5). Если sidecar отсутствует — None.
+                "doc_id": resolve_doc_id(meta, doc_index, jpg.name),
+                # Связь с узлом графа (контракт KMZ 2.11.0 §5 + 2.12.0 §6
+                # формула doc::<doc_id>). Если узел известен — значение
+                # совпадает с `id` узла в graph.html.
+                "graph_node_id": resolve_doc_graph_node_id(
+                    {**meta, "doc_id": resolve_doc_id(meta, doc_index, jpg.name)},
+                    gidx,
+                ),
                 "ts": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
             }
             write_exif(jpg, center_lat, center_lon, altitude_amsl_m, descr, ucomment)
