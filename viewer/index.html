@@ -1170,6 +1170,10 @@ html.role-embed #ver-switch{display:none!important}
     <div id="export-menu" onclick="event.stopPropagation()"></div>
   </div>
   <button id="share-btn" onclick="copyShareLink()" style="display:none">🔗 Поделиться</button>
+  <!-- B2 (multi-kmz-timeline-phase1): dropdown «текущая дата T» для multi-extract.
+       Виден только при ≥2 загруженных KMZ; cascade extractDate через
+       `<Document><ExtendedData>` → filename `_YYYY-MM-DD.kmz$` → «—». -->
+  <select id="kmz-date-switch" title="Текущая дата T (multi-extract)" onchange="setActiveKMZLayer(+this.value)" style="display:none;margin-left:6px;font:11px 'JetBrains Mono',ui-monospace,monospace;padding:3px 6px;background:var(--surface);color:var(--fg);border:1px solid var(--border);border-radius:5px"></select>
   <div id="stats">
     <div class="stat"><span class="stat-val" id="stat-total">0</span><span class="stat-lbl">фото</span></div>
     <div class="stat"><span class="stat-val" id="stat-gps">0</span><span class="stat-lbl">с GPS</span></div>
@@ -4813,6 +4817,22 @@ function parseKML(xmlText,filename){
   const docEl = doc.getElementsByTagName('Document')[0];
   const docName = (docEl && (childText(docEl, 'name') || childText(docEl, 'n'))) || filename.replace(/\.kml$/i,'');
 
+  // Capture `<Document>`-level `<ExtendedData>` direct children (контракт KMZ 2.12.0 §5:
+  // `<Data name="extract_date">YYYY-MM-DD</Data>` + другие doc-метаданные).
+  // Только прямые `<Data>` дети `<ExtendedData>` под `<Document>` — не путать с
+  // placemark-level ExtendedData (тот парсится отдельно ниже).
+  const docExtData = {};
+  if(docEl){
+    for(const ed of Array.from(docEl.children).filter(c=>c.tagName==='ExtendedData')){
+      for(const d of Array.from(ed.children).filter(c=>c.tagName==='Data')){
+        const nm = d.getAttribute('name');
+        if(!nm) continue;
+        const valEl = Array.from(d.children).find(c=>c.tagName==='value');
+        docExtData[nm] = valEl ? (valEl.textContent || '').trim() : '';
+      }
+    }
+  }
+
   // Build style table: id → resolved style block. We also preserve the raw
   // styleUrl on each placemark so downstream consumers (e.g. the marker list
   // grouping in renderMarksList) can classify by "cad_zu_/cad_oks_/cad_exp_".
@@ -4898,7 +4918,7 @@ function parseKML(xmlText,filename){
       placemarks.push({type:'None', name, desc, style, styleUrl, coords:null, ext});
     }
   }
-  return {docName, filename, placemarks};
+  return {docName, filename, placemarks, docExtData};
 }
 
 // Extracted style-table builder (unchanged behaviour, factored out so parseKML
@@ -5011,6 +5031,60 @@ let _kmzActiveBlobMap = {};
 let _kmzAttachBlobs = {};
 // v2.10.0: graph.html (ownership graph) from the last loaded KMZ, in-memory only.
 let _kmzGraphHtml = null;
+// B2 (multi-kmz-timeline-phase1): индекс активного KMZ-слоя в kmlLayers[].
+// При >=2 KMZ user переключает через dropdown #kmz-date-switch → setActiveKMZLayer().
+let _activeLayerIdx = -1;
+
+// B2: переключить активный KMZ-слой: видим на карте только chosen, остальные
+// скрываются (layer.visible=false + map.removeLayer). Граф iframe обновляется
+// на graph.html выбранного слоя (singleton `_kmzGraphHtml` отслеживает активный).
+function setActiveKMZLayer(idx){
+  if(idx<0||idx>=kmlLayers.length) return;
+  _activeLayerIdx = idx;
+  for(let i=0;i<kmlLayers.length;i++){
+    const L = kmlLayers[i];
+    if(!L || !L.layerGroup) continue;
+    if(i===idx){
+      if(!map.hasLayer(L.layerGroup)) L.layerGroup.addTo(map);
+      L.visible = true;
+    }else{
+      if(map.hasLayer(L.layerGroup)) map.removeLayer(L.layerGroup);
+      L.visible = false;
+    }
+  }
+  _kmzGraphHtml = kmlLayers[idx]?.graphHtml || null;
+  if(typeof _refreshGraphTab === 'function') _refreshGraphTab();
+  // Если граф открыт — пересоздать srcdoc.
+  const fr = document.getElementById('graph-frame');
+  if(fr && _kmzGraphHtml && fr.srcdoc !== _kmzGraphHtml) fr.srcdoc = _kmzGraphHtml;
+  if(typeof renderList === 'function') renderList();
+}
+
+// B2: построить/обновить dropdown «текущая дата» по списку kmlLayers.
+// Видим только при `kmlLayers.length >= 2`. KMZ без resolved extractDate — в
+// dropdown с меткой «—» (decision из планирования).
+function _refreshKmzDateSwitch(){
+  const sel = document.getElementById('kmz-date-switch');
+  if(!sel) return;
+  if(kmlLayers.length < 2){ sel.style.display='none'; sel.innerHTML=''; return; }
+  // Сортировка: по extractDate (ISO) восходяще; layers без даты — в конец.
+  const order = kmlLayers.map((L,i)=>({i, d:L.extractDate||''}))
+    .sort((a,b)=>{
+      if(a.d && b.d) return a.d.localeCompare(b.d);
+      if(a.d) return -1;
+      if(b.d) return 1;
+      return a.i - b.i;
+    });
+  sel.innerHTML = order.map(({i, d})=>{
+    const L = kmlLayers[i];
+    const label = d || '—';
+    const fname = L.filename || `KMZ ${i+1}`;
+    const sel2 = i===_activeLayerIdx ? ' selected' : '';
+    return `<option value="${i}"${sel2}>${label} — ${esc(fname)}</option>`;
+  }).join('');
+  sel.style.display = '';
+}
+
 // Поиск документа по `doc_id` среди всех загруженных KMZ-слоёв
 // (sidecar `_data/documents.json`, контракт 2.12.0 §5). Первое попадание
 // побеждает — фаза 1, без cross-layer merge.
@@ -5244,15 +5318,52 @@ async function loadKMZFromFile(file, displayName, localRootDir=null){
       );
     }
 
-    // ── 5. Load KML layer (contours, annotations, etc.) ───────────
-    const kmzLabel = label.replace(/\.kmz$/i,'');
-    await _loadKMLFromText(patchedKML, kmzLabel, null, {documentsIndex});
-
     // ── 5b. graph.html (v2.10.0) → «Граф связей» sidebar tab ──────
+    // B2: каждый KMZ может нести свой graph.html; хранится per-layer.
     const ghKey = Object.keys(zip.files).find(k =>
       !zip.files[k].dir && /(^|\/)graph\.html$/i.test(k));
-    _kmzGraphHtml = ghKey ? await zip.files[ghKey].async('string') : null;
+    const graphHtml = ghKey ? await zip.files[ghKey].async('string') : null;
+
+    // B2: cascade `extract_date` (контракт KMZ 2.12.0 §5):
+    //   1) `<Document><ExtendedData><Data name="extract_date">` (если parseKML извлёк);
+    //   2) filename regex `_(YYYY-MM-DD).kmz$` (convention 015 §4);
+    //   3) null — в dropdown будет помечен «—».
+    let extractDate = null;
+    try{
+      // parseKML вызывается внутри _loadKMLFromText ниже, поэтому повторно
+      // парсим только нужный тег здесь. Если на это уйдёт ощутимо — позже
+      // вынесем в общий parse-pass.
+      const tmpDoc = (new DOMParser()).parseFromString(patchedKML, 'application/xml');
+      const tmpDocEl = tmpDoc.getElementsByTagName('Document')[0];
+      if(tmpDocEl){
+        for(const ed of Array.from(tmpDocEl.children).filter(c=>c.tagName==='ExtendedData')){
+          for(const d of Array.from(ed.children).filter(c=>c.tagName==='Data')){
+            if(d.getAttribute('name')==='extract_date'){
+              const v = Array.from(d.children).find(c=>c.tagName==='value');
+              const txt = v ? (v.textContent||'').trim() : '';
+              if(/^\d{4}-\d{2}-\d{2}$/.test(txt)){ extractDate = txt; break; }
+            }
+          }
+          if(extractDate) break;
+        }
+      }
+    }catch(_){}
+    if(!extractDate){
+      const m = label.match(/_(\d{4}-\d{2}-\d{2})\.kmz$/i);
+      if(m) extractDate = m[1];
+    }
+
+    // ── 5. Load KML layer (contours, annotations, etc.) ───────────
+    const kmzLabel = label.replace(/\.kmz$/i,'');
+    await _loadKMLFromText(patchedKML, kmzLabel, null, {documentsIndex, graphHtml, extractDate});
+
+    // Активный graph — последний загруженный (если только один KMZ — он же
+    // и активный). При multi-KMZ пользователь переключает через
+    // `setActiveKMZLayer` → singleton `_kmzGraphHtml` обновится там же.
+    _kmzGraphHtml = graphHtml;
+    _activeLayerIdx = kmlLayers.length - 1;
     if(typeof _refreshGraphTab === 'function') _refreshGraphTab();
+    if(typeof _refreshKmzDateSwitch === 'function') _refreshKmzDateSwitch();
 
     // ── 6. Register extracted photo placemarks as app photos ──────
     let photoAdded = 0;
@@ -5865,6 +5976,8 @@ async function _loadKMLFromText(text, displayName, handle, extras){
     kmlText: text,        // raw KML — kept in sync after every kdConfirm save-to-layer
     handle: handle||null, // FSA writable handle — null on legacy upload path
     documentsIndex: extras?.documentsIndex || null, // sidecar `_data/documents.json` (KMZ 2.12.0 §5), per-layer
+    graphHtml: extras?.graphHtml || null,           // per-layer graph.html (B2: multi-KMZ timeline)
+    extractDate: extras?.extractDate || null,       // ISO YYYY-MM-DD (B2: cascade — docExtData → filename → null)
   });
   updateKMLButton();
   saveKMLLayersToStorage();if(typeof renderMarksList==='function'&&_activeSidebarTab==='marks')renderMarksList();
@@ -7392,7 +7505,7 @@ async function viewerNav(dir){
 function updateStats(){document.getElementById('stat-total').textContent=photos.length;document.getElementById('stat-gps').textContent=photos.filter(p=>p.lat!=null).length;document.getElementById('stat-angle').textContent=photos.filter(p=>p.bearing!=null).length;}
 function onAutoSaveCbChange(cb){document.getElementById('auto-save-label').classList.toggle('active-label',cb.checked);try{localStorage.setItem('autoSaveEXIF',cb.checked?'1':'0');}catch(_){}}
 (function(){try{if(localStorage.getItem('autoSaveEXIF')==='1'){document.getElementById('auto-save-cb').checked=true;document.getElementById('auto-save-label').classList.add('active-label');}}catch(_){}})();
-function clearAll(){closeLightbox();closeViewer();exitManualGPSMode();photos.forEach(p=>{if(p.marker)map.removeLayer(p.marker);if(!p.isRemote&&p.displayUrl)URL.revokeObjectURL(p.displayUrl);});photos=[];activeIdx=null;remotePhotos=[];selectedFolderPath=null;folderTreeExpanded={};emptyFolders=[];document.getElementById('folder-filter-banner').classList.remove('visible');updateFolderTreePanel();updateStats();renderList();updateInviteButton();document.getElementById('map-hint').classList.remove('hidden');document.getElementById('share-btn').style.display='none';_kmzGraphHtml=null;if(typeof _refreshGraphTab==='function')_refreshGraphTab();showToast('Всё очищено');}
+function clearAll(){closeLightbox();closeViewer();exitManualGPSMode();photos.forEach(p=>{if(p.marker)map.removeLayer(p.marker);if(!p.isRemote&&p.displayUrl)URL.revokeObjectURL(p.displayUrl);});photos=[];activeIdx=null;remotePhotos=[];selectedFolderPath=null;folderTreeExpanded={};emptyFolders=[];document.getElementById('folder-filter-banner').classList.remove('visible');updateFolderTreePanel();updateStats();renderList();updateInviteButton();document.getElementById('map-hint').classList.remove('hidden');document.getElementById('share-btn').style.display='none';_kmzGraphHtml=null;_activeLayerIdx=-1;if(typeof _refreshGraphTab==='function')_refreshGraphTab();if(typeof _refreshKmzDateSwitch==='function')_refreshKmzDateSwitch();showToast('Всё очищено');}
 function setProgress(pct){document.getElementById('load-progress-bar').style.width=pct+'%';document.getElementById('load-progress').classList.toggle('active',pct>0&&pct<100);}
 let _tt=null;function showToast(msg,type='info',dur=2800,onClick=null){const t=document.getElementById('toast');t.innerHTML=msg;const bg={info:'var(--surface)',success:'#0f2a0f',error:'#2a0f0f',warn:'#2a200a'};const bc={info:'var(--border)',success:'#22c55e',error:'#ef4444',warn:'#f59e0b'};t.style.background=bg[type]||bg.info;t.style.borderColor=bc[type]||bc.info;t.style.cursor=onClick?'pointer':'';t.onclick=onClick||null;t.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>{t.classList.remove('show');t.onclick=null;t.style.cursor='';},dur);}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
