@@ -156,7 +156,9 @@ resolution prompt (см. §13).
 
 ### §4.1 Источник истины
 
-Sidecar JSON в корне проекта, append-only, git-trackable. БД-таблица
+Sidecar JSON в корне проекта по фиксированному пути
+**`<project>/_data/documents.json`** (зафиксировано CORRESPONDENCE/016 §C
+по запросу viewer-team). Append-only, git-trackable. БД-таблица
 `documents` (генерируется через `egrn_parser reindex-documents` — см. §14
 PR-β) используется только для быстрых запросов отчётами; ground-truth —
 JSON.
@@ -227,13 +229,26 @@ JSON.
         }
       ],
       "artifacts": [{"file": "docs/purchase_2026-02-20.jpg",
-                     "sha256": "ef56...", "page_count": 4}],
+                     "sha256": "ef56...", "page_count": 4,
+                     "external_url": "https://disk.yandex.ru/i/abc123"}],
       "source_id": null,
       "notes": "Купля-продажа от ООО Прежний-Собственник → ООО АКМЕ-ПРОМ"
     }
   ]
 }
 ```
+
+**Поле `artifacts[].external_url`** (опциональное, добавлено по запросу
+viewer-team CORRESPONDENCE/014 §B / 015 §3 / 016 §3): прямая URL-ссылка
+на JPG (Yandex.Disk, S3, etc.) для remote-fetch fallback в lightbox UX.
+Используется viewer-lightbox когда `doc_id` указан в deeplink, но
+JPG не загружен локально. Parser-internal; не валидируется парсером.
+
+**Sidecar внутри KMZ-архива** (контракт KMZ 2.12.0 §5, зафиксировано
+по запросу viewer-team CORRESPONDENCE/016 §3): `08_build_kmz_v2_2`
+копирует `<project>/_data/documents.json` в KMZ как
+**`_data/documents.json`** (тот же путь). Опционально: если файл
+в проекте отсутствует — sidecar в KMZ не появляется.
 
 ### §4.3 `kind` enumeration
 
