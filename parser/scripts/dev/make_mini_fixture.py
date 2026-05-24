@@ -154,15 +154,147 @@ GRAPH_INDEX = {
 }
 
 
-def build(out_dir: Path) -> Path:
+def _write_documents_overlay(out_dir: Path) -> None:
+    """Записывает `_data/documents.json` с фикстурой выписки + overlay (PR-β).
+
+    Структура (см. dev/SPEC_TEMPORAL_REPORTS.md §4.2):
+      • ee_demo01 — ЕГРН-выписка 2026-01-15 (база snapshot).
+      • nr_demo01 — нотариальное снятие ареста 2026-03-01 (overlay).
+      • ee_demo02 — новая ЕГРН-выписка 2026-04-15 (поглощает overlay).
+    """
+    docs = {
+        "schema_version": "1.0",
+        "project_slug": "demo",
+        "documents": [
+            {
+                "doc_id": "ee_demo01", "kind": "egrn_extract",
+                "doc_date": "2026-01-15",
+                "subjects": {"cadastrals": ["61:44:0050706:31"]},
+                "effects": [],
+                "artifacts": [{"file": "docs/egrn_demo01.jpg"}],
+            },
+            {
+                "doc_id": "nr_demo01", "kind": "notarial_release",
+                "doc_date": "2026-03-01",
+                "subjects": {"cadastrals": ["61:44:0050706:31"]},
+                "effects": [{
+                    "op": "remove",
+                    "target": "cadastre_objects[id=c2].restrictions",
+                    "payload": {"type": "арест"},
+                }],
+                "artifacts": [{"file": "docs/release_2026-03-01.jpg",
+                               "external_url": "https://disk.yandex.ru/i/demo"}],
+            },
+            {
+                "doc_id": "ee_demo02", "kind": "egrn_extract",
+                "doc_date": "2026-04-15",
+                "subjects": {"cadastrals": ["61:44:0050706:31"]},
+                "effects": [],
+                "artifacts": [{"file": "docs/egrn_demo02.jpg"}],
+            },
+        ],
+    }
+    (out_dir / "_data" / "documents.json").write_text(
+        json.dumps(docs, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _write_osv_stub(out_dir: Path) -> None:
+    """ОСВ-стуб для PR-ε (ОСВ-сверка) — кэш данных в JSON.
+
+    Фикстура содержит и совпадение по КН с structure.json (61:44:0050706:1),
+    и orphan-запись без соответствия в кадастре (несовпадение → попадает в
+    отчёт «есть в ОСВ, нет в кадастре»).
+    """
+    osv = {
+        "schema_version": "1.0",
+        "exported_at": "2026-04-10T10:00:00Z",
+        "rows": [
+            {"row_n": 1, "account": "01.01", "inv_number": "ОС-001",
+             "name": "Земельный участок 61:44:0050706:1",
+             "cn_hints": ["61:44:0050706:1"],
+             "open_dt": 1_500_000.00, "close_dt": 1_500_000.00},
+            {"row_n": 2, "account": "01.01", "inv_number": "ОС-002",
+             "name": "Хозблок с погребом, литер Г",  # principal_unregistered (нет КН)
+             "cn_hints": [],
+             "open_dt": 250_000.00, "close_dt": 250_000.00},
+            {"row_n": 3, "account": "08", "inv_number": "ОНС-007",
+             "name": "Затраты на строительство мансарды",
+             "cn_hints": [],
+             "open_dt": 1_200_000.00, "close_dt": 1_350_000.00},
+        ],
+    }
+    (out_dir / "_data" / "osv_cache.json").write_text(
+        json.dumps(osv, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _add_pledge_chain(structure: dict) -> dict:
+    """Добавляет в structure.json фикстуру для founder-chain pledge BFS (PR-β/γ).
+
+    Расширяет `beneficiaries`:
+      • ben_main — наш enterprise (head ЮЛ).
+      • ben_holding — материнский ЮЛ с залогом доли (`has_pledge=true`).
+      • ben_bank — залогодержатель доли (исключается из обхода).
+    Добавляет cadastre_objects[].restrictions с залогом самого объекта на c2.
+    """
+    structure = {**structure}
+    structure["beneficiaries"] = {
+        "ben_main": {
+            "_kind": "legal",
+            "attrs": {"Полное наименование": "ООО ДЕМО-ПРОМ",
+                      "ИНН": "6164098765", "ОГРН": "1026100000001"},
+            "Бенефициар (ключ)": "ben_holding",
+            "has_pledge": False,
+        },
+        "ben_holding": {
+            "_kind": "legal",
+            "attrs": {"Полное наименование": "ООО ДЕМО-ХОЛДИНГ",
+                      "ИНН": "7700000001"},
+            "has_pledge": True,
+            "Обременения доли": [{
+                "Тип обременения": "залог",
+                "Договор залога": {"Номер": "12/2025", "Дата": "2025-06-15"},
+                "Сведения о залогодержателе": {
+                    "Наименование": "АО ДЕМО-БАНК",
+                    "ИНН": "7700000099",
+                },
+            }],
+        },
+        "ben_bank": {
+            "_kind": "legal",
+            "attrs": {"Полное наименование": "АО ДЕМО-БАНК",
+                      "ИНН": "7700000099"},
+        },
+    }
+    # Залог самого объекта на c2 (здание).
+    new_cads = []
+    for cad in structure.get("cadastre_objects", []):
+        if cad.get("id") == "c2":
+            cad = {**cad, "restrictions": [{
+                "type": "ипотека",
+                "beneficiary_name": "АО ДЕМО-БАНК",
+                "beneficiary_inn": "7700000099",
+                "contract": "ИП-345/2025-09-01",
+            }]}
+        new_cads.append(cad)
+    structure["cadastre_objects"] = new_cads
+    return structure
+
+
+def build(out_dir: Path, *, with_pledge_chain: bool = False,
+          with_osv: bool = False, with_overlay: bool = False) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "_data").mkdir(exist_ok=True)
     (out_dir / "_data" / "nspd_cache").mkdir(exist_ok=True)
     (out_dir / "Документы_JPG").mkdir(exist_ok=True)
     (out_dir / "Фотографии").mkdir(exist_ok=True)
 
+    structure = _add_pledge_chain(STRUCTURE) if with_pledge_chain else STRUCTURE
     (out_dir / "_data" / "structure.json").write_text(
-        json.dumps(STRUCTURE, ensure_ascii=False, indent=2), encoding="utf-8")
+        json.dumps(structure, ensure_ascii=False, indent=2), encoding="utf-8")
+    if with_overlay:
+        _write_documents_overlay(out_dir)
+    if with_osv:
+        _write_osv_stub(out_dir)
     (out_dir / "_data" / "nspd_cache" / "cache.json").write_text(
         json.dumps(CACHE, ensure_ascii=False, indent=2), encoding="utf-8")
     (out_dir / "_data" / "graph.html").write_text(GRAPH_HTML, encoding="utf-8")
@@ -184,19 +316,30 @@ def build(out_dir: Path) -> Path:
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
-        print(__doc__)
-        return 2
-    out_dir = Path(sys.argv[1]).expanduser().resolve()
+    import argparse
+    p = argparse.ArgumentParser(description="mini-fixture KMZ для viewer/parser-тестов")
+    p.add_argument("out_dir", type=Path, help="папка для проекта (пустая или новая)")
+    p.add_argument("--with-pledge-chain", action="store_true",
+                   help="добавить founder-chain с залогом доли + restrictions объекта (PR-β/γ)")
+    p.add_argument("--with-osv", action="store_true",
+                   help="добавить _data/osv_cache.json — стуб ОСВ для PR-ε")
+    p.add_argument("--with-overlay", action="store_true",
+                   help="добавить _data/documents.json — выписка+overlay+выписка (PR-β/γ)")
+    args = p.parse_args()
+    out_dir = args.out_dir.expanduser().resolve()
     if out_dir.exists() and any(out_dir.iterdir()):
         print(f"[!] {out_dir} не пуста — отказываюсь перетирать. "
               "Удалите вручную или укажите пустую/несуществующую папку.",
               file=sys.stderr)
         return 1
-    kmz = build(out_dir)
+    kmz = build(out_dir, with_pledge_chain=args.with_pledge_chain,
+                with_osv=args.with_osv, with_overlay=args.with_overlay)
     print(f"[+] mini-fixture готова: {kmz}")
-    print(f"    Откройте в viewer (drag&drop), убедитесь что у маркеров КН/БУ/EQ/БЕН")
-    print(f"    в `<ExtendedData>` есть `graph_node_id`, и кнопка 🕸 работает.")
+    flags = [f for f, v in (("pledge-chain", args.with_pledge_chain),
+                            ("osv", args.with_osv),
+                            ("overlay", args.with_overlay)) if v]
+    if flags:
+        print(f"    Включены extension'ы: {', '.join(flags)}")
     return 0
 
 
