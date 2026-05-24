@@ -104,6 +104,75 @@ def load_enriched(root: Path) -> dict:
     return {}
 
 
+# ─── Report 3: Фотоотчёт (PR-ζ) ─────────────────────────────────────────────
+
+
+def build_photo_report(
+    root: Path,
+    structure: dict,
+    documents: list[dict],
+    out_path: Path,
+) -> Path | None:
+    """Фотоотчёт по проекту (§8.5 spec'а).
+
+    Делегирует работу `06_photo_report_to_docx_v3.py` (DOCX-native через
+    python-docx с SEQ/TOC/EXIF/COM-обновлением — §17.2..§17.10).
+    Источник фото: `<project>/images/` или `<project>/Фотографии/`
+    (в обоих местах смотрим). Подписи обогащаются `doc_id` из EXIF
+    UserComment payload (EXIF schema v1.1, контракт KMZ 2.12.0 §5).
+
+    Возвращает путь к DOCX или None если фото не найдены.
+    """
+    photos_root = None
+    for candidate in (root / "images", root / "Фотографии",
+                      root / "Документы_JPG"):
+        if candidate.exists() and any(candidate.rglob("*.jpg")):
+            photos_root = candidate
+            break
+    if photos_root is None:
+        return None
+
+    # Импортируем 06 как библиотеку (имя начинается с цифры — через importlib).
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "_06_photo", SCRIPTS / "pirushin_sosn_rocha_06_photo_report_to_docx_v3.py")
+    if spec is None or spec.loader is None:
+        cp("  ⚠ 06_photo_report_to_docx_v3.py не найден или не загружается.", C.Y)
+        return None
+    photo_mod = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(photo_mod)
+    except ImportError as e:
+        cp(f"  ⚠ 06 module load failed: {e} "
+           "(нужны python-docx + pillow).", C.Y)
+        return None
+    except Exception as e:
+        cp(f"  ⚠ 06 module exec_module failed: {e}", C.Y)
+        return None
+
+    # Используем 06.build() через подмену корневой папки.
+    # 06 ожидает interactive ask_dir → main() — у нас prepared path.
+    try:
+        import tempfile
+        doc = photo_mod.setup_document()
+        photo_mod.add_table_of_contents(doc)
+        state = photo_mod.BuildState()
+        tmp_dir = Path(tempfile.mkdtemp(prefix="ekcelo_09_photo_"))
+        try:
+            sections: list = []
+            photo_mod.collect_sections(photos_root, photos_root, sections)
+            total = sum(len(images) for _, images in sections)
+            photo_mod.emit_sections(doc, sections, photos_root, state, tmp_dir, total)
+            doc.save(str(out_path))
+        finally:
+            import shutil
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+    except Exception as e:
+        cp(f"  ⚠ Сборка фотоотчёта упала: {e}", C.Y)
+        return None
+    return out_path
+
+
 # ─── Report 1: ОСВ-сверка (PR-ε) ────────────────────────────────────────────
 
 
@@ -483,7 +552,15 @@ def run_session(root: Path, target_date: date) -> int:
                 build_pledge_report(structure, documents, target_date, b)
             _save_all(builders, out_dir, f"report_pledges_{ts}")
         elif choice == "3":
-            cp("  Фотоотчёт пока не реализован (см. PR-ζ).", C.Y)
+            out = build_photo_report(
+                root, structure, documents,
+                out_dir / f"report_photo_{ts}.docx",
+            )
+            if out:
+                cp(f"  ✓ {out}", C.G)
+            else:
+                cp("  ⚠ Фото не найдены (images/ или Фотографии/) или "
+                   "недоступен python-docx/pillow.", C.Y)
         elif choice == "4":
             new_fmt = ask("Выберите md / docx / both", default=fmt).lower()
             if new_fmt in ("md", "docx", "both"):

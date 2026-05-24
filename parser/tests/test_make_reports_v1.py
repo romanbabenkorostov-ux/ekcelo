@@ -133,6 +133,14 @@ def test_load_osv_returns_none_when_missing(tmp_path: Path):
     assert _09.load_osv(tmp_path) is None
 
 
+def test_build_photo_report_returns_none_when_no_photos(tmp_path: Path):
+    """PR-ζ: фотоотчёт graceful-skip когда фото нет."""
+    (tmp_path / "_data").mkdir()
+    out = _09.build_photo_report(tmp_path, {}, [],
+                                  tmp_path / "report.docx")
+    assert out is None
+
+
 def test_cli_smoke_help(tmp_path: Path):
     """CLI запускается без ошибок и выводит usage."""
     res = subprocess.run(
