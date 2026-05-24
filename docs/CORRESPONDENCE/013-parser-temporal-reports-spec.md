@@ -7,6 +7,14 @@
   §9 контракта S6+ (informative bullet); 012 (continuation)
 - **Status:** review request — приглашаем команду B оставить комментарии до 2026-06-07
 
+> **Update 2026-05-24 (in-PR amendment):** spec §9 переработан под
+> dual-emission (один builder ↔ MD + DOCX-native рендереры) вместо
+> MD→DOCX конвертации. В §17 добавлен каталог заимствований из готового
+> `parser/scripts/pirushin_sosn_rocha_06_photo_report_to_docx_v3.py`
+> (SEQ-поля, TOC, COM-обновление, EXIF, иерархические заголовки H2..H9,
+> подгонка 3 фото/A4). В §8 меню добавлен пункт 3 «Фотоотчёт по
+> проекту» (PR-ζ). Roadmap §14 расширен до PR-α..η.
+
 ## 1. Что выпустили
 
 Spec `dev/SPEC_TEMPORAL_REPORTS.md` v1 (draft, parser-internal),
