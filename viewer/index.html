@@ -4394,11 +4394,12 @@ async function addLocalPhoto(file,locPath='',fileHandle=null){
   // Now the merge is automatic and across all sourceTypes.
   const displayUrl=URL.createObjectURL(file);
   let lat=null,lon=null,bearing=null,altitude=null,date='',gppData=null;
-  try{const e=await exifr.parse(file,{gps:true,tiff:true,exif:true,ifd0:true,translateValues:true});if(e){lat=e.latitude??e.GPSLatitude??null;lon=e.longitude??e.GPSLongitude??null;bearing=e.GPSImgDirection!=null?parseFloat(e.GPSImgDirection):null;altitude=e.GPSAltitude??null;date=e.DateTimeOriginal??e.DateTime??'';gppData=parseGPPUserComment(e);}}catch(err){}
+  let ekceloData=null;
+  try{const e=await exifr.parse(file,{gps:true,tiff:true,exif:true,ifd0:true,translateValues:true});if(e){lat=e.latitude??e.GPSLatitude??null;lon=e.longitude??e.GPSLongitude??null;bearing=e.GPSImgDirection!=null?parseFloat(e.GPSImgDirection):null;altitude=e.GPSAltitude??null;date=e.DateTimeOriginal??e.DateTime??'';gppData=parseGPPUserComment(e);ekceloData=parseEkceloUserComment(e);}}catch(err){}
   const dateMismatch=detectDateMismatch(file,date);
   // v2.9.60 (Task 38): track first local source folder for dedup-log default save path
   if(!_dedupBatchFolder && locPath) _dedupBatchFolder = locPath.split('/')[0] || locPath;
-  addOrEnrichPhoto({name:file.name,size:file.size,displayUrl,thumbUrl:displayUrl,lat,lon,bearing,altitude,date,isRemote:false,file,fileHandle,experimentData:gppData||null,locPath,dateMismatch,sourceType:'local'});
+  addOrEnrichPhoto({name:file.name,size:file.size,displayUrl,thumbUrl:displayUrl,lat,lon,bearing,altitude,date,isRemote:false,file,fileHandle,experimentData:gppData||null,docMeta:ekceloData||null,locPath,dateMismatch,sourceType:'local'});
   return true;
 }
 function detectDateMismatch(file,dateExif){if(!file?.lastModified||!dateExif)return false;const m=String(dateExif).match(/(\d{4})[:\-](\d{2})[:\-](\d{2})[T\s](\d{2})[:\-](\d{2})[:\-](\d{2})/);if(!m)return false;try{return Math.abs(new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+m[6]).getTime()-file.lastModified)>60000;}catch{return false;}}
@@ -4462,7 +4463,7 @@ function addOrEnrichPhoto(photo){
     };
     // Enrich: fill only what existing lacks
     const enrichedFields = [];
-    const ENRICHABLE = ['lat','lon','bearing','altitude','date','locPath','experimentData'];
+    const ENRICHABLE = ['lat','lon','bearing','altitude','date','locPath','experimentData','docMeta'];
     for(const k of ENRICHABLE){
       const cur = existing[k];
       const nw  = photo[k];
@@ -5010,6 +5011,17 @@ let _kmzActiveBlobMap = {};
 let _kmzAttachBlobs = {};
 // v2.10.0: graph.html (ownership graph) from the last loaded KMZ, in-memory only.
 let _kmzGraphHtml = null;
+// Поиск документа по `doc_id` среди всех загруженных KMZ-слоёв
+// (sidecar `_data/documents.json`, контракт 2.12.0 §5). Первое попадание
+// побеждает — фаза 1, без cross-layer merge.
+function _lookupDocument(docId){
+  if(!docId) return null;
+  for(const layer of kmlLayers){
+    const found = layer?.documentsIndex?.get?.(docId);
+    if(found) return found;
+  }
+  return null;
+}
 
 /* ── S5: overlay графа + переход маркер→узел (CONTRACT_KMZ 2.11.0) ── */
 function _graphNodeIdOf(m){
@@ -5197,6 +5209,24 @@ async function loadKMZFromFile(file, displayName, localRootDir=null){
     _kmzActiveBlobMap = blobMap;
     _kmzAttachBlobs = blobMap;   // persistent: survives the post-load reset below
 
+    // ── 2a. Опц. sidecar `_data/documents.json` (контракт KMZ 2.12.0 §5) ──
+    // Реестр документов проекта; используется lightbox'ом для документ-карточки
+    // и для remote-fetch по deeplink `#p=<имя>&d=<doc_id>`. Sidecar опционален;
+    // отсутствие — норма для старых KMZ (≤ 2.11.0) или проектов без документ-реестра.
+    let documentsIndex = null;
+    const docsKey = Object.keys(zip.files).find(k =>
+      !zip.files[k].dir && /^(.*\/)?_data\/documents\.json$/i.test(k)
+    );
+    if(docsKey){
+      try{
+        const docsJson = JSON.parse(await zip.files[docsKey].async('string'));
+        documentsIndex = new Map();
+        for(const d of (docsJson.documents || [])){
+          if(d?.doc_id) documentsIndex.set(d.doc_id, d);
+        }
+      }catch(_){ /* fail-safe: невалидный JSON → sidecar просто игнорируется */ }
+    }
+
     // ── 3. Detect photo placemarks BEFORE patching KML ───────────
     // Photo placemark = Point + description containing <img src="images/...">
     // We extract them as app photos, then remove them from the KML so
@@ -5216,7 +5246,7 @@ async function loadKMZFromFile(file, displayName, localRootDir=null){
 
     // ── 5. Load KML layer (contours, annotations, etc.) ───────────
     const kmzLabel = label.replace(/\.kmz$/i,'');
-    await _loadKMLFromText(patchedKML, kmzLabel, null);
+    await _loadKMLFromText(patchedKML, kmzLabel, null, {documentsIndex});
 
     // ── 5b. graph.html (v2.10.0) → «Граф связей» sidebar tab ──────
     const ghKey = Object.keys(zip.files).find(k =>
@@ -5238,6 +5268,17 @@ async function loadKMZFromFile(file, displayName, localRootDir=null){
       }
       const blobUrl = fileBlob ? URL.createObjectURL(fileBlob) : kp.blobUrl;
 
+      // EXIF UserComment v1.1: KMZ-извлечённые фото тоже несут payload `app:"ekcelo"`
+      // от 07_init_project_v2 (`doc_id`/`kind` и т.д.). До этого `experimentData` всегда
+      // был null для KMZ-фото — регрессия GPP-карточки тоже чинится здесь.
+      let kmzGppData=null,kmzEkceloData=null;
+      if(fileBlob){
+        try{
+          const e=await exifr.parse(fileBlob,{tiff:true,exif:true,gps:true,translateValues:true});
+          if(e){kmzGppData=parseGPPUserComment(e);kmzEkceloData=parseEkceloUserComment(e);}
+        }catch(_){}
+      }
+
       const photoObj = {
         name:       kp.name,
         size:       fileBlob?.size || 0,
@@ -5254,7 +5295,8 @@ async function loadKMZFromFile(file, displayName, localRootDir=null){
         locPath:    kp.locPath || '',
         dateMismatch: false,
         sourceType: 'kmz',
-        experimentData: null,
+        experimentData: kmzGppData,
+        docMeta:        kmzEkceloData,
       };
       if(photoObj.date) photoObj.dateObj = parsePhotoDate(photoObj.date);
       // v2.9.60 (Task 43): old guard
@@ -5803,7 +5845,7 @@ function _warnIfDuplicateCadnums(){
   return skip;
 }
 
-async function _loadKMLFromText(text, displayName, handle){
+async function _loadKMLFromText(text, displayName, handle, extras){
   const parsed = parseKML(text, displayName);
   // v2.9.58 (Task 9): dedup against already-loaded layers BEFORE rendering,
   // so duplicate placemarks don't even appear on the map. _dedupParsedPlacemarks
@@ -5822,6 +5864,7 @@ async function _loadKMLFromText(text, displayName, handle){
     cadPlacemarks: [],
     kmlText: text,        // raw KML — kept in sync after every kdConfirm save-to-layer
     handle: handle||null, // FSA writable handle — null on legacy upload path
+    documentsIndex: extras?.documentsIndex || null, // sidecar `_data/documents.json` (KMZ 2.12.0 §5), per-layer
   });
   updateKMLButton();
   saveKMLLayersToStorage();if(typeof renderMarksList==='function'&&_activeSidebarTab==='marks')renderMarksList();
@@ -7009,7 +7052,7 @@ async function openLightbox(idx,latlng){
   lb.classList.add('no-transition');lb.classList.add('visible');
   requestAnimationFrame(()=>{posLightbox(latlng,false);requestAnimationFrame(()=>lb.classList.remove('no-transition'));});
   setActiveMarker(idx);highlightTimelineDot(p);
-  _setLightboxFragment(p.name);
+  _setLightboxFragment(p.name, p.docMeta?.doc_id || null);
 }
 
 function buildRows(p){
@@ -7037,6 +7080,22 @@ function buildRows(p){
   if(p.dateMismatch)rows.push(`<tr><td colspan="2" style="font-size:9px;color:var(--warn);font-family:'JetBrains Mono',monospace;padding:3px 0">⚠ Дата файла ≠ дата съёмки</td></tr>`);
   const gpp=p.experimentData;
   if(gpp?.experiment){rows.push(`<tr><td colspan="2" style="background:rgba(232,255,71,.08);padding:5px 8px 4px;font-weight:700;color:var(--accent);font-size:10px;text-transform:uppercase;font-family:'JetBrains Mono',monospace;border-radius:4px">📋 Данные опыта</td></tr>`);const exp=gpp.experiment;if(exp.doc)addRow('Номер',exp.doc);if(exp.crop)addRow('Культура',exp.crop);if(exp.dt)addRow('Дата',exp.dt);}
+  // 📄 Документ (EXIF v1.1 + `_data/documents.json` lookup; контракт 2.12.0 §5)
+  const docId=p.docMeta?.doc_id;
+  if(docId){
+    rows.push(`<tr><td colspan="2" style="background:rgba(120,180,255,.08);padding:5px 8px 4px;font-weight:700;color:#7ab4ff;font-size:10px;text-transform:uppercase;font-family:'JetBrains Mono',monospace;border-radius:4px">📄 Документ <button class="gps-icon-btn" title="Открыть узел документа в графе" onclick="_openGraphFor('doc::${esc(docId)}')" style="margin-left:6px;vertical-align:middle">🕸</button></td></tr>`);
+    addRow('doc_id', docId);
+    const meta=p.docMeta;
+    if(meta.kind)      addRow('Тип', meta.kind);
+    if(meta.doc_date)  addRow('Дата документа', meta.doc_date);
+    if(meta.extract_number) addRow('Номер выписки', meta.extract_number);
+    const doc=_lookupDocument(docId);
+    if(doc){
+      const url=(doc.artifacts||[]).map(a=>a?.external_url).find(Boolean);
+      if(url) rows.push(`<tr><td style="color:var(--muted);font-size:10px;width:92px">Источник</td><td><a href="${esc(url)}" target="_blank" rel="noopener" style="color:#7ab4ff">🔗 Открыть</a></td></tr>`);
+      if(doc.notes && !meta.doc_date) addRow('Заметки', doc.notes);
+    }
+  }
   return rows.join('');
 }
 
@@ -7353,17 +7412,44 @@ async function fetchTimeout(url,ms=10000){const c=new AbortController();const t=
 async function resolveYandexHref(pub){const api=`https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=${encodeURIComponent(pub)}`;for(const mk of[u=>proxyUrl(u),...PUBLIC_PROXIES]){try{const r=await fetchTimeout(mk(api),8000);if(r.ok){const d=await r.json();if(d.href)return d.href;}}catch(_){}}throw new Error('Яндекс API недоступен');}
 async function fetchBlob(href){if(YANDEX_PROXY){const r=await fetchTimeout(proxyUrl(href),30000);if(r.ok)return r.blob();}for(const mk of PUBLIC_PROXIES){try{const r=await fetchTimeout(mk(href),20000);if(r.ok)return r.blob();}catch(_){}}throw new Error('Файл недоступен');}
 async function fetchYandexBlob(pub){return fetchBlob(await resolveYandexHref(pub));}
-async function loadSingleRemotePhoto(viewUrl,customName){const type=detectRemoteType(viewUrl),gdId=extractGdriveId(viewUrl)||null;const name=customName||(gdId?`gd_${gdId.slice(0,8)}.jpg`:`photo_${Date.now()}.jpg`);showToast(`⏳ ${name}`,'info',6000);const phIdx=photos.length;addPhoto({name,displayUrl:null,thumbUrl:null,lat:null,lon:null,bearing:null,altitude:null,date:'',isRemote:true,sourceType:type,gdId,_loading:true});updateStats();renderList();let blob=null;try{if(type==='yandex')blob=await fetchYandexBlob(viewUrl);else{const r=await fetchTimeout(viewUrl,20000);if(!r.ok)throw new Error(`HTTP ${r.status}`);blob=await r.blob();}}catch(err){showToast(`⚠️ ${err.message}`,'error',8000);const ph=photos[phIdx];if(ph){ph._loading=false;ph.displayUrl=gdId?`https://drive.google.com/thumbnail?id=${gdId}&sz=w1600`:viewUrl;ph.thumbUrl=ph.displayUrl;}remotePhotos.push({originalUrl:viewUrl,name});updateShareButton();renderList();return;}const blobUrl=URL.createObjectURL(blob);let lat=null,lon=null,bearing=null,altitude=null,date='',gppData=null;try{const e=await exifr.parse(blob,{gps:true,tiff:true,exif:true,translateValues:true});if(e){lat=e.latitude??null;lon=e.longitude??null;bearing=e.GPSImgDirection!=null?+e.GPSImgDirection:null;altitude=e.GPSAltitude??null;date=e.DateTimeOriginal??'';gppData=parseGPPUserComment(e);}}catch(_){}const ph=photos[phIdx];if(ph){ph._loading=false;ph.displayUrl=blobUrl;ph.thumbUrl=blobUrl;ph.lat=lat;ph.lon=lon;ph.bearing=bearing;ph.altitude=altitude;ph.date=date;ph.dateObj=date?parsePhotoDate(date):undefined;ph.originalBlob=blob;ph.experimentData=gppData;if(lat!=null)addMarker(ph,phIdx);}remotePhotos.push({originalUrl:viewUrl,name});updateStats();renderList();updateShareButton();updateTimelineData();showToast(`✅ ${name}${lat!=null?'':' (без GPS)'}`,'success');}
+async function loadSingleRemotePhoto(viewUrl,customName){const type=detectRemoteType(viewUrl),gdId=extractGdriveId(viewUrl)||null;const name=customName||(gdId?`gd_${gdId.slice(0,8)}.jpg`:`photo_${Date.now()}.jpg`);showToast(`⏳ ${name}`,'info',6000);const phIdx=photos.length;addPhoto({name,displayUrl:null,thumbUrl:null,lat:null,lon:null,bearing:null,altitude:null,date:'',isRemote:true,sourceType:type,gdId,_loading:true});updateStats();renderList();let blob=null;try{if(type==='yandex')blob=await fetchYandexBlob(viewUrl);else{const r=await fetchTimeout(viewUrl,20000);if(!r.ok)throw new Error(`HTTP ${r.status}`);blob=await r.blob();}}catch(err){showToast(`⚠️ ${err.message}`,'error',8000);const ph=photos[phIdx];if(ph){ph._loading=false;ph.displayUrl=gdId?`https://drive.google.com/thumbnail?id=${gdId}&sz=w1600`:viewUrl;ph.thumbUrl=ph.displayUrl;}remotePhotos.push({originalUrl:viewUrl,name});updateShareButton();renderList();return;}const blobUrl=URL.createObjectURL(blob);let lat=null,lon=null,bearing=null,altitude=null,date='',gppData=null,ekceloData=null;try{const e=await exifr.parse(blob,{gps:true,tiff:true,exif:true,translateValues:true});if(e){lat=e.latitude??null;lon=e.longitude??null;bearing=e.GPSImgDirection!=null?+e.GPSImgDirection:null;altitude=e.GPSAltitude??null;date=e.DateTimeOriginal??'';gppData=parseGPPUserComment(e);ekceloData=parseEkceloUserComment(e);}}catch(_){}const ph=photos[phIdx];if(ph){ph._loading=false;ph.displayUrl=blobUrl;ph.thumbUrl=blobUrl;ph.lat=lat;ph.lon=lon;ph.bearing=bearing;ph.altitude=altitude;ph.date=date;ph.dateObj=date?parsePhotoDate(date):undefined;ph.originalBlob=blob;ph.experimentData=gppData;ph.docMeta=ekceloData;if(lat!=null)addMarker(ph,phIdx);}remotePhotos.push({originalUrl:viewUrl,name});updateStats();renderList();updateShareButton();updateTimelineData();showToast(`✅ ${name}${lat!=null?'':' (без GPS)'}`,'success');}
 function updateShareButton(){document.getElementById('share-btn').style.display=remotePhotos.length?'':'none';}
-function copyShareLink(){const base=window.location.origin+window.location.pathname;const params=new URLSearchParams();remotePhotos.slice(0,10).forEach((p,i)=>{params.set(`photo${i+1}`,p.originalUrl);if(p.name)params.set(`name${i+1}`,p.name);});let url=`${base}?${params}`;if(activeIdx!=null&&photos[activeIdx])url+='#p='+encodeURIComponent(photos[activeIdx].name);navigator.clipboard.writeText(url).then(()=>showToast('📋 Скопировано!','success')).catch(()=>showToast('Ошибка','error'));}
+function copyShareLink(){const base=window.location.origin+window.location.pathname;const params=new URLSearchParams();remotePhotos.slice(0,10).forEach((p,i)=>{params.set(`photo${i+1}`,p.originalUrl);if(p.name)params.set(`name${i+1}`,p.name);});let url=`${base}?${params}`;if(activeIdx!=null&&photos[activeIdx]){const ap=photos[activeIdx];url+='#p='+encodeURIComponent(ap.name);if(ap.docMeta?.doc_id) url+='&d='+encodeURIComponent(ap.docMeta.doc_id);}navigator.clipboard.writeText(url).then(()=>showToast('📋 Скопировано!','success')).catch(()=>showToast('Ошибка','error'));}
 async function loadPhotosFromUrl(){const params=new URLSearchParams(window.location.search);const su=params.get('photo');if(su){await loadSingleRemotePhoto(su,params.get('name')||'');fitMapToPhotos();_tryOpenFromFragment();return;}const plist=[];for(const[k,v]of params.entries()){const m=k.match(/^photo(\d+)$/);if(m)plist.push({n:+m[1],url:v,name:params.get(`name${m[1]}`)||''});}if(plist.length){plist.sort((a,b)=>a.n-b.n);for(const p of plist)await loadSingleRemotePhoto(p.url,p.name);fitMapToPhotos();_tryOpenFromFragment();}}
 // ═══ EXIF lightbox routing (S6+, viewer-инициатива, контракт не расширяется) ═══
 // Фрагмент #p=<имя_файла> синхронизируется с открытым lightbox'ом.
-function _setLightboxFragment(name){try{if(!name)return;const u=new URL(location.href);u.hash='p='+encodeURIComponent(name);history.replaceState(null,'',u);}catch(_){}}
+function _setLightboxFragment(name, docId){try{if(!name)return;const u=new URL(location.href);let h='p='+encodeURIComponent(name);if(docId) h+='&d='+encodeURIComponent(docId);u.hash=h;history.replaceState(null,'',u);}catch(_){}}
 function _clearLightboxFragment(){try{const u=new URL(location.href);if(!u.hash)return;history.replaceState(null,'',u.pathname+u.search);}catch(_){}}
-function _readLightboxFragment(){const m=(location.hash||'').match(/[#&]p=([^&]+)/);return m?decodeURIComponent(m[1]):null;}
-function _tryOpenFromFragment(){const n=_readLightboxFragment();if(!n)return;const idx=photos.findIndex(p=>p.name===n);if(idx<0)return;const p=photos[idx];openLightbox(idx,(p.lat!=null&&p.lon!=null)?L.latLng(p.lat,p.lon):null);}
-window.addEventListener('hashchange',()=>{const n=_readLightboxFragment();if(!n){if(activeIdx!=null)closeLightbox();return;}const idx=photos.findIndex(p=>p.name===n);if(idx>=0&&idx!==activeIdx){const p=photos[idx];openLightbox(idx,(p.lat!=null&&p.lon!=null)?L.latLng(p.lat,p.lon):null);}});
+function _readLightboxFragment(){const h=location.hash||'';const mp=h.match(/[#&]p=([^&]+)/);const md=h.match(/[#&]d=([^&]+)/);return mp||md?{name:mp?decodeURIComponent(mp[1]):null,doc_id:md?decodeURIComponent(md[1]):null}:null;}
+async function _tryOpenFromFragment(){
+  const f=_readLightboxFragment();if(!f)return;
+  // 1) Photo по имени — основной случай (S6+ v1)
+  if(f.name){
+    const idx=photos.findIndex(p=>p.name===f.name);
+    if(idx>=0){const p=photos[idx];openLightbox(idx,(p.lat!=null&&p.lon!=null)?L.latLng(p.lat,p.lon):null);return;}
+  }
+  // 2) doc_id fallback — если фото не загружено локально, ищем external_url
+  // в `_data/documents.json` любого из загруженных KMZ (контракт 2.12.0 §5).
+  if(f.doc_id){
+    const doc=_lookupDocument(f.doc_id);
+    const ext=doc && (doc.artifacts||[]).map(a=>a?.external_url).find(Boolean);
+    if(ext){
+      const baseName=f.name || (doc.artifacts||[]).find(a=>a?.file)?.file?.split('/').pop() || `${f.doc_id}.jpg`;
+      await loadSingleRemotePhoto(ext, baseName);
+      // После загрузки фото попадёт в photos[]; re-fire fragment open
+      const idx2=photos.findIndex(p=>p.name===baseName);
+      if(idx2>=0){const p2=photos[idx2];p2.docMeta=p2.docMeta||{doc_id:f.doc_id};openLightbox(idx2,(p2.lat!=null&&p2.lon!=null)?L.latLng(p2.lat,p2.lon):null);}
+      return;
+    }
+    showToast(`Документ ${f.doc_id} не загружен`,'error',5000);
+  }
+}
+window.addEventListener('hashchange',()=>{
+  const f=_readLightboxFragment();
+  if(!f||!f.name){if(activeIdx!=null)closeLightbox();return;}
+  const idx=photos.findIndex(p=>p.name===f.name);
+  if(idx>=0&&idx!==activeIdx){const p=photos[idx];openLightbox(idx,(p.lat!=null&&p.lon!=null)?L.latLng(p.lat,p.lon):null);}
+});
 window.addEventListener('load',()=>{
   updateShareButton();loadPhotosFromUrl();initTimeline();
   // Mobile screen warning
@@ -7626,7 +7712,10 @@ let filterStart=null,filterEnd=null,minDateGlobal=null,maxDateGlobal=null,datedP
 let _dotHeld=null;        // photo held by mousedown for wheel-zoom
 let _wheelZoomRadius=null; // ms half-width of wheel-zoom range
 function parsePhotoDate(d){if(!d)return null;if(d instanceof Date)return new Date(d);const m=String(d).match(/(\d{4})[:\-](\d{2})[:\-](\d{2})[T\s](\d{2})[:\-](\d{2})[:\-](\d{2})/);return m?new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+m[6]):null;}
-function parseGPPUserComment(exif){if(!exif?.UserComment)return null;let raw=exif.UserComment;if(typeof raw==='string')raw=new TextEncoder().encode(raw);const pfx=new Uint8Array([0x41,0x53,0x43,0x49,0x49,0x00,0x00,0x00]);let jb;if(raw.length>=8&&raw.slice(0,8).every((b,i)=>b===pfx[i]))jb=raw.slice(8);else jb=raw;try{const d=JSON.parse(new TextDecoder().decode(jb).replace(/\0/g,'').trim());return d?.app==='gpp'&&d.exp?{version:d.v||1,experiment:d.exp}:null;}catch{return null;}}
+function _decodeUserCommentJSON(exif){if(!exif?.UserComment)return null;let raw=exif.UserComment;if(typeof raw==='string')raw=new TextEncoder().encode(raw);const pfx=new Uint8Array([0x41,0x53,0x43,0x49,0x49,0x00,0x00,0x00]);let jb;if(raw.length>=8&&raw.slice(0,8).every((b,i)=>b===pfx[i]))jb=raw.slice(8);else jb=raw;try{return JSON.parse(new TextDecoder().decode(jb).replace(/\0/g,'').trim());}catch{return null;}}
+function parseGPPUserComment(exif){const d=_decodeUserCommentJSON(exif);return d?.app==='gpp'&&d.exp?{version:d.v||1,experiment:d.exp}:null;}
+// EXIF UserComment v1.1 (контракт KMZ 2.12.0): payload `{app:"ekcelo", doc_id, kind, doc_date, graph_node_id, ...}`
+function parseEkceloUserComment(exif){const d=_decodeUserCommentJSON(exif);return d?.app==='ekcelo'?d:null;}
 function isPhotoInRange(p){if(!p.dateObj||!filterStart||!filterEnd)return true;return p.dateObj>=filterStart&&p.dateObj<=filterEnd;}
 
 function updateMarkerOpacities(){
