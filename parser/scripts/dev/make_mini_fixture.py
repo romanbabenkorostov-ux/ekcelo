@@ -32,7 +32,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from pirushin_sosn_rocha_08_build_kmz_v2 import build_kmz  # noqa: E402
+from pirushin_sosn_rocha_08_build_kmz_v2_2 import build_kmz  # noqa: E402
 
 
 STRUCTURE = {
@@ -281,7 +281,14 @@ def _add_pledge_chain(structure: dict) -> dict:
 
 
 def build(out_dir: Path, *, with_pledge_chain: bool = False,
-          with_osv: bool = False, with_overlay: bool = False) -> Path:
+          with_osv: bool = False, with_overlay: bool = False,
+          extract_dates: list[str] | None = None,
+          project_slug: str = "demo") -> Path | list[Path]:
+    """Если ``extract_dates`` задан — генерирует N KMZ для одного проекта
+    с разными `<Data extract_date>` (filename `<project_slug>_<YYYY-MM-DD>.kmz`).
+    Между snapshot'ами имитируется изменение restrictions объекта c2:
+    арест появляется в 1-м, снят во 2-м, во 3-м нет.
+    Возвращает list[Path] для multi-extract или Path для single."""
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "_data").mkdir(exist_ok=True)
     (out_dir / "_data" / "nspd_cache").mkdir(exist_ok=True)
@@ -312,6 +319,38 @@ def build(out_dir: Path, *, with_pledge_chain: bool = False,
     for name in ("IMG_01.jpg", "IMG_02.jpg", "IMG_03.jpg"):
         (photo_dir / name).write_bytes(fake_jpg)
 
+    # Multi-extract: эмитим N KMZ для одного project_root с разными
+    # extract_date. Между snapshot'ами меняем restrictions объекта c2
+    # (имитация юр.изменений во времени для smoke-теста B2 timeline UI).
+    if extract_dates:
+        kmz_files: list[Path] = []
+        for i, ed in enumerate(extract_dates):
+            # Per-snapshot мутация structure.json: арест на c2 в 1-м,
+            # снят начиная со 2-го (имитация снятия ареста между датами).
+            snap_struct = json.loads(json.dumps(structure))  # deepcopy
+            for cad in snap_struct.get("cadastre_objects", []):
+                if cad.get("id") == "c2":
+                    if i == 0:
+                        cad["restrictions"] = [{
+                            "type": "арест",
+                            "basis": "Постановление суда от 2025-12-01",
+                            "since": "2025-12-01",
+                        }]
+                    else:
+                        cad["restrictions"] = []
+            (out_dir / "_data" / "structure.json").write_text(
+                json.dumps(snap_struct, ensure_ascii=False, indent=2),
+                encoding="utf-8")
+            kmz_path = build_kmz(out_dir, extract_date=ed)
+            target = out_dir / "kmz-kml" / f"{project_slug}_{ed}.kmz"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if kmz_path.resolve() != target.resolve():
+                target.write_bytes(kmz_path.read_bytes())
+            kmz_files.append(target)
+        # Восстанавливаем последнюю версию structure.json как актуальную
+        # (нужна для дальнейших инспекций / 09_v1).
+        return kmz_files
+
     return build_kmz(out_dir)
 
 
@@ -325,6 +364,15 @@ def main() -> int:
                    help="добавить _data/osv_cache.json — стуб ОСВ для PR-ε")
     p.add_argument("--with-overlay", action="store_true",
                    help="добавить _data/documents.json — выписка+overlay+выписка (PR-β/γ)")
+    p.add_argument("--extract-dates", type=str, default=None,
+                   help="multi-extract batch: ISO-даты через запятую, "
+                        "напр. '2026-01-15,2026-04-15,2026-08-01'. "
+                        "Генерирует N KMZ в kmz-kml/ с filename "
+                        "<project_slug>_<date>.kmz; имитация изменения "
+                        "restrictions между snapshot'ами (для smoke-теста "
+                        "viewer/multi-kmz-timeline-phase1).")
+    p.add_argument("--project-slug", type=str, default="demo",
+                   help="префикс filename для --extract-dates (default: demo)")
     args = p.parse_args()
     out_dir = args.out_dir.expanduser().resolve()
     if out_dir.exists() and any(out_dir.iterdir()):
@@ -332,9 +380,19 @@ def main() -> int:
               "Удалите вручную или укажите пустую/несуществующую папку.",
               file=sys.stderr)
         return 1
+    extract_dates = None
+    if args.extract_dates:
+        extract_dates = [d.strip() for d in args.extract_dates.split(",")
+                         if d.strip()]
     kmz = build(out_dir, with_pledge_chain=args.with_pledge_chain,
-                with_osv=args.with_osv, with_overlay=args.with_overlay)
-    print(f"[+] mini-fixture готова: {kmz}")
+                with_osv=args.with_osv, with_overlay=args.with_overlay,
+                extract_dates=extract_dates, project_slug=args.project_slug)
+    if isinstance(kmz, list):
+        print(f"[+] multi-extract batch готов ({len(kmz)} KMZ):")
+        for k in kmz:
+            print(f"    {k}")
+    else:
+        print(f"[+] mini-fixture готова: {kmz}")
     flags = [f for f, v in (("pledge-chain", args.with_pledge_chain),
                             ("osv", args.with_osv),
                             ("overlay", args.with_overlay)) if v]
