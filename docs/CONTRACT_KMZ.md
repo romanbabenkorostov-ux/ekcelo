@@ -238,7 +238,10 @@ SemVer `MAJOR.MINOR.PATCH` для контракта:
   EXIF-роутинг lightbox (viewer-инициатива); MessageChannel; de-sandbox;
   визуальное различение `_kind = "ip" | "person" | "legal_text"` в overlay
   графа `04_nspd_graph_*` и пунктирное ребро `kind = "person_to_legal"`
-  (parser/viewer overlay UX, не wire; см. CORRESPONDENCE/011).
+  (parser/viewer overlay UX, не wire; см. CORRESPONDENCE/011);
+  snapshot-overlay temporal model + `documents.json` registry для
+  отчётов по проекту (parser-internal, ОСВ-сверка + залоговая таблица);
+  см. `dev/SPEC_TEMPORAL_REPORTS.md` и CORRESPONDENCE/013.
 
 ## 10. Изменения
 
