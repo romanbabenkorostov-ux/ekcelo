@@ -7009,6 +7009,7 @@ async function openLightbox(idx,latlng){
   lb.classList.add('no-transition');lb.classList.add('visible');
   requestAnimationFrame(()=>{posLightbox(latlng,false);requestAnimationFrame(()=>lb.classList.remove('no-transition'));});
   setActiveMarker(idx);highlightTimelineDot(p);
+  _setLightboxFragment(p.name);
 }
 
 function buildRows(p){
@@ -7173,6 +7174,7 @@ function closeLightbox(){
   lbManualPos=false;
   // Task 4 (v62): clear the connector line + ring when lightbox closes
   _clearLightboxConnector();
+  _clearLightboxFragment();
 }
 
 // Sorted navigation order: all photos by shooting date (fallback: file mtime)
@@ -7353,8 +7355,15 @@ async function fetchBlob(href){if(YANDEX_PROXY){const r=await fetchTimeout(proxy
 async function fetchYandexBlob(pub){return fetchBlob(await resolveYandexHref(pub));}
 async function loadSingleRemotePhoto(viewUrl,customName){const type=detectRemoteType(viewUrl),gdId=extractGdriveId(viewUrl)||null;const name=customName||(gdId?`gd_${gdId.slice(0,8)}.jpg`:`photo_${Date.now()}.jpg`);showToast(`⏳ ${name}`,'info',6000);const phIdx=photos.length;addPhoto({name,displayUrl:null,thumbUrl:null,lat:null,lon:null,bearing:null,altitude:null,date:'',isRemote:true,sourceType:type,gdId,_loading:true});updateStats();renderList();let blob=null;try{if(type==='yandex')blob=await fetchYandexBlob(viewUrl);else{const r=await fetchTimeout(viewUrl,20000);if(!r.ok)throw new Error(`HTTP ${r.status}`);blob=await r.blob();}}catch(err){showToast(`⚠️ ${err.message}`,'error',8000);const ph=photos[phIdx];if(ph){ph._loading=false;ph.displayUrl=gdId?`https://drive.google.com/thumbnail?id=${gdId}&sz=w1600`:viewUrl;ph.thumbUrl=ph.displayUrl;}remotePhotos.push({originalUrl:viewUrl,name});updateShareButton();renderList();return;}const blobUrl=URL.createObjectURL(blob);let lat=null,lon=null,bearing=null,altitude=null,date='',gppData=null;try{const e=await exifr.parse(blob,{gps:true,tiff:true,exif:true,translateValues:true});if(e){lat=e.latitude??null;lon=e.longitude??null;bearing=e.GPSImgDirection!=null?+e.GPSImgDirection:null;altitude=e.GPSAltitude??null;date=e.DateTimeOriginal??'';gppData=parseGPPUserComment(e);}}catch(_){}const ph=photos[phIdx];if(ph){ph._loading=false;ph.displayUrl=blobUrl;ph.thumbUrl=blobUrl;ph.lat=lat;ph.lon=lon;ph.bearing=bearing;ph.altitude=altitude;ph.date=date;ph.dateObj=date?parsePhotoDate(date):undefined;ph.originalBlob=blob;ph.experimentData=gppData;if(lat!=null)addMarker(ph,phIdx);}remotePhotos.push({originalUrl:viewUrl,name});updateStats();renderList();updateShareButton();updateTimelineData();showToast(`✅ ${name}${lat!=null?'':' (без GPS)'}`,'success');}
 function updateShareButton(){document.getElementById('share-btn').style.display=remotePhotos.length?'':'none';}
-function copyShareLink(){const base=window.location.origin+window.location.pathname;const params=new URLSearchParams();remotePhotos.slice(0,10).forEach((p,i)=>{params.set(`photo${i+1}`,p.originalUrl);if(p.name)params.set(`name${i+1}`,p.name);});navigator.clipboard.writeText(`${base}?${params}`).then(()=>showToast('📋 Скопировано!','success')).catch(()=>showToast('Ошибка','error'));}
-async function loadPhotosFromUrl(){const params=new URLSearchParams(window.location.search);const su=params.get('photo');if(su){await loadSingleRemotePhoto(su,params.get('name')||'');fitMapToPhotos();return;}const plist=[];for(const[k,v]of params.entries()){const m=k.match(/^photo(\d+)$/);if(m)plist.push({n:+m[1],url:v,name:params.get(`name${m[1]}`)||''});}if(plist.length){plist.sort((a,b)=>a.n-b.n);for(const p of plist)await loadSingleRemotePhoto(p.url,p.name);fitMapToPhotos();}}
+function copyShareLink(){const base=window.location.origin+window.location.pathname;const params=new URLSearchParams();remotePhotos.slice(0,10).forEach((p,i)=>{params.set(`photo${i+1}`,p.originalUrl);if(p.name)params.set(`name${i+1}`,p.name);});let url=`${base}?${params}`;if(activeIdx!=null&&photos[activeIdx])url+='#p='+encodeURIComponent(photos[activeIdx].name);navigator.clipboard.writeText(url).then(()=>showToast('📋 Скопировано!','success')).catch(()=>showToast('Ошибка','error'));}
+async function loadPhotosFromUrl(){const params=new URLSearchParams(window.location.search);const su=params.get('photo');if(su){await loadSingleRemotePhoto(su,params.get('name')||'');fitMapToPhotos();_tryOpenFromFragment();return;}const plist=[];for(const[k,v]of params.entries()){const m=k.match(/^photo(\d+)$/);if(m)plist.push({n:+m[1],url:v,name:params.get(`name${m[1]}`)||''});}if(plist.length){plist.sort((a,b)=>a.n-b.n);for(const p of plist)await loadSingleRemotePhoto(p.url,p.name);fitMapToPhotos();_tryOpenFromFragment();}}
+// ═══ EXIF lightbox routing (S6+, viewer-инициатива, контракт не расширяется) ═══
+// Фрагмент #p=<имя_файла> синхронизируется с открытым lightbox'ом.
+function _setLightboxFragment(name){try{if(!name)return;const u=new URL(location.href);u.hash='p='+encodeURIComponent(name);history.replaceState(null,'',u);}catch(_){}}
+function _clearLightboxFragment(){try{const u=new URL(location.href);if(!u.hash)return;history.replaceState(null,'',u.pathname+u.search);}catch(_){}}
+function _readLightboxFragment(){const m=(location.hash||'').match(/[#&]p=([^&]+)/);return m?decodeURIComponent(m[1]):null;}
+function _tryOpenFromFragment(){const n=_readLightboxFragment();if(!n)return;const idx=photos.findIndex(p=>p.name===n);if(idx<0)return;const p=photos[idx];openLightbox(idx,(p.lat!=null&&p.lon!=null)?L.latLng(p.lat,p.lon):null);}
+window.addEventListener('hashchange',()=>{const n=_readLightboxFragment();if(!n){if(activeIdx!=null)closeLightbox();return;}const idx=photos.findIndex(p=>p.name===n);if(idx>=0&&idx!==activeIdx){const p=photos[idx];openLightbox(idx,(p.lat!=null&&p.lon!=null)?L.latLng(p.lat,p.lon):null);}});
 window.addEventListener('load',()=>{
   updateShareButton();loadPhotosFromUrl();initTimeline();
   // Mobile screen warning
