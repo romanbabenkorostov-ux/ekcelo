@@ -86,6 +86,53 @@ def test_build_pledge_report_classifies_all_4_sections():
     assert "<details>" in md
 
 
+def test_build_osv_recon_report():
+    """PR-ε: 3 строки ОСВ против 2-объектной структуры → 2 missing-in-cad
+    (одна КН-привязанная не из кадастра, одна без КН) + 1 missing-in-osv."""
+    structure = {
+        "cadastre_objects": [
+            {"id": "c1", "cadastral_number": "61:44:0050706:1",
+             "object_type": "Земельный участок",
+             "accounting_account": "01.01"},
+            {"id": "c2", "cadastral_number": "61:44:0050706:99",
+             "object_type": "Здание",
+             "accounting_account": "01.01"},  # в structure есть, в ОСВ нет
+        ],
+    }
+    osv = {
+        "exported_at": "2026-04-10T10:00:00Z",
+        "rows": [
+            {"row_n": 1, "account": "01.01", "inv_number": "ОС-001",
+             "name": "Земельный участок",
+             "cn_hints": ["61:44:0050706:1"],  # совпадает с c1
+             "close_dt": 1_500_000.00},
+            {"row_n": 2, "account": "01.01", "inv_number": "ОС-002",
+             "name": "Хозблок", "cn_hints": [],  # нет в кадастре
+             "close_dt": 250_000.00},
+            {"row_n": 3, "account": "08", "inv_number": "ОНС-007",
+             "name": "Затраты на мансарду", "cn_hints": [],  # счёт 08
+             "close_dt": 1_350_000.00},
+        ],
+    }
+    builder = MarkdownBuilder(tracker=SourceTracker(), title="ОСВ test")
+    _09.build_osv_recon_report(structure, osv, date(2026, 4, 15), builder)
+    md = "\n".join(builder._lines)
+    # Счета сгруппированы
+    assert "§01.01" in md
+    assert "§08" in md
+    # Missing-in-cad: ОС-002 (Хозблок) + ОНС-007
+    assert "ОС-002" in md
+    assert "ОНС-007" in md
+    # Missing-in-osv: c2 (61:44:0050706:99)
+    assert "61:44:0050706:99" in md
+    # Рекомендация присутствует
+    assert "рекомендовать" in md.lower()
+
+
+def test_load_osv_returns_none_when_missing(tmp_path: Path):
+    assert _09.load_osv(tmp_path) is None
+
+
 def test_cli_smoke_help(tmp_path: Path):
     """CLI запускается без ошибок и выводит usage."""
     res = subprocess.run(

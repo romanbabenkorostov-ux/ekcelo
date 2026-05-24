@@ -104,6 +104,135 @@ def load_enriched(root: Path) -> dict:
     return {}
 
 
+# ─── Report 1: ОСВ-сверка (PR-ε) ────────────────────────────────────────────
+
+
+def load_osv(root: Path) -> dict | None:
+    """Читает <project>/_data/osv_cache.json (см. make_mini_fixture --with-osv).
+
+    Возвращает {"rows": [...]} или None если файла нет.
+    """
+    p = root / "_data" / "osv_cache.json"
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _osv_account_label(account: str) -> str:
+    return {"01.01": "Основные средства (собственные)",
+            "01.03": "Аренда",
+            "01.К":  "Арендные платежи накопленные",
+            "08":    "Капвложения в строительство"}.get(account, account)
+
+
+def build_osv_recon_report(
+    structure: dict,
+    osv: dict,
+    target_date: date,
+    builder,
+) -> None:
+    """ОСВ-сверка: для каждого учётного счёта — две таблицы
+    («есть в ОСВ, нет в кадастре» / «есть в кадастре, нет в ОСВ»)."""
+    cads = structure.get("cadastre_objects") or []
+    cad_cn = {c.get("cadastral_number") for c in cads if c.get("cadastral_number")}
+    # cadastre без КН (principal_unregistered) учитываются по text_descriptor
+    cad_text = {c.get("text_descriptor") for c in cads
+                if c.get("object_type") == "principal_unregistered"}
+
+    tracker: SourceTracker = builder.tracker
+    src_osv = tracker.ref("osv", "ОСВ-выгрузка из 1С "
+                          f"(_data/osv_cache.json, exported_at={osv.get('exported_at', '—')})")
+    src_struct = tracker.ref("structure",
+                             "structure.json (актуальный snapshot)")
+
+    builder.heading(
+        f"ОСВ-сверка на {target_date.isoformat()}",
+        level=1,
+    )
+    builder.paragraph(
+        "Сверка кадастровых объектов и ОСВ по счетам 01.01 / 01.03 / 01.К / 08. "
+        "При несовпадении — рекомендуется проверить и при подтверждении "
+        "поставить объект на кадастровый учёт через МФЦ "
+        "(заявление + технический план + правоустанавливающий документ)."
+    )
+
+    rows_by_account = {}
+    for row in osv.get("rows") or []:
+        rows_by_account.setdefault(row.get("account") or "—", []).append(row)
+
+    osv_cns: set[str] = set()
+    for rows in rows_by_account.values():
+        for r in rows:
+            osv_cns.update(r.get("cn_hints") or [])
+
+    for account in sorted(rows_by_account.keys()):
+        builder.heading(
+            f"§{account} — {_osv_account_label(account)}",
+            level=2,
+        )
+        rows = rows_by_account[account]
+
+        missing_in_cad: list[list[str]] = []
+        for r in rows:
+            hints = r.get("cn_hints") or []
+            in_cad = any(h in cad_cn for h in hints)
+            in_text = r.get("name", "").strip() in cad_text
+            if not in_cad and not in_text:
+                missing_in_cad.append([
+                    r.get("inv_number") or "—",
+                    r.get("name") or "—",
+                    ", ".join(hints) or "—",
+                    f"{r.get('close_dt', 0):,.2f}".replace(",", " "),
+                    src_osv,
+                ])
+        builder.heading("Есть в ОСВ, нет в кадастре", level=3)
+        if missing_in_cad:
+            builder.table(
+                ["Инв.№", "Наименование", "КН-подсказка", "Сумма (БС)", "Источник"],
+                missing_in_cad,
+            )
+            builder.paragraph(
+                "**Рекомендация:** проверить наличие объекта в реестре. "
+                "Если объект существует de facto — рекомендовать руководству "
+                "поставить на кадастровый учёт."
+            )
+        else:
+            builder.paragraph("Все позиции ОСВ присутствуют в кадастре.")
+
+        missing_in_osv: list[list[str]] = []
+        for cad in cads:
+            cn = cad.get("cadastral_number")
+            if not cn or cn in osv_cns:
+                continue
+            # Проверяем, относится ли cad к этому счёту через accounting_account
+            # principal_unregistered'ов; для КН-объектов проверяем по умолчанию 01.01.
+            cad_account = cad.get("accounting_account") or "01.01"
+            if cad_account != account:
+                continue
+            missing_in_osv.append([
+                cn,
+                cad.get("object_type") or "—",
+                cad.get("address") or "—",
+                src_struct,
+            ])
+        if missing_in_osv:
+            builder.heading("Есть в кадастре, нет в ОСВ", level=3)
+            builder.table(
+                ["КН", "Тип", "Адрес", "Источник"],
+                missing_in_osv,
+            )
+            builder.paragraph(
+                "**Рекомендация:** проверить, отражены ли объекты на "
+                "бухгалтерском учёте. Возможно требуется бухгалтерская "
+                "корректировка / постановка на учёт."
+            )
+
+    builder.sources_block()
+
+
 # ─── Report 2: Залоговая таблица (PR-δ) ─────────────────────────────────────
 
 
@@ -328,15 +457,25 @@ def run_session(root: Path, target_date: date) -> int:
 
     while True:
         cp(f"\nФормат output: {fmt}", C.CY)
-        cp("[1] ОСВ-сверка                        (не реализовано в v1)")
+        cp("[1] ОСВ-сверка (счета 01.01 / 01.03 / 01.К / 08)")
         cp("[2] Таблица залогов (4 секции)")
-        cp("[3] Фотоотчёт по проекту              (не реализовано в v1)")
+        cp("[3] Фотоотчёт по проекту")
         cp("[4] Формат output (md / docx / both)")
         cp("[Q] Выход")
         choice = ask("Выбор").lower()
 
         if choice == "1":
-            cp("  ОСВ-сверка пока не реализована (см. PR-ε).", C.Y)
+            osv = load_osv(root)
+            if osv is None:
+                cp("  ОСВ не загружен (нет _data/osv_cache.json). "
+                   "Подключите ОСВ через 052 или make_mini_fixture --with-osv.",
+                   C.Y)
+            else:
+                title = f"ОСВ-сверка — {target_date.isoformat()}"
+                builders = _make_builders(fmt, title)
+                for _, b in builders:
+                    build_osv_recon_report(structure, osv, target_date, b)
+                _save_all(builders, out_dir, f"report_osv_recon_{ts}")
         elif choice == "2":
             title = f"Залоговая таблица — {target_date.isoformat()}"
             builders = _make_builders(fmt, title)
