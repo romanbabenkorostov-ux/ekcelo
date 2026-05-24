@@ -141,6 +141,56 @@ def test_build_photo_report_returns_none_when_no_photos(tmp_path: Path):
     assert out is None
 
 
+def test_integration_mini_fixture_e2e(tmp_path: Path):
+    """E2E: make_mini_fixture с тремя флагами → ручной вызов обоих
+    отчётов через build_pledge_report / build_osv_recon_report → проверка
+    что MD-файлы валидны (§11 spec'а Integration acceptance)."""
+    import subprocess
+
+    fixture_dir = tmp_path / "proj"
+    res = subprocess.run(
+        [sys.executable,
+         str(SCRIPTS / "dev" / "make_mini_fixture.py"),
+         str(fixture_dir),
+         "--with-pledge-chain", "--with-osv", "--with-overlay"],
+        capture_output=True, text=True, timeout=30,
+        env={"PYTHONPATH": str(SCRIPTS.parent), "PATH": "/usr/bin:/bin"},
+    )
+    assert res.returncode == 0, f"fixture failed: {res.stderr}"
+    assert (fixture_dir / "_data" / "structure.json").exists()
+    assert (fixture_dir / "_data" / "documents.json").exists()
+    assert (fixture_dir / "_data" / "osv_cache.json").exists()
+
+    # Загрузить и прогнать оба отчёта программно
+    structure = _09.load_structure(fixture_dir)
+    documents = _09.load_documents(fixture_dir)
+    osv = _09.load_osv(fixture_dir)
+    target = date(2026, 4, 15)
+
+    # 1. Залоговая таблица
+    pb = MarkdownBuilder(tracker=SourceTracker(),
+                         title=f"Залоги — {target.isoformat()}")
+    _09.build_pledge_report(structure, documents, target, pb)
+    pledges_path = pb.save(fixture_dir / "reports" / "pledges.md")
+    assert pledges_path.exists()
+    md = pledges_path.read_text(encoding="utf-8")
+    assert "§1. Без залога" in md
+    assert "§2. С залогом объекта" in md
+    assert "§3. С залогом доли в УК" in md
+    assert "§4. С залогом и объекта" in md
+
+    # 2. ОСВ-сверка
+    ob = MarkdownBuilder(tracker=SourceTracker(),
+                         title=f"ОСВ — {target.isoformat()}")
+    _09.build_osv_recon_report(structure, osv, target, ob)
+    osv_path = ob.save(fixture_dir / "reports" / "osv.md")
+    assert osv_path.exists()
+    md_osv = osv_path.read_text(encoding="utf-8")
+    assert "§01.01" in md_osv
+    # ОНС-007 (счёт 08) присутствует в стубе
+    assert "ОНС-007" in md_osv
+
+
 def test_cli_smoke_help(tmp_path: Path):
     """CLI запускается без ошибок и выводит usage."""
     res = subprocess.run(

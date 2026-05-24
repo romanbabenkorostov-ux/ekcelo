@@ -37,6 +37,21 @@ def test_resolve_state_no_documents_returns_structure_copy():
     assert out is not st  # deepcopy
 
 
+def test_resolve_state_extract_only_returns_snapshot():
+    """Базовый snapshot без overlay — последняя выписка как база."""
+    docs = [
+        {"doc_id": "ee_01", "kind": "egrn_extract", "doc_date": "2026-01-15"},
+        {"doc_id": "ee_02", "kind": "egrn_extract", "doc_date": "2026-04-15"},
+    ]
+    # На 2026-05-01 без overlay → структура как есть (deepcopy).
+    out = resolve_state(_fixture_structure(), docs, date(2026, 5, 1))
+    assert out["cadastre_objects"][0]["restrictions"][0]["type"] == "арест"
+    # И deepcopy — мутация не затрагивает source.
+    out["cadastre_objects"][0]["restrictions"] = []
+    src = _fixture_structure()
+    assert src["cadastre_objects"][0]["restrictions"][0]["type"] == "арест"
+
+
 def test_resolve_state_overlay_removes_arrest():
     docs = [
         {"doc_id": "ee_01", "kind": "egrn_extract", "doc_date": "2026-01-15"},
