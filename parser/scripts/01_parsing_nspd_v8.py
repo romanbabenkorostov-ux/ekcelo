@@ -1,5 +1,18 @@
 """
-NSPD Парсер v8.2 (extends standalone v25.0 — adds contour extraction)
+NSPD Парсер v8.3 (extends standalone v25.0 — adds contour extraction)
+
+Что нового vs v8.2 (фиксы боевого прогона 23:50:0301004:25):
+- **KeyError 'кол-во_колец'** — последний legacy-ключ в print лога parse_one()
+  заменён на новые 'полигонов'/'колец_всего'.
+- **NetworkCapture исключает search/suggest endpoints** — они отдают
+  extent квартала вместо геометрии объекта (причина площади 1.4e15 м²).
+- **find_by_cad: exact > substring** — выбираем feature с точным
+  совпадением cad_num вместо первого попавшегося substring-матча.
+- **Auto-reproject EPSG:3857 → WGS84** через `_maybe_reproject_to_wgs84`,
+  вызывается в `_build_payload_from_geojson` для всех источников.
+- **Sanity-check площади** (`_payload_area_sane`): отвергаем payload где
+  computed > 1e10 м² или off-by-100x от parsed_area. Применяется ко
+  всем источникам (network_capture, wfs, ol_state).
 
 Что нового vs v8.1 (боевая адаптация под реальную DOM НСПД):
 - **NetworkCapture**: пассивный network-sniffer ловит ВСЕ JSON-ответы НСПД
@@ -131,7 +144,7 @@ MIN_CONTOUR_AREA_PX = 80
 RDP_EPSILON_MIN_PX = 0.8
 RDP_EPSILON_FRAC = 0.0015
 
-ALG_VERSION = "v8.2"
+ALG_VERSION = "v8.3"
 
 # Включить запись debug-dump на диск при неудаче CV-pipeline.
 CONTOUR_DEBUG_DUMP = True
@@ -829,13 +842,18 @@ class NetworkCapture:
                 "nspd.gov.ru", "rosreestr.ru", "pkk.rosreestr",
             )):
                 return
+            # Search/suggest/autocomplete отдают extent квартала/региона, а не геометрию
+            # самого объекта — это причина гигантской площади (баг v8.2 на 23:50:0301004:25).
+            if any(skip in url for skip in (
+                "/search/", "/suggest", "/autocomplete", "/typeahead",
+            )):
+                return
             ct = ""
             try:
                 ct = (resp.headers or {}).get("content-type", "") or ""
             except Exception:
                 pass
             if "json" not in ct.lower():
-                # Иногда content-type=text/plain, но тело — JSON. Пробуем парсить опционально.
                 if not url.endswith(".json") and "json" not in url.lower():
                     return
             try:
@@ -895,27 +913,35 @@ class NetworkCapture:
         self.features.clear()
 
     def find_by_cad(self, cad_num):
-        """Ищет среди перехваченных features ту, у которой в properties/attrs
-        содержится переданный кадастровый номер."""
+        """Ищет feature с переданным кадастровым номером.
+        Приоритет: точное совпадение > substring. Точное всегда побеждает,
+        иначе ловим search-результаты с extent квартала вместо геометрии объекта."""
         cn_compact = (cad_num or "").replace(" ", "").upper()
         if not cn_compact:
             return None
-        # «короткая» форма для частей-объектов (без '/N')
         cn_core = cn_compact.split("/")[0]
+        exact = []
+        substr = []
         for entry in self.features:
             f = entry["feature"]
             props = f.get("properties") or f.get("attrs") or {}
-            for v in props.values():
-                if not isinstance(v, str):
-                    continue
-                vc = v.replace(" ", "").upper()
-                if cn_compact in vc or cn_core in vc:
-                    return {
-                        "geom": f["geometry"],
-                        "props": props,
-                        "src_url": entry["url"],
-                    }
-        return None
+            prop_strs = [v.replace(" ", "").upper()
+                         for v in props.values() if isinstance(v, str)]
+            if any(p == cn_compact for p in prop_strs):
+                exact.append(entry)
+            elif any(p == cn_core for p in prop_strs):
+                exact.append(entry)
+            elif any((cn_compact in p) or (cn_core in p) for p in prop_strs):
+                substr.append(entry)
+        pick = exact[0] if exact else (substr[0] if substr else None)
+        if not pick:
+            return None
+        f = pick["feature"]
+        return {
+            "geom": f["geometry"],
+            "props": f.get("properties") or f.get("attrs") or {},
+            "src_url": pick["url"],
+        }
 
 
 async def _fetch_geom_via_wfs(context, cad_num, prefix=""):
@@ -1038,6 +1064,29 @@ async def _fetch_geom_via_ol_state(page):
     if "3857" in proj:
         geom = _reproject_3857_to_wgs84(geom)
     return {"geom": geom, "props": {}, "src": "ol_state", "proj_raw": proj}
+
+
+def _first_point(coords):
+    """Первая координатная пара любого вложенного GeoJSON-coordinates."""
+    c = coords
+    while isinstance(c, list) and c and isinstance(c[0], list):
+        c = c[0]
+    if isinstance(c, list) and len(c) >= 2 and all(isinstance(x, (int, float)) for x in c[:2]):
+        return c
+    return None
+
+
+def _maybe_reproject_to_wgs84(geom):
+    """Если координаты выходят за пределы [-180,180]/[-90,90] — считаем EPSG:3857
+    и reproject'им в WGS84. Иначе возвращаем как есть."""
+    if not geom or "coordinates" not in geom:
+        return geom
+    p = _first_point(geom["coordinates"])
+    if not p:
+        return geom
+    if abs(p[0]) > 180 or abs(p[1]) > 90:
+        return _reproject_3857_to_wgs84(geom)
+    return geom
 
 
 def _reproject_3857_to_wgs84(geom):
@@ -1382,7 +1431,9 @@ def _extract_contours_from_image(png_bytes, parsed_area_sqm, scale_px, scale_m):
 
 
 def _build_payload_from_geojson(geom, parsed_area_sqm, source, scale_meta=None, thumb_b64=None):
-    """Из WGS84 GeoJSON строит финальный payload (v8.1 schema)."""
+    """Из WGS84 GeoJSON строит финальный payload (v8.1 schema).
+    Авто-reproject если координаты в EPSG:3857."""
+    geom = _maybe_reproject_to_wgs84(geom)
     converted = _geojson_to_local_meters(geom)
     if not converted:
         return None
@@ -1413,6 +1464,25 @@ def _build_payload_from_geojson(geom, parsed_area_sqm, source, scale_meta=None, 
         "превью_png_b64": thumb_b64,
         "алгоритм_версия": ALG_VERSION,
     }
+
+
+def _payload_area_sane(payload, parsed_area_sqm):
+    """Грубый sanity-check площади. Отсекает search-результаты
+    (extent квартала вместо геометрии объекта) и кривые проекции.
+
+    Правила:
+      - computed > 1e10 м² (≥ 10 000 км²) → всегда мусор.
+      - parsed известен и computed > 100×parsed → мусор.
+      - parsed известен и computed < parsed/100 (off by 2 orders down) → подозрительно, мусор.
+    """
+    comp = payload.get("площадь_вычисленная_кв_м") or 0
+    if comp > 1e10:
+        return False
+    if parsed_area_sqm and parsed_area_sqm > 0 and comp > 0:
+        ratio = comp / parsed_area_sqm
+        if ratio > 100.0 or ratio < 0.01:
+            return False
+    return True
 
 
 def _build_payload_from_cv(cv_result, parsed_area_sqm, scale_meta):
@@ -1463,13 +1533,17 @@ async def extract_contour(page, context, capture, info, cad_num, prefix=""):
     cap = capture.find_by_cad(cad_num) if capture else None
     if cap and cap.get("geom"):
         payload = _build_payload_from_geojson(cap["geom"], parsed_area, "network_capture")
-        if payload:
+        if payload and _payload_area_sane(payload, parsed_area):
             payload["capture_url"] = cap.get("src_url")
             print(f"{prefix}  [contour] ✓ network_capture: тип={payload['тип']}, "
                   f"полигонов={payload['полигонов']}, колец={payload['колец_всего']}, "
                   f"площадь={payload['площадь_вычисленная_кв_м']} м² "
                   f"(заявлено {parsed_area}) ← {cap.get('src_url','?')[:80]}")
             return payload
+        elif payload:
+            print(f"{prefix}  [contour] network_capture отвергнут: "
+                  f"computed={payload['площадь_вычисленная_кв_м']} м² нереалистично "
+                  f"(parsed={parsed_area}). Источник: {cap.get('src_url','?')[:80]}")
     else:
         n_cap = len(capture.features) if capture else 0
         print(f"{prefix}  [contour] network_capture: подходящей feature не найдено "
@@ -1483,7 +1557,7 @@ async def extract_contour(page, context, capture, info, cad_num, prefix=""):
         wfs = None
     if wfs and wfs.get("geom"):
         payload = _build_payload_from_geojson(wfs["geom"], parsed_area, "wfs")
-        if payload:
+        if payload and _payload_area_sane(payload, parsed_area):
             payload["wfs_layer_id"] = wfs.get("layer_id")
             payload["wfs_field"] = wfs.get("field")
             payload["wfs_method"] = wfs.get("method")
@@ -1492,6 +1566,9 @@ async def extract_contour(page, context, capture, info, cad_num, prefix=""):
                   f"площадь={payload['площадь_вычисленная_кв_м']} м² "
                   f"(layer {payload['wfs_layer_id']}, field {payload['wfs_field']})")
             return payload
+        elif payload:
+            print(f"{prefix}  [contour] WFS отвергнут: "
+                  f"computed={payload['площадь_вычисленная_кв_м']} м² нереалистично")
 
     # 2) TERTIARY: OL-state (window.* heuristics)
     try:
@@ -1501,11 +1578,14 @@ async def extract_contour(page, context, capture, info, cad_num, prefix=""):
         ol = None
     if ol and ol.get("geom"):
         payload = _build_payload_from_geojson(ol["geom"], parsed_area, "ol_state")
-        if payload:
+        if payload and _payload_area_sane(payload, parsed_area):
             print(f"{prefix}  [contour] ✓ OL-state: тип={payload['тип']}, "
                   f"полигонов={payload['полигонов']}, колец={payload['колец_всего']}, "
                   f"площадь={payload['площадь_вычисленная_кв_м']} м²")
             return payload
+        elif payload:
+            print(f"{prefix}  [contour] OL-state отвергнут: "
+                  f"computed={payload['площадь_вычисленная_кв_м']} м² нереалистично")
 
     # 3) LAST-RESORT: screenshot + CV
     if not _HAS_CV:
@@ -1638,7 +1718,9 @@ async def parse_one(page, context, capture, cadastral_number, session, depth=0):
                     if isinstance(v, list))
     contour_tag = ""
     if "Контур" in info:
-        contour_tag = f" | Контур: {info['Контур']['источник']}/{info['Контур']['кол-во_колец']} колец"
+        contour_tag = (f" | Контур: {info['Контур']['источник']}/"
+                       f"{info['Контур'].get('полигонов', 0)} полиг./"
+                       f"{info['Контур'].get('колец_всего', 0)} колец")
 
     print(f"{prefix}[OK] {category} → {header_cn} | Атрибутов: {attr_count} | Связанных: {rel_count}{contour_tag}")
     print_discovered(info.get("Связанные объекты", {}), header_cn)

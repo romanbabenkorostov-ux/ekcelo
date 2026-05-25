@@ -225,7 +225,7 @@ def test_cv_payload_from_cv_schema():
     assert all("outer" in p and "holes" in p for p in payload["полигоны"])
     # legacy flat тоже есть
     assert isinstance(payload["локальные_метры"], list)
-    assert payload["алгоритм_версия"] == "v8.2"
+    assert payload["алгоритм_версия"] == "v8.3"
     assert payload["площадь_заявленная_кв_м"] == 554.0
     assert abs(payload["площадь_вычисленная_кв_м"] - 554.0) < 0.01
 
@@ -312,6 +312,102 @@ def test_network_capture_clear():
     cap.features.append({"url": "u", "feature": {"geometry": {}}})
     cap.clear()
     assert cap.features == []
+
+
+# ─── Reproject & sanity (v8.3) ──────────────────────────────────────────
+
+
+def test_maybe_reproject_passthrough_wgs84():
+    geom = {"type": "Polygon", "coordinates": [[[37.6, 55.7], [37.7, 55.7]]]}
+    out = nspd_v8._maybe_reproject_to_wgs84(geom)
+    assert out["coordinates"][0][0] == [37.6, 55.7]
+
+
+def test_maybe_reproject_triggers_on_3857():
+    """Координаты в EPSG:3857 (метры) → reproject в lon/lat."""
+    geom = {"type": "Polygon",
+            "coordinates": [[[4185000.0, 5550000.0], [4185100.0, 5550000.0]]]}
+    out = nspd_v8._maybe_reproject_to_wgs84(geom)
+    lon, lat = out["coordinates"][0][0]
+    assert -180 < lon < 180
+    assert -90 < lat < 90
+    # 4185000 m ≈ 37.6° E
+    assert 37 < lon < 38
+
+
+def test_payload_area_sane_huge_rejected():
+    p = {"площадь_вычисленная_кв_м": 1.4e15}
+    assert nspd_v8._payload_area_sane(p, None) is False
+
+
+def test_payload_area_sane_off_by_100x_rejected():
+    p = {"площадь_вычисленная_кв_м": 100000.0}
+    assert nspd_v8._payload_area_sane(p, 554.0) is False
+
+
+def test_payload_area_sane_ok_with_parsed():
+    p = {"площадь_вычисленная_кв_м": 600.0}
+    assert nspd_v8._payload_area_sane(p, 554.0) is True
+
+
+def test_payload_area_sane_ok_without_parsed():
+    p = {"площадь_вычисленная_кв_м": 5000.0}
+    assert nspd_v8._payload_area_sane(p, None) is True
+
+
+def test_network_capture_skips_search():
+    """Search/suggest endpoints исключаются (extent квартала, не геометрия)."""
+    cap = nspd_v8.NetworkCapture()
+    # эмулируем сканирование «вручную» — _on_response/_scan имеет фильтр URL
+    # на уровне _on_response, _scan просто принимает данные. Проверяем _on_response через мок.
+    class FakeResp:
+        def __init__(self, url, payload):
+            self.url = url
+            self.headers = {"content-type": "application/json"}
+            self._payload = payload
+
+        async def json(self):
+            return self._payload
+
+    fc = {"type": "FeatureCollection",
+          "features": [{"type": "Feature",
+                        "geometry": {"type": "Polygon",
+                                     "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]},
+                        "properties": {"cad_num": "X:1:1:1"}}]}
+    import asyncio
+    # Search URL → не должен попасть в features
+    r1 = FakeResp("https://nspd.gov.ru/api/geoportal/v2/search/geoportal?query=X", fc)
+    asyncio.get_event_loop().run_until_complete(cap._on_response(r1))
+    assert len(cap.features) == 0
+    # WFS URL → должен попасть
+    r2 = FakeResp("https://nspd.gov.ru/api/aeggis/v3/36048/wfs?...", fc)
+    asyncio.get_event_loop().run_until_complete(cap._on_response(r2))
+    assert len(cap.features) == 1
+
+
+def test_network_capture_prefers_exact_match_over_substring():
+    """Если есть exact-match и substring-match, выбираем exact."""
+    cap = nspd_v8.NetworkCapture()
+    # «Левая» feature, substring-матч на квартал
+    cap.features.append({
+        "url": "u1",
+        "feature": {
+            "geometry": {"type": "Polygon",
+                         "coordinates": [[[0, 0], [9999, 0], [9999, 9999], [0, 9999], [0, 0]]]},
+            "properties": {"name": "квартал 23:50:0301004:25 содержит"},
+        }
+    })
+    # «Правая» feature, exact match
+    cap.features.append({
+        "url": "u2",
+        "feature": {
+            "geometry": {"type": "Polygon",
+                         "coordinates": [[[1, 1], [2, 1], [2, 2], [1, 2], [1, 1]]]},
+            "properties": {"cad_num": "23:50:0301004:25"},
+        }
+    })
+    found = cap.find_by_cad("23:50:0301004:25")
+    assert found["src_url"] == "u2"
 
 
 def test_cv_no_purple_pixels_returns_none():
