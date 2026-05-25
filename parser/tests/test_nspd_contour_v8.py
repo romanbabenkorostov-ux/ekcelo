@@ -225,7 +225,7 @@ def test_cv_payload_from_cv_schema():
     assert all("outer" in p and "holes" in p for p in payload["полигоны"])
     # legacy flat тоже есть
     assert isinstance(payload["локальные_метры"], list)
-    assert payload["алгоритм_версия"] == "v8.1"
+    assert payload["алгоритм_версия"] == "v8.2"
     assert payload["площадь_заявленная_кв_м"] == 554.0
     assert abs(payload["площадь_вычисленная_кв_м"] - 554.0) < 0.01
 
@@ -243,6 +243,75 @@ def test_cv_returns_none_on_empty_input():
         pytest.skip("CV-deps not available")
     assert nspd_v8._extract_contours_from_image(None, 554.0, 65, 10) is None
     assert nspd_v8._extract_contours_from_image(b"", 554.0, 65, 10) is None
+
+
+# ─── NetworkCapture (v8.2) ──────────────────────────────────────────────
+
+
+def test_network_capture_scans_featurecollection():
+    cap = nspd_v8.NetworkCapture()
+    fc = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {"type": "Polygon",
+                             "coordinates": [[[37.6, 55.7], [37.7, 55.7],
+                                              [37.7, 55.8], [37.6, 55.8],
+                                              [37.6, 55.7]]]},
+                "properties": {"cad_num": "77:01:0001001:123"},
+            }
+        ],
+    }
+    cap._scan(fc, "https://nspd.gov.ru/api/aeggis/v3/36329/wfs?cql=...")
+    assert len(cap.features) == 1
+    found = cap.find_by_cad("77:01:0001001:123")
+    assert found is not None
+    assert found["geom"]["type"] == "Polygon"
+
+
+def test_network_capture_scans_pkk_style():
+    cap = nspd_v8.NetworkCapture()
+    pkk = {
+        "feature": {
+            "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]},
+            "attrs": {"cn": "23:50:0301004:25"},
+        }
+    }
+    cap._scan(pkk, "https://pkk.rosreestr.ru/api/features/1/23:50:0301004:25")
+    assert len(cap.features) == 1
+    assert cap.find_by_cad("23:50:0301004:25") is not None
+
+
+def test_network_capture_finds_part_by_core():
+    """Часть `:25/9` должна находить feature родителя `:25` тоже (по core-form)."""
+    cap = nspd_v8.NetworkCapture()
+    fc = {
+        "type": "FeatureCollection",
+        "features": [{
+            "type": "Feature",
+            "geometry": {"type": "Polygon",
+                         "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]},
+            "properties": {"cad_num": "23:50:0301004:25"},
+        }],
+    }
+    cap._scan(fc, "u")
+    assert cap.find_by_cad("23:50:0301004:25/9") is not None
+
+
+def test_network_capture_no_match():
+    cap = nspd_v8.NetworkCapture()
+    cap._scan({"type": "FeatureCollection", "features": [
+        {"type": "Feature", "geometry": {"type": "Point", "coordinates": [0, 0]},
+         "properties": {"cad_num": "OTHER:1:1:1"}}]}, "u")
+    assert cap.find_by_cad("23:50:0301004:25") is None
+
+
+def test_network_capture_clear():
+    cap = nspd_v8.NetworkCapture()
+    cap.features.append({"url": "u", "feature": {"geometry": {}}})
+    cap.clear()
+    assert cap.features == []
 
 
 def test_cv_no_purple_pixels_returns_none():
