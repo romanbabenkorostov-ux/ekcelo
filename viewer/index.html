@@ -7609,6 +7609,11 @@ async function writeEXIFWithGPS(){ if(!roleAllows('edit'))return;
   let blob=null;
   try{if(p.originalBlob)blob=p.originalBlob;else if(p.fileHandle){const f=await p.fileHandle.getFile();blob=f;}else if(p.file)blob=p.file;else if(p.isRemote&&p.sourceType==='yandex'&&p.remoteViewUrl)blob=await fetchYandexBlob(p.remoteViewUrl);else throw new Error('Нет источника');}
   catch(err){showToast(`❌ ${err.message}`,'error',6000);document.getElementById('mgps-save-btn').disabled=false;return;}
+  // Sanity-check: blob должен быть валидным JPEG (FFD8 magic + ≥512 байт).
+  // Stub/synthetic JPG (например, 91-байт фикстура от parser-team в smoke-batch)
+  // — НЕ пригоден для piexifjs read-write cycle, выдаёт "unpack error" в piexif.dump.
+  if(blob.size < 512){showToast('❌ Файл слишком мал — возможно, synthetic stub без EXIF; запись невозможна','error',7000);document.getElementById('mgps-save-btn').disabled=false;return;}
+  try{const hd=new Uint8Array(await blob.slice(0,2).arrayBuffer());if(hd[0]!==0xFF||hd[1]!==0xD8){showToast('❌ Не JPEG (нет FFD8) — EXIF не записан','error',6000);document.getElementById('mgps-save-btn').disabled=false;return;}}catch(_){}
   let dataUrl;try{dataUrl=await blobToDataUrl(blob);}catch(e){showToast('❌ Чтение файла: '+e.message,'error');document.getElementById('mgps-save-btn').disabled=false;return;}
   let exifObj={'0th':{},'Exif':{},'GPS':{},'1st':{}};try{exifObj=piexif.load(dataUrl);}catch(_){}if(!exifObj['GPS'])exifObj['GPS']={};
   const[latDMS,latRef]=decToDMS(tempLat,'lat');const[lonDMS,lonRef]=decToDMS(tempLon,'lon');
@@ -7619,7 +7624,7 @@ async function writeEXIFWithGPS(){ if(!roleAllows('edit'))return;
   if(p.locPath)gpp.loc={path:p.locPath,source:p.sourceType||'local'};
   const gppTxt=JSON.stringify(gpp),gppPay=new Uint8Array(8+new TextEncoder().encode(gppTxt).length);gppPay.set(PFX,0);gppPay.set(new TextEncoder().encode(gppTxt),8);
   if(!exifObj['Exif'])exifObj['Exif']={};exifObj['Exif'][piexif.ExifIFD.UserComment]=gppPay;
-  let newDataUrl;try{newDataUrl=piexif.insert(piexif.dump(exifObj),dataUrl);}catch(err){showToast(`❌ EXIF: ${err.message}`,'error',6000);document.getElementById('mgps-save-btn').disabled=false;return;}
+  let newDataUrl;try{newDataUrl=piexif.insert(piexif.dump(exifObj),dataUrl);}catch(err){showToast(`❌ EXIF запись не удалась: ${err.message}. Возможно, JPEG несовместим с piexifjs (synthetic/stub или повреждённый файл).`,'error',8000);document.getElementById('mgps-save-btn').disabled=false;return;}
   const newBlob=dataUrlToBlob(newDataUrl);
   if(!p.isRemote&&p.fileHandle&&typeof p.fileHandle.createWritable==='function'){try{if(!(await _ensureHandleRW(p.fileHandle)))throw new Error('нет прав на запись');const w=await p.fileHandle.createWritable();await w.write(newBlob);await w.close();showToast('✅ Файл перезаписан на диске','success',3000);}catch(e){const a=document.createElement('a');a.href=newDataUrl;a.download=p.name;a.click();showToast('✅ EXIF записан (скачан)','success',3000);}}
   else if(p.isRemote){const a=document.createElement('a');a.href=newDataUrl;a.download=p.name;a.click();showToast('✅ Скачан (источник только чтение)','success',4000);}
