@@ -1,14 +1,29 @@
 """
-NSPD Парсер v8.1 (extends standalone v25.0 — adds contour extraction)
+NSPD Парсер v8.2 (extends standalone v25.0 — adds contour extraction)
+
+Что нового vs v8.1 (боевая адаптация под реальную DOM НСПД):
+- **NetworkCapture**: пассивный network-sniffer ловит ВСЕ JSON-ответы НСПД
+  (когда страница сама загружает feature). Стало PRIMARY-источником —
+  работает без активного HTTP-запроса, без CORS/Referer-проблем.
+- WFS-fetch переведён с `page.evaluate(fetch)` (CORS-проблема) на
+  `context.request.get()` (Playwright APIRequestContext). Корректные headers.
+- Scale-bar: множество селекторов (`.ol-scale-line-inner`,
+  `.ol-scale-bar-single`, `[class*="scale"]`) + текст-эвристика
+  (любой div/span с текстом `/^[\\d.,]+\\s*(m|м|km|км)$/`).
+- Screenshot canvas: 6 селекторов вместо 1.
+- При неудаче CV — debug-dump на диск: `debug_contour_<cn>_<ts>/` со
+  screenshot.png, mask.png, hsv-histogram.png, чтобы можно было
+  диагностировать визуально.
+- Подробное логирование на каждой ступени fallback'а.
 
 Что нового vs v8.0:
 - CV-pipeline отрефакторен под сложные формы (например 90:25:020103:1393 — сеть дорожек).
 - Двух-проходная HSV-маска: stroke (резкий пурпур) + fill (полупрозрачный).
 - Bounded morphology: маленькое ядро 3×3, 1 итерация — не «съедает» тонкие перешейки.
-- `polygons` — новая семантическая структура: [{outer: ring, holes: [ring,...]}, ...].
-- `тип` корректно: Polygon при 1 outer, MultiPolygon при ≥2 (раньше считалось по плоскому числу колец).
-- Адаптивный RDP epsilon: max(0.8, 0.0015 × perimeter) — на сложной форме меньше упрощения.
-- Backward-compat: `локальные_метры` (плоский список колец) остаётся, помечен legacy.
+- `polygons` — семантическая структура: [{outer: ring, holes: [ring,...]}, ...].
+- `тип` корректно: Polygon при 1 outer, MultiPolygon при ≥2.
+- Адаптивный RDP epsilon: max(0.8, 0.0015 × perimeter).
+- Backward-compat: `локальные_метры` (плоский) остаётся.
 
 Что нового vs v7/v25.0:
 - Новый шаг в `parse_one()`: после парсинга карточки извлекается контур объекта.
@@ -116,7 +131,10 @@ MIN_CONTOUR_AREA_PX = 80
 RDP_EPSILON_MIN_PX = 0.8
 RDP_EPSILON_FRAC = 0.0015
 
-ALG_VERSION = "v8.1"
+ALG_VERSION = "v8.2"
+
+# Включить запись debug-dump на диск при неудаче CV-pipeline.
+CONTOUR_DEBUG_DUMP = True
 
 # Поля с площадью, которые мы признаём (для калибровки)
 AREA_KEYS = (
@@ -795,70 +813,159 @@ def _geojson_to_local_meters(geojson):
     }
 
 
-async def _fetch_geom_via_wfs(page, cad_num):
-    """PRIMARY: запрашивает GeoJSON геометрию через WFS API НСПД.
-    Делает fetch из контекста страницы (правильный Referer, cookies).
-    Возвращает GeoJSON Polygon/MultiPolygon в WGS84 либо None.
-    """
-    layers_groups = [("zu", NSPD_ZU_IDS), ("oks", NSPD_OKS_IDS)]
+class NetworkCapture:
+    """Пассивно слушает все JSON-ответы с nspd.gov.ru/rosreestr.ru/pkk.
+    Когда страница сама подгружает feature/featurecollection — мы их видим
+    без CORS, без явных запросов. Главный PRIMARY-источник в v8.2."""
 
-    js = """
-    async (args) => {
-      const { cad, layerIds, fields } = args;
-      const esc = cad.replace(/'/g, "\\\\'");
-      for (const id of layerIds) {
-        // XML FILTER
-        for (const f of fields) {
-          const xmlF = `<fes:Filter xmlns:fes="http://www.opengis.net/fes/2.0"><fes:PropertyIsEqualTo>`+
-            `<fes:ValueReference>${f}</fes:ValueReference><fes:Literal>${esc}</fes:Literal>`+
-            `</fes:PropertyIsEqualTo></fes:Filter>`;
-          const base = `https://nspd.gov.ru/api/aeggis/v3/${id}/wfs?SERVICE=WFS&VERSION=2.0.0`+
-            `&REQUEST=GetFeature&TYPENAMES=ms:layer_${id}&outputFormat=application/json`+
-            `&SRSNAME=EPSG:4326&count=1`;
-          const url = `${base}&FILTER=${encodeURIComponent(xmlF)}`;
-          try {
-            const ctl = new AbortController();
-            const tid = setTimeout(() => ctl.abort(), 12000);
-            const r = await fetch(url, { signal: ctl.signal });
-            clearTimeout(tid);
-            if (!r.ok) continue;
-            const fc = await r.json();
-            const feat = fc.features && fc.features[0];
-            if (feat && feat.geometry) {
-              return { geom: feat.geometry, props: feat.properties || {}, src_url: url, layer_id: id, field: f, method: 'xml' };
-            }
-          } catch(_) { /* keep trying */ }
-        }
-        // CQL_FILTER
-        for (const f of fields) {
-          const url = `https://nspd.gov.ru/api/aeggis/v3/${id}/wfs?SERVICE=WFS&VERSION=2.0.0`+
-            `&REQUEST=GetFeature&TYPENAMES=ms:layer_${id}&CQL_FILTER=${encodeURIComponent(`${f}='${esc}'`)}`+
-            `&outputFormat=application/json&SRSNAME=EPSG:4326&count=1`;
-          try {
-            const ctl = new AbortController();
-            const tid = setTimeout(() => ctl.abort(), 12000);
-            const r = await fetch(url, { signal: ctl.signal });
-            clearTimeout(tid);
-            if (!r.ok) continue;
-            const fc = await r.json();
-            const feat = fc.features && fc.features[0];
-            if (feat && feat.geometry) {
-              return { geom: feat.geometry, props: feat.properties || {}, src_url: url, layer_id: id, field: f, method: 'cql' };
-            }
-          } catch(_) {}
-        }
-      }
-      return null;
-    }
-    """
+    def __init__(self):
+        self.features = []  # [{url, feature, source}]
+        self._page = None
 
-    for _name, ids in layers_groups:
+    async def _on_response(self, resp):
         try:
-            result = await page.evaluate(js, {"cad": cad_num, "layerIds": ids, "fields": CAD_FIELDS})
+            url = resp.url
+            if not any(d in url for d in (
+                "nspd.gov.ru", "rosreestr.ru", "pkk.rosreestr",
+            )):
+                return
+            ct = ""
+            try:
+                ct = (resp.headers or {}).get("content-type", "") or ""
+            except Exception:
+                pass
+            if "json" not in ct.lower():
+                # Иногда content-type=text/plain, но тело — JSON. Пробуем парсить опционально.
+                if not url.endswith(".json") and "json" not in url.lower():
+                    return
+            try:
+                data = await resp.json()
+            except Exception:
+                return
+            self._scan(data, url)
         except Exception:
-            result = None
-        if result and result.get("geom"):
-            return result
+            return
+
+    def _scan(self, data, url, depth=0):
+        if depth > 4 or data is None:
+            return
+        if isinstance(data, list):
+            for x in data:
+                self._scan(x, url, depth + 1)
+            return
+        if not isinstance(data, dict):
+            return
+        t = data.get("type")
+        if t == "FeatureCollection":
+            for f in data.get("features") or []:
+                if isinstance(f, dict) and f.get("geometry"):
+                    self.features.append({"url": url, "feature": f})
+        elif t == "Feature" and data.get("geometry"):
+            self.features.append({"url": url, "feature": data})
+        # PKK style: {feature: {geometry: ..., attrs: ...}}
+        feat = data.get("feature")
+        if isinstance(feat, dict) and feat.get("geometry"):
+            self.features.append({"url": url, "feature": feat})
+        # Подзапросы — рекурсивно
+        for k in ("data", "result", "response", "body"):
+            if k in data:
+                self._scan(data[k], url, depth + 1)
+
+    def attach(self, page):
+        self._page = page
+
+        # Wrap async handler into a sync callback that schedules a task.
+        def _cb(resp):
+            try:
+                asyncio.create_task(self._on_response(resp))
+            except RuntimeError:
+                pass
+
+        self._cb = _cb
+        page.on("response", _cb)
+
+    def detach(self):
+        if self._page and self._cb:
+            try:
+                self._page.remove_listener("response", self._cb)
+            except Exception:
+                pass
+
+    def clear(self):
+        self.features.clear()
+
+    def find_by_cad(self, cad_num):
+        """Ищет среди перехваченных features ту, у которой в properties/attrs
+        содержится переданный кадастровый номер."""
+        cn_compact = (cad_num or "").replace(" ", "").upper()
+        if not cn_compact:
+            return None
+        # «короткая» форма для частей-объектов (без '/N')
+        cn_core = cn_compact.split("/")[0]
+        for entry in self.features:
+            f = entry["feature"]
+            props = f.get("properties") or f.get("attrs") or {}
+            for v in props.values():
+                if not isinstance(v, str):
+                    continue
+                vc = v.replace(" ", "").upper()
+                if cn_compact in vc or cn_core in vc:
+                    return {
+                        "geom": f["geometry"],
+                        "props": props,
+                        "src_url": entry["url"],
+                    }
+        return None
+
+
+async def _fetch_geom_via_wfs(context, cad_num, prefix=""):
+    """SECONDARY: WFS API НСПД через Playwright APIRequestContext.
+    Чистый HTTP, без CORS. Перебирает ZU/OKS layers × CAD_FIELDS × методы.
+    Возвращает {geom, props, src_url, layer_id, field, method} или None.
+    """
+    from urllib.parse import quote
+    headers = {
+        "Referer": "https://nspd.gov.ru/",
+        "Accept": "application/json, */*",
+        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                       "Chrome/120.0 Safari/537.36"),
+    }
+    tried = 0
+    for kind, ids in (("zu", NSPD_ZU_IDS), ("oks", NSPD_OKS_IDS)):
+        for id_ in ids:
+            for f in CAD_FIELDS:
+                cql = quote(f"{f}='{cad_num}'", safe="")
+                url = (
+                    f"https://nspd.gov.ru/api/aeggis/v3/{id_}/wfs?"
+                    f"SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&"
+                    f"TYPENAMES=ms:layer_{id_}&CQL_FILTER={cql}&"
+                    f"outputFormat=application/json&SRSNAME=EPSG:4326&count=1"
+                )
+                tried += 1
+                try:
+                    resp = await context.request.get(url, headers=headers, timeout=12000)
+                except Exception as e:
+                    print(f"{prefix}  [wfs] layer {id_}/{f}: {e.__class__.__name__}")
+                    continue
+                if resp.status != 200:
+                    continue
+                try:
+                    body = await resp.json()
+                except Exception:
+                    continue
+                feats = (body or {}).get("features") or []
+                if feats and isinstance(feats[0], dict) and feats[0].get("geometry"):
+                    return {
+                        "geom": feats[0]["geometry"],
+                        "props": feats[0].get("properties") or {},
+                        "src_url": url,
+                        "layer_id": id_,
+                        "field": f,
+                        "method": "cql",
+                        "kind": kind,
+                    }
+    print(f"{prefix}  [wfs] перебрано {tried} комбинаций — без результата")
     return None
 
 
@@ -953,52 +1060,141 @@ def _reproject_3857_to_wgs84(geom):
 
 
 async def _read_scale_bar(page):
-    """Читает scale-bar из DOM. Возвращает (px_width, meters) либо (None, None)."""
+    """Читает scale-bar из DOM. Несколько стратегий + текст-эвристика.
+    Возвращает {px, m, raw, sel} либо None. Дополнительно — список tried-селекторов
+    в ключе 'debug_tried' для лога."""
     js = """
     () => {
-      const el = document.querySelector('.scale-inner');
-      if (!el) return null;
-      const txt = (el.innerText || el.textContent || '').trim();
-      const w = el.offsetWidth || parseFloat(el.style.width) || null;
-      // Парсим "10 m", "100 м", "1 km" и т.п.
-      const m = txt.match(/([\\d.,]+)\\s*(km|км|m|м)/i);
-      if (!m || !w) return null;
-      let val = parseFloat(m[1].replace(',', '.'));
-      const unit = m[2].toLowerCase();
-      if (unit === 'km' || unit === 'км') val *= 1000.0;
-      return { px: w, m: val, raw: txt };
+      const tried = [];
+      const selectors = [
+        '.ol-scale-line-inner',
+        '.ol-scale-bar-single',
+        '.ol-scale-bar',
+        '.ol-scale-line',
+        '[class*="scale-line"]',
+        '[class*="scale-bar"]',
+        '[class*="scale-inner"]',
+        '[class*="ScaleLine"]',
+        '[class*="ScaleBar"]',
+        '.scale-control',
+        '.map-scale',
+        'm-scale-bar',
+      ];
+      const matchUnit = (txt) => txt.match(/([\\d.,]+)\\s*(km|км|m|м)\\b/i);
+
+      for (const sel of selectors) {
+        let els;
+        try { els = document.querySelectorAll(sel); }
+        catch(_) { continue; }
+        tried.push({sel, count: els.length});
+        for (const el of els) {
+          const txt = (el.innerText || el.textContent || '').trim();
+          const m = matchUnit(txt);
+          if (!m) continue;
+          const w = el.offsetWidth || el.getBoundingClientRect().width;
+          if (!w || w < 10) continue;
+          let val = parseFloat(m[1].replace(',', '.'));
+          if (m[2].toLowerCase().startsWith('k')) val *= 1000;
+          return {px: Math.round(w * 100) / 100, m: val, raw: txt, sel, debug_tried: tried};
+        }
+      }
+
+      // Текст-эвристика: ищем любой div/span с коротким текстом «N m» / «N км»
+      const all = document.querySelectorAll('div, span, p');
+      for (const el of all) {
+        const txt = (el.innerText || el.textContent || '').trim();
+        if (!txt || txt.length > 14) continue;
+        const m = txt.match(/^([\\d.,]+)\\s*(km|км|m|м)$/i);
+        if (!m) continue;
+        const w = el.offsetWidth || el.getBoundingClientRect().width;
+        if (!w || w < 20 || w > 400) continue;
+        let val = parseFloat(m[1].replace(',', '.'));
+        if (m[2].toLowerCase().startsWith('k')) val *= 1000;
+        return {px: Math.round(w * 100) / 100, m: val, raw: txt, sel: 'text-heuristic', debug_tried: tried};
+      }
+      return {match: null, debug_tried: tried};
     }
     """
     try:
-        return await page.evaluate(js)
-    except Exception:
-        return None
+        result = await page.evaluate(js)
+    except Exception as e:
+        return {"_error": f"{e.__class__.__name__}: {e}"}
+    if not result or "px" not in result:
+        return result  # содержит debug_tried
+    return result
 
 
 async def _screenshot_map_canvas(page):
-    """Делает скриншот OL-канваса карты. Возвращает (png_bytes, bbox_dict)."""
+    """Скриншот канваса карты с перебором селекторов.
+    Возвращает (png_bytes, clip_dict, used_sel) либо (None, None, tried_log)."""
     js = """
     () => {
-      const cv = document.querySelector('.ol-viewport canvas') || document.querySelector('canvas');
-      if (!cv) return null;
-      const r = cv.getBoundingClientRect();
-      return { x: r.x, y: r.y, w: r.width, h: r.height };
+      const tried = [];
+      const selectors = [
+        '.ol-viewport canvas',
+        '.ol-unselectable canvas',
+        '#map canvas',
+        '.map canvas',
+        '[class*="map-container"] canvas',
+        '[class*="MapContainer"] canvas',
+        'canvas',
+      ];
+      for (const sel of selectors) {
+        let els;
+        try { els = document.querySelectorAll(sel); }
+        catch(_) { continue; }
+        tried.push({sel, count: els.length});
+        for (const el of els) {
+          const r = el.getBoundingClientRect();
+          if (r.width < 200 || r.height < 200) continue;
+          return {sel, x: r.x, y: r.y, w: r.width, h: r.height, tried};
+        }
+      }
+      return {match: null, tried};
     }
     """
     try:
         bbox = await page.evaluate(js)
-        if not bbox or not bbox.get("w"):
-            return None, None
-        clip = {
-            "x": int(bbox["x"]),
-            "y": int(bbox["y"]),
-            "width": int(bbox["w"]),
-            "height": int(bbox["h"]),
-        }
+    except Exception as e:
+        return None, None, f"evaluate-error: {e.__class__.__name__}"
+    if not bbox or "w" not in bbox:
+        return None, None, bbox.get("tried") if bbox else None
+    clip = {
+        "x": max(0, int(bbox["x"])),
+        "y": max(0, int(bbox["y"])),
+        "width": int(bbox["w"]),
+        "height": int(bbox["h"]),
+    }
+    try:
         png_bytes = await page.screenshot(clip=clip, type="png")
-        return png_bytes, clip
+    except Exception as e:
+        return None, clip, f"screenshot-error: {e.__class__.__name__}"
+    return png_bytes, clip, bbox.get("sel")
+
+
+def _save_debug_dump(cad_num, png_bytes, mask_bytes=None, payload=None, reason=""):
+    """Сохраняет диагностический дамп при неудаче CV-pipeline."""
+    if not CONTOUR_DEBUG_DUMP:
+        return None
+    try:
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_cn = (cad_num or "unknown").replace(":", "_").replace("/", "-")
+        d = Path(f"debug_contour_{safe_cn}_{ts}")
+        d.mkdir(exist_ok=True)
+        if png_bytes:
+            (d / "screenshot.png").write_bytes(png_bytes)
+        if mask_bytes:
+            (d / "mask.png").write_bytes(mask_bytes)
+        info = {"reason": reason, "ts": ts}
+        if payload:
+            info["payload"] = payload
+        (d / "info.json").write_text(
+            json.dumps(info, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return str(d)
     except Exception:
-        return None, None
+        return None
 
 
 def _decode_png_to_bgr(png_bytes):
@@ -1250,68 +1446,101 @@ def _build_payload_from_cv(cv_result, parsed_area_sqm, scale_meta):
     }
 
 
-async def extract_contour(page, info, cad_num, prefix=""):
-    """Главная точка входа: пытается извлечь контур тремя способами.
-    Возвращает payload (dict) либо None."""
+async def extract_contour(page, context, capture, info, cad_num, prefix=""):
+    """4-уровневый fallback: NetworkCapture → WFS API → OL-state → screenshot+CV.
+    Возвращает payload (dict) или None.
+
+    `capture` — экземпляр NetworkCapture, attach'нутый к page (хранит уже перехваченные
+    JSON-features за время паузы пользователя на карточке).
+    """
     if info.get("Без координат границ") is True:
         print(f"{prefix}  [contour] объект без координат границ — пропуск")
         return None
 
     parsed_area = _parsed_area_sqm(info)
-    scale_meta = await _read_scale_bar(page)
 
-    # 1) PRIMARY: WFS
+    # 0) PRIMARY: NetworkCapture — то, что страница уже сама загрузила
+    cap = capture.find_by_cad(cad_num) if capture else None
+    if cap and cap.get("geom"):
+        payload = _build_payload_from_geojson(cap["geom"], parsed_area, "network_capture")
+        if payload:
+            payload["capture_url"] = cap.get("src_url")
+            print(f"{prefix}  [contour] ✓ network_capture: тип={payload['тип']}, "
+                  f"полигонов={payload['полигонов']}, колец={payload['колец_всего']}, "
+                  f"площадь={payload['площадь_вычисленная_кв_м']} м² "
+                  f"(заявлено {parsed_area}) ← {cap.get('src_url','?')[:80]}")
+            return payload
+    else:
+        n_cap = len(capture.features) if capture else 0
+        print(f"{prefix}  [contour] network_capture: подходящей feature не найдено "
+              f"(перехвачено всего: {n_cap})")
+
+    # 1) SECONDARY: WFS API через context.request (без CORS)
     try:
-        wfs = await _fetch_geom_via_wfs(page, cad_num)
+        wfs = await _fetch_geom_via_wfs(context, cad_num, prefix=prefix)
     except Exception as e:
-        print(f"{prefix}  [contour] WFS exception: {e}")
+        print(f"{prefix}  [contour] WFS exception: {e.__class__.__name__}: {e}")
         wfs = None
     if wfs and wfs.get("geom"):
-        payload = _build_payload_from_geojson(wfs["geom"], parsed_area, "wfs", scale_meta)
+        payload = _build_payload_from_geojson(wfs["geom"], parsed_area, "wfs")
         if payload:
             payload["wfs_layer_id"] = wfs.get("layer_id")
             payload["wfs_field"] = wfs.get("field")
             payload["wfs_method"] = wfs.get("method")
-            np_ = payload["полигонов"]
-            nr = payload["колец_всего"]
-            comp = payload["площадь_вычисленная_кв_м"]
             print(f"{prefix}  [contour] ✓ WFS: тип={payload['тип']}, "
-                  f"полигонов={np_}, колец={nr}, "
-                  f"площадь={comp} м² (заявлено {parsed_area})")
+                  f"полигонов={payload['полигонов']}, колец={payload['колец_всего']}, "
+                  f"площадь={payload['площадь_вычисленная_кв_м']} м² "
+                  f"(layer {payload['wfs_layer_id']}, field {payload['wfs_field']})")
             return payload
 
-    # 2) SECONDARY: OL-state
+    # 2) TERTIARY: OL-state (window.* heuristics)
     try:
         ol = await _fetch_geom_via_ol_state(page)
     except Exception as e:
-        print(f"{prefix}  [contour] OL-state exception: {e}")
+        print(f"{prefix}  [contour] OL-state exception: {e.__class__.__name__}: {e}")
         ol = None
     if ol and ol.get("geom"):
-        payload = _build_payload_from_geojson(ol["geom"], parsed_area, "ol_state", scale_meta)
+        payload = _build_payload_from_geojson(ol["geom"], parsed_area, "ol_state")
         if payload:
-            np_ = payload["полигонов"]
-            nr = payload["колец_всего"]
-            comp = payload["площадь_вычисленная_кв_м"]
             print(f"{prefix}  [contour] ✓ OL-state: тип={payload['тип']}, "
-                  f"полигонов={np_}, колец={nr}, площадь={comp} м²")
+                  f"полигонов={payload['полигонов']}, колец={payload['колец_всего']}, "
+                  f"площадь={payload['площадь_вычисленная_кв_м']} м²")
             return payload
 
     # 3) LAST-RESORT: screenshot + CV
     if not _HAS_CV:
-        print(f"{prefix}  [contour] CV-fallback недоступен (нет numpy/cv2/PIL) — контур не извлечён")
+        print(f"{prefix}  [contour] CV-fallback недоступен (нет numpy/cv2/PIL)")
         return None
-    if not scale_meta:
-        print(f"{prefix}  [contour] CV-fallback: scale-bar не найден — контур не извлечён")
-        return None
-    png_bytes, _bbox = await _screenshot_map_canvas(page)
+
+    scale_meta = await _read_scale_bar(page)
+    valid_scale = bool(scale_meta and scale_meta.get("px") and scale_meta.get("m"))
+    if not valid_scale:
+        tried = (scale_meta or {}).get("debug_tried") or []
+        nonzero = [t for t in tried if t.get("count")]
+        print(f"{prefix}  [contour] CV-fallback: scale-bar не найден. "
+              f"Селекторы найдены: {nonzero[:5]}")
+
+    png_bytes, clip, used_sel = await _screenshot_map_canvas(page)
     if not png_bytes:
-        print(f"{prefix}  [contour] CV-fallback: скриншот canvas не получен — пропуск")
+        print(f"{prefix}  [contour] CV-fallback: скриншот canvas не получен ({used_sel})")
         return None
+    print(f"{prefix}  [contour] CV-fallback: скриншот canvas «{used_sel}» {clip}")
+
+    if not valid_scale:
+        # Сохраняем дамп — может помочь подобрать scale-bar вручную
+        dump = _save_debug_dump(cad_num, png_bytes, reason="no_scale_bar")
+        if dump:
+            print(f"{prefix}  [contour] debug-dump: {dump}")
+        return None
+
     cv_res = _extract_contours_from_image(
         png_bytes, parsed_area, scale_meta.get("px"), scale_meta.get("m")
     )
     if not cv_res:
-        print(f"{prefix}  [contour] CV-fallback: фиолетовый полигон не найден на снимке")
+        dump = _save_debug_dump(cad_num, png_bytes, reason="no_purple_mask",
+                                 payload={"scale_meta": scale_meta})
+        print(f"{prefix}  [contour] CV-fallback: фиолетовый полигон не найден на снимке"
+              + (f". debug: {dump}" if dump else ""))
         return None
     payload = _build_payload_from_cv(cv_res, parsed_area, scale_meta)
     print(f"{prefix}  [contour] ✓ CV-fallback: тип={payload['тип']}, "
@@ -1324,7 +1553,9 @@ async def extract_contour(page, info, cad_num, prefix=""):
 # ────────────────────── основная обработка одной карточки ──────────────────────
 
 
-async def parse_one(page, cadastral_number, session, depth=0):
+async def parse_one(page, context, capture, cadastral_number, session, depth=0):
+    if capture is not None:
+        capture.clear()
     url = f"https://nspd.gov.ru/map?query={cadastral_number.replace(':', '%3A')}"
     try:
         await page.goto(url, wait_until="domcontentloaded", timeout=45000)
@@ -1384,9 +1615,9 @@ async def parse_one(page, cadastral_number, session, depth=0):
     if related:
         info["Связанные объекты"] = related
 
-    # ── НОВОЕ В v8: извлечение контура ──
+    # ── v8.2: извлечение контура (4-уровневый fallback) ──
     try:
-        contour = await extract_contour(page, info, header_cn, prefix=prefix)
+        contour = await extract_contour(page, context, capture, info, header_cn, prefix=prefix)
         if contour:
             info["Контур"] = contour
     except Exception as e:
@@ -1429,9 +1660,9 @@ async def parse_one(page, cadastral_number, session, depth=0):
     return info, category, snap_path
 
 
-async def parse_one_safe(page, cn, session, depth=0):
+async def parse_one_safe(page, context, capture, cn, session, depth=0):
     try:
-        return await parse_one(page, cn, session, depth=depth)
+        return await parse_one(page, context, capture, cn, session, depth=depth)
     except UserExit:
         raise
     except KeyboardInterrupt:
@@ -1448,7 +1679,7 @@ async def parse_one_safe(page, cn, session, depth=0):
 # ────────────────────── обработка пакета ──────────────────────
 
 
-async def process_batch(page, cns, session):
+async def process_batch(page, context, capture, cns, session):
     total = len(cns)
     for idx, cn in enumerate(cns, 1):
         print(f"\n{'═' * 60}")
@@ -1459,7 +1690,7 @@ async def process_batch(page, cns, session):
             print(f"[skip] {cn} уже обработан ранее в этой сессии")
             continue
 
-        result = await parse_one_safe(page, cn, session, depth=0)
+        result = await parse_one_safe(page, context, capture, cn, session, depth=0)
         if result is None:
             continue
         info, _category, _snap = result
@@ -1478,7 +1709,7 @@ async def process_batch(page, cns, session):
             if session.has(rcn):
                 continue
             print(f"\n  ── связанный [{jdx}/{len(related)}] родителя {cn} ──")
-            await parse_one_safe(page, rcn, session, depth=1)
+            await parse_one_safe(page, context, capture, rcn, session, depth=1)
 
             if prompt_after_related():
                 raise UserExit()
@@ -1497,6 +1728,12 @@ async def run():
         browser = await p.chromium.launch(headless=False)
         context = await browser.new_context()
         page = await context.new_page()
+
+        # v8.2: NetworkCapture — пассивно ловит GeoJSON-ответы НСПД
+        capture = NetworkCapture()
+        capture.attach(page)
+        print("[i] NetworkCapture attached — слушаю JSON-ответы НСПД на response-event")
+
         try:
             while True:
                 cns = read_cn_batch()
@@ -1511,7 +1748,7 @@ async def run():
                     print(f"    {i:>3}. {c}{mark}")
 
                 try:
-                    await process_batch(page, cns, session)
+                    await process_batch(page, context, capture, cns, session)
                 except UserExit:
                     print("\n[i] Запрошен выход — завершаем сессию")
                     break
