@@ -561,7 +561,9 @@ html.tile-seam-yandex .leaflet-tile-pane{ will-change:transform; isolation:isola
 #mw-full-btn{background:rgba(255,255,255,.08);color:#e0e0e0;border:1px solid rgba(255,255,255,.15)!important}
 
 /* MANUAL GPS PANEL */
-#manual-gps-panel{display:none;position:absolute;bottom:136px;right:12px;z-index:800;width:280px;background:var(--surface);border:1px solid var(--accent2);border-radius:10px;box-shadow:var(--shadow);padding:12px 14px;font-family:'JetBrains Mono',monospace}
+#manual-gps-panel{display:none;position:absolute;bottom:136px;right:12px;z-index:3100;width:280px;background:var(--surface);border:1px solid var(--accent2);border-radius:10px;box-shadow:var(--shadow);padding:12px 14px;font-family:'JetBrains Mono',monospace}
+#manual-gps-panel #mgps-title{cursor:move;user-select:none}
+#manual-gps-panel.dragging{transition:none}
 #manual-gps-panel.visible{display:block}
 #mgps-title{font-size:10px;color:var(--accent2);font-weight:700;letter-spacing:.4px;text-transform:uppercase;margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #mgps-mode-btns{display:flex;gap:6px;margin-bottom:10px}
@@ -1370,7 +1372,7 @@ html.role-embed #ver-switch{display:none!important}
   <div id="cad-tooltip"><div id="cad-tooltip-wrap"></div></div>
 
   <div id="manual-gps-panel">
-    <div id="mgps-title">📍 Ручной GPS</div>
+    <div id="mgps-title" title="Перетащить — изменить положение окна">📍 Изменение геопривязки</div>
     <div id="mgps-mode-btns">
       <button class="mgps-mode-btn" id="mgps-btn-map"  onclick="setGPSInputMode('map')">🗺️ Клик</button>
       <button class="mgps-mode-btn" id="mgps-btn-text" onclick="setGPSInputMode('text')">⌨️ Ввести</button>
@@ -6633,7 +6635,12 @@ function renderMarksList(){
     const grp = g.key;
     const body = document.getElementById(`marks-body-${grp}`);
     const cnt  = document.getElementById(`marks-count-${grp}`);
+    const groupEl = document.getElementById(`marks-group-${grp}`);
     if(!body || !cnt) continue;
+    // UX: пустые категории скрываем целиком (не показываем «Нет: …» placeholder).
+    // Категория появляется только когда в неё попадает хоть один маркер (из
+    // загруженного KMZ или созданный в текущей сессии).
+    if(groupEl) groupEl.style.display = buckets[grp].length ? '' : 'none';
     // Считаем только видимые записи (дубли с _visible:false не учитывает).
     cnt.textContent = buckets[grp].filter(m => m.markerVisible !== false).length;
     body.innerHTML = '';
@@ -6645,10 +6652,7 @@ function renderMarksList(){
     _ensureGroupCheckbox(grp, buckets[grp]);
 
     if(!buckets[grp].length){
-      const e = document.createElement('div');
-      e.className = 'mark-empty';
-      e.textContent = 'Нет: ' + (g.label || grp).toLowerCase();
-      body.appendChild(e);
+      // Группа скрыта целиком — body можно оставить пустым, placeholder не нужен.
       continue;
     }
     for(const m of buckets[grp]){
@@ -7336,6 +7340,48 @@ let lbManualPos=false; // set when user drags, prevents map auto-reposition
   });
 })();
 
+// Drag для #manual-gps-panel («Изменение геопривязки») — handle на #mgps-title.
+// Панель absolute с bottom/right якорями; на drag-start переключаемся в left/top,
+// чтобы корректно следовать курсору. Bounding по map-wrap.
+(function initGPSPanelDrag(){
+  let dragging=false, startX=0, startY=0, origL=0, origT=0;
+  const handle=()=>document.getElementById('mgps-title');
+  const pnl=()=>document.getElementById('manual-gps-panel');
+  document.addEventListener('mousedown',e=>{
+    const h=handle(); if(!h||!h.contains(e.target))return;
+    const p=pnl(); if(!p||!p.classList.contains('visible'))return;
+    // Переход bottom/right → left/top один раз при первом drag в сеансе.
+    const rect=p.getBoundingClientRect();
+    const mw=document.getElementById('map-wrap');
+    const mwRect=mw.getBoundingClientRect();
+    if(!p.dataset.draggedOnce){
+      p.style.left=(rect.left-mwRect.left)+'px';
+      p.style.top =(rect.top -mwRect.top )+'px';
+      p.style.right='auto'; p.style.bottom='auto';
+      p.dataset.draggedOnce='1';
+    }
+    dragging=true;
+    startX=e.clientX; startY=e.clientY;
+    origL=parseInt(p.style.left||'0',10);
+    origT=parseInt(p.style.top ||'0',10);
+    p.classList.add('dragging');
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!dragging)return;
+    const p=pnl(); if(!p)return;
+    const mw=document.getElementById('map-wrap');
+    const W=mw.offsetWidth, H=mw.offsetHeight;
+    const pw=p.offsetWidth||280, ph=p.offsetHeight||300;
+    const dx=e.clientX-startX, dy=e.clientY-startY;
+    p.style.left=Math.max(0,Math.min(W-pw, origL+dx))+'px';
+    p.style.top =Math.max(0,Math.min(H-ph, origT+dy))+'px';
+  });
+  document.addEventListener('mouseup',()=>{
+    if(dragging){dragging=false;const p=pnl(); if(p) p.classList.remove('dragging');}
+  });
+})();
+
 function closeLightbox(){
   if(_moveModePhotoIdx !== null) cancelPhotoMove();
   document.getElementById('lightbox').classList.remove('visible');
@@ -7575,7 +7621,7 @@ window.addEventListener('load',()=>{
 let manualGPSActive=false,manualModePhotoIndex=null,manualInputMode='map';
 let tempLat=null,tempLon=null,tempBearing=0,tempMarker=null;
 
-function enterManualGPSMode(idx){const p=photos[idx];if(!p)return;if(manualGPSActive)exitManualGPSMode(true);manualGPSActive=true;manualModePhotoIndex=idx;tempLat=p.lat;tempLon=p.lon;tempBearing=Math.round(p.bearing||0);renderList();setGPSInputMode('map');document.getElementById('manual-gps-panel').classList.add('visible');document.getElementById('mgps-title').textContent=`📍 GPS — ${p.name.slice(0,28)}`;const c=document.getElementById('mgps-coords-display');if(tempLat!=null){c.textContent=`${tempLat.toFixed(6)}, ${tempLon.toFixed(6)}`;c.classList.add('set');document.getElementById('mgps-bearing-wrap').style.display='block';document.getElementById('mgps-save-btn').disabled=false;updateTempMarker();}else{c.textContent='— не выбраны —';c.classList.remove('set');document.getElementById('mgps-bearing-wrap').style.display='none';document.getElementById('mgps-save-btn').disabled=true;}document.getElementById('mgps-bearing').value=tempBearing;document.getElementById('mgps-bearing-val').textContent=tempBearing+'°';showToast('📍 Кликните на карте или перетащите маркер','info',4000);}
+function enterManualGPSMode(idx){const p=photos[idx];if(!p)return;if(manualGPSActive)exitManualGPSMode(true);manualGPSActive=true;manualModePhotoIndex=idx;tempLat=p.lat;tempLon=p.lon;tempBearing=Math.round(p.bearing||0);renderList();setGPSInputMode('map');document.getElementById('manual-gps-panel').classList.add('visible');document.getElementById('mgps-title').textContent=`📍 Изменение геопривязки — ${p.name.slice(0,24)}`;const c=document.getElementById('mgps-coords-display');if(tempLat!=null){c.textContent=`${tempLat.toFixed(6)}, ${tempLon.toFixed(6)}`;c.classList.add('set');document.getElementById('mgps-bearing-wrap').style.display='block';document.getElementById('mgps-save-btn').disabled=false;updateTempMarker();}else{c.textContent='— не выбраны —';c.classList.remove('set');document.getElementById('mgps-bearing-wrap').style.display='none';document.getElementById('mgps-save-btn').disabled=true;}document.getElementById('mgps-bearing').value=tempBearing;document.getElementById('mgps-bearing-val').textContent=tempBearing+'°';showToast('📍 Кликните на карте или перетащите маркер','info',4000);}
 function setGPSInputMode(mode){manualInputMode=mode;document.getElementById('mgps-btn-map').classList.toggle('active',mode==='map');document.getElementById('mgps-btn-text').classList.toggle('active',mode==='text');document.getElementById('mgps-coord-input-wrap').style.display=mode==='text'?'block':'none';document.getElementById('gps-hint-overlay').classList.toggle('visible',mode==='map');document.getElementById('map-wrap').classList.toggle('gps-picking',mode==='map');if(mode==='text')document.getElementById('mgps-coord-field').focus();}
 function exitManualGPSMode(silent=false){manualGPSActive=false;manualModePhotoIndex=null;tempLat=null;tempLon=null;tempBearing=0;if(tempMarker){map.removeLayer(tempMarker);tempMarker=null;}document.getElementById('manual-gps-panel').classList.remove('visible');document.getElementById('gps-hint-overlay').classList.remove('visible');document.getElementById('map-wrap').classList.remove('gps-picking');document.getElementById('lb-card').classList.remove('gps-active');renderList();if(!silent)showToast('GPS отменён');if(activeIdx!=null){const p=photos[activeIdx];openLightbox(activeIdx,p.lat!=null?L.latLng(p.lat,p.lon):null);}}
 function handleMapClickForGPS(e){tempLat=e.latlng.lat;tempLon=e.latlng.lng;updateTempMarker();onCoordsSet();}
@@ -7609,11 +7655,23 @@ async function writeEXIFWithGPS(){ if(!roleAllows('edit'))return;
   let blob=null;
   try{if(p.originalBlob)blob=p.originalBlob;else if(p.fileHandle){const f=await p.fileHandle.getFile();blob=f;}else if(p.file)blob=p.file;else if(p.isRemote&&p.sourceType==='yandex'&&p.remoteViewUrl)blob=await fetchYandexBlob(p.remoteViewUrl);else throw new Error('Нет источника');}
   catch(err){showToast(`❌ ${err.message}`,'error',6000);document.getElementById('mgps-save-btn').disabled=false;return;}
-  // Sanity-check: blob должен быть валидным JPEG (FFD8 magic + ≥512 байт).
-  // Stub/synthetic JPG (например, 91-байт фикстура от parser-team в smoke-batch)
-  // — НЕ пригоден для piexifjs read-write cycle, выдаёт "unpack error" в piexif.dump.
-  if(blob.size < 512){showToast('❌ Файл слишком мал — возможно, synthetic stub без EXIF; запись невозможна','error',7000);document.getElementById('mgps-save-btn').disabled=false;return;}
-  try{const hd=new Uint8Array(await blob.slice(0,2).arrayBuffer());if(hd[0]!==0xFF||hd[1]!==0xD8){showToast('❌ Не JPEG (нет FFD8) — EXIF не записан','error',6000);document.getElementById('mgps-save-btn').disabled=false;return;}}catch(_){}
+  // Stub/synthetic JPG (например, 91-байт фикстура от parser-team в smoke-batch
+  // multi_extract_sample/) — НЕ пригоден для piexifjs read-write cycle.
+  // Не блокируем UX: координаты/угол обновляем в-памяти + перерисовываем маркер,
+  // EXIF не пишем, info-toast (вместо raw piexifjs error).
+  let _isValidJpgForWrite = blob.size >= 512;
+  if(_isValidJpgForWrite){
+    try{const hd=new Uint8Array(await blob.slice(0,2).arrayBuffer());if(hd[0]!==0xFF||hd[1]!==0xD8) _isValidJpgForWrite=false;}catch(_){ _isValidJpgForWrite=false; }
+  }
+  if(!_isValidJpgForWrite){
+    p.lat=tempLat;p.lon=tempLon;p.bearing=tempBearing||null;
+    if(p.marker)map.removeLayer(p.marker);p.marker=null;
+    addMarker(p,idx);rebuildMarkerListeners();
+    updateStats();renderList();applyFolderMarkerFilter();
+    exitManualGPSMode(true);
+    showToast('ℹ Координаты обновлены в сеансе (EXIF не записан — stub-файл без валидного JPEG)','info',7000);
+    return;
+  }
   let dataUrl;try{dataUrl=await blobToDataUrl(blob);}catch(e){showToast('❌ Чтение файла: '+e.message,'error');document.getElementById('mgps-save-btn').disabled=false;return;}
   let exifObj={'0th':{},'Exif':{},'GPS':{},'1st':{}};try{exifObj=piexif.load(dataUrl);}catch(_){}if(!exifObj['GPS'])exifObj['GPS']={};
   const[latDMS,latRef]=decToDMS(tempLat,'lat');const[lonDMS,lonRef]=decToDMS(tempLon,'lon');
