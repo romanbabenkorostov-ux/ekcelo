@@ -1,5 +1,20 @@
 """
-NSPD Парсер v8.3 (extends standalone v25.0 — adds contour extraction)
+NSPD Парсер v8.4 (extends standalone v25.0 — adds contour extraction)
+
+Что нового vs v8.3 (второй боевой прогон 23:50:0301004:25 — все источники упали):
+- **WFS** переведён с `context.request` на `page.request` — наследует
+  cookies/Referer открытой страницы, проходит anti-bot фильтры. Подробный
+  лог статусов (200/403/404/EXC) и `e.message` вместо просто класса.
+- **+ новый источник PKK** (Rosreestr feature API) между WFS и OL-state:
+  `pkk.rosreestr.ru/api/features/{1|5}/{cad_num}` + text-search fallback.
+- **scale-bar Deep DOM**: обход всех Shadow Root'ов (НСПД использует
+  web-components m-* — обычный `querySelectorAll` их не видит). Добавлен
+  тег M-TYPOGRAPHY в список text-эвристики.
+- **NetworkCapture.all_urls**: хранит все URL'ы (даже отфильтрованные).
+  При cap=0 печатает последние 15 для диагностики — видно какие endpoints
+  страница реально дёргает.
+- **scale-bar fail log** — печатает text-samples (что нашлось похожего на
+  scale), чтобы можно было руками докрутить регекс.
 
 Что нового vs v8.2 (фиксы боевого прогона 23:50:0301004:25):
 - **KeyError 'кол-во_колец'** — последний legacy-ключ в print лога parse_one()
@@ -144,7 +159,7 @@ MIN_CONTOUR_AREA_PX = 80
 RDP_EPSILON_MIN_PX = 0.8
 RDP_EPSILON_FRAC = 0.0015
 
-ALG_VERSION = "v8.3"
+ALG_VERSION = "v8.4"
 
 # Включить запись debug-dump на диск при неудаче CV-pipeline.
 CONTOUR_DEBUG_DUMP = True
@@ -832,7 +847,8 @@ class NetworkCapture:
     без CORS, без явных запросов. Главный PRIMARY-источник в v8.2."""
 
     def __init__(self):
-        self.features = []  # [{url, feature, source}]
+        self.features = []        # [{url, feature, source}]
+        self.all_urls = []        # [(url, status, content_type)] — для debug
         self._page = None
 
     async def _on_response(self, resp):
@@ -842,17 +858,19 @@ class NetworkCapture:
                 "nspd.gov.ru", "rosreestr.ru", "pkk.rosreestr",
             )):
                 return
-            # Search/suggest/autocomplete отдают extent квартала/региона, а не геометрию
-            # самого объекта — это причина гигантской площади (баг v8.2 на 23:50:0301004:25).
+            status = None
+            ct = ""
+            try:
+                status = resp.status
+                ct = (resp.headers or {}).get("content-type", "") or ""
+            except Exception:
+                pass
+            self.all_urls.append((url, status, ct))
+            # Search/suggest/autocomplete отдают extent квартала/региона.
             if any(skip in url for skip in (
                 "/search/", "/suggest", "/autocomplete", "/typeahead",
             )):
                 return
-            ct = ""
-            try:
-                ct = (resp.headers or {}).get("content-type", "") or ""
-            except Exception:
-                pass
             if "json" not in ct.lower():
                 if not url.endswith(".json") and "json" not in url.lower():
                     return
@@ -911,6 +929,11 @@ class NetworkCapture:
 
     def clear(self):
         self.features.clear()
+        self.all_urls.clear()
+
+    def debug_summary(self, max_urls=20):
+        """Список последних N URL'ов для диагностики (когда features=0)."""
+        return self.all_urls[-max_urls:]
 
     def find_by_cad(self, cad_num):
         """Ищет feature с переданным кадастровым номером.
@@ -944,20 +967,23 @@ class NetworkCapture:
         }
 
 
-async def _fetch_geom_via_wfs(context, cad_num, prefix=""):
-    """SECONDARY: WFS API НСПД через Playwright APIRequestContext.
-    Чистый HTTP, без CORS. Перебирает ZU/OKS layers × CAD_FIELDS × методы.
-    Возвращает {geom, props, src_url, layer_id, field, method} или None.
+async def _fetch_geom_via_wfs(page, cad_num, prefix=""):
+    """SECONDARY: WFS API НСПД через page.request (тот же storage state, что и страница).
+    Перебирает ZU/OKS layers × CAD_FIELDS. Возвращает {geom, ...} или None.
+
+    v8.4: используем `page.request` вместо `context.request` — он наследует
+    cookies/Referer открытой страницы НСПД, поэтому проходит anti-bot фильтры
+    лучше. Подробное логирование (status, e.message).
     """
     from urllib.parse import quote
     headers = {
-        "Referer": "https://nspd.gov.ru/",
+        "Referer": "https://nspd.gov.ru/map",
         "Accept": "application/json, */*",
-        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                       "AppleWebKit/537.36 (KHTML, like Gecko) "
-                       "Chrome/120.0 Safari/537.36"),
+        "Origin": "https://nspd.gov.ru",
     }
     tried = 0
+    statuses = {}
+    last_err = None
     for kind, ids in (("zu", NSPD_ZU_IDS), ("oks", NSPD_OKS_IDS)):
         for id_ in ids:
             for f in CAD_FIELDS:
@@ -970,11 +996,15 @@ async def _fetch_geom_via_wfs(context, cad_num, prefix=""):
                 )
                 tried += 1
                 try:
-                    resp = await context.request.get(url, headers=headers, timeout=12000)
+                    resp = await page.request.get(url, headers=headers, timeout=15000)
                 except Exception as e:
-                    print(f"{prefix}  [wfs] layer {id_}/{f}: {e.__class__.__name__}")
+                    last_err = f"{e.__class__.__name__}: {str(e)[:140]}"
+                    statuses.setdefault("EXC", 0)
+                    statuses["EXC"] += 1
                     continue
-                if resp.status != 200:
+                st = resp.status
+                statuses[st] = statuses.get(st, 0) + 1
+                if st != 200:
                     continue
                 try:
                     body = await resp.json()
@@ -991,7 +1021,60 @@ async def _fetch_geom_via_wfs(context, cad_num, prefix=""):
                         "method": "cql",
                         "kind": kind,
                     }
-    print(f"{prefix}  [wfs] перебрано {tried} комбинаций — без результата")
+    summary = ", ".join(f"{k}:{v}" for k, v in statuses.items())
+    print(f"{prefix}  [wfs] перебрано {tried} комбинаций — без результата. "
+          f"Статусы: [{summary}]" + (f". Последняя ошибка: {last_err}" if last_err else ""))
+    return None
+
+
+async def _fetch_geom_via_pkk(page, cad_num, prefix=""):
+    """SECONDARY-B: PKK Rosreestr API. Старый, но даёт feature.geometry для
+    большинства объектов. type 1 = ЗУ, type 5 = ОКС. Через page.request."""
+    headers = {
+        "Referer": "https://pkk.rosreestr.ru/",
+        "Accept": "application/json, */*",
+        "Origin": "https://pkk.rosreestr.ru",
+    }
+    tried_urls = []
+    for type_id, kind in ((1, "zu"), (5, "oks")):
+        url = f"https://pkk.rosreestr.ru/api/features/{type_id}/{cad_num}"
+        tried_urls.append((url, "feat"))
+        try:
+            resp = await page.request.get(url, headers=headers, timeout=15000)
+            if resp.status == 200:
+                body = await resp.json()
+                feat = (body or {}).get("feature")
+                if feat and feat.get("geometry"):
+                    return {
+                        "geom": feat["geometry"],
+                        "props": feat.get("attrs") or {},
+                        "src_url": url,
+                        "type_id": type_id,
+                        "kind": kind,
+                    }
+        except Exception as e:
+            print(f"{prefix}  [pkk] type {type_id}: {e.__class__.__name__}: {str(e)[:120]}")
+            continue
+    # Text-search fallback (returns center/extent if no geometry).
+    from urllib.parse import quote
+    qurl = (f"https://pkk.rosreestr.ru/api/features/search?"
+            f"text={quote(cad_num)}&tolerance=4&limit=1&layers[]=1&layers[]=5")
+    tried_urls.append((qurl, "search"))
+    try:
+        resp = await page.request.get(qurl, headers=headers, timeout=15000)
+        if resp.status == 200:
+            body = await resp.json()
+            feats = (body or {}).get("features") or []
+            if feats and feats[0].get("geometry"):
+                f0 = feats[0]
+                return {
+                    "geom": f0["geometry"],
+                    "props": f0.get("attrs") or {},
+                    "src_url": qurl,
+                    "kind": "search",
+                }
+    except Exception as e:
+        print(f"{prefix}  [pkk] search: {e.__class__.__name__}: {str(e)[:120]}")
     return None
 
 
@@ -1109,59 +1192,73 @@ def _reproject_3857_to_wgs84(geom):
 
 
 async def _read_scale_bar(page):
-    """Читает scale-bar из DOM. Несколько стратегий + текст-эвристика.
-    Возвращает {px, m, raw, sel} либо None. Дополнительно — список tried-селекторов
-    в ключе 'debug_tried' для лога."""
+    """Читает scale-bar из DOM **с обходом shadowRoot** (НСПД использует
+    web-components m-* с Shadow DOM). Несколько стратегий + текст-эвристика.
+    Возвращает {px, m, raw, sel} либо {debug_tried, debug_text_samples}."""
     js = """
     () => {
       const tried = [];
-      const selectors = [
-        '.ol-scale-line-inner',
-        '.ol-scale-bar-single',
-        '.ol-scale-bar',
-        '.ol-scale-line',
-        '[class*="scale-line"]',
-        '[class*="scale-bar"]',
-        '[class*="scale-inner"]',
-        '[class*="ScaleLine"]',
-        '[class*="ScaleBar"]',
-        '.scale-control',
-        '.map-scale',
-        'm-scale-bar',
-      ];
       const matchUnit = (txt) => txt.match(/([\\d.,]+)\\s*(km|км|m|м)\\b/i);
+      const selectors = [
+        '.ol-scale-line-inner', '.ol-scale-bar-single', '.ol-scale-bar', '.ol-scale-line',
+        '[class*="scale-line"]', '[class*="scale-bar"]', '[class*="scale-inner"]',
+        '[class*="ScaleLine"]', '[class*="ScaleBar"]',
+        '.scale-control', '.map-scale', 'm-scale-bar',
+      ];
 
+      // Обход DOM включая Shadow DOM — собираем все Elements
+      function collectAll(root, bag) {
+        if (!root || !root.querySelectorAll) return;
+        const els = root.querySelectorAll('*');
+        els.forEach(el => {
+          bag.push(el);
+          if (el.shadowRoot) collectAll(el.shadowRoot, bag);
+        });
+      }
+      const all = [];
+      collectAll(document, all);
+
+      // 1) Селекторы среди всех найденных
       for (const sel of selectors) {
-        let els;
-        try { els = document.querySelectorAll(sel); }
-        catch(_) { continue; }
-        tried.push({sel, count: els.length});
-        for (const el of els) {
+        let count = 0;
+        for (const el of all) {
+          try {
+            if (!el.matches || !el.matches(sel)) continue;
+            count++;
+            const txt = (el.innerText || el.textContent || '').trim();
+            const m = matchUnit(txt);
+            if (!m) continue;
+            const r = el.getBoundingClientRect();
+            const w = el.offsetWidth || r.width;
+            if (!w || w < 10) continue;
+            let val = parseFloat(m[1].replace(',', '.'));
+            if (m[2].toLowerCase().startsWith('k')) val *= 1000;
+            return {px: Math.round(w * 100) / 100, m: val, raw: txt, sel, debug_tried: tried};
+          } catch(_) {}
+        }
+        tried.push({sel, count});
+      }
+
+      // 2) Текст-эвристика: любой элемент с коротким текстом-scale + видимая ширина
+      const textSamples = [];
+      for (const el of all) {
+        try {
+          if (!['DIV','SPAN','P','LABEL','M-TYPOGRAPHY'].includes(el.tagName)) continue;
           const txt = (el.innerText || el.textContent || '').trim();
-          const m = matchUnit(txt);
+          if (!txt || txt.length > 14) continue;
+          const m = txt.match(/^([\\d.,]+)\\s*(km|км|m|м)$/i);
           if (!m) continue;
-          const w = el.offsetWidth || el.getBoundingClientRect().width;
-          if (!w || w < 10) continue;
+          const r = el.getBoundingClientRect();
+          const w = el.offsetWidth || r.width;
+          if (!w || w < 20 || w > 400) continue;
+          if (textSamples.length < 5) textSamples.push({tag: el.tagName, txt, w});
           let val = parseFloat(m[1].replace(',', '.'));
           if (m[2].toLowerCase().startsWith('k')) val *= 1000;
-          return {px: Math.round(w * 100) / 100, m: val, raw: txt, sel, debug_tried: tried};
-        }
+          return {px: Math.round(w * 100) / 100, m: val, raw: txt,
+                  sel: 'text-heuristic:' + el.tagName, debug_tried: tried};
+        } catch(_) {}
       }
-
-      // Текст-эвристика: ищем любой div/span с коротким текстом «N m» / «N км»
-      const all = document.querySelectorAll('div, span, p');
-      for (const el of all) {
-        const txt = (el.innerText || el.textContent || '').trim();
-        if (!txt || txt.length > 14) continue;
-        const m = txt.match(/^([\\d.,]+)\\s*(km|км|m|м)$/i);
-        if (!m) continue;
-        const w = el.offsetWidth || el.getBoundingClientRect().width;
-        if (!w || w < 20 || w > 400) continue;
-        let val = parseFloat(m[1].replace(',', '.'));
-        if (m[2].toLowerCase().startsWith('k')) val *= 1000;
-        return {px: Math.round(w * 100) / 100, m: val, raw: txt, sel: 'text-heuristic', debug_tried: tried};
-      }
-      return {match: null, debug_tried: tried};
+      return {match: null, debug_tried: tried, debug_text_samples: textSamples};
     }
     """
     try:
@@ -1169,7 +1266,7 @@ async def _read_scale_bar(page):
     except Exception as e:
         return {"_error": f"{e.__class__.__name__}: {e}"}
     if not result or "px" not in result:
-        return result  # содержит debug_tried
+        return result
     return result
 
 
@@ -1547,11 +1644,20 @@ async def extract_contour(page, context, capture, info, cad_num, prefix=""):
     else:
         n_cap = len(capture.features) if capture else 0
         print(f"{prefix}  [contour] network_capture: подходящей feature не найдено "
-              f"(перехвачено всего: {n_cap})")
+              f"(перехвачено features: {n_cap})")
+        if capture and len(capture.features) == 0:
+            # Дамп последних URL'ов для диагностики — что вообще делает страница
+            tail = capture.debug_summary(max_urls=15)
+            if tail:
+                print(f"{prefix}  [contour] network_capture: последние {len(tail)} URL'ов "
+                      f"(для диагностики):")
+                for u, st, ct in tail:
+                    short = u if len(u) <= 120 else u[:117] + "..."
+                    print(f"{prefix}    [{st} {ct[:20]}] {short}")
 
-    # 1) SECONDARY: WFS API через context.request (без CORS)
+    # 1) SECONDARY: WFS API НСПД (через page.request)
     try:
-        wfs = await _fetch_geom_via_wfs(context, cad_num, prefix=prefix)
+        wfs = await _fetch_geom_via_wfs(page, cad_num, prefix=prefix)
     except Exception as e:
         print(f"{prefix}  [contour] WFS exception: {e.__class__.__name__}: {e}")
         wfs = None
@@ -1569,6 +1675,28 @@ async def extract_contour(page, context, capture, info, cad_num, prefix=""):
         elif payload:
             print(f"{prefix}  [contour] WFS отвергнут: "
                   f"computed={payload['площадь_вычисленная_кв_м']} м² нереалистично")
+
+    # 1b) SECONDARY-B: PKK Rosreestr feature API
+    try:
+        pkk = await _fetch_geom_via_pkk(page, cad_num, prefix=prefix)
+    except Exception as e:
+        print(f"{prefix}  [contour] PKK exception: {e.__class__.__name__}: {e}")
+        pkk = None
+    if pkk and pkk.get("geom"):
+        payload = _build_payload_from_geojson(pkk["geom"], parsed_area, "pkk")
+        if payload and _payload_area_sane(payload, parsed_area):
+            payload["pkk_url"] = pkk.get("src_url")
+            payload["pkk_kind"] = pkk.get("kind")
+            print(f"{prefix}  [contour] ✓ PKK: тип={payload['тип']}, "
+                  f"полигонов={payload['полигонов']}, колец={payload['колец_всего']}, "
+                  f"площадь={payload['площадь_вычисленная_кв_м']} м² "
+                  f"(kind={payload['pkk_kind']})")
+            return payload
+        elif payload:
+            print(f"{prefix}  [contour] PKK отвергнут: "
+                  f"computed={payload['площадь_вычисленная_кв_м']} м² нереалистично")
+    else:
+        print(f"{prefix}  [pkk] нет feature.geometry в ответе PKK")
 
     # 2) TERTIARY: OL-state (window.* heuristics)
     try:
@@ -1597,8 +1725,13 @@ async def extract_contour(page, context, capture, info, cad_num, prefix=""):
     if not valid_scale:
         tried = (scale_meta or {}).get("debug_tried") or []
         nonzero = [t for t in tried if t.get("count")]
+        samples = (scale_meta or {}).get("debug_text_samples") or []
         print(f"{prefix}  [contour] CV-fallback: scale-bar не найден. "
-              f"Селекторы найдены: {nonzero[:5]}")
+              f"Селекторы (>0): {nonzero[:5] or 'none'}")
+        if samples:
+            print(f"{prefix}    text-samples: {samples}")
+        elif scale_meta and scale_meta.get("_error"):
+            print(f"{prefix}    evaluate error: {scale_meta['_error']}")
 
     png_bytes, clip, used_sel = await _screenshot_map_canvas(page)
     if not png_bytes:

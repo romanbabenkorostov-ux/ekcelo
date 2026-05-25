@@ -225,7 +225,7 @@ def test_cv_payload_from_cv_schema():
     assert all("outer" in p and "holes" in p for p in payload["полигоны"])
     # legacy flat тоже есть
     assert isinstance(payload["локальные_метры"], list)
-    assert payload["алгоритм_версия"] == "v8.3"
+    assert payload["алгоритм_версия"] == "v8.4"
     assert payload["площадь_заявленная_кв_м"] == 554.0
     assert abs(payload["площадь_вычисленная_кв_м"] - 554.0) < 0.01
 
@@ -357,12 +357,12 @@ def test_payload_area_sane_ok_without_parsed():
 
 def test_network_capture_skips_search():
     """Search/suggest endpoints исключаются (extent квартала, не геометрия)."""
-    cap = nspd_v8.NetworkCapture()
-    # эмулируем сканирование «вручную» — _on_response/_scan имеет фильтр URL
-    # на уровне _on_response, _scan просто принимает данные. Проверяем _on_response через мок.
+    import asyncio
+
     class FakeResp:
         def __init__(self, url, payload):
             self.url = url
+            self.status = 200
             self.headers = {"content-type": "application/json"}
             self._payload = payload
 
@@ -374,15 +374,41 @@ def test_network_capture_skips_search():
                         "geometry": {"type": "Polygon",
                                      "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]},
                         "properties": {"cad_num": "X:1:1:1"}}]}
+    cap = nspd_v8.NetworkCapture()
+
+    async def run():
+        await cap._on_response(FakeResp("https://nspd.gov.ru/api/geoportal/v2/search/geoportal?query=X", fc))
+        assert len(cap.features) == 0
+        await cap._on_response(FakeResp("https://nspd.gov.ru/api/aeggis/v3/36048/wfs?x=1", fc))
+        assert len(cap.features) == 1
+        # all_urls фиксирует и search, и wfs
+        assert len(cap.all_urls) == 2
+    asyncio.run(run())
+
+
+def test_network_capture_all_urls_tracked():
+    """all_urls фиксирует все попавшие в листенер URL'ы (для debug-лога)."""
     import asyncio
-    # Search URL → не должен попасть в features
-    r1 = FakeResp("https://nspd.gov.ru/api/geoportal/v2/search/geoportal?query=X", fc)
-    asyncio.get_event_loop().run_until_complete(cap._on_response(r1))
-    assert len(cap.features) == 0
-    # WFS URL → должен попасть
-    r2 = FakeResp("https://nspd.gov.ru/api/aeggis/v3/36048/wfs?...", fc)
-    asyncio.get_event_loop().run_until_complete(cap._on_response(r2))
-    assert len(cap.features) == 1
+
+    class FakeResp:
+        def __init__(self, url):
+            self.url = url
+            self.status = 403
+            self.headers = {"content-type": "text/html"}
+
+        async def json(self):
+            raise RuntimeError("not json")
+
+    cap = nspd_v8.NetworkCapture()
+
+    async def run():
+        await cap._on_response(FakeResp("https://nspd.gov.ru/api/foo"))
+        await cap._on_response(FakeResp("https://pkk.rosreestr.ru/api/bar"))
+        # не НСПД/PKK — не попадёт
+        await cap._on_response(FakeResp("https://other.example.com/baz"))
+    asyncio.run(run())
+    assert len(cap.all_urls) == 2
+    assert cap.debug_summary(max_urls=10)[0][1] == 403
 
 
 def test_network_capture_prefers_exact_match_over_substring():
