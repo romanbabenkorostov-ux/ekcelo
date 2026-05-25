@@ -1,5 +1,14 @@
 """
-NSPD Парсер v8.0 (extends standalone v25.0 — adds contour extraction)
+NSPD Парсер v8.1 (extends standalone v25.0 — adds contour extraction)
+
+Что нового vs v8.0:
+- CV-pipeline отрефакторен под сложные формы (например 90:25:020103:1393 — сеть дорожек).
+- Двух-проходная HSV-маска: stroke (резкий пурпур) + fill (полупрозрачный).
+- Bounded morphology: маленькое ядро 3×3, 1 итерация — не «съедает» тонкие перешейки.
+- `polygons` — новая семантическая структура: [{outer: ring, holes: [ring,...]}, ...].
+- `тип` корректно: Polygon при 1 outer, MultiPolygon при ≥2 (раньше считалось по плоскому числу колец).
+- Адаптивный RDP epsilon: max(0.8, 0.0015 × perimeter) — на сложной форме меньше упрощения.
+- Backward-compat: `локальные_метры` (плоский список колец) остаётся, помечен legacy.
 
 Что нового vs v7/v25.0:
 - Новый шаг в `parse_one()`: после парсинга карточки извлекается контур объекта.
@@ -9,21 +18,23 @@ NSPD Парсер v8.0 (extends standalone v25.0 — adds contour extraction)
     {
       "источник": "wfs" | "ol_state" | "screenshot_cv",
       "тип": "Polygon" | "MultiPolygon",
-      "кол-во_колец": int,
+      "полигонов": int,
+      "колец_всего": int,
       "площадь_заявленная_кв_м": float | None,
       "площадь_вычисленная_кв_м": float | None,
       "коэф_коррекции_масштаба": float | None,
       "центроид": {"lon": float, "lat": float} | {"px_x": float, "px_y": float},
       "geojson": {...} | None,           # WGS84, если есть georeference
-      "локальные_метры": [               # массив колец; первое — внешний контур,
-        [{"dx": 1.234, "dy": -5.678}, ...], #   следующие — дырки (для MultiPolygon — flat list колец)
+      "полигоны": [                       # NEW v8.1 — семантическая структура
+        {"outer": [{"dx":..,"dy":..}, ...], "holes": [[...], ...]},
         ...
       ],
+      "локальные_метры": [...],          # legacy flat (deprecated, оставлен)
       "scale_bar_px": int | None,
       "scale_bar_m": float | None,
       "м_на_пиксель": float | None,
       "превью_png_b64": str | None,
-      "алгоритм_версия": "v8.0"
+      "алгоритм_версия": "v8.1"
     }
 
 Зависимости:
@@ -87,17 +98,25 @@ NSPD_ZU_IDS = [36048]
 NSPD_OKS_IDS = [36329, 36328, 36049]
 CAD_FIELDS = ['cad_num', 'KAD_NUM', 'CAD_NUM', 'kadnum']
 
-# CV-fallback: HSV-диапазон фиолетового контура NSPD (sampled empirically)
-PURPLE_HSV_LOW = (130, 60, 80)
-PURPLE_HSV_HIGH = (165, 255, 255)
+# CV-fallback: HSV-диапазоны фиолетового NSPD (sampled empirically).
+# Два прохода:
+#   1) STROKE — резкая обводка ~ #7030a0 (насыщенный пурпур, S высокий).
+#   2) FILL — полупрозрачная заливка поверх серой карты ~ (160,130,200) (S низкий).
+# OpenCV HSV: H ∈ [0..179], S,V ∈ [0..255].
+PURPLE_STROKE_HSV_LOW = (125, 90, 60)
+PURPLE_STROKE_HSV_HIGH = (165, 255, 255)
+PURPLE_FILL_HSV_LOW = (125, 30, 100)
+PURPLE_FILL_HSV_HIGH = (170, 255, 255)
 
-# Минимальная площадь контура в пикселях (отсекаем шум)
-MIN_CONTOUR_AREA_PX = 20
+# Минимальная площадь контура в пикселях (отсекаем шум).
+# Для тонких сегментов (~3м при 6 px/m → ~18 px ширина × 30 px длина = 540 px²) — подходит.
+MIN_CONTOUR_AREA_PX = 80
 
-# RDP-упрощение полигона: tolerance в пикселях
-RDP_EPSILON_PX = 1.5
+# RDP-упрощение полигона: адаптивный epsilon = max(MIN, FRAC * perimeter).
+RDP_EPSILON_MIN_PX = 0.8
+RDP_EPSILON_FRAC = 0.0015
 
-ALG_VERSION = "v8.0"
+ALG_VERSION = "v8.1"
 
 # Поля с площадью, которые мы признаём (для калибровки)
 AREA_KEYS = (
@@ -715,14 +734,15 @@ def _ring_area_sqm_local(ring_local_m):
 
 
 def _geojson_to_local_meters(geojson):
-    """Конвертирует GeoJSON Polygon/MultiPolygon (WGS84) → массив колец в локальных метрах.
+    """GeoJSON Polygon/MultiPolygon (WGS84) → семантические полигоны в локальных метрах.
     Центроид — внешнее кольцо первого полигона.
 
     Возвращает:
       {
-        "тип": str,
+        "тип": "Polygon" | "MultiPolygon",
         "центроид": {"lon": float, "lat": float},
-        "локальные_метры": [[{"dx":..,"dy":..}, ...], ...],
+        "полигоны": [{"outer": [{dx,dy},...], "holes": [[...], ...]}, ...],
+        "локальные_метры": [[...], ...],            # legacy flat
         "площадь_вычисленная_кв_м": float
       }
     """
@@ -735,35 +755,42 @@ def _geojson_to_local_meters(geojson):
         return None
 
     if gtype == "Polygon":
-        polygons = [coords]
+        polys_raw = [coords]
+        out_type = "Polygon"
     elif gtype == "MultiPolygon":
-        polygons = coords
+        polys_raw = coords
+        out_type = "MultiPolygon"
     else:
         return None
 
-    # Центроид — внешнее кольцо первого полигона.
-    outer_first = polygons[0][0]
+    outer_first = polys_raw[0][0]
     cx, cy = _ring_centroid_wgs84(outer_first)
 
-    rings_local = []
+    polygons_struct = []
+    flat_rings = []
     total_area = 0.0
-    for poly in polygons:
+
+    for poly in polys_raw:
+        outer_m = []
+        holes_m = []
         for i_ring, ring in enumerate(poly):
-            ring_m = []
-            for pt in ring:
-                dx, dy = _lonlat_to_local_meters(pt[0], pt[1], cx, cy)
-                ring_m.append((dx, dy))
-            area = _ring_area_sqm_local(ring_m)
+            ring_tuples = [_lonlat_to_local_meters(p[0], p[1], cx, cy) for p in ring]
+            ring_rounded = [{"dx": round(x, 3), "dy": round(y, 3)} for x, y in ring_tuples]
+            area = _ring_area_sqm_local(ring_tuples)
             if i_ring == 0:
+                outer_m = ring_rounded
                 total_area += area
             else:
-                total_area -= area  # дырка
-            rings_local.append([{"dx": round(x, 3), "dy": round(y, 3)} for x, y in ring_m])
+                holes_m.append(ring_rounded)
+                total_area -= area
+            flat_rings.append(ring_rounded)
+        polygons_struct.append({"outer": outer_m, "holes": holes_m})
 
     return {
-        "тип": gtype,
+        "тип": out_type,
         "центроид": {"lon": round(cx, 7), "lat": round(cy, 7)},
-        "локальные_метры": rings_local,
+        "полигоны": polygons_struct,
+        "локальные_метры": flat_rings,
         "площадь_вычисленная_кв_м": round(total_area, 2),
     }
 
@@ -974,116 +1001,192 @@ async def _screenshot_map_canvas(page):
         return None, None
 
 
-def _extract_contours_from_image(png_bytes, parsed_area_sqm, scale_px, scale_m):
-    """LAST-RESORT: HSV-фильтр фиолетового → cv2.findContours.
-    Возвращает (rings_local_meters, computed_area_sqm, m_per_px, thumb_b64)."""
-    if not _HAS_CV:
-        return None, None, None, None
-    if not png_bytes:
-        return None, None, None, None
+def _decode_png_to_bgr(png_bytes):
+    """PNG bytes → BGR numpy array. None если не декодировался."""
+    if not _HAS_CV or not png_bytes:
+        return None
+    try:
+        img = np.array(Image.open(io.BytesIO(png_bytes)).convert("RGB"))
+    except Exception:
+        return None
+    return cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
-    img = np.array(Image.open(io.BytesIO(png_bytes)).convert("RGB"))
-    bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+
+def _build_purple_mask(bgr):
+    """Двух-проходная HSV-маска: STROKE ∪ FILL.
+    Возвращает binary uint8 mask (H×W), 255 — пурпурный пиксель."""
     hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(hsv, np.array(PURPLE_HSV_LOW), np.array(PURPLE_HSV_HIGH))
+    stroke = cv2.inRange(hsv,
+                         np.array(PURPLE_STROKE_HSV_LOW),
+                         np.array(PURPLE_STROKE_HSV_HIGH))
+    fill = cv2.inRange(hsv,
+                       np.array(PURPLE_FILL_HSV_LOW),
+                       np.array(PURPLE_FILL_HSV_HIGH))
+    return cv2.bitwise_or(stroke, fill)
 
-    # Morph close — заглушить шум, замкнуть контур-обводку с заливкой
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
 
-    # RETR_CCOMP: внешние контуры + 1 уровень вложенности (дырки)
-    contours, hierarchy = cv2.findContours(mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
-    if not contours:
-        return None, None, None, None
+def _clean_mask(mask):
+    """Минимальная морфология: OPEN(шум) → CLOSE(склейка микро-разрывов stroke).
+    Маленькое ядро 3×3, 1 итерация — НЕ съедает тонкие перешейки сложных форм."""
+    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    m = cv2.morphologyEx(mask, cv2.MORPH_OPEN, k, iterations=1)
+    m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, k, iterations=1)
+    return m
 
-    # Группируем outer/inner по hierarchy
+
+def _find_polygons(mask, min_area_px=MIN_CONTOUR_AREA_PX):
+    """RETR_CCOMP → группировка outer/holes по hierarchy.
+    Возвращает (contours, polygons), где polygons = [{outer: idx, holes: [idx,...]}].
+    Маленькие контуры (< min_area_px) отбрасываются.
+    """
+    contours, hierarchy = cv2.findContours(mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
+    if not contours or hierarchy is None:
+        return [], []
+
+    polygons = []
+    keep = set()
+    parent_to_outer = {}
+
     # hierarchy[0][i] = [next, prev, first_child, parent]
-    outers = []
-    holes_by_parent = {}
     for i, h in enumerate(hierarchy[0]):
-        parent = h[3]
-        area = cv2.contourArea(contours[i])
-        if area < MIN_CONTOUR_AREA_PX:
+        parent = int(h[3])
+        if cv2.contourArea(contours[i]) < min_area_px:
             continue
+        keep.add(i)
         if parent == -1:
-            outers.append(i)
-        else:
-            holes_by_parent.setdefault(parent, []).append(i)
+            parent_to_outer[i] = len(polygons)
+            polygons.append({"outer": i, "holes": []})
 
-    if not outers:
-        return None, None, None, None
+    for i, h in enumerate(hierarchy[0]):
+        if i not in keep:
+            continue
+        parent = int(h[3])
+        if parent == -1 or parent not in parent_to_outer:
+            continue
+        polygons[parent_to_outer[parent]]["holes"].append(i)
 
-    # Центроид общей маски (для совмещения rings)
+    return contours, polygons
+
+
+def _mask_centroid(mask, contours, polygon_idxs):
+    """Центроид общей маски через moments. Fallback — среднее по outer'ам."""
     M = cv2.moments(mask)
-    if M["m00"] == 0:
-        cx_px = sum(np.mean(contours[i][:, 0, 0]) for i in outers) / len(outers)
-        cy_px = sum(np.mean(contours[i][:, 0, 1]) for i in outers) / len(outers)
-    else:
-        cx_px = M["m10"] / M["m00"]
-        cy_px = M["m01"] / M["m00"]
+    if M["m00"] > 0:
+        return M["m10"] / M["m00"], M["m01"] / M["m00"]
+    if not polygon_idxs:
+        h, w = mask.shape
+        return w / 2.0, h / 2.0
+    xs = [float(np.mean(contours[p["outer"]][:, 0, 0])) for p in polygon_idxs]
+    ys = [float(np.mean(contours[p["outer"]][:, 0, 1])) for p in polygon_idxs]
+    return sum(xs) / len(xs), sum(ys) / len(ys)
 
-    # Масштаб м/пиксель из scale-bar
-    if not scale_px or not scale_m:
-        return None, None, None, None
+
+def _polygons_area_px(contours, polygons):
+    """Площадь всех полигонов (outer - holes) в пикселях²."""
+    total = 0.0
+    for p in polygons:
+        total += cv2.contourArea(contours[p["outer"]])
+        for h in p["holes"]:
+            total -= cv2.contourArea(contours[h])
+    return max(total, 0.0)
+
+
+def _adaptive_rdp(contour):
+    """Адаптивный RDP: epsilon = max(MIN, FRAC × perimeter)."""
+    perim = cv2.arcLength(contour, closed=True)
+    eps = max(RDP_EPSILON_MIN_PX, RDP_EPSILON_FRAC * perim)
+    return cv2.approxPolyDP(contour, eps, closed=True)
+
+
+def _ring_to_local_m(contour, cx_px, cy_px, m_per_px):
+    """Pixel-ring → массив {dx, dy} в метрах от центроида. OY инвертирован."""
+    simp = _adaptive_rdp(contour)
+    pts = simp[:, 0, :]
+    return [
+        {
+            "dx": round((float(x) - cx_px) * m_per_px, 3),
+            "dy": round(-(float(y) - cy_px) * m_per_px, 3),
+        }
+        for x, y in pts
+    ]
+
+
+def _localize_polygons(contours, polygons, cx_px, cy_px, m_per_px):
+    """polygons[idx]={outer:i, holes:[j..]} → list of {outer: [{dx,dy}], holes: [[...], ...]}."""
+    out = []
+    for p in polygons:
+        outer = _ring_to_local_m(contours[p["outer"]], cx_px, cy_px, m_per_px)
+        holes = [_ring_to_local_m(contours[h], cx_px, cy_px, m_per_px) for h in p["holes"]]
+        out.append({"outer": outer, "holes": holes})
+    return out
+
+
+def _make_debug_overlay(bgr, mask, contours, polygons, centroid_px):
+    """Превью PNG (base64): подсветка mask, контуры зелёным, центроид красным."""
+    overlay = bgr.copy()
+    overlay[mask > 0] = (200, 80, 220)
+    blended = cv2.addWeighted(bgr, 0.5, overlay, 0.5, 0)
+    outer_cnts = [contours[p["outer"]] for p in polygons]
+    cv2.drawContours(blended, outer_cnts, -1, (0, 255, 0), 2)
+    for p in polygons:
+        for h in p["holes"]:
+            cv2.drawContours(blended, [contours[h]], -1, (0, 200, 255), 1)
+    cv2.circle(blended, (int(centroid_px[0]), int(centroid_px[1])), 4, (0, 0, 255), -1)
+    h_img, w_img = blended.shape[:2]
+    if max(h_img, w_img) > 600:
+        s = 600.0 / max(h_img, w_img)
+        blended = cv2.resize(blended, (int(w_img * s), int(h_img * s)))
+    ok, buf = cv2.imencode(".png", blended)
+    return base64.b64encode(buf.tobytes()).decode("ascii") if ok else None
+
+
+def _extract_contours_from_image(png_bytes, parsed_area_sqm, scale_px, scale_m):
+    """LAST-RESORT orchestrator: PNG → семантические полигоны в локальных метрах.
+    Возвращает dict с ключами: polygons_local_m, area_sqm, m_per_px, centroid_px, corr, thumb_b64.
+    None — если CV-deps отсутствуют, скриншот пустой, scale-bar не задан, или маска пуста.
+    """
+    if not _HAS_CV or not png_bytes or not scale_px or not scale_m:
+        return None
+
+    bgr = _decode_png_to_bgr(png_bytes)
+    if bgr is None:
+        return None
+
+    raw_mask = _build_purple_mask(bgr)
+    mask = _clean_mask(raw_mask)
+    contours, polygons = _find_polygons(mask)
+    if not polygons:
+        return None
+
+    cx_px, cy_px = _mask_centroid(mask, contours, polygons)
     m_per_px = scale_m / scale_px
 
-    # Площадь полигонов (outer - holes) в пикселях → м²
-    total_area_px = 0.0
-    for i in outers:
-        total_area_px += cv2.contourArea(contours[i])
-        for h in holes_by_parent.get(i, []):
-            total_area_px -= cv2.contourArea(contours[h])
-    computed_area_sqm = total_area_px * (m_per_px ** 2)
+    area_px = _polygons_area_px(contours, polygons)
+    computed_sqm = area_px * (m_per_px ** 2)
 
-    # Коррекция масштаба по parsed_area (если есть)
+    # Калибровка масштаба по заявленной площади (если есть)
     corr = 1.0
-    if parsed_area_sqm and computed_area_sqm > 0:
-        corr = math.sqrt(parsed_area_sqm / computed_area_sqm)
+    if parsed_area_sqm and computed_sqm > 0:
+        corr = math.sqrt(parsed_area_sqm / computed_sqm)
         m_per_px *= corr
-        computed_area_sqm = parsed_area_sqm
+        computed_sqm = parsed_area_sqm
 
-    # RDP-упрощение + перевод в локальные метры
-    rings_local = []
-    for i in outers:
-        cnt = contours[i]
-        eps = RDP_EPSILON_PX
-        cnt_simp = cv2.approxPolyDP(cnt, eps, closed=True)
-        ring = []
-        for p in cnt_simp[:, 0, :]:
-            dx = (float(p[0]) - cx_px) * m_per_px
-            # OY в пикселях направлена вниз; в метрах — вверх. Инвертируем.
-            dy = -(float(p[1]) - cy_px) * m_per_px
-            ring.append({"dx": round(dx, 3), "dy": round(dy, 3)})
-        rings_local.append(ring)
-        for h in holes_by_parent.get(i, []):
-            hcnt = contours[h]
-            hcnt_simp = cv2.approxPolyDP(hcnt, eps, closed=True)
-            hring = []
-            for p in hcnt_simp[:, 0, :]:
-                dx = (float(p[0]) - cx_px) * m_per_px
-                dy = -(float(p[1]) - cy_px) * m_per_px
-                hring.append({"dx": round(dx, 3), "dy": round(dy, 3)})
-            rings_local.append(hring)
+    polygons_local_m = _localize_polygons(contours, polygons, cx_px, cy_px, m_per_px)
+    thumb_b64 = _make_debug_overlay(bgr, mask, contours, polygons, (cx_px, cy_px))
 
-    # PNG thumb с подсветкой маски (для отладки)
-    overlay = bgr.copy()
-    overlay[mask > 0] = (200, 80, 220)  # BGR фиолет
-    blended = cv2.addWeighted(bgr, 0.5, overlay, 0.5, 0)
-    cv2.drawContours(blended, [contours[i] for i in outers], -1, (0, 255, 0), 2)
-    cv2.circle(blended, (int(cx_px), int(cy_px)), 4, (0, 0, 255), -1)
-    # Уменьшаем для b64
-    h, w = blended.shape[:2]
-    if max(h, w) > 600:
-        scale = 600.0 / max(h, w)
-        blended = cv2.resize(blended, (int(w * scale), int(h * scale)))
-    _ok, buf = cv2.imencode(".png", blended)
-    thumb_b64 = base64.b64encode(buf.tobytes()).decode("ascii") if _ok else None
-
-    return rings_local, computed_area_sqm, m_per_px, thumb_b64, (cx_px, cy_px), corr
+    return {
+        "polygons_local_m": polygons_local_m,
+        "area_sqm": computed_sqm,
+        "m_per_px": m_per_px,
+        "centroid_px": (cx_px, cy_px),
+        "corr": corr,
+        "thumb_b64": thumb_b64,
+        "num_polygons": len(polygons),
+    }
 
 
 def _build_payload_from_geojson(geom, parsed_area_sqm, source, scale_meta=None, thumb_b64=None):
-    """Из WGS84 GeoJSON строит финальный payload."""
+    """Из WGS84 GeoJSON строит финальный payload (v8.1 schema)."""
     converted = _geojson_to_local_meters(geom)
     if not converted:
         return None
@@ -1093,15 +1196,20 @@ def _build_payload_from_geojson(geom, parsed_area_sqm, source, scale_meta=None, 
     if parsed_area_sqm and computed and computed > 0:
         corr = round(parsed_area_sqm / computed, 6)
 
-    payload = {
+    polys = converted["полигоны"]
+    rings_total = sum(1 + len(p["holes"]) for p in polys)
+
+    return {
         "источник": source,
         "тип": converted["тип"],
-        "кол-во_колец": len(converted["локальные_метры"]),
+        "полигонов": len(polys),
+        "колец_всего": rings_total,
         "площадь_заявленная_кв_м": parsed_area_sqm,
         "площадь_вычисленная_кв_м": computed,
         "коэф_коррекции_масштаба": corr,
         "центроид": converted["центроид"],
         "geojson": geom,
+        "полигоны": polys,
         "локальные_метры": converted["локальные_метры"],
         "scale_bar_px": (scale_meta or {}).get("px"),
         "scale_bar_m": (scale_meta or {}).get("m"),
@@ -1109,25 +1217,35 @@ def _build_payload_from_geojson(geom, parsed_area_sqm, source, scale_meta=None, 
         "превью_png_b64": thumb_b64,
         "алгоритм_версия": ALG_VERSION,
     }
-    return payload
 
 
-def _build_payload_from_cv(rings_local, computed_area_sqm, m_per_px, parsed_area_sqm,
-                            scale_meta, centroid_px, corr, thumb_b64):
+def _build_payload_from_cv(cv_result, parsed_area_sqm, scale_meta):
+    """cv_result = output of _extract_contours_from_image (dict)."""
+    polys = cv_result["polygons_local_m"]
+    rings_total = sum(1 + len(p["holes"]) for p in polys)
+    flat_rings = []
+    for p in polys:
+        flat_rings.append(p["outer"])
+        flat_rings.extend(p["holes"])
+
+    corr = cv_result["corr"]
+    centroid_px = cv_result["centroid_px"]
     return {
         "источник": "screenshot_cv",
-        "тип": "Polygon" if len(rings_local) == 1 else "MultiPolygon",
-        "кол-во_колец": len(rings_local),
+        "тип": "Polygon" if len(polys) == 1 else "MultiPolygon",
+        "полигонов": len(polys),
+        "колец_всего": rings_total,
         "площадь_заявленная_кв_м": parsed_area_sqm,
-        "площадь_вычисленная_кв_м": round(computed_area_sqm, 2),
+        "площадь_вычисленная_кв_м": round(cv_result["area_sqm"], 2),
         "коэф_коррекции_масштаба": round(corr, 6) if corr else None,
         "центроид": {"px_x": round(centroid_px[0], 2), "px_y": round(centroid_px[1], 2)},
         "geojson": None,
-        "локальные_метры": rings_local,
+        "полигоны": polys,
+        "локальные_метры": flat_rings,
         "scale_bar_px": (scale_meta or {}).get("px"),
         "scale_bar_m": (scale_meta or {}).get("m"),
-        "м_на_пиксель": round(m_per_px, 6) if m_per_px else None,
-        "превью_png_b64": thumb_b64,
+        "м_на_пиксель": round(cv_result["m_per_px"], 6) if cv_result["m_per_px"] else None,
+        "превью_png_b64": cv_result.get("thumb_b64"),
         "алгоритм_версия": ALG_VERSION,
     }
 
@@ -1154,9 +1272,11 @@ async def extract_contour(page, info, cad_num, prefix=""):
             payload["wfs_layer_id"] = wfs.get("layer_id")
             payload["wfs_field"] = wfs.get("field")
             payload["wfs_method"] = wfs.get("method")
-            n = payload["кол-во_колец"]
+            np_ = payload["полигонов"]
+            nr = payload["колец_всего"]
             comp = payload["площадь_вычисленная_кв_м"]
-            print(f"{prefix}  [contour] ✓ WFS: тип={payload['тип']}, колец={n}, "
+            print(f"{prefix}  [contour] ✓ WFS: тип={payload['тип']}, "
+                  f"полигонов={np_}, колец={nr}, "
                   f"площадь={comp} м² (заявлено {parsed_area})")
             return payload
 
@@ -1169,10 +1289,11 @@ async def extract_contour(page, info, cad_num, prefix=""):
     if ol and ol.get("geom"):
         payload = _build_payload_from_geojson(ol["geom"], parsed_area, "ol_state", scale_meta)
         if payload:
-            n = payload["кол-во_колец"]
+            np_ = payload["полигонов"]
+            nr = payload["колец_всего"]
             comp = payload["площадь_вычисленная_кв_м"]
-            print(f"{prefix}  [contour] ✓ OL-state: тип={payload['тип']}, колец={n}, "
-                  f"площадь={comp} м²")
+            print(f"{prefix}  [contour] ✓ OL-state: тип={payload['тип']}, "
+                  f"полигонов={np_}, колец={nr}, площадь={comp} м²")
             return payload
 
     # 3) LAST-RESORT: screenshot + CV
@@ -1192,13 +1313,9 @@ async def extract_contour(page, info, cad_num, prefix=""):
     if not cv_res:
         print(f"{prefix}  [contour] CV-fallback: фиолетовый полигон не найден на снимке")
         return None
-    rings_local, computed_area_sqm, m_per_px, thumb_b64, centroid_px, corr = cv_res
-    payload = _build_payload_from_cv(
-        rings_local, computed_area_sqm, m_per_px, parsed_area,
-        scale_meta, centroid_px, corr, thumb_b64,
-    )
-    n = payload["кол-во_колец"]
-    print(f"{prefix}  [contour] ✓ CV-fallback: колец={n}, "
+    payload = _build_payload_from_cv(cv_res, parsed_area, scale_meta)
+    print(f"{prefix}  [contour] ✓ CV-fallback: тип={payload['тип']}, "
+          f"полигонов={payload['полигонов']}, колец={payload['колец_всего']}, "
           f"площадь={payload['площадь_вычисленная_кв_м']} м² "
           f"(коррекция масштаба ×{payload['коэф_коррекции_масштаба']})")
     return payload

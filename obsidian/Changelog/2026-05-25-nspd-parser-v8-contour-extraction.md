@@ -89,8 +89,57 @@
 
 ## Файлы
 
-- `parser/scripts/01_parsing_nspd_v8.py` (новый, +1428 строк, AST parses OK).
+- `parser/scripts/01_parsing_nspd_v8.py` (новый, ~1545 строк, AST parses OK).
+- `parser/tests/test_nspd_contour_v8.py` (новый, 16 тестов, все зелёные).
+- `parser/tests/fixtures/synthetic_path_network.png` (фикстура «сеть дорожек»).
 - Этот changelog.
+
+## Refactor v8.0 → v8.1 (по объекту-сложной-формы 90:25:020103:1393)
+
+Запрос — отрефакторить CV-pipeline на сложной форме «сеть дорожек» (сооружение
+«дорожка литер XXXIV», г. Ялта, пгт. Гаспра, ш. Алупкинское 60, S=554 кв.м).
+Скриншот НСПД: разветвлённая полупрозрачная фиолетовая фигура из ~6 связанных
+сегментов на серо-зелёном фоне карты.
+
+Изменения:
+
+1. **Двух-проходная HSV-маска**: STROKE (резкий пурпур, S≥90) ∪ FILL
+   (полупрозрачный, S от 30 — учитывает смешение с фоном через альфа-канал).
+   Раньше один общий диапазон не покрывал полупрозрачный fill.
+
+2. **Bounded morphology**: ядро 3×3, по 1 итерации OPEN→CLOSE. Раньше
+   `MORPH_CLOSE` с `iterations=2` мог склеить тонкие перешейки или «съесть»
+   узкие ветви сети дорожек.
+
+3. **Адаптивный RDP**: `epsilon = max(0.8, 0.0015 × perimeter)` вместо
+   фиксированных 1.5px. На сложной форме сохраняется больше вершин (32 в
+   тесте), на простом квадрате — упрощается до минимума.
+
+4. **Семантическая структура `polygons`**: `[{outer: ring, holes: [...]}]`
+   вместо плоского списка колец. `тип` теперь корректно различает Polygon
+   (1 outer) и MultiPolygon (≥2 outer), а не по числу колец. Legacy flat
+   `локальные_метры` сохранён для backward-compat.
+
+5. **Разделение на тестируемые функции**: `_decode_png_to_bgr`,
+   `_build_purple_mask`, `_clean_mask`, `_find_polygons`,
+   `_mask_centroid`, `_polygons_area_px`, `_adaptive_rdp`,
+   `_ring_to_local_m`, `_localize_polygons`, `_make_debug_overlay`,
+   `_extract_contours_from_image` (orchestrator).
+
+6. **Тесты `parser/tests/test_nspd_contour_v8.py`** (16 шт., все ✓):
+   - Геометрические инварианты (квадрат → 10000 м², экватор → 111320 м/°).
+   - Schema `_geojson_to_local_meters` (Polygon, MultiPolygon).
+   - **`test_cv_extract_complex_path_network`** — главный: синтетика «сеть
+     дорожек» 900×600 px, 6 пересекающихся сегментов толщиной 16 px → 1
+     outer polygon с 32 вершинами, площадь_вычисленная == 554.0 после
+     калибровки, corr=0.90, m/px=0.139.
+   - Schema payload v8.1.
+   - Negative cases: пустой PNG, без scale-bar, без фиолетовых пикселей.
+
+## Версионирование
+
+`ALG_VERSION = "v8.1"` (раньше "v8.0"). Поле сохраняется в каждом payload,
+downstream может фильтровать по версии алгоритма.
 
 ## Что не вошло (отложено)
 
