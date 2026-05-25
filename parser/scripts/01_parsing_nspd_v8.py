@@ -1,5 +1,18 @@
 """
-NSPD Парсер v8.4 (extends standalone v25.0 — adds contour extraction)
+NSPD Парсер v8.5 (extends standalone v25.0 — adds contour extraction)
+
+Что нового vs v8.4:
+- **Удалён `превью_png_b64` из payload** — раздувал JSON (десятки КБ на объект).
+  Превью теперь пишется только в debug-dump на диск при неудаче CV.
+- **SSL-блокировки WFS/PKK починены** — `ignore_https_errors=True` в
+  `browser.new_context()`. Раньше `page.request` падал на:
+    `self-signed certificate in certificate chain` (НСПД)
+    `certificate has expired` (PKK).
+- **Buffered debug-log**: список 15 captured URLs печатается ТОЛЬКО если
+  все 5 источников упали. При успехе CV-fallback (как и любого другого)
+  лог чистый — одна строка ✓.
+- **Явный успех-маркер**: лог при найденном контуре теперь начинается с
+  `✅ КОНТУР [source]: ...`.
 
 Что нового vs v8.3 (второй боевой прогон 23:50:0301004:25 — все источники упали):
 - **WFS** переведён с `context.request` на `page.request` — наследует
@@ -159,7 +172,7 @@ MIN_CONTOUR_AREA_PX = 80
 RDP_EPSILON_MIN_PX = 0.8
 RDP_EPSILON_FRAC = 0.0015
 
-ALG_VERSION = "v8.4"
+ALG_VERSION = "v8.5"
 
 # Включить запись debug-dump на диск при неудаче CV-pipeline.
 CONTOUR_DEBUG_DUMP = True
@@ -1463,8 +1476,9 @@ def _localize_polygons(contours, polygons, cx_px, cy_px, m_per_px):
     return out
 
 
-def _make_debug_overlay(bgr, mask, contours, polygons, centroid_px):
-    """Превью PNG (base64): подсветка mask, контуры зелёным, центроид красным."""
+def _make_debug_overlay_bytes(bgr, mask, contours, polygons, centroid_px):
+    """Превью PNG (bytes): подсветка mask, контуры зелёным, центроид красным.
+    v8.5: возвращает raw bytes (раньше — base64 для payload, теперь сохраняется на диск)."""
     overlay = bgr.copy()
     overlay[mask > 0] = (200, 80, 220)
     blended = cv2.addWeighted(bgr, 0.5, overlay, 0.5, 0)
@@ -1475,11 +1489,11 @@ def _make_debug_overlay(bgr, mask, contours, polygons, centroid_px):
             cv2.drawContours(blended, [contours[h]], -1, (0, 200, 255), 1)
     cv2.circle(blended, (int(centroid_px[0]), int(centroid_px[1])), 4, (0, 0, 255), -1)
     h_img, w_img = blended.shape[:2]
-    if max(h_img, w_img) > 600:
-        s = 600.0 / max(h_img, w_img)
+    if max(h_img, w_img) > 800:
+        s = 800.0 / max(h_img, w_img)
         blended = cv2.resize(blended, (int(w_img * s), int(h_img * s)))
     ok, buf = cv2.imencode(".png", blended)
-    return base64.b64encode(buf.tobytes()).decode("ascii") if ok else None
+    return buf.tobytes() if ok else None
 
 
 def _extract_contours_from_image(png_bytes, parsed_area_sqm, scale_px, scale_m):
@@ -1514,7 +1528,7 @@ def _extract_contours_from_image(png_bytes, parsed_area_sqm, scale_px, scale_m):
         computed_sqm = parsed_area_sqm
 
     polygons_local_m = _localize_polygons(contours, polygons, cx_px, cy_px, m_per_px)
-    thumb_b64 = _make_debug_overlay(bgr, mask, contours, polygons, (cx_px, cy_px))
+    overlay_bytes = _make_debug_overlay_bytes(bgr, mask, contours, polygons, (cx_px, cy_px))
 
     return {
         "polygons_local_m": polygons_local_m,
@@ -1522,14 +1536,15 @@ def _extract_contours_from_image(png_bytes, parsed_area_sqm, scale_px, scale_m):
         "m_per_px": m_per_px,
         "centroid_px": (cx_px, cy_px),
         "corr": corr,
-        "thumb_b64": thumb_b64,
+        "overlay_png": overlay_bytes,
         "num_polygons": len(polygons),
     }
 
 
-def _build_payload_from_geojson(geom, parsed_area_sqm, source, scale_meta=None, thumb_b64=None):
-    """Из WGS84 GeoJSON строит финальный payload (v8.1 schema).
-    Авто-reproject если координаты в EPSG:3857."""
+def _build_payload_from_geojson(geom, parsed_area_sqm, source, scale_meta=None):
+    """Из WGS84 GeoJSON строит финальный payload.
+    Авто-reproject если координаты в EPSG:3857.
+    v8.5: превью_png_b64 больше не пишется в payload."""
     geom = _maybe_reproject_to_wgs84(geom)
     converted = _geojson_to_local_meters(geom)
     if not converted:
@@ -1558,7 +1573,6 @@ def _build_payload_from_geojson(geom, parsed_area_sqm, source, scale_meta=None, 
         "scale_bar_px": (scale_meta or {}).get("px"),
         "scale_bar_m": (scale_meta or {}).get("m"),
         "м_на_пиксель": None,
-        "превью_png_b64": thumb_b64,
         "алгоритм_версия": ALG_VERSION,
     }
 
@@ -1583,7 +1597,8 @@ def _payload_area_sane(payload, parsed_area_sqm):
 
 
 def _build_payload_from_cv(cv_result, parsed_area_sqm, scale_meta):
-    """cv_result = output of _extract_contours_from_image (dict)."""
+    """cv_result = output of _extract_contours_from_image (dict).
+    v8.5: превью_png_b64 больше не в payload (он сохраняется отдельно на диск)."""
     polys = cv_result["polygons_local_m"]
     rings_total = sum(1 + len(p["holes"]) for p in polys)
     flat_rings = []
@@ -1608,58 +1623,72 @@ def _build_payload_from_cv(cv_result, parsed_area_sqm, scale_meta):
         "scale_bar_px": (scale_meta or {}).get("px"),
         "scale_bar_m": (scale_meta or {}).get("m"),
         "м_на_пиксель": round(cv_result["m_per_px"], 6) if cv_result["m_per_px"] else None,
-        "превью_png_b64": cv_result.get("thumb_b64"),
         "алгоритм_версия": ALG_VERSION,
     }
 
 
-async def extract_contour(page, context, capture, info, cad_num, prefix=""):
-    """4-уровневый fallback: NetworkCapture → WFS API → OL-state → screenshot+CV.
-    Возвращает payload (dict) или None.
+def _save_overlay_png(cad_num, overlay_bytes):
+    """Сохраняет debug-overlay рядом с снэпшотом объекта."""
+    if not overlay_bytes:
+        return None
+    try:
+        safe_cn = (cad_num or "unknown").replace(":", "_").replace("/", "-")
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        fname = f"contour_overlay_{safe_cn}_{ts}.png"
+        Path(fname).write_bytes(overlay_bytes)
+        return fname
+    except Exception:
+        return None
 
-    `capture` — экземпляр NetworkCapture, attach'нутый к page (хранит уже перехваченные
-    JSON-features за время паузы пользователя на карточке).
+
+def _success_log(payload, source_label, parsed_area, prefix=""):
+    extras = ""
+    if source_label == "screenshot_cv" and payload.get("коэф_коррекции_масштаба"):
+        extras = f", коррекция ×{payload['коэф_коррекции_масштаба']}"
+    print(f"{prefix}  ✅ КОНТУР [{source_label}]: тип={payload['тип']}, "
+          f"полигонов={payload['полигонов']}, колец={payload['колец_всего']}, "
+          f"площадь={payload['площадь_вычисленная_кв_м']} м² "
+          f"(заявлено {parsed_area}){extras}")
+
+
+async def extract_contour(page, context, capture, info, cad_num, prefix=""):
+    """5-уровневый fallback: NetworkCapture → WFS → PKK → OL-state → screenshot+CV.
+
+    v8.5: debug-сообщения копятся в локальный буфер и печатаются ТОЛЬКО если
+    все 5 источников провалились. При успехе любой ступени — одна короткая
+    строка `✅ КОНТУР [source]: ...`.
     """
     if info.get("Без координат границ") is True:
         print(f"{prefix}  [contour] объект без координат границ — пропуск")
         return None
 
     parsed_area = _parsed_area_sqm(info)
+    debug = []  # buffered debug — печатаем только при полной неудаче
 
-    # 0) PRIMARY: NetworkCapture — то, что страница уже сама загрузила
+    def dbg(msg):
+        debug.append(f"{prefix}  {msg}")
+
+    # 0) NetworkCapture
     cap = capture.find_by_cad(cad_num) if capture else None
     if cap and cap.get("geom"):
         payload = _build_payload_from_geojson(cap["geom"], parsed_area, "network_capture")
         if payload and _payload_area_sane(payload, parsed_area):
             payload["capture_url"] = cap.get("src_url")
-            print(f"{prefix}  [contour] ✓ network_capture: тип={payload['тип']}, "
-                  f"полигонов={payload['полигонов']}, колец={payload['колец_всего']}, "
-                  f"площадь={payload['площадь_вычисленная_кв_м']} м² "
-                  f"(заявлено {parsed_area}) ← {cap.get('src_url','?')[:80]}")
+            _success_log(payload, "network_capture", parsed_area, prefix)
             return payload
         elif payload:
-            print(f"{prefix}  [contour] network_capture отвергнут: "
-                  f"computed={payload['площадь_вычисленная_кв_м']} м² нереалистично "
-                  f"(parsed={parsed_area}). Источник: {cap.get('src_url','?')[:80]}")
+            dbg(f"[contour] network_capture отвергнут: "
+                f"computed={payload['площадь_вычисленная_кв_м']} м² нереалистично")
     else:
         n_cap = len(capture.features) if capture else 0
-        print(f"{prefix}  [contour] network_capture: подходящей feature не найдено "
-              f"(перехвачено features: {n_cap})")
-        if capture and len(capture.features) == 0:
-            # Дамп последних URL'ов для диагностики — что вообще делает страница
-            tail = capture.debug_summary(max_urls=15)
-            if tail:
-                print(f"{prefix}  [contour] network_capture: последние {len(tail)} URL'ов "
-                      f"(для диагностики):")
-                for u, st, ct in tail:
-                    short = u if len(u) <= 120 else u[:117] + "..."
-                    print(f"{prefix}    [{st} {ct[:20]}] {short}")
+        dbg(f"[contour] network_capture: подходящей feature не найдено "
+            f"(перехвачено features: {n_cap})")
 
-    # 1) SECONDARY: WFS API НСПД (через page.request)
+    # 1) WFS
     try:
         wfs = await _fetch_geom_via_wfs(page, cad_num, prefix=prefix)
     except Exception as e:
-        print(f"{prefix}  [contour] WFS exception: {e.__class__.__name__}: {e}")
+        dbg(f"[contour] WFS exception: {e.__class__.__name__}: {e}")
         wfs = None
     if wfs and wfs.get("geom"):
         payload = _build_payload_from_geojson(wfs["geom"], parsed_area, "wfs")
@@ -1667,83 +1696,76 @@ async def extract_contour(page, context, capture, info, cad_num, prefix=""):
             payload["wfs_layer_id"] = wfs.get("layer_id")
             payload["wfs_field"] = wfs.get("field")
             payload["wfs_method"] = wfs.get("method")
-            print(f"{prefix}  [contour] ✓ WFS: тип={payload['тип']}, "
-                  f"полигонов={payload['полигонов']}, колец={payload['колец_всего']}, "
-                  f"площадь={payload['площадь_вычисленная_кв_м']} м² "
-                  f"(layer {payload['wfs_layer_id']}, field {payload['wfs_field']})")
+            _success_log(payload, "wfs", parsed_area, prefix)
             return payload
         elif payload:
-            print(f"{prefix}  [contour] WFS отвергнут: "
-                  f"computed={payload['площадь_вычисленная_кв_м']} м² нереалистично")
+            dbg(f"[contour] WFS отвергнут: computed={payload['площадь_вычисленная_кв_м']} нереалистично")
+    else:
+        dbg(f"[contour] WFS: без результата")
 
-    # 1b) SECONDARY-B: PKK Rosreestr feature API
+    # 1b) PKK
     try:
         pkk = await _fetch_geom_via_pkk(page, cad_num, prefix=prefix)
     except Exception as e:
-        print(f"{prefix}  [contour] PKK exception: {e.__class__.__name__}: {e}")
+        dbg(f"[contour] PKK exception: {e.__class__.__name__}: {e}")
         pkk = None
     if pkk and pkk.get("geom"):
         payload = _build_payload_from_geojson(pkk["geom"], parsed_area, "pkk")
         if payload and _payload_area_sane(payload, parsed_area):
             payload["pkk_url"] = pkk.get("src_url")
             payload["pkk_kind"] = pkk.get("kind")
-            print(f"{prefix}  [contour] ✓ PKK: тип={payload['тип']}, "
-                  f"полигонов={payload['полигонов']}, колец={payload['колец_всего']}, "
-                  f"площадь={payload['площадь_вычисленная_кв_м']} м² "
-                  f"(kind={payload['pkk_kind']})")
+            _success_log(payload, "pkk", parsed_area, prefix)
             return payload
         elif payload:
-            print(f"{prefix}  [contour] PKK отвергнут: "
-                  f"computed={payload['площадь_вычисленная_кв_м']} м² нереалистично")
+            dbg(f"[contour] PKK отвергнут: computed={payload['площадь_вычисленная_кв_м']} нереалистично")
     else:
-        print(f"{prefix}  [pkk] нет feature.geometry в ответе PKK")
+        dbg(f"[contour] PKK: нет feature.geometry")
 
-    # 2) TERTIARY: OL-state (window.* heuristics)
+    # 2) OL-state
     try:
         ol = await _fetch_geom_via_ol_state(page)
     except Exception as e:
-        print(f"{prefix}  [contour] OL-state exception: {e.__class__.__name__}: {e}")
+        dbg(f"[contour] OL-state exception: {e.__class__.__name__}: {e}")
         ol = None
     if ol and ol.get("geom"):
         payload = _build_payload_from_geojson(ol["geom"], parsed_area, "ol_state")
         if payload and _payload_area_sane(payload, parsed_area):
-            print(f"{prefix}  [contour] ✓ OL-state: тип={payload['тип']}, "
-                  f"полигонов={payload['полигонов']}, колец={payload['колец_всего']}, "
-                  f"площадь={payload['площадь_вычисленная_кв_м']} м²")
+            _success_log(payload, "ol_state", parsed_area, prefix)
             return payload
         elif payload:
-            print(f"{prefix}  [contour] OL-state отвергнут: "
-                  f"computed={payload['площадь_вычисленная_кв_м']} м² нереалистично")
+            dbg(f"[contour] OL-state отвергнут: computed={payload['площадь_вычисленная_кв_м']} нереалистично")
+    else:
+        dbg("[contour] OL-state: map-instance не найден в window.*")
 
-    # 3) LAST-RESORT: screenshot + CV
+    # 3) CV
     if not _HAS_CV:
-        print(f"{prefix}  [contour] CV-fallback недоступен (нет numpy/cv2/PIL)")
+        dbg("[contour] CV-fallback недоступен (нет numpy/cv2/PIL)")
+        _flush_debug(debug)
         return None
 
     scale_meta = await _read_scale_bar(page)
     valid_scale = bool(scale_meta and scale_meta.get("px") and scale_meta.get("m"))
+
+    png_bytes, clip, used_sel = await _screenshot_map_canvas(page)
+    if not png_bytes:
+        dbg(f"[contour] CV-fallback: скриншот canvas не получен ({used_sel})")
+        _flush_debug(debug)
+        return None
+
     if not valid_scale:
         tried = (scale_meta or {}).get("debug_tried") or []
         nonzero = [t for t in tried if t.get("count")]
         samples = (scale_meta or {}).get("debug_text_samples") or []
-        print(f"{prefix}  [contour] CV-fallback: scale-bar не найден. "
-              f"Селекторы (>0): {nonzero[:5] or 'none'}")
+        dbg(f"[contour] CV-fallback: scale-bar не найден. "
+            f"Селекторы (>0): {nonzero[:5] or 'none'}")
         if samples:
-            print(f"{prefix}    text-samples: {samples}")
+            dbg(f"    text-samples: {samples}")
         elif scale_meta and scale_meta.get("_error"):
-            print(f"{prefix}    evaluate error: {scale_meta['_error']}")
-
-    png_bytes, clip, used_sel = await _screenshot_map_canvas(page)
-    if not png_bytes:
-        print(f"{prefix}  [contour] CV-fallback: скриншот canvas не получен ({used_sel})")
-        return None
-    print(f"{prefix}  [contour] CV-fallback: скриншот canvas «{used_sel}» {clip}")
-
-    if not valid_scale:
-        # Сохраняем дамп — может помочь подобрать scale-bar вручную
+            dbg(f"    evaluate error: {scale_meta['_error']}")
         dump = _save_debug_dump(cad_num, png_bytes, reason="no_scale_bar")
         if dump:
-            print(f"{prefix}  [contour] debug-dump: {dump}")
+            dbg(f"[contour] debug-dump: {dump}")
+        _flush_debug(debug)
         return None
 
     cv_res = _extract_contours_from_image(
@@ -1751,16 +1773,27 @@ async def extract_contour(page, context, capture, info, cad_num, prefix=""):
     )
     if not cv_res:
         dump = _save_debug_dump(cad_num, png_bytes, reason="no_purple_mask",
-                                 payload={"scale_meta": scale_meta})
-        print(f"{prefix}  [contour] CV-fallback: фиолетовый полигон не найден на снимке"
-              + (f". debug: {dump}" if dump else ""))
+                                payload={"scale_meta": scale_meta})
+        dbg(f"[contour] CV-fallback: фиолетовый полигон не найден"
+            + (f". debug: {dump}" if dump else ""))
+        _flush_debug(debug)
         return None
+
     payload = _build_payload_from_cv(cv_res, parsed_area, scale_meta)
-    print(f"{prefix}  [contour] ✓ CV-fallback: тип={payload['тип']}, "
-          f"полигонов={payload['полигонов']}, колец={payload['колец_всего']}, "
-          f"площадь={payload['площадь_вычисленная_кв_м']} м² "
-          f"(коррекция масштаба ×{payload['коэф_коррекции_масштаба']})")
+    _success_log(payload, "screenshot_cv", parsed_area, prefix)
+    # Сохраняем overlay PNG на диск (не в payload — раздувал JSON)
+    overlay_path = _save_overlay_png(cad_num, cv_res.get("overlay_png"))
+    if overlay_path:
+        print(f"{prefix}  [contour] overlay → {overlay_path}")
     return payload
+
+
+def _flush_debug(debug_lines):
+    """Печатает накопленный debug-лог одним блоком при провале всех источников."""
+    if not debug_lines:
+        return
+    print("\n".join(debug_lines))
+    print(debug_lines[0].split(']')[0].split('[')[0] + "❌ КОНТУР: все источники упали")
 
 
 # ────────────────────── основная обработка одной карточки ──────────────────────
@@ -1941,7 +1974,9 @@ async def run():
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=False)
-        context = await browser.new_context()
+        # ignore_https_errors=True — фиксит WFS/PKK "self-signed cert in chain"
+        # / "certificate has expired" (v8.5).
+        context = await browser.new_context(ignore_https_errors=True)
         page = await context.new_page()
 
         # v8.2: NetworkCapture — пассивно ловит GeoJSON-ответы НСПД

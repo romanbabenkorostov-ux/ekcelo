@@ -202,8 +202,9 @@ def test_cv_extract_complex_path_network():
     assert 0.5 < result["corr"] < 1.5, f"коэф_коррекции выбился: {result['corr']}"
     # m_per_px после калибровки — корректный
     assert result["m_per_px"] > 0
-    # Превью декодируется
-    assert result["thumb_b64"] and len(result["thumb_b64"]) > 100
+    # v8.5: overlay_png — bytes, не base64
+    assert result["overlay_png"] and isinstance(result["overlay_png"], bytes)
+    assert result["overlay_png"][:8] == b"\x89PNG\r\n\x1a\n"
     # Сложная форма → outer ring имеет много вершин (после адаптивного RDP)
     outer_rings = [p["outer"] for p in result["polygons_local_m"]]
     max_vertices = max(len(r) for r in outer_rings)
@@ -225,7 +226,9 @@ def test_cv_payload_from_cv_schema():
     assert all("outer" in p and "holes" in p for p in payload["полигоны"])
     # legacy flat тоже есть
     assert isinstance(payload["локальные_метры"], list)
-    assert payload["алгоритм_версия"] == "v8.4"
+    assert payload["алгоритм_версия"] == "v8.5"
+    # v8.5: превью_png_b64 удалён из payload
+    assert "превью_png_b64" not in payload
     assert payload["площадь_заявленная_кв_м"] == 554.0
     assert abs(payload["площадь_вычисленная_кв_м"] - 554.0) < 0.01
 
