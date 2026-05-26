@@ -396,113 +396,94 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 #map{width:100%;height:100%;background:var(--map-bg);transition:background .3s}
 .leaflet-container{background:var(--map-bg) !important}
 /* ═══════════════════════════════════════════════════════════════════
-   TILE SEAM FIX — ⚠ ВНИМАНИЕ! Не трогать без понимания истории.
-   Working since v2.9.53, confirmed clean in v2.9.56/57 user tests.
+   TILE SEAM FIX — ⚠ Контракт. Полная история и обоснование:
+                    obsidian/Decisions/tile-seam-fix.md
    ═══════════════════════════════════════════════════════════════════
-   Issue: white grid between map tiles (visible only in Chromium-based
-   browsers — Chrome, Yandex; not in Firefox). Two-year history of
-   broken attempts before this configuration stuck:
+   Симптом: белая (или цвета фона) сетка-щели 1px между соседними
+   тайлами OSM/Esri. Видна на Chrome, Yandex.Браузер, Firefox —
+   особенно на HiDPI и в светлой теме (где --map-filter identity).
 
-     v2.9.30  filter on .leaflet-div-icon — wrong target
-     v2.9.31  delete L.Icon.Default._getIconUrl — fixed unrelated thing
-     v2.9.32  mergeOptions {iconUrl:''} — broke photo markers, reverted
-     v2.9.33  width:257px + margin:-1px + transform:scale(1.02) on pane —
-              CATASTROPHIC at z>maxNativeZoom: Leaflet upscales each tile
-              slot to 2048×2048 px, but width:257px shrunk the bitmap to
-              257-px square inside it, leaving 1791 px of pane background
-              visible. Giant white quadrants on z22.
-     v2.9.34  Removed the v2.9.33 overlap, kept filter on individual
-              tiles. Worked in Firefox but Chrome rendered 1-px white
-              gaps — each .leaflet-tile got its own GPU compositing
-              layer due to CSS filter, and translate3d() rounding rules
-              don't guarantee exact edge-to-edge across separate layers.
-     v2.9.36  Light theme added (--map-bg: #f2efe9), making the
-              previously-dark gaps suddenly very visible. Same code,
-              new symptom.
-     v2.9.50  Various other tactics (will-change, backface-visibility,
-              transform on tile) — all created MORE separate layers,
-              not fewer. Some made the white grid worse.
+   Корень: при per-tile композитных слоях translate3d округляет
+   позиции тайлов субпиксельно по-разному → 1px-щель. Решение —
+   собрать ВСЕ тайлы в один композитный слой панели и склеить
+   соседние bitmap'ы blend-режимом plus-lighter (Leaflet PR #8891).
 
-   THE WORKING CONFIGURATION (v2.9.53, KEEP THESE FIVE LINES INTACT):
+   КОНТРАКТ (НЕ менять без чтения ADR):
 
-     .leaflet-tile-pane {
-       background: var(--map-bg);          ← matches tile colour, hides
-                                              any sub-pixel hairline
-       filter: var(--map-filter);          ← ONE compositing layer for
-                                              the whole pane (not per
-                                              tile)
-       transform: translateZ(0);           ← forces own 2D composite,
-                                              prevents Blink from
-                                              short-circuiting the layer
-     }
-     .leaflet-container img.leaflet-tile {
-       mix-blend-mode: plus-lighter;       ← Leaflet PR #8891 official
-                                              fix for Chromium #600120;
-                                              merges adjacent <img>s
-                                              into shared blending ctx
-     }
-     .leaflet-tile {
-       filter: none !important;            ← OVERRIDES leaflet.css
-                                              `.leaflet-tile{filter:
-                                              inherit}` which was the
-                                              root cause of per-tile
-                                              composite layers
-       outline: 1px solid transparent;     ← closes residual sub-pixel
-                                              cracks in WebKit
-     }
+     .leaflet-tile-pane:
+       background        : var(--map-bg)     — цвет под щелью совпадает
+                                                с краем тайла (последний
+                                                рубеж, если всё иное
+                                                провалится)
+       filter            : var(--map-filter) — темизация (в светлой теме
+                                                identity — НЕЛЬЗЯ
+                                                рассчитывать на этот
+                                                фильтр как на источник
+                                                композитного слоя!)
+       isolation         : isolate           — изолированная blending-
+                                                группа: ОБЯЗАТЕЛЬНО,
+                                                иначе plus-lighter не
+                                                видит соседние тайлы
+       will-change       : transform         — ПРИНУДИТЕЛЬНЫЙ единый
+                                                композитный слой
+                                                панели — НЕ зависит от
+                                                значения filter (фикс
+                                                регрессии в светлой
+                                                теме / на FF / Chrome /
+                                                YaBrowser)
+       transform         : translateZ(0)     — belt+suspenders для
+                                                старых движков
 
-   IF YOU NEED TO MODIFY THIS BLOCK:
-     1. Test on Chrome AND Firefox AND Yandex Browser (all three).
-     2. Test at zoom levels 10, 18, 22 (covers normal + upscaled tiles).
-     3. Test on a HiDPI monitor (devicePixelRatio > 1) — that's where
-        the seams first appear.
-     4. Check both light and dark themes (--map-bg differs).
-     5. Verify Метки (markers), Контуры (contours), photo pins still
-        render correctly — past "fixes" broke icons.
+     .leaflet-container img.leaflet-tile:
+       mix-blend-mode    : plus-lighter      — Leaflet PR #8891, фикс
+                                                Chromium #600120;
+                                                СКЛЕИВАЕТ соседние img
+                                                поверх щели
 
-   v2.9.62 FALLBACK (additive, zero-risk for Chrome/Firefox):
-     Some Yandex Browser builds ship an OLDER Chromium that lacks
-     `mix-blend-mode: plus-lighter`. There the keystone rule above is
-     silently ignored → the white grid returns (Chrome is newer = OK,
-     Firefox never had the bug). JS feature+engine detection adds
-     `html.tile-seam-fallback` ONLY when the engine is Blink AND
-     CSS.supports('mix-blend-mode','plus-lighter') === false. The five
-     rules above are NEVER touched, so the proven Chrome/Firefox path is
-     byte-identical (no regression possible). The fallback only adds:
-       html.tile-seam-fallback .leaflet-tile-pane { isolation:isolate }
-         → one isolated blending/compositing context for the whole pane
-           (complementary mechanism to plus-lighter)
-       html.tile-seam-fallback .leaflet-tile { outline-color:var(--map-bg) }
-         → reuses the EXISTING 1px outline (geometry unchanged — no z>19
-           catastrophe) but paints it in the pane colour so overlapping
-           per-tile frames over-paint the sub-pixel crack invisibly.
-     Still must be verified on a real old Yandex Browser per the 5 steps.
+     .leaflet-tile:
+       filter: none !important               — ПЕРЕБИВАЕТ leaflet.css
+                                                `.leaflet-tile{filter:
+                                                inherit}` — иначе у
+                                                каждой плитки СВОЙ
+                                                композитный слой (=
+                                                источник щели)
+       outline: 1px solid transparent        — закрывает остаточную
+                                                субпиксельную трещину
+                                                в WebKit
 
-   v2.9.62b UPDATE (diagnostic-driven): on the reporting user's Yandex
-   Browser, CSS.supports('mix-blend-mode','plus-lighter') === TRUE, yet
-   the white grid still appears on OSM AND Esri, in both themes. So the
-   plus-lighter hypothesis above is NOT this user's cause. Conclusion:
-   Yandex's compositor does not collapse .leaflet-tile-pane into a single
-   layer (an identity --map-filter under system-light theme can be
-   optimized away; translateZ(0) alone is not always enough in YaBrowser),
-   so per-tile layers + translate3d sub-pixel rounding leave a 1px void
-   that plus-lighter cannot bridge (nothing to blend across separate
-   layers). Additive, UA-gated fix (YaBrowser ONLY → Chrome/Firefox
-   byte-identical, zero regression):
-       html.tile-seam-yandex .leaflet-tile-pane { will-change:transform;
-                                                   isolation:isolate }
-         → pins the pane to ONE composite layer (will-change on the PANE,
-           NOT on tiles — v2.9.50's failure was will-change on TILES,
-           which made MORE per-tile layers; pane-level is the opposite)
-           so plus-lighter can finally merge adjacent <img> tiles. No
-           geometry/size change → no z>19 catastrophe.
-     MUST be verified on the actual Yandex Browser; if the grid persists,
-     the residual is a Leaflet tile-position rounding issue that needs a
-     JS-level GridLayer patch (larger change), not more CSS.
+     Fallback @supports not (mix-blend-mode: plus-lighter):
+       — древний Chromium (старые билды Я.Браузера). plus-lighter
+       молчаливо игнорируется; красим существующий 1px-outline в
+       цвет панели — перекрывающиеся per-tile рамки маскируют щель.
+       Никаких геометрических изменений (uplineпоменяли только цвет,
+       НЕ ширину — катастрофа v2.9.33 с width:257px невозможна).
+
+   НИКАКИХ JS UA-сниффингов: предыдущая ревизия гейтила фикс по
+   `/YaBrowser/` в navigator.userAgent → на Chrome/Firefox он НЕ
+   применялся, и при identity-filter в светлой теме щель возвращалась
+   именно там. Universal CSS снимает эту ловушку.
+
+   ЕСЛИ НУЖНО МЕНЯТЬ — обязательно:
+     1. Проверить Chrome + Firefox + Yandex.Browser.
+     2. Zoom: 10, 18, 22 (нормальный + upscaled выше maxNativeZoom).
+     3. HiDPI монитор (devicePixelRatio > 1) — там сетка появляется
+        первой.
+     4. Светлая И тёмная темы (--map-filter в светлой = identity).
+     5. Что Метки/Контуры/фото-пины не сломались (filter на иконки
+        в прошлом ронял маркеры — v2.9.30/31/32).
+
+   ⚠ ЗАПРЕЩЕНО (повторы прошлых провалов):
+     ✗ width/margin на .leaflet-tile (катастрофа на z>maxNativeZoom)
+     ✗ will-change/transform/backface-visibility на .leaflet-tile
+       (создаёт per-tile слои = источник щели)
+     ✗ filter на .leaflet-tile (то же)
+     ✗ UA-сниффинг как условие фикса (часть браузеров остаётся без)
    ═══════════════════════════════════════════════════════════════════ */
 .leaflet-tile-pane{
   background: var(--map-bg);
   filter: var(--map-filter);
+  isolation: isolate;
+  will-change: transform;
   transform: translateZ(0);
 }
 .leaflet-container img.leaflet-tile{
@@ -512,17 +493,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
   filter: none !important;
   outline: 1px solid transparent;
 }
-/* v2.9.62 — см. «v2.9.62 FALLBACK» в комментарии выше. Применяется ТОЛЬКО при
-   html.tile-seam-fallback (старый Chromium Яндекс.Браузера без plus-lighter).
-   Пять правил выше НЕ изменены → путь Chrome/Firefox байт-в-байт прежний. */
-html.tile-seam-fallback .leaflet-tile-pane{ isolation:isolate; }
-html.tile-seam-fallback .leaflet-tile{ outline-color:var(--map-bg); }
-/* v2.9.62b — Яндекс.Браузер ПОДДЕРЖИВАЕТ plus-lighter, но щель остаётся:
-   принудительно держим .leaflet-tile-pane единым композитным слоем (will-change
-   на ПАНЕЛИ, не на плитках — провал v2.9.50 был will-change на ПЛИТКАХ), чтобы
-   plus-lighter мог слить соседние <img>. UA-гейт ТОЛЬКО YaBrowser → Chrome/
-   Firefox не затронуты (нулевой риск регрессии). Требует проверки на устройстве. */
-html.tile-seam-yandex .leaflet-tile-pane{ will-change:transform; isolation:isolate; }
+@supports not (mix-blend-mode: plus-lighter){
+  .leaflet-tile{ outline-color: var(--map-bg); }
+}
 .leaflet-control-zoom a{background:var(--surface) !important;color:var(--text) !important;border-color:var(--border) !important}
 .leaflet-control-zoom a:hover{background:var(--surface2) !important}
 .leaflet-control-attribution{background:rgba(var(--bg-rgb,13,15,20),.75) !important;color:var(--muted) !important;font-size:10px !important;z-index:540 !important}
@@ -1736,37 +1709,18 @@ L.control.scale({imperial:false,metric:true,position:'bottomleft'}).addTo(map);
   _attach();
 })();
 
-// ── TILE SEAM FIX (v2.9.36) ────────────────────────────────────────
-// Earlier (v2.9.33) attempt forced width:257px + margin:-1px on every tile
-// via tileload + MutationObserver, the JS-level twin of the broken CSS rule.
-// At z > maxNativeZoom Leaflet upscales each tile slot to 2048×2048 px;
-// hardcoded 257×257 inline shrinks the bitmap inside the slot, leaving giant
-// rectangles of pane background visible — the white grid the user reported.
-// The IIFE no longer touches tile dimensions. v2.9.62: it ONLY feature/engine-
-// detects old Chromium (Yandex Browser) lacking `mix-blend-mode: plus-lighter`
-// and, in that case ONLY, adds html.tile-seam-fallback so the additive CSS
-// fallback applies. Chrome/Firefox: no class → proven 5-rule path is unchanged.
-// See the «v2.9.62 FALLBACK» section of the TILE SEAM FIX comment above.
-(function fixTileSeams(){
-  try{
-    const ua = navigator.userAgent || '';
-    const isBlink = /Chrome|Chromium|YaBrowser/.test(ua) && !/Firefox|FxiOS/.test(ua);
-    const hasPlusLighter = !!(window.CSS && CSS.supports && CSS.supports('mix-blend-mode','plus-lighter'));
-    if(isBlink && !hasPlusLighter){
-      document.documentElement.classList.add('tile-seam-fallback');
-    }
-    // v2.9.62b: диагностика показала — в Яндекс.Браузере plus-lighter
-    // ПОДДЕРЖИВАЕТСЯ (CSS.supports===true), но белая сетка всё равно есть на
-    // OSM+Спутник, обе темы. Значит plus-lighter нечего «склеивать»: компоновщик
-    // Яндекса НЕ сводит .leaflet-tile-pane в один слой (identity-filter в
-    // системной светлой теме может оптимизироваться), плитки остаются
-    // отдельными GPU-слоями → субпиксельная щель translate3d. UA-гейт ТОЛЬКО
-    // на YaBrowser → Chrome/Firefox байт-в-байт прежние (ноль регрессии).
-    if(/YaBrowser/.test(ua)){
-      document.documentElement.classList.add('tile-seam-yandex');
-    }
-  }catch(_){}
-})();
+// TILE SEAM FIX — теперь полностью на CSS (universal, без UA-сниффинга).
+// Контракт: см. блок «TILE SEAM FIX» в <style> выше и
+// obsidian/Decisions/tile-seam-fix.md.
+//
+// Историческая справка: ранее здесь был UA-гейтированный IIFE
+// (fixTileSeams), который добавлял html.tile-seam-fallback / .tile-seam-yandex.
+// Гейт по `/YaBrowser/` пропускал Chrome/Firefox, и при identity-filter в
+// светлой теме щель возвращалась там. Сейчас isolation:isolate +
+// will-change:transform на .leaflet-tile-pane применяются БЕЗУСЛОВНО, а
+// fallback для древнего Chromium — через @supports not (mix-blend-mode:
+// plus-lighter). JS больше не нужен.
+//
 // OSM tileLayer — no createTile patch needed.
 // Setting referrerPolicy on img caused white tiles in Chrome/Yandex when opening
 // from file:// (no-referrer-when-downgrade = no Referer → OSM 403 → blank tile).
@@ -7609,6 +7563,11 @@ async function writeEXIFWithGPS(){ if(!roleAllows('edit'))return;
   let blob=null;
   try{if(p.originalBlob)blob=p.originalBlob;else if(p.fileHandle){const f=await p.fileHandle.getFile();blob=f;}else if(p.file)blob=p.file;else if(p.isRemote&&p.sourceType==='yandex'&&p.remoteViewUrl)blob=await fetchYandexBlob(p.remoteViewUrl);else throw new Error('Нет источника');}
   catch(err){showToast(`❌ ${err.message}`,'error',6000);document.getElementById('mgps-save-btn').disabled=false;return;}
+  // Sanity-check: blob должен быть валидным JPEG (FFD8 magic + ≥512 байт).
+  // Stub/synthetic JPG (например, 91-байт фикстура от parser-team в smoke-batch)
+  // — НЕ пригоден для piexifjs read-write cycle, выдаёт "unpack error" в piexif.dump.
+  if(blob.size < 512){showToast('❌ Файл слишком мал — возможно, synthetic stub без EXIF; запись невозможна','error',7000);document.getElementById('mgps-save-btn').disabled=false;return;}
+  try{const hd=new Uint8Array(await blob.slice(0,2).arrayBuffer());if(hd[0]!==0xFF||hd[1]!==0xD8){showToast('❌ Не JPEG (нет FFD8) — EXIF не записан','error',6000);document.getElementById('mgps-save-btn').disabled=false;return;}}catch(_){}
   let dataUrl;try{dataUrl=await blobToDataUrl(blob);}catch(e){showToast('❌ Чтение файла: '+e.message,'error');document.getElementById('mgps-save-btn').disabled=false;return;}
   let exifObj={'0th':{},'Exif':{},'GPS':{},'1st':{}};try{exifObj=piexif.load(dataUrl);}catch(_){}if(!exifObj['GPS'])exifObj['GPS']={};
   const[latDMS,latRef]=decToDMS(tempLat,'lat');const[lonDMS,lonRef]=decToDMS(tempLon,'lon');
@@ -7619,7 +7578,7 @@ async function writeEXIFWithGPS(){ if(!roleAllows('edit'))return;
   if(p.locPath)gpp.loc={path:p.locPath,source:p.sourceType||'local'};
   const gppTxt=JSON.stringify(gpp),gppPay=new Uint8Array(8+new TextEncoder().encode(gppTxt).length);gppPay.set(PFX,0);gppPay.set(new TextEncoder().encode(gppTxt),8);
   if(!exifObj['Exif'])exifObj['Exif']={};exifObj['Exif'][piexif.ExifIFD.UserComment]=gppPay;
-  let newDataUrl;try{newDataUrl=piexif.insert(piexif.dump(exifObj),dataUrl);}catch(err){showToast(`❌ EXIF: ${err.message}`,'error',6000);document.getElementById('mgps-save-btn').disabled=false;return;}
+  let newDataUrl;try{newDataUrl=piexif.insert(piexif.dump(exifObj),dataUrl);}catch(err){showToast(`❌ EXIF запись не удалась: ${err.message}. Возможно, JPEG несовместим с piexifjs (synthetic/stub или повреждённый файл).`,'error',8000);document.getElementById('mgps-save-btn').disabled=false;return;}
   const newBlob=dataUrlToBlob(newDataUrl);
   if(!p.isRemote&&p.fileHandle&&typeof p.fileHandle.createWritable==='function'){try{if(!(await _ensureHandleRW(p.fileHandle)))throw new Error('нет прав на запись');const w=await p.fileHandle.createWritable();await w.write(newBlob);await w.close();showToast('✅ Файл перезаписан на диске','success',3000);}catch(e){const a=document.createElement('a');a.href=newDataUrl;a.download=p.name;a.click();showToast('✅ EXIF записан (скачан)','success',3000);}}
   else if(p.isRemote){const a=document.createElement('a');a.href=newDataUrl;a.download=p.name;a.click();showToast('✅ Скачан (источник только чтение)','success',4000);}
