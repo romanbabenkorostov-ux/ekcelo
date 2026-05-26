@@ -10,3 +10,15 @@ dev/tests/playwright-report/
 dev/tests/package-lock.json
 dev/package-lock.json
 .eslintcache
+
+# Python
+*.pyo
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Local exports / dumps
+parser/session_export_*.json
+parser/*.kmz
