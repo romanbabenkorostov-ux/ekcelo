@@ -1,8 +1,8 @@
 # ADR-001: Расширение схемы БД для профиля экспорта в ЭТП
 
-**Статус:** Proposed
+**Статус:** Accepted
 **Дата:** 2026-05-27
-**Связано:** SPEC `docs/etp_export/SPEC_etp_export.md` §5, PR #41 (merged, SHA `8e1272f`).
+**Связано:** SPEC `docs/etp_export/SPEC_etp_export.md` §5, PR #41 (merged, SHA `8e1272f`), PR #48 (merged — ADR-001 Proposed), PR #50/52 (CORRESPONDENCE/025+026 ratification), миграция `schema/migrations/0001_etp_profile.sql`.
 
 ---
 
