@@ -27,6 +27,14 @@ from pathlib import Path
 
 SCHEMA_VERSION = "1.0"
 
+# Sanity-границы площади (defense-in-depth против legacy/buggy session_export'ов).
+# Зеркалит v8 `_payload_area_sane`: 01b отвергает заведомо некорректные payload'ы
+# — в первую очередь network_capture, где substring-match по properties может
+# подобрать геометрию соседнего КН или квартала.
+MAX_REASONABLE_AREA_SQM = 1e10        # 10 000 км² — выше неизбежно квартал/регион
+MAX_AREA_RATIO = 100.0                # computed/parsed > 100x → мусор
+MIN_AREA_RATIO = 0.01                 # computed/parsed < 0.01x → мусор
+
 # Приоритет источников (см. ADR §3). Чем выше — тем «лучше» контур.
 SOURCE_PRIORITY = {
     "manual": 1000,
@@ -98,6 +106,34 @@ def _should_upgrade(existing: dict, candidate: dict) -> tuple[bool, str]:
         return False, f"alg {candidate.get('алгоритм_версия')} < {existing.get('алгоритм_версия')}"
     # При полном равенстве — оставляем существующее (детерминизм).
     return False, "tie, keep existing"
+
+
+def _payload_area_sane(payload: dict) -> tuple[bool, str]:
+    """Грубый sanity-check площади (defense-in-depth).
+
+    Возвращает (ok, reason). Не пытается «починить» payload — только говорит,
+    стоит ли его пускать в sidecar. Нужно, потому что:
+      - v8 раннее `_payload_area_sane` пробежал только при extract; старые
+        session_export'ы (v8.0…v8.3) могут содержать мусор.
+      - network_capture особенно хрупок: `find_by_cad` делает substring-match
+        по properties и может вернуть extent квартала вместо контура объекта.
+
+    Правила:
+      - computed > MAX_REASONABLE_AREA_SQM → всегда мусор (квартал/регион).
+      - parsed известен и computed > MAX_AREA_RATIO × parsed → мусор.
+      - parsed известен и computed < parsed × MIN_AREA_RATIO → мусор.
+    """
+    comp = payload.get("площадь_вычисленная_кв_м") or 0
+    parsed = payload.get("площадь_заявленная_кв_м") or 0
+    if comp > MAX_REASONABLE_AREA_SQM:
+        return False, f"computed {comp:.2e} м² > {MAX_REASONABLE_AREA_SQM:.0e}"
+    if parsed > 0 and comp > 0:
+        ratio = comp / parsed
+        if ratio > MAX_AREA_RATIO:
+            return False, f"computed/parsed = {ratio:.1f}x (> {MAX_AREA_RATIO:.0f})"
+        if ratio < MIN_AREA_RATIO:
+            return False, f"computed/parsed = {ratio:.4f}x (< {MIN_AREA_RATIO})"
+    return True, ""
 
 
 def _strip_payload(c: dict) -> dict:
@@ -216,6 +252,10 @@ def ingest_one(records, file_path: Path, sink: dict, stats: dict):
             stats["skipped_bad_contour"] += 1
             continue
         candidate = _strip_payload(contour)
+        ok, why = _payload_area_sane(candidate)
+        if not ok:
+            stats["skipped_insane_area"].append((cn_norm, src_label, why))
+            continue
         existing = objects.get(cn_norm)
         do, reason = _should_upgrade(existing, candidate)
         if do:
@@ -282,6 +322,7 @@ def main():
         "files_read": 0, "files_failed": 0,
         "records_seen": 0,
         "skipped_bad_cn": 0, "skipped_bad_contour": 0,
+        "skipped_insane_area": [],
         "upgraded": [], "kept": [],
     }
 
@@ -311,6 +352,11 @@ def main():
     print(f"    kept (lower priority): {len(stats['kept'])}")
     print(f"    skipped (bad cn): {stats['skipped_bad_cn']}")
     print(f"    skipped (bad contour): {stats['skipped_bad_contour']}")
+    print(f"    skipped (insane area): {len(stats['skipped_insane_area'])}")
+    for cn, src, why in stats["skipped_insane_area"][:10]:
+        print(f"      ✗ {cn} [{src}]: {why}")
+    if len(stats["skipped_insane_area"]) > 10:
+        print(f"      … ещё {len(stats['skipped_insane_area']) - 10}")
     print(f"    итого объектов в sidecar: {n_objs}")
 
     by_source = {}
