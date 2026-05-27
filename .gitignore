@@ -22,3 +22,10 @@ dev/package-lock.json
 # Local exports / dumps
 parser/session_export_*.json
 parser/*.kmz
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
