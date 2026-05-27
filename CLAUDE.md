@@ -20,9 +20,9 @@
 
 ## 3. Repository & DB Rules
 - `parser/` (Python), `schema/` (SQL), `/` (Web/Worker), `obsidian/` (Knowledge).
-- **DB Truth**: Всегда сверяться с `schema/egrn_current_schema.sql`.
+- **DB Truth**: «БД = слепок ЕГРН + ЭТП-профиль» (ADR-001). §1..§5 в `schema/egrn_current_schema.sql` восстанавливается из выписок ЕГРН; §6 (`object_etp_profile`, `lots`, `lot_items`) — не-ЕГРН слой с ручными правками экономиста / EXIF / NSPD / LLM, имеет поля `source` + `confidence`, при пересоздании БД из выписок НЕ восстанавливается.
 - **Naming**: snake_case везде (Python, JS, SQL).
-- **Migrations**: Изменения БД — только через файлы миграций.
+- **Migrations**: Изменения БД — только через файлы миграций в `schema/migrations/`.
 
 ## 4. Communication & Styles
 - **Default Style**: **Caveman Full** (максимально кратко, только суть).

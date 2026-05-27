@@ -1,8 +1,11 @@
 -- =============================================
--- EKCELO — EGRN Parser Current Schema
--- Актуальная структура БД парсера ЕГРН (v1.10+)
--- Единый источник правды для Python + Frontend
--- Дата: 2026-05-12
+-- EKCELO — Current DB Schema
+-- БД = слепок ЕГРН + ЭТП-профиль (см. CLAUDE.md §3, ADR-001)
+--   §1..§5 — слепок ЕГРН (объекты, права, выписки, ограничения)
+--   §6     — ЭТП-профиль (не-ЕГРН слой, не восстанавливается из выписок)
+-- Единый источник правды для Python + Frontend.
+-- Дата: 2026-05-27
+-- Миграции: schema/migrations/
 -- =============================================
 
 PRAGMA journal_mode=WAL;
@@ -86,3 +89,52 @@ CREATE INDEX idx_rights_cad ON rights(cad_number);
 CREATE INDEX idx_rights_inn ON rights(right_holder_inn);
 CREATE INDEX idx_extracts_cad_date ON extracts(cad_number, extract_date);
 CREATE INDEX idx_restrictions_cad ON object_restrictions(cad_number);
+
+-- =============================================
+-- 6. ЭТП-профиль (НЕ-ЕГРН слой; см. ADR-001, CLAUDE.md §3)
+-- =============================================
+-- Гэп-поля для развёрнутого описания лота на ЭТП.
+-- Заполняется ОСВ-листом экономиста, EXIF фото, NSPD, LLM.
+-- При пересоздании БД из выписок ЭТП-профиль НЕ восстанавливается.
+-- Полная спецификация: docs/etp_export/SPEC_etp_export.md §3, §5.
+CREATE TABLE IF NOT EXISTS object_etp_profile (
+    cad_number      TEXT PRIMARY KEY REFERENCES objects(cad_number) ON DELETE CASCADE,
+    location_extra  TEXT,                        -- JSON: {landmark, transport_access, environment_short}
+    building_extra  TEXT,                        -- JSON: {renovation_year, wear_degree, engineering{}, amenities[]}
+    layout          TEXT,                        -- JSON: {layout_type, ceiling_height_m, finish_level, finish_state, windows, entry_group, current_condition_comment}
+    legal_extra     TEXT,                        -- JSON: {use_type_fact, zoning, special_restrictions[]}
+    risks           TEXT,                        -- JSON: {technical_risks[], legal_risks[], location_risks[], other_risks[]}
+    extras          TEXT,                        -- JSON: {furniture, advantages[], notes}
+    source          TEXT NOT NULL CHECK (source IN ('osv','exif','manual','nspd','llm')),
+    confidence      REAL NOT NULL CHECK (confidence >= 0.0 AND confidence <= 1.0),
+    updated_at      TEXT DEFAULT (datetime('now'))
+);
+
+-- lots.lot_id формат: [A-Za-z0-9_:/-]+, длина 1..256.
+-- Совместимо с CONTRACT_KMZ.md §6 graph_node_id → viewer Phase 2 overlay
+-- переиспользует S5-инфру (CORRESPONDENCE/026).
+CREATE TABLE IF NOT EXISTS lots (
+    lot_id              TEXT PRIMARY KEY CHECK (
+                            length(lot_id) BETWEEN 1 AND 256
+                            AND lot_id NOT GLOB '*[^A-Za-z0-9_:/-]*'
+                        ),
+    name                TEXT NOT NULL,
+    platform_targets    TEXT,                    -- JSON array
+    procedure_type      TEXT,
+    deal_type           TEXT CHECK (deal_type IS NULL OR deal_type IN ('sale','lease','other')),
+    primary_cad_number  TEXT REFERENCES objects(cad_number) ON DELETE SET NULL,
+    notes_md            TEXT,
+    created_at          TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS lot_items (
+    lot_id      TEXT NOT NULL REFERENCES lots(lot_id) ON DELETE CASCADE,
+    cad_number  TEXT NOT NULL REFERENCES objects(cad_number) ON DELETE CASCADE,
+    role        TEXT NOT NULL CHECK (role IN ('building','land','room','equipment','structure')),
+    ord         INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (lot_id, cad_number)
+);
+
+CREATE INDEX idx_etp_profile_source ON object_etp_profile(source);
+CREATE INDEX idx_lots_primary ON lots(primary_cad_number);
+CREATE INDEX idx_lot_items_cad ON lot_items(cad_number);
