@@ -1,0 +1,210 @@
+{
+  "$comment": "Read-only fixture для ЭТП-профиля. Соответствует ADR-001 и SPEC §3/§5. Используется viewer-team для рендера карточки и parser-team в тесте миграции DDL. Cad-номера/правообладатели — синтетические (по мотивам проекта pirushin/sosna-rocha).",
+  "$schema_version": "1.0",
+  "$generated_at": "2026-05-27",
+  "$see_also": [
+    "docs/etp_export/SPEC_etp_export.md §3 (JSON-структура long_description)",
+    "docs/etp_export/SPEC_etp_export.md §5 (схема БД object_etp_profile/lots/lot_items)",
+    "obsidian/Decisions/ADR-001-etp-profile-extension.md"
+  ],
+
+  "object_etp_profile": [
+    {
+      "$comment": "Кейс A: офисное помещение с богатым профилем — все секции заполнены, преимущественно source=osv (ручной ввод экономистом из ОСВ-листа).",
+      "cad_number": "61:44:0050706:31",
+      "location_extra": {
+        "landmark": "в 7 минутах пешком от станции метро «Тверская»",
+        "transport_access": "удовлетворительная",
+        "environment_short": "зона смешанной жилой и деловой застройки центральной части города"
+      },
+      "building_extra": {
+        "renovation_year": 2015,
+        "wear_degree": "удовлетворительное",
+        "engineering": {
+          "electricity": "подключено",
+          "water": "центральное",
+          "sewerage": "центральная",
+          "heating": "центральное",
+          "gas": "отсутствует",
+          "telecom": "интернет, телефония"
+        },
+        "amenities": [
+          "благоустроенная придомовая территория",
+          "организованные парковочные места"
+        ]
+      },
+      "layout": {
+        "layout_type": "кабинетная",
+        "ceiling_height_m": 3.1,
+        "finish_level": "офисная отделка",
+        "finish_state": "удовлетворительное",
+        "windows": "пластиковые стеклопакеты",
+        "entry_group": "отдельный вход с улицы",
+        "current_condition_comment": "требуется частичный косметический ремонт"
+      },
+      "legal_extra": {
+        "use_type_fact": "офис",
+        "zoning": "общественно-деловая зона",
+        "special_restrictions": [
+          "запрещено размещение шумных производств"
+        ]
+      },
+      "risks": {
+        "technical_risks": [
+          "отдельные элементы отделки требуют обновления"
+        ],
+        "legal_risks": [],
+        "location_risks": [
+          "ограниченные возможности парковки в дневное время"
+        ],
+        "other_risks": []
+      },
+      "extras": {
+        "furniture": "частично меблировано",
+        "advantages": [
+          "расположение в деловом центре города",
+          "пешая доступность до метро"
+        ],
+        "notes": "Подробные сведения приведены в отчёте об оценке и технической документации, размещённых в составе документации по лоту."
+      },
+      "source": "osv",
+      "confidence": 1.0,
+      "updated_at": "2026-05-26T14:20:00Z"
+    },
+
+    {
+      "$comment": "Кейс B: складское помещение с автозаполнением из NSPD + EXIF — confidence < 1 для большинства полей; viewer должен показать бейджи источника и приглушение для confidence<0.5.",
+      "cad_number": "61:44:0050706:42",
+      "location_extra": {
+        "landmark": "промышленная зона, близко к федеральной трассе М-4",
+        "transport_access": "хорошая для грузового транспорта",
+        "environment_short": "промышленно-складская зона"
+      },
+      "building_extra": {
+        "renovation_year": null,
+        "wear_degree": "требуется капитальный ремонт",
+        "engineering": {
+          "electricity": "подключено",
+          "water": "техническое",
+          "sewerage": "локальная",
+          "heating": "отсутствует",
+          "gas": "отсутствует",
+          "telecom": "интернет"
+        },
+        "amenities": [
+          "погрузочная рампа",
+          "ограждённая территория"
+        ]
+      },
+      "layout": {
+        "layout_type": "open-space",
+        "ceiling_height_m": 6.5,
+        "finish_level": "без отделки",
+        "finish_state": "удовлетворительное",
+        "windows": "оконные блоки требуют замены",
+        "entry_group": "ворота для грузового транспорта",
+        "current_condition_comment": "требуется капитальный ремонт кровли"
+      },
+      "legal_extra": {
+        "use_type_fact": "склад",
+        "zoning": "производственно-складская",
+        "special_restrictions": []
+      },
+      "risks": {
+        "technical_risks": [
+          "износ кровли >60%",
+          "электропроводка требует замены"
+        ],
+        "legal_risks": [
+          "перепланировка не зарегистрирована в ЕГРН"
+        ],
+        "location_risks": [
+          "повышенный шумовой фон от трассы"
+        ],
+        "other_risks": []
+      },
+      "extras": {
+        "furniture": null,
+        "advantages": [
+          "удобная транспортная доступность",
+          "электромощность 60 кВт"
+        ],
+        "notes": null
+      },
+      "source": "nspd",
+      "confidence": 0.65,
+      "updated_at": "2026-05-25T09:10:00Z"
+    },
+
+    {
+      "$comment": "Кейс C: земельный участок с минимальным профилем — большинство полей null; LLM-suggest с низким confidence, viewer должен приглушить значения.",
+      "cad_number": "61:44:0050706:7",
+      "location_extra": {
+        "landmark": null,
+        "transport_access": "грунтовая дорога районного значения",
+        "environment_short": "сельская местность"
+      },
+      "building_extra": null,
+      "layout": null,
+      "legal_extra": {
+        "use_type_fact": "не используется",
+        "zoning": "земли сельскохозяйственного назначения",
+        "special_restrictions": [
+          "часть участка попадает в водоохранную зону реки"
+        ]
+      },
+      "risks": {
+        "technical_risks": [],
+        "legal_risks": [
+          "сервитут проезда смежных собственников"
+        ],
+        "location_risks": [
+          "отсутствие централизованной инфраструктуры"
+        ],
+        "other_risks": []
+      },
+      "extras": {
+        "furniture": null,
+        "advantages": [
+          "ровный рельеф",
+          "возможность подключения к ЛЭП по границе"
+        ],
+        "notes": null
+      },
+      "source": "llm",
+      "confidence": 0.35,
+      "updated_at": "2026-05-24T16:45:00Z"
+    }
+  ],
+
+  "lots": [
+    {
+      "$comment": "Лот A: имущественный комплекс из помещения + участка (типовой кейс — офис с прилегающей землёй).",
+      "lot_id": "lot:pirushin:001",
+      "name": "Имущественный комплекс «Пирушин-Центр»: офисное помещение + земельный участок",
+      "platform_targets": ["torgi.gov.ru", "sberbank-ast.ru"],
+      "procedure_type": "реализации имущества должника в рамках дела о банкротстве",
+      "deal_type": "sale",
+      "primary_cad_number": "61:44:0050706:31",
+      "notes_md": "Лот сформирован по решению экономиста: офис + смежный участок продаются единым активом для сохранения операционной ценности.",
+      "created_at": "2026-05-26T14:30:00Z"
+    },
+    {
+      "$comment": "Лот B: одиночный склад — пример минимального лота из одного КН.",
+      "lot_id": "lot:sosna-rocha:042",
+      "name": "Складское помещение «Сосна-Роча» (одиночный лот)",
+      "platform_targets": ["torgi.gov.ru"],
+      "procedure_type": "приватизации",
+      "deal_type": "sale",
+      "primary_cad_number": "61:44:0050706:42",
+      "notes_md": null,
+      "created_at": "2026-05-26T15:00:00Z"
+    }
+  ],
+
+  "lot_items": [
+    {"lot_id": "lot:pirushin:001", "cad_number": "61:44:0050706:31", "role": "room", "ord": 1},
+    {"lot_id": "lot:pirushin:001", "cad_number": "61:44:0050706:7",  "role": "land", "ord": 2},
+    {"lot_id": "lot:sosna-rocha:042", "cad_number": "61:44:0050706:42", "role": "room", "ord": 1}
+  ]
+}
