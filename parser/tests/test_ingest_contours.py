@@ -385,3 +385,87 @@ def test_strip_payload_removes_internal_fields():
     assert "random_internal" not in stripped
     assert stripped["источник"] == "wfs"
     assert "geojson" in stripped
+
+
+# ─── Sanity-check площади (defense-in-depth) ────────────────────────────
+
+
+def test_payload_area_sane_accepts_normal():
+    ok, _ = ingest._payload_area_sane(_contour("wfs"))
+    assert ok is True
+
+
+def test_payload_area_sane_rejects_giant_area():
+    """computed > 1e10 м² (типично: extent квартала вместо контура)."""
+    bad = _contour("network_capture")
+    bad["площадь_вычисленная_кв_м"] = 1.4e15
+    ok, why = ingest._payload_area_sane(bad)
+    assert ok is False
+    assert "1e+10" in why or "10" in why
+
+
+def test_payload_area_sane_rejects_ratio_too_high():
+    """parsed=100, computed=20000 → ratio=200 → reject."""
+    bad = _contour("network_capture")
+    bad["площадь_заявленная_кв_м"] = 100.0
+    bad["площадь_вычисленная_кв_м"] = 20_000.0
+    ok, _ = ingest._payload_area_sane(bad)
+    assert ok is False
+
+
+def test_payload_area_sane_rejects_ratio_too_low():
+    """parsed=100, computed=0.5 → ratio=0.005 → reject."""
+    bad = _contour("wfs")
+    bad["площадь_заявленная_кв_м"] = 100.0
+    bad["площадь_вычисленная_кв_м"] = 0.5
+    ok, _ = ingest._payload_area_sane(bad)
+    assert ok is False
+
+
+def test_payload_area_sane_no_parsed_only_giant_check():
+    """Если parsed=None — работает только верхний потолок 1e10."""
+    p = _contour("wfs")
+    p["площадь_заявленная_кв_м"] = None
+    p["площадь_вычисленная_кв_м"] = 5e9
+    ok, _ = ingest._payload_area_sane(p)
+    assert ok is True  # ниже потолка
+
+
+def test_e2e_insane_network_capture_skipped(tmp_path, monkeypatch, capsys):
+    """Network_capture с extent квартала (computed=1.4e15) пропускается, sidecar пуст."""
+    project = _setup_project(tmp_path)
+    bad = _contour("network_capture")
+    bad["площадь_вычисленная_кв_м"] = 1.4e15
+    (project / "session_export_garbage.json").write_text(
+        json.dumps(_session_export("Земельные участки", "23:50:0301004:25", bad)),
+        encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["01b", "--project", str(project)])
+    ingest.main()
+    sidecar = project / "_data" / "contours.json"
+    data = json.loads(sidecar.read_text(encoding="utf-8"))
+    assert "23:50:0301004:25" not in data["objects"], "мусорный network_capture должен быть отвергнут"
+    out = capsys.readouterr().out
+    assert "insane area" in out
+
+
+def test_e2e_insane_does_not_overwrite_good(tmp_path, monkeypatch):
+    """Хороший WFS в sidecar НЕ затирается последующим insane network_capture."""
+    project = _setup_project(tmp_path)
+    (project / "session_export_good.json").write_text(
+        json.dumps(_session_export("Земельные участки", "23:50:0301004:25", _contour("wfs"))),
+        encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["01b", "--project", str(project)])
+    ingest.main()
+    sidecar = project / "_data" / "contours.json"
+    good = json.loads(sidecar.read_text(encoding="utf-8"))["objects"]["23:50:0301004:25"]
+    assert good["источник"] == "wfs"
+
+    bad = _contour("network_capture")  # priority 600 < wfs 800 в любом случае
+    bad["площадь_вычисленная_кв_м"] = 1.4e15
+    (project / "session_export_bad.json").write_text(
+        json.dumps(_session_export("Земельные участки", "23:50:0301004:25", bad)),
+        encoding="utf-8")
+    ingest.main()
+    after = json.loads(sidecar.read_text(encoding="utf-8"))["objects"]["23:50:0301004:25"]
+    assert after["источник"] == "wfs"
+    assert after["площадь_вычисленная_кв_м"] == 100.0
