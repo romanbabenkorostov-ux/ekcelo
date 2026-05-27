@@ -1863,11 +1863,18 @@ const L_NspdLayer = L.GridLayer.extend({
     const img = document.createElement('img');
     img.style.cssText = 'width:256px;height:256px;';
     const url = _nspdWmsUrl(this.options._layerId, coords);
-    fetch(url, {
-      referrer: 'https://nspd.gov.ru/',
-      referrerPolicy: 'unsafe-url',
-      headers: { Accept: 'image/png,image/*' },
-    })
+    // CORS-fix: NSPD не отдаёт Access-Control-Allow-Origin → завёрнут через
+    // Cloudflare worker (`infra/cloudflare-worker/worker.js` уже знает про
+    // nspd.gov.ru в ALLOWED_HOSTS + Referer hack в REFERERS). Если worker не
+    // настроен (YANDEX_PROXY пуст) — fallback на прямой fetch с referrer hack.
+    const fetchUrl = (typeof proxyUrl === 'function' && typeof YANDEX_PROXY !== 'undefined' && YANDEX_PROXY)
+                       ? proxyUrl(url) : url;
+    const fetchOpts = { headers: { Accept: 'image/png,image/*' } };
+    if(fetchUrl === url){ // direct (no proxy) — legacy referrer hack
+      fetchOpts.referrer = 'https://nspd.gov.ru/';
+      fetchOpts.referrerPolicy = 'unsafe-url';
+    }
+    fetch(fetchUrl, fetchOpts)
     .then(r => r.ok ? r.blob() : Promise.reject(r.status))
     .then(blob => {
       const burl = URL.createObjectURL(blob);
@@ -2021,7 +2028,12 @@ function _prefetchCadastreZ17(token){
     if(i >= work.length) return Promise.resolve();
     const url = work[i++];
     _prefetchSeen.add(url);
-    return fetch(url, { referrer:'https://nspd.gov.ru/', referrerPolicy:'unsafe-url', headers:{ Accept:'image/png,image/*' } })
+    // CORS-fix: тот же proxy-fallback что в createTile (см. line ~1865).
+    const fetchUrl = (typeof proxyUrl === 'function' && typeof YANDEX_PROXY !== 'undefined' && YANDEX_PROXY)
+                       ? proxyUrl(url) : url;
+    const fetchOpts = { headers:{ Accept:'image/png,image/*' } };
+    if(fetchUrl === url){ fetchOpts.referrer='https://nspd.gov.ru/'; fetchOpts.referrerPolicy='unsafe-url'; }
+    return fetch(fetchUrl, fetchOpts)
       .then(r=>r.ok?r.blob():null)
       .catch(()=>{})
       .then(()=>worker());
