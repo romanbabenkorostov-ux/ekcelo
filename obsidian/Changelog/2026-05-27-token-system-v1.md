@@ -35,7 +35,9 @@ python3 tools/ekcelo_tokens.py url "https://disk.yandex.ru/d/GLA8p8oHpnv9NA"
 
 ## Поставка `ekcelo-site`
 ZIP с `viewer/token-gate.html` под именем `index.html`. CORS не нужен
-(`tokens.js` грузится с GitHub Pages с `Access-Control-Allow-Origin: *`).
+(`tokens.js` грузится с
+`https://romanbabenkorostov-ux.github.io/ekcelo/viewer/tokens.js` —
+GitHub Pages шлёт `Access-Control-Allow-Origin: *`).
 Не кешировать `tokens.js` агрессивно — алгоритм может перейти на v2.
 
 ## v2 на будущее
