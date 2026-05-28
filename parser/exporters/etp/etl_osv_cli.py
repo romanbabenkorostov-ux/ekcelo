@@ -4,7 +4,7 @@ Usage:
     python -m parser.exporters.etp.etl_osv_cli \\
         --yaml path/to/survey.yaml \\
         --db path/to/ekcelo.sqlite \\
-        [--dry-run]
+        [--dry-run] [--export]
 """
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ import sqlite3
 import sys
 from pathlib import Path
 
+from parser.exporters.etp.auto_export import add_export_args, run_export_if_requested
 from parser.exporters.etp.etl_osv import apply_osv, load_osv
 
 
@@ -43,6 +44,8 @@ def main(argv: list[str] | None = None) -> int:
         f"lots: +{report.lots_inserted}/~{report.lots_updated}  "
         f"lot_items: +{report.lot_items_inserted}/-{report.lot_items_deleted}"
     )
+
+    run_export_if_requested(conn, args, dry_run=args.dry_run)
     return 0
 
 
@@ -55,6 +58,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--db", required=True, help="Путь к SQLite БД с миграцией 0001.")
     p.add_argument("--dry-run", action="store_true",
                    help="Только валидация + reporting; БД не меняется.")
+    add_export_args(p)
     return p.parse_args(argv)
 
 
