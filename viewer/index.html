@@ -4184,6 +4184,8 @@ function _renderEtpBlock(etp){
   }
   if(etp.building_extra){
     const b = etp.building_extra;
+    const cons = [b.building_type, b.year_built && `постройка ${b.year_built}`].filter(Boolean);
+    if(cons.length) rows.push(['Конструкция', cons.join(', ')]);
     const w = [b.wear_degree, b.renovation_year && `ремонт ${b.renovation_year}`].filter(Boolean);
     if(w.length) rows.push(['Здание', w.join(', ')]);
     if(b.engineering){
@@ -4202,6 +4204,7 @@ function _renderEtpBlock(etp){
     const lg = etp.legal_extra;
     const p = [lg.use_type_fact, lg.zoning].filter(Boolean);
     if(p.length) rows.push(['Юридически', p.join(', ')]);
+    if(lg.use_type_permitted) rows.push(['Разрешённое использование', lg.use_type_permitted]);
     if(Array.isArray(lg.special_restrictions) && lg.special_restrictions.length){
       rows.push(['Ограничения', lg.special_restrictions.join('; ')]);
     }

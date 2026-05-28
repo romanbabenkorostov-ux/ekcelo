@@ -129,6 +129,8 @@ const SECTIONS = {
     { key: "environment_short",   label: "environment_short",   type: "str"  },
   ],
   building_extra: [
+    { key: "building_type",       label: "building_type (материал стен, напр. «кирпичное»)", type: "str" },
+    { key: "year_built",          label: "year_built (год постройки)", type: "int" },
     { key: "renovation_year",     label: "renovation_year",     type: "int"  },
     { key: "wear_degree",         label: "wear_degree",         type: "str"  },
     { key: "engineering",         label: "engineering",         type: "engineering" },
@@ -146,6 +148,7 @@ const SECTIONS = {
   ],
   legal_extra: [
     { key: "use_type_fact",          label: "use_type_fact",          type: "str"  },
+    { key: "use_type_permitted",     label: "use_type_permitted (через «; » если несколько)", type: "str" },
     { key: "zoning",                 label: "zoning",                 type: "str"  },
     { key: "special_restrictions",   label: "special_restrictions (по одному на строку)", type: "list" },
   ],
