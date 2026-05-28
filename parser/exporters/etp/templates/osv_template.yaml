@@ -25,6 +25,8 @@ profiles:
       environment_short: "зона смешанной жилой и деловой застройки центральной части города"
 
     building_extra:
+      building_type: "кирпичное"          # Stage 5 NSPD: нормализованный материал стен
+      year_built: 1975                    # Stage 5 NSPD: год постройки
       renovation_year: 2015
       wear_degree: "удовлетворительное"
       engineering:
@@ -49,6 +51,7 @@ profiles:
 
     legal_extra:
       use_type_fact: "офис"
+      use_type_permitted: "административно-офисные помещения; деловые услуги"  # Stage 5 NSPD
       zoning: "общественно-деловая зона"
       special_restrictions:
         - "запрещено размещение шумных производств"
