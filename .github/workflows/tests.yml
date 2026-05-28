@@ -1,0 +1,35 @@
+# .github/workflows/tests.yml
+#
+# EkceloFoto — юнит-тесты viewer/core/ через встроенный node:test (Node 20).
+# Никаких npm-зависимостей. Триггер: правки в viewer/ или tests/viewer/.
+# ADR-003 (viewer/core слой).
+
+name: tests
+
+on:
+  pull_request:
+    paths:
+      - "viewer/**"
+      - "tests/viewer/**"
+      - ".github/workflows/tests.yml"
+  push:
+    branches: [main]
+    paths:
+      - "viewer/**"
+      - "tests/viewer/**"
+      - ".github/workflows/tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  viewer-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Run viewer/core unit tests (node:test)
+        run: node --test tests/viewer/*.test.mjs
