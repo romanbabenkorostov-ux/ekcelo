@@ -872,6 +872,17 @@ html.tile-seam-yandex .leaflet-tile-pane{ will-change:transform; isolation:isola
 .info-card .ic-att-thumb{width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid var(--border);cursor:pointer;background:#000}
 .info-card .ic-att-chip{display:inline-flex;align-items:center;gap:3px;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;padding:3px 7px;border-radius:9px;border:1px solid var(--accent2);background:var(--bg);color:var(--text);cursor:pointer}
 .info-card .ic-att-chip.ic-att-missing{opacity:.5;cursor:default;border-color:var(--border)}
+/* ── ETP Profile Phase 1 (read-only render; CORRESPONDENCE/025+026) ── */
+.info-card .ic-section-label{font-size:9px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin:6px 0 3px;display:flex;align-items:center;gap:6px}
+.info-card .ic-section-label--etp{color:var(--accent2)}
+.info-card .ic-etp-badge{font-family:'JetBrains Mono',monospace;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:600;letter-spacing:.3px}
+.info-card .ic-etp-badge--high{background:rgba(108,217,108,.18);color:#6cd96c}
+.info-card .ic-etp-badge--mid{background:rgba(232,255,71,.18);color:var(--accent)}
+.info-card .ic-etp-badge--low{background:rgba(255,149,0,.18);color:#ff9500}
+.info-card .ic-etp-body{font-size:10px;line-height:1.4;color:var(--text2)}
+.info-card .ic-etp-body.ic-etp-dim{opacity:.55}
+.info-card .ic-etp-row{margin:2px 0}
+.info-card .ic-etp-key{color:var(--muted);margin-right:4px}
 #att-lightbox{position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;cursor:zoom-out}
 #att-lightbox.open{display:flex}
 #att-lightbox img{max-width:94vw;max-height:94vh;object-fit:contain;box-shadow:0 0 30px rgba(0,0,0,.6)}
@@ -1782,6 +1793,24 @@ const TILES={
   // White background: 1×1 white PNG tile — no imagery, just clean background for contour parsing
   white:L.tileLayer('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==',{attribution:'',maxZoom:22,opacity:0})
 };
+
+// ── ETP PROFILE (Phase 1, read-only fixture) ─────────────────────────
+// Контракт: CORRESPONDENCE/025+026, TASK_BRIEF viewer-team, FIXTURE_NOTES.md
+// в parser/tests/fixtures/etp/. БД ещё не мигрирована (parser-A работает
+// над DDL параллельно), поэтому viewer Phase 1 читает ИСКЛЮЧИТЕЛЬНО из
+// локальной фикстуры. При появлении экспорта из БД — заменить fetch на
+// запрос к экспортированному JSON (формат object_etp_profile[] идентичен).
+let _etpProfile = { byKn: new Map(), lots: [], lotItems: [] };
+(async function loadEtpFixture(){
+  try{
+    const r = await fetch('parser/tests/fixtures/etp/object_etp_profile_sample.json');
+    if(!r.ok) return;  // фикстура отсутствует → silent skip (опциональный слой)
+    const j = await r.json();
+    for(const p of (j.object_etp_profile||[])) _etpProfile.byKn.set(p.cad_number, p);
+    _etpProfile.lots = j.lots || [];
+    _etpProfile.lotItems = j.lot_items || [];
+  }catch(e){ console.debug('[etp] fixture not loaded:', e); }
+})();
 TILES.osm.addTo(map);
 let currentLayer='osm';
 
@@ -4105,6 +4134,15 @@ function _renderObjectCard(hit, cardId){
   const graphBtn = _gid
     ? `<button class="ic-icobtn" title="К узлу графа связей" onclick="_openGraphFor('${_gid.replace(/'/g,"\\'")}')">🕸</button>`
     : '';
+  // ── ЭТП-профиль (Phase 1, read-only) — CORRESPONDENCE/025+026 ──
+  const rawCad = (m.cadNum || m.name || '').toString();
+  const cadMatch = rawCad.match(/\d{2}:\d{2,3}:\d{6,10}:\d{1,6}/);
+  const cn = cadMatch ? cadMatch[0] : rawCad.trim();
+  const etp = cn ? _etpProfile.byKn.get(cn) : null;
+  const etpHtml = etp ? _renderEtpBlock(etp) : '';
+  const egrnLabel = etpHtml
+    ? '<div class="ic-section-label">— ЕГРН —</div>'  // показываем только если есть ЭТП-пара
+    : '';
   return (
     `<div class="ic-header ${groupClass}">`+
       `<span class="ic-title">${groupTitle}</span>`+
@@ -4114,10 +4152,81 @@ function _renderObjectCard(hit, cardId){
       `<button class="ic-close" title="Закрыть">×</button>`+
     `</div>`+
     `<div class="ic-body">`+
+      egrnLabel+
       `<div class="ic-name">${safeName}</div>`+
       (safeDesc ? `<div class="ic-desc">${safeDesc}</div>` : '')+
       attHtml+
+      etpHtml+
     `</div>`
+  );
+}
+
+// ── ЭТП-профиль: render одной записи object_etp_profile[i] ──
+// Источник данных — фикстура parser/tests/fixtures/etp/object_etp_profile_sample.json
+// (CORRESPONDENCE/025+026). Не рендерит ничего, если все секции пустые.
+function _renderEtpBlock(etp){
+  const conf = Number(etp.confidence) || 0;
+  const src  = String(etp.source || '');
+  const lvl  = conf >= 1.0 ? 'high' : (conf >= 0.5 ? 'mid' : 'low');
+  const titles = {
+    high: 'Ручной ввод экономистом (ОСВ-лист). Доверие максимальное.',
+    mid:  'Автозаполнение из NSPD/EXIF. Среднее доверие — рекомендуется проверить.',
+    low:  'LLM-обогащение, низкое доверие. Подтвердить вручную перед публикацией.'
+  };
+  const badge = `<span class="ic-etp-badge ic-etp-badge--${lvl}" title="${titles[lvl]}">${_escapeHtml(src)} ${conf.toFixed(2)}</span>`;
+  const dimClass = lvl === 'low' ? ' ic-etp-dim' : '';
+
+  const rows = [];
+  if(etp.location_extra){
+    const l = etp.location_extra;
+    const parts = [l.landmark, l.transport_access, l.environment_short].filter(Boolean);
+    if(parts.length) rows.push(['Окружение', parts.join('; ')]);
+  }
+  if(etp.building_extra){
+    const b = etp.building_extra;
+    const w = [b.wear_degree, b.renovation_year && `ремонт ${b.renovation_year}`].filter(Boolean);
+    if(w.length) rows.push(['Здание', w.join(', ')]);
+    if(b.engineering){
+      const eng = Object.entries(b.engineering).filter(([_,v])=>v && v!=='отсутствует');
+      if(eng.length) rows.push(['Сети', eng.map(([k,v])=>`${k}: ${v}`).join('; ')]);
+    }
+    if(Array.isArray(b.amenities) && b.amenities.length) rows.push(['Удобства', b.amenities.join('; ')]);
+  }
+  if(etp.layout){
+    const ly = etp.layout;
+    const p = [ly.layout_type, ly.ceiling_height_m && `h=${ly.ceiling_height_m}м`, ly.finish_state].filter(Boolean);
+    if(p.length) rows.push(['Планировка', p.join(', ')]);
+    if(ly.current_condition_comment) rows.push(['Состояние', ly.current_condition_comment]);
+  }
+  if(etp.legal_extra){
+    const lg = etp.legal_extra;
+    const p = [lg.use_type_fact, lg.zoning].filter(Boolean);
+    if(p.length) rows.push(['Юридически', p.join(', ')]);
+    if(Array.isArray(lg.special_restrictions) && lg.special_restrictions.length){
+      rows.push(['Ограничения', lg.special_restrictions.join('; ')]);
+    }
+  }
+  if(etp.risks){
+    const r = etp.risks;
+    const all = ['technical_risks','legal_risks','location_risks','other_risks']
+      .flatMap(k => Array.isArray(r[k]) ? r[k] : []);
+    if(all.length) rows.push(['Риски', all.join('; ')]);
+  }
+  if(etp.extras){
+    const x = etp.extras;
+    if(Array.isArray(x.advantages) && x.advantages.length) rows.push(['Преимущества', x.advantages.join('; ')]);
+    if(x.notes) rows.push(['Примечание', x.notes]);
+  }
+
+  if(rows.length === 0) return '';  // профиль есть, но все секции пустые
+
+  const body = rows.map(([k,v]) =>
+    `<div class="ic-etp-row"><span class="ic-etp-key">${_escapeHtml(k)}:</span> ${_escapeHtml(v)}</div>`
+  ).join('');
+
+  return (
+    `<div class="ic-section-label ic-section-label--etp">— ЭТП-профиль ${badge} —</div>`+
+    `<div class="ic-etp-body${dimClass}">${body}</div>`
   );
 }
 
