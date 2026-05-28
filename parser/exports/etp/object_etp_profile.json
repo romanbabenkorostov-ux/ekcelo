@@ -1,0 +1,97 @@
+{
+  "$schema_version": "1.0",
+  "$source": "parser/exporters/etp/export_json.py",
+  "$project_slug": null,
+  "object_etp_profile": [
+    {
+      "cad_number": "61:44:0050706:31",
+      "location_extra": {
+        "landmark": "в 7 минутах пешком от станции метро «Тверская»",
+        "transport_access": "удовлетворительная",
+        "environment_short": "зона смешанной жилой и деловой застройки центральной части города"
+      },
+      "building_extra": {
+        "renovation_year": 2015,
+        "wear_degree": "удовлетворительное",
+        "engineering": {
+          "electricity": "подключено",
+          "water": "центральное",
+          "sewerage": "центральная",
+          "heating": "центральное",
+          "gas": "отсутствует",
+          "telecom": "интернет, телефония"
+        },
+        "amenities": [
+          "благоустроенная придомовая территория",
+          "организованные парковочные места"
+        ]
+      },
+      "layout": {
+        "layout_type": "кабинетная",
+        "ceiling_height_m": 3.1,
+        "finish_level": "офисная отделка",
+        "finish_state": "удовлетворительное",
+        "windows": "пластиковые стеклопакеты",
+        "entry_group": "отдельный вход с улицы",
+        "current_condition_comment": "требуется частичный косметический ремонт"
+      },
+      "legal_extra": {
+        "use_type_fact": "офис",
+        "zoning": "общественно-деловая зона",
+        "special_restrictions": [
+          "запрещено размещение шумных производств"
+        ]
+      },
+      "risks": {
+        "technical_risks": [
+          "отдельные элементы отделки требуют обновления"
+        ],
+        "legal_risks": [],
+        "location_risks": [
+          "ограниченные возможности парковки в дневное время"
+        ],
+        "other_risks": []
+      },
+      "extras": {
+        "furniture": "частично меблировано",
+        "advantages": [
+          "расположение в деловом центре города",
+          "пешая доступность до метро"
+        ],
+        "notes": "Подробные сведения приведены в отчёте об оценке и технической документации."
+      },
+      "source": "osv",
+      "confidence": 1.0,
+      "updated_at": "2026-05-28 09:30:03"
+    }
+  ],
+  "lots": [
+    {
+      "lot_id": "lot:pirushin:001",
+      "name": "Имущественный комплекс «Пирушин-Центр»: офис + участок",
+      "platform_targets": [
+        "torgi.gov.ru",
+        "sberbank-ast.ru"
+      ],
+      "procedure_type": "реализации имущества должника в рамках дела о банкротстве",
+      "deal_type": "sale",
+      "primary_cad_number": "61:44:0050706:31",
+      "notes_md": "Лот сформирован по решению экономиста: офис + смежный участок продаются единым активом.",
+      "created_at": "2026-05-28 09:30:03"
+    }
+  ],
+  "lot_items": [
+    {
+      "lot_id": "lot:pirushin:001",
+      "cad_number": "61:44:0050706:31",
+      "role": "room",
+      "ord": 1
+    },
+    {
+      "lot_id": "lot:pirushin:001",
+      "cad_number": "61:44:0050706:7",
+      "role": "land",
+      "ord": 2
+    }
+  ]
+}
