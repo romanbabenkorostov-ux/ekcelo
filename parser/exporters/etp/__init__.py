@@ -8,9 +8,15 @@ Stage 3: appendix + cli — Markdown-приложение + CLI экспорт.
 Stage 4: etl_osv — импорт survey-листа экономиста в БД.
 Stage 4b: export_json — экспорт БД в JSON-формат фикстуры (для viewer).
 Stage 5: nspd_enricher — gap-fill object_etp_profile из NSPD-данных.
+Stage 6: etl_exif — обогащение профиля из EXIF UserComment JPG-фото.
 """
 from parser.exporters.etp.appendix import build_lot_appendix
 from parser.exporters.etp.build_lot_context import build_lot_context
+from parser.exporters.etp.etl_exif import (
+    enrich_from_exif,
+    read_userComment,
+    scan_directory,
+)
 from parser.exporters.etp.etl_osv import apply_osv, load_osv
 from parser.exporters.etp.export_json import build_export_payload, write_export
 from parser.exporters.etp.nspd_enricher import (
@@ -35,4 +41,7 @@ __all__ = [
     "write_export",
     "merge_nspd_into_profile",
     "enrich_from_directory",
+    "enrich_from_exif",
+    "read_userComment",
+    "scan_directory",
 ]
