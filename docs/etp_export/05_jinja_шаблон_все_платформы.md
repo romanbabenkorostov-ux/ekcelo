@@ -39,14 +39,7 @@
 Объектом торгов является {{ ctx.identity.title }}
 {%- if ctx.identity.purpose %} {{ ctx.identity.purpose }} назначения{% endif -%}
 {%- if ctx.identity.area_total_sqm %} общей площадью {{ ctx.identity.area_total_sqm }} кв. м{% endif -%},
-расположенное
-{%- if ctx.identity.floor and ctx.building.floors_total %}
-    на {{ ctx.identity.floor }}-м этаже {{ ctx.building.floors_total }}-этажного
-{%- elif ctx.identity.floor %}
-    на {{ ctx.identity.floor }}-м этаже
-{%- endif -%}
-{%- if ctx.building.building_type %} {{ ctx.building.building_type }}{% endif -%}
-здания по адресу: {{ full_address(ctx.location) }}.
+расположенное{% if ctx.identity.floor and ctx.building.floors_total %} на {{ ctx.identity.floor }}-м этаже {{ ctx.building.floors_total }}-этажного{% elif ctx.identity.floor %} на {{ ctx.identity.floor }}-м этаже{% endif %}{% if ctx.building.building_type %} {{ ctx.building.building_type }}{% endif %} здания по адресу: {{ full_address(ctx.location) }}.
 {%- if ctx.identity.cadastral_number %}
  Кадастровый номер объекта: {{ ctx.identity.cadastral_number }}.
 {%- endif %}
@@ -87,11 +80,12 @@
 {% macro paragraph_building(ctx) -%}
 {% set b = ctx.building %}
 {% if b.building_type or b.floors_total or b.year_built or b.wear_degree or b.engineering %}
-Здание
-    {%- if b.building_type %} {{ b.building_type }}{% endif -%}
-    {%- if b.floors_total %}, {{ b.floors_total }}-этажное{% endif -%}
-    {%- if b.year_built %}, год постройки — {{ b.year_built }}{% endif -%}
-    {%- if b.wear_degree %}, состояние конструктивных элементов оценивается как {{ b.wear_degree }}{% endif -%}.
+{% if b.building_type or b.floors_total or b.year_built -%}
+Здание{% if b.building_type %} {{ b.building_type }}{% endif %}{% if b.floors_total %}, {{ b.floors_total }}-этажное{% endif %}{% if b.year_built %}, год постройки — {{ b.year_built }}{% endif %}.
+{%- endif %}
+{%- if b.wear_degree %}
+ Состояние конструктивных элементов оценивается как {{ b.wear_degree }}.
+{%- endif %}
 {%- if b.engineering %}
  Объект подключен к основным инженерным сетям:
     {%- if b.engineering.electricity %} электроснабжение — {{ b.engineering.electricity }}{% endif -%}
@@ -183,15 +177,9 @@
                     or (ex.advantages and ex.advantages|length) %}
 {% if has_extras %}
  К дополнительным характеристикам объекта относятся:
-    {%- if ex.equipment and ex.equipment|length %}
-        установленное оборудование: {{ ex.equipment|join(", ") }};
-    {%- endif %}
-    {%- if ex.furniture %}
-        наличие мебели: {{ ex.furniture }};
-    {%- endif %}
-    {%- if ex.advantages and ex.advantages|length %}
-        положительные факторы: {{ ex.advantages|join(", ") }};
-    {%- endif %}
+{%- if ex.equipment and ex.equipment|length %} установленное оборудование: {{ ex.equipment|join(", ") }};{% endif -%}
+{%- if ex.furniture %} наличие мебели: {{ ex.furniture }};{% endif -%}
+{%- if ex.advantages and ex.advantages|length %} положительные факторы: {{ ex.advantages|join(", ") }};{% endif %}
 {% endif %}
 {% if ex.notes %}
  {{ ex.notes }}
@@ -412,8 +400,13 @@
 {{ p4|trim }}
 {% endif %}
 
-{# Абзац 5: риски (акцент для банкротства) #}
+{# Абзац 5: риски (акцент для банкротства; печатается только при наличии рисков) #}
 {% set r = ctx.risks %}
+{% set _has_any_risks = (r.technical_risks and r.technical_risks|length)
+   or (r.legal_risks and r.legal_risks|length)
+   or (r.location_risks and r.location_risks|length)
+   or (r.other_risks and r.other_risks|length) %}
+{% if _has_any_risks %}
 По результатам анализа документации и материалов дела о банкротстве участникам торгов рекомендуется учитывать следующие факторы риска:
 {%- if r.technical_risks and r.technical_risks|length %}
  технические — {{ r.technical_risks|join(", ") }};
@@ -427,11 +420,8 @@
 {%- if r.other_risks and r.other_risks|length %}
  иные — {{ r.other_risks|join(", ") }};
 {%- endif %}
-{% if not ((r.technical_risks and r.technical_risks|length)
-   or (r.legal_risks and r.legal_risks|length)
-   or (r.location_risks and r.location_risks|length)
-   or (r.other_risks and r.other_risks|length)) %}
- Существенные технические, правовые и территориальные риски по объекту не выявлены.
+{% else %}
+Существенные технические, правовые и территориальные риски по объекту не выявлены.
 {% endif %}
 {%- endmacro %}
 
