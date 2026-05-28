@@ -13,6 +13,7 @@ import sqlite3
 import sys
 from pathlib import Path
 
+from parser.exporters.etp.auto_export import add_export_args, run_export_if_requested
 from parser.exporters.etp.nspd_enricher import (
     DEFAULT_CONFIDENCE,
     DEFAULT_SOURCE,
@@ -53,6 +54,8 @@ def main(argv: list[str] | None = None) -> int:
         f"[{mode}] processed: {len(reports)}  changed: {changed}  "
         f"skipped: {skipped}  fields_filled: {fields_total}"
     )
+
+    run_export_if_requested(conn, args, dry_run=args.dry_run)
     return 0
 
 
@@ -69,6 +72,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--confidence", type=float, default=DEFAULT_CONFIDENCE,
                    help=f"Confidence для новых записей (default: {DEFAULT_CONFIDENCE}).")
     p.add_argument("--dry-run", action="store_true")
+    add_export_args(p)
     return p.parse_args(argv)
 
 
