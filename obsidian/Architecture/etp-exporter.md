@@ -205,6 +205,26 @@ python -m parser.exporters.etp.cli \
     --out out/etp/
 ```
 
+### CLI: инициализация dev-БД (bootstrap)
+
+```bash
+# Минимальная БД (только objects + миграция 0001)
+python -m parser.exporters.etp.init_db_cli --db ekcelo.sqlite
+
+# + загрузка baseline-шаблона (3 объекта + 1 профиль + 1 лот)
+python -m parser.exporters.etp.init_db_cli --db ekcelo.sqlite --with-template
+
+# Пересоздать существующую БД
+python -m parser.exporters.etp.init_db_cli --db ekcelo.sqlite --force
+```
+
+Bootstrap для разработки и смоук-теста. Создаёт минимальную ЕГРН-схему
+(`objects` + связанные таблицы) + миграцию 0001. С `--with-template` —
+сразу заливает `osv_template.yaml`, после чего можно прогонять
+`etl_*_cli --export` или `export_json_cli` без подготовки.
+
+Для production используйте полноценный `egrn_parser`.
+
 ### CLI: импорт ОСВ survey-листа в БД (Stage 4)
 
 ```bash
