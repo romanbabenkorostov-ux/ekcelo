@@ -7,5 +7,15 @@ Stage 2: text_render (Jinja-шаблоны из docs/etp_export/05_*.md).
 Stage 3: pdf_appendix + CLI.
 """
 from parser.exporters.etp.build_lot_context import build_lot_context
+from parser.exporters.etp.text_render import (
+    available_modes,
+    available_platforms,
+    render_lot_description,
+)
 
-__all__ = ["build_lot_context"]
+__all__ = [
+    "build_lot_context",
+    "render_lot_description",
+    "available_platforms",
+    "available_modes",
+]
