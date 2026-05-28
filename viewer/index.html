@@ -1625,10 +1625,9 @@ if(__ekceloRole === 'embed'){
     try{ delete window[k]; }catch(_){ try{ window[k] = undefined; }catch(__){} }
   });
 }
-async function __ekceloSha256Hex(s){
-  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
-  return Array.from(new Uint8Array(b)).map(function(x){ return x.toString(16).padStart(2,'0'); }).join('');
-}
+// __ekceloSha256Hex вынесен в viewer/core/hashing.js (ADR-003).
+// Регистрация window.__ekceloSha256Hex для совместимости — в общем
+// <script type="module"> блоке ниже после всех классических скриптов.
 function __ekceloRoleLockSync(){
   const el = document.getElementById('ekcelo-role-lock'); if(!el) return;
   el.textContent = (__ekceloRole === 'pro') ? '🔓 про' : '🔑 про…';
@@ -8989,10 +8988,7 @@ function _kdRenderCatalog(q){
   });
 }
 
-function _escapeHtml(s){
-  return String(s).replace(/[&<>"']/g, c =>
-    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
+// _escapeHtml вынесен в viewer/core/escape.js (ADR-003). См. <script type="module"> ниже.
 
 function _kdApplyCatalogItem(catIdx){
   const it = _objectCatalog[catIdx];
@@ -11247,11 +11243,7 @@ function _synthStyleXmlFromParsedStyle(id, st){
     `</Style>`;
 }
 
-// XML escape helper for attribute / element text (NOT for CDATA — keep CDATA as-is).
-function _escapeXml(s){
-  return String(s||'').replace(/[&<>'"]/g, c =>
-    ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&apos;','"':'&quot;'}[c]));
-}
+// _escapeXml вынесен в viewer/core/escape.js (ADR-003). См. <script type="module"> ниже.
 
 // Downscale photo for embedding in KMZ. Returns a Blob (jpeg q=0.78).
 // Source priority:
@@ -11995,5 +11987,9 @@ queueMicrotask(() => {
   </div>
   <iframe id="graph-overlay-frame" sandbox="allow-scripts" referrerpolicy="no-referrer" title="Граф связей"></iframe>
 </div>
+<!-- viewer/core bridges (ADR-003). Модуль-deferred, загружается после парсинга
+     HTML и до DOMContentLoaded; вызовы _escapeHtml/_escapeXml/__ekceloSha256Hex
+     в классическом коде сидят внутри функций, исполняемых на user-action или после load. -->
+<script type="module" src="./ui/bridge.js"></script>
 </body>
 </html>
