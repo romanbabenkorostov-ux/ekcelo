@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Ekcelo · admin · etp-profile</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<style>
+  :root { --fg:#222; --muted:#666; --hint:#888; --bg:#fafafa; --card:#fff;
+    --border:#d8d8d8; --accent:#2a6df4; --warn:#8a1f1f; --ok:#1f6a1f; }
+  html, body { margin:0; padding:0; background:var(--bg); color:var(--fg);
+    font:14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 880px; margin: 4vh auto; padding: 0 20px 60px; }
+  h1 { font-size:18px; font-weight:600; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:13px; margin:0 0 18px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:8px;
+    padding:14px 16px; margin-bottom:14px; }
+  .card h2 { font-size:14px; font-weight:600; margin:0 0 10px; color:#333; }
+  label { display:block; font-size:12px; color:var(--muted); margin:8px 0 4px; }
+  input[type="text"], input[type="number"], select, textarea {
+    width:100%; box-sizing:border-box; padding:7px 9px; font:inherit;
+    background:#fff; border:1px solid var(--border); border-radius:6px; }
+  textarea { resize:vertical; min-height:48px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; }
+  .row { display:flex; gap:10px; }
+  .row > * { flex:1 1 0; }
+  details { margin:6px 0; border:1px solid var(--border); border-radius:6px; background:#fff; }
+  details > summary { cursor:pointer; padding:8px 12px; font-weight:500; user-select:none; }
+  details[open] > summary { border-bottom:1px solid var(--border); }
+  details > .body { padding:8px 12px 12px; }
+  button { padding:9px 16px; border:0; border-radius:6px; background:var(--accent); color:#fff;
+    font:inherit; cursor:pointer; }
+  button.sec { background:#eee; color:#333; }
+  button:disabled { opacity:0.55; cursor:not-allowed; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .hint { color:var(--hint); font-size:12px; line-height:1.5; }
+  .hint code { background:#eee; padding:1px 5px; border-radius:3px; }
+  .err { color:var(--warn); font-size:13px; margin-top:8px; min-height:1.2em; }
+  .ok  { color:var(--ok); }
+  pre#yaml { background:#1e1e1e; color:#dfe2e6; padding:12px 14px; border-radius:6px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px;
+    overflow:auto; max-height:420px; margin:0; white-space:pre; }
+  .meta { display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap; }
+  .meta > div { flex:1 1 200px; }
+  .nf { color:var(--hint); font-style:italic; }
+</style>
+</head>
+<body>
+<main>
+  <h1>admin · etp-profile</h1>
+  <p class="sub">Редактор гэп-полей <code>object_etp_profile</code>. Генерирует YAML survey-лист по контракту <code>obsidian/Architecture/etl-osv.md</code>.</p>
+
+  <div id="boot" class="card hint">Загрузка экспорта…</div>
+
+  <div id="ui" hidden>
+
+    <section class="card">
+      <h2>Объект</h2>
+      <label for="cad-select">Кадастровый номер</label>
+      <select id="cad-select"></select>
+      <label for="cad-manual">…или вручную (если нет в экспорте)</label>
+      <input id="cad-manual" type="text" placeholder="61:44:0050706:31" autocomplete="off">
+      <div id="cad-status" class="hint" style="margin-top:6px;"></div>
+    </section>
+
+    <section class="card">
+      <h2>Метаданные правки</h2>
+      <div class="meta">
+        <div>
+          <label for="src">source</label>
+          <select id="src">
+            <option value="manual" selected>manual</option>
+            <option value="osv">osv</option>
+            <option value="exif">exif</option>
+            <option value="nspd">nspd</option>
+            <option value="llm">llm</option>
+          </select>
+        </div>
+        <div>
+          <label for="conf">confidence (0…1)</label>
+          <input id="conf" type="number" min="0" max="1" step="0.05" value="1.0">
+        </div>
+      </div>
+      <p class="hint" style="margin-top:8px;">Для ручных правок экономиста по умолчанию <code>source=manual</code>, <code>confidence=1.0</code>. Эти значения применятся ко всему профилю (per-field override в этой версии UI не предусмотрен — при необходимости правьте YAML вручную).</p>
+    </section>
+
+    <section class="card">
+      <h2>Поля профиля</h2>
+      <p class="hint">Незаполненные секции в YAML не пишутся (поле в БД станет <code>NULL</code>). Пустые строки/массивы внутри секции — пропускаются.</p>
+
+      <details><summary>location_extra</summary><div class="body" id="s-location"></div></details>
+      <details><summary>building_extra</summary><div class="body" id="s-building"></div></details>
+      <details><summary>layout</summary><div class="body" id="s-layout"></div></details>
+      <details><summary>legal_extra</summary><div class="body" id="s-legal"></div></details>
+      <details><summary>risks</summary><div class="body" id="s-risks"></div></details>
+      <details><summary>extras</summary><div class="body" id="s-extras"></div></details>
+    </section>
+
+    <section class="card">
+      <h2>YAML</h2>
+      <pre id="yaml">—</pre>
+      <div class="actions">
+        <button id="copy" class="sec">Копировать</button>
+        <button id="download">Скачать .yml</button>
+      </div>
+      <div id="dl-status" class="hint" style="margin-top:8px;"></div>
+      <p class="hint" style="margin-top:10px;">
+        После скачивания: положить в <code>parser/inbox/etp/&lt;YYYY-MM-DD&gt;-&lt;slug&gt;.yml</code>
+        и сообщить parser-A. Они прогонят ETL и опубликуют свежий
+        <code>parser/exports/etp/object_etp_profile.json</code> — этот UI и Phase 1 viewer
+        подхватят изменения при следующем заходе.
+      </p>
+    </section>
+
+  </div>
+
+  <div id="fatal" class="card err" hidden></div>
+</main>
+
+<script>
+"use strict";
+
+// ─── Контракт полей по obsidian/Architecture/etl-osv.md ──────────────────────
+// Каждая секция = массив поля {key, label, type, hint?}.
+// type: "str" | "int" | "float" | "list" (newline-separated) | "engineering"
+const SECTIONS = {
+  location_extra: [
+    { key: "landmark",            label: "landmark",            type: "str"  },
+    { key: "transport_access",    label: "transport_access",    type: "str"  },
+    { key: "environment_short",   label: "environment_short",   type: "str"  },
+  ],
+  building_extra: [
+    { key: "renovation_year",     label: "renovation_year",     type: "int"  },
+    { key: "wear_degree",         label: "wear_degree",         type: "str"  },
+    { key: "engineering",         label: "engineering",         type: "engineering" },
+    { key: "amenities",           label: "amenities (по одному на строку)", type: "list" },
+  ],
+  layout: [
+    { key: "layout_type",                 label: "layout_type",                 type: "str"   },
+    { key: "rooms_count",                 label: "rooms_count",                 type: "int"   },
+    { key: "ceiling_height_m",            label: "ceiling_height_m",            type: "float" },
+    { key: "finish_level",                label: "finish_level",                type: "str"   },
+    { key: "finish_state",                label: "finish_state",                type: "str"   },
+    { key: "windows",                     label: "windows",                     type: "str"   },
+    { key: "entry_group",                 label: "entry_group",                 type: "str"   },
+    { key: "current_condition_comment",   label: "current_condition_comment",   type: "str"   },
+  ],
+  legal_extra: [
+    { key: "use_type_fact",          label: "use_type_fact",          type: "str"  },
+    { key: "zoning",                 label: "zoning",                 type: "str"  },
+    { key: "special_restrictions",   label: "special_restrictions (по одному на строку)", type: "list" },
+  ],
+  risks: [
+    { key: "technical_risks",   label: "technical_risks (по одному на строку)",  type: "list" },
+    { key: "legal_risks",       label: "legal_risks (по одному на строку)",      type: "list" },
+    { key: "location_risks",    label: "location_risks (по одному на строку)",   type: "list" },
+    { key: "other_risks",       label: "other_risks (по одному на строку)",      type: "list" },
+  ],
+  extras: [
+    { key: "equipment",   label: "equipment (по одному на строку)",  type: "list" },
+    { key: "furniture",   label: "furniture",                        type: "str"  },
+    { key: "advantages",  label: "advantages (по одному на строку)", type: "list" },
+    { key: "notes",       label: "notes",                            type: "str"  },
+  ],
+};
+
+const ENGINEERING_KEYS = ["electricity", "water", "sewerage", "heating", "gas", "telecom"];
+
+// ─── Источники данных ────────────────────────────────────────────────────────
+const EXPORT_PATHS = [
+  "../parser/exports/etp/object_etp_profile.json",
+  "../parser/tests/fixtures/etp/object_etp_profile_sample.json",
+];
+
+const $ = (id) => document.getElementById(id);
+
+const state = {
+  profiles: [],          // массив object_etp_profile
+  current: null,         // текущий профиль (или null если новый/manual)
+  source_url: null,      // откуда загрузили
+};
+
+// ─── Загрузка ────────────────────────────────────────────────────────────────
+async function loadProfiles() {
+  for (const url of EXPORT_PATHS) {
+    try {
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) continue;
+      const j = await r.json();
+      const arr = Array.isArray(j) ? j : (j.object_etp_profile || j.profiles || []);
+      return { url, profiles: arr };
+    } catch { /* try next */ }
+  }
+  return null;
+}
+
+// ─── Утилиты ─────────────────────────────────────────────────────────────────
+function isEmpty(v) {
+  if (v === null || v === undefined) return true;
+  if (typeof v === "string") return v.trim().length === 0;
+  if (Array.isArray(v)) return v.length === 0;
+  if (typeof v === "object") return Object.keys(v).length === 0;
+  return false;
+}
+
+function slugFromCad(cad) {
+  return (cad || "unknown").replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function todayIso() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+}
+
+// ─── Рендер форм ─────────────────────────────────────────────────────────────
+function buildField(sect, f, value) {
+  const id = `f-${sect}-${f.key}`;
+  const wrap = document.createElement("div");
+  const lab = document.createElement("label");
+  lab.setAttribute("for", id);
+  lab.textContent = f.label;
+  wrap.appendChild(lab);
+
+  if (f.type === "list") {
+    const ta = document.createElement("textarea");
+    ta.id = id;
+    ta.rows = Math.max(2, Math.min(6, (value || []).length + 1));
+    ta.value = (value || []).join("\n");
+    wrap.appendChild(ta);
+  } else if (f.type === "engineering") {
+    const grid = document.createElement("div");
+    grid.style.display = "grid";
+    grid.style.gridTemplateColumns = "repeat(auto-fit, minmax(160px, 1fr))";
+    grid.style.gap = "6px 10px";
+    const eng = value || {};
+    for (const k of ENGINEERING_KEYS) {
+      const sub = document.createElement("div");
+      const sl = document.createElement("label");
+      sl.textContent = k;
+      sl.style.margin = "4px 0 2px";
+      const si = document.createElement("input");
+      si.type = "text";
+      si.id = `${id}--${k}`;
+      si.value = eng[k] || "";
+      sub.appendChild(sl); sub.appendChild(si);
+      grid.appendChild(sub);
+    }
+    wrap.appendChild(grid);
+  } else {
+    const inp = document.createElement("input");
+    inp.id = id;
+    inp.type = (f.type === "int" || f.type === "float") ? "number" : "text";
+    if (f.type === "float") inp.step = "any";
+    if (value !== undefined && value !== null) inp.value = value;
+    wrap.appendChild(inp);
+  }
+  return wrap;
+}
+
+function renderForm(profile) {
+  for (const sect of Object.keys(SECTIONS)) {
+    const host = $(`s-${sect.replace("_extra","").replace("_","-")}`)
+                 || $(`s-${sect.split("_")[0]}`)
+                 || $(`s-${sect}`);
+    // (мы заранее задали id вручную ниже — пересчёт ниже)
+  }
+  // Корректное соответствие container ids:
+  const HOSTS = {
+    location_extra:  "s-location",
+    building_extra:  "s-building",
+    layout:          "s-layout",
+    legal_extra:     "s-legal",
+    risks:           "s-risks",
+    extras:          "s-extras",
+  };
+  for (const [sect, fields] of Object.entries(SECTIONS)) {
+    const host = $(HOSTS[sect]);
+    host.innerHTML = "";
+    const sectVal = (profile && profile[sect]) || {};
+    for (const f of fields) {
+      host.appendChild(buildField(sect, f, sectVal[f.key]));
+    }
+  }
+}
+
+// ─── Сбор данных из формы ────────────────────────────────────────────────────
+function readField(sect, f) {
+  const id = `f-${sect}-${f.key}`;
+  if (f.type === "list") {
+    const v = $(id).value.split("\n").map(s => s.trim()).filter(Boolean);
+    return v;
+  }
+  if (f.type === "engineering") {
+    const out = {};
+    for (const k of ENGINEERING_KEYS) {
+      const el = $(`${id}--${k}`);
+      const v = (el.value || "").trim();
+      if (v) out[k] = v;
+    }
+    return out;
+  }
+  const raw = ($(id).value || "").trim();
+  if (raw === "") return undefined;
+  if (f.type === "int")   { const n = parseInt(raw, 10); return Number.isFinite(n) ? n : raw; }
+  if (f.type === "float") { const n = parseFloat(raw);    return Number.isFinite(n) ? n : raw; }
+  return raw;
+}
+
+function collectProfile() {
+  const cad = ($("cad-manual").value || $("cad-select").value || "").trim();
+  const out = { cad_number: cad };
+  const src = $("src").value;
+  const conf = parseFloat($("conf").value);
+  out.__source = src;
+  out.__confidence = Number.isFinite(conf) ? conf : 1.0;
+  for (const [sect, fields] of Object.entries(SECTIONS)) {
+    const obj = {};
+    for (const f of fields) {
+      const v = readField(sect, f);
+      if (isEmpty(v)) continue;
+      obj[f.key] = v;
+    }
+    if (!isEmpty(obj)) out[sect] = obj;
+  }
+  return out;
+}
+
+// ─── YAML генератор ──────────────────────────────────────────────────────────
+function yamlString(s) {
+  // Всегда double-quoted с экранированием. Безопасно для любых строк.
+  const esc = String(s)
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g,  '\\"')
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/\t/g, "\\t");
+  return `"${esc}"`;
+}
+
+function yamlScalar(v) {
+  if (v === null || v === undefined) return "null";
+  if (typeof v === "number")  return Number.isFinite(v) ? String(v) : "null";
+  if (typeof v === "boolean") return v ? "true" : "false";
+  return yamlString(v);
+}
+
+function yamlList(arr, indent) {
+  const pad = " ".repeat(indent);
+  return arr.map(x => `${pad}- ${yamlScalar(x)}`).join("\n");
+}
+
+function yamlObject(obj, indent) {
+  const pad = " ".repeat(indent);
+  const lines = [];
+  for (const [k, v] of Object.entries(obj)) {
+    if (isEmpty(v)) continue;
+    if (Array.isArray(v)) {
+      lines.push(`${pad}${k}:`);
+      lines.push(yamlList(v, indent + 2));
+    } else if (v && typeof v === "object") {
+      lines.push(`${pad}${k}:`);
+      lines.push(yamlObject(v, indent + 2));
+    } else {
+      lines.push(`${pad}${k}: ${yamlScalar(v)}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+function buildYaml(profile) {
+  const cad = profile.cad_number;
+  if (!cad) return "# cad_number не задан — выберите объект или введите вручную.\n";
+  const src = profile.__source || "manual";
+  const conf = (profile.__confidence === undefined) ? 1.0 : profile.__confidence;
+  const confStr = Number.isInteger(conf) ? conf.toFixed(1) : String(conf);
+
+  const lines = [];
+  lines.push(`# Сгенерировано admin/etp-profile/ UI.`);
+  lines.push(`# Контракт: obsidian/Architecture/etl-osv.md`);
+  lines.push(`# Положить в parser/inbox/etp/${todayIso()}-${slugFromCad(cad)}.yml`);
+  lines.push(``);
+  lines.push(`schema_version: "1.0"`);
+  lines.push(`default_source: ${src}`);
+  lines.push(`default_confidence: ${confStr}`);
+  lines.push(``);
+  lines.push(`profiles:`);
+  lines.push(`  - cad_number: ${yamlString(cad)}`);
+
+  // Все 6 секций. Опускаем пустые (= NULL в БД, как и было).
+  for (const sect of Object.keys(SECTIONS)) {
+    const v = profile[sect];
+    if (isEmpty(v)) continue;
+    lines.push(`    ${sect}:`);
+    lines.push(yamlObject(v, 6));
+  }
+  return lines.join("\n") + "\n";
+}
+
+// ─── Скачивание / копирование ────────────────────────────────────────────────
+function downloadYaml(name, text) {
+  const blob = new Blob([text], { type: "application/x-yaml;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// ─── События ─────────────────────────────────────────────────────────────────
+function onCadChange() {
+  const cad = ($("cad-manual").value || $("cad-select").value || "").trim();
+  state.current = state.profiles.find(p => p.cad_number === cad) || null;
+  $("cad-status").textContent = state.current
+    ? `Загружен профиль из ${state.source_url}.`
+    : (cad ? `Новый объект (нет в экспорте) — поля стартуют пустыми.` : "");
+  renderForm(state.current || {});
+  updateYaml();
+}
+
+function updateYaml() {
+  const profile = collectProfile();
+  $("yaml").textContent = buildYaml(profile);
+}
+
+function wire() {
+  $("cad-select").addEventListener("change", () => {
+    $("cad-manual").value = "";
+    onCadChange();
+  });
+  $("cad-manual").addEventListener("input", onCadChange);
+  $("src").addEventListener("change", updateYaml);
+  $("conf").addEventListener("input", updateYaml);
+  document.addEventListener("input", (e) => {
+    if (e.target.closest("#ui .card:nth-of-type(3)")) updateYaml();
+  });
+  $("download").addEventListener("click", () => {
+    const profile = collectProfile();
+    if (!profile.cad_number) { $("dl-status").innerHTML = `<span class="err">cad_number не задан.</span>`; return; }
+    const name = `${todayIso()}-${slugFromCad(profile.cad_number)}.yml`;
+    downloadYaml(name, buildYaml(profile));
+    $("dl-status").innerHTML = `<span class="ok">Скачано: <code>${name}</code>. Положите в <code>parser/inbox/etp/</code>.</span>`;
+  });
+  $("copy").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText($("yaml").textContent);
+      $("dl-status").innerHTML = `<span class="ok">Скопировано в буфер.</span>`;
+    } catch {
+      $("dl-status").innerHTML = `<span class="err">Не удалось скопировать. Выделите текст вручную.</span>`;
+    }
+  });
+}
+
+// ─── Старт ───────────────────────────────────────────────────────────────────
+(async () => {
+  const loaded = await loadProfiles();
+  if (!loaded) {
+    $("boot").remove();
+    $("fatal").hidden = false;
+    $("fatal").textContent = `Не удалось загрузить экспорт ни по одному из путей: ${EXPORT_PATHS.join(", ")}.`;
+    return;
+  }
+  state.profiles = loaded.profiles;
+  state.source_url = loaded.url;
+
+  // Заполнить select.
+  const sel = $("cad-select");
+  sel.innerHTML = `<option value="">— выберите —</option>` +
+    state.profiles.map(p => `<option value="${p.cad_number}">${p.cad_number}</option>`).join("");
+
+  // Deep-link ?cad=…
+  const params = new URLSearchParams(location.search);
+  const cad = params.get("cad");
+  if (cad) {
+    if ([...sel.options].some(o => o.value === cad)) sel.value = cad;
+    else $("cad-manual").value = cad;
+  }
+
+  $("boot").remove();
+  $("ui").hidden = false;
+  wire();
+  onCadChange();
+})();
+</script>
+</body>
+</html>
