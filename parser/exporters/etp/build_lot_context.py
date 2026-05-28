@@ -71,7 +71,7 @@ def build_lot_context(
         "location": _build_location(obj, profile),
         "building": _build_building(obj, profile),
         "layout_and_condition": _build_layout(profile),
-        "legal": _build_legal(rights, restrictions, profile),
+        "legal": _build_legal(rights, restrictions, profile, obj),
         "risks": _build_risks(profile),
         "extras": _build_extras(profile, items, cad),
         "generated_text": {"short": None, "full": None, "version": 1},
@@ -199,9 +199,9 @@ def _build_building(obj: sqlite3.Row | None, profile: sqlite3.Row | None) -> dic
         # Объект без здания (например, земельный участок) или нет данных.
         return {}
     return {
-        "building_type": None,
+        "building_type": extra.get("building_type"),
         "floors_total": obj["floors"] if obj and obj["object_type"] in ("building", "construction") else None,
-        "year_built": None,
+        "year_built": extra.get("year_built"),
         "renovation_year": extra.get("renovation_year"),
         "wear_degree": extra.get("wear_degree"),
         "engineering": extra.get("engineering") or {},
@@ -229,10 +229,12 @@ def _build_legal(
     rights: list[sqlite3.Row],
     restrictions: list[sqlite3.Row],
     profile: sqlite3.Row | None,
+    obj: sqlite3.Row | None = None,
 ) -> dict:
     extra = _parse_json(profile, "legal_extra") if profile else {}
     extra = extra or {}
     primary_right = rights[0] if rights else None
+    permitted_obj = obj["permitted_use"] if obj else None  # ЕГРН-источник
     return {
         "right_type": primary_right["right_type"] if primary_right else None,
         "right_holder": (primary_right["name_full"] if primary_right and primary_right["name_full"]
@@ -240,7 +242,9 @@ def _build_legal(
         "basis_type": primary_right["registration_number"] if primary_right and primary_right["registration_number"] else None,
         "encumbrances": [_encumbrance_from_row(r) for r in restrictions],
         "use_type_fact": extra.get("use_type_fact"),
-        "use_type_permitted": None,  # gap §10 — заполнится через NSPD enrichment (следующий PR)
+        # use_type_permitted: ЕГРН (obj.permitted_use) — основной источник;
+        # legal_extra.use_type_permitted перекрывает (например, после NSPD-enrichment).
+        "use_type_permitted": extra.get("use_type_permitted") or permitted_obj,
         "zoning": extra.get("zoning"),
         "special_restrictions": extra.get("special_restrictions") or [],
     }
