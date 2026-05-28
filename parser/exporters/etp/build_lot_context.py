@@ -20,6 +20,9 @@ import json
 import sqlite3
 from typing import Any
 
+from parser.exporters.etp.address_parser import parse_address
+from parser.exporters.etp.encumbrance_mapper import map_encumbrance
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Публичный API
@@ -179,18 +182,11 @@ def _title_for(object_type: str | None) -> str:
 def _build_location(obj: sqlite3.Row | None, profile: sqlite3.Row | None) -> dict:
     extra = _parse_json(profile, "location_extra") if profile else {}
     extra = extra or {}
-    # Плоский адрес из ЕГРН — пока без компонентного парсинга (gap §10 SPEC).
-    # Полный адрес возвращается как single "address" в meta-поле; компоненты
-    # заполнятся, когда появится address_parser (следующий PR).
+    address_raw = obj["address"] if obj else None
+    components = parse_address(address_raw)
     return {
-        "region": None,
-        "municipality": None,
-        "locality": None,
-        "street": None,
-        "house": None,
-        "building": None,
-        "room": None,
-        "address_raw": obj["address"] if obj else None,
+        **components,
+        "address_raw": address_raw,
         "landmark": extra.get("landmark"),
         "transport_access": extra.get("transport_access"),
         "environment_short": extra.get("environment_short"),
@@ -254,7 +250,7 @@ def _encumbrance_from_row(row: sqlite3.Row) -> dict:
     return {
         "type": row["restrict_type"],
         "description": row["description"],
-        "influence": None,  # gap §10 — заполнится через encumbrance_mapper (следующий PR)
+        "influence": map_encumbrance(row["restrict_type"]),
     }
 
 
