@@ -182,8 +182,11 @@ def test_location_uses_etp_profile_extras(db):
     assert loc["address_raw"] == "г. Ростов-на-Дону, ул. Б.Садовая, 111, пом. VII"
     assert loc["landmark"] == "в 7 минутах пешком от станции метро «Тверская»"
     assert loc["environment_short"].startswith("зона смешанной")
-    # Компонентный парсинг пока gap — все компоненты None.
-    assert loc["region"] is None and loc["street"] is None
+    # Адрес теперь разбирается компонентно (address_parser).
+    assert loc["locality"] == "г. Ростов-на-Дону"
+    assert loc["street"] == "ул. Б.Садовая"
+    assert loc["house"] == "111"
+    assert loc["room"] == "пом. VII"
 
 
 def test_building_filled_from_profile(db):
