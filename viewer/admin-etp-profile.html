@@ -166,9 +166,18 @@ const SECTIONS = {
 const ENGINEERING_KEYS = ["electricity", "water", "sewerage", "heating", "gas", "telecom"];
 
 // ─── Источники данных ────────────────────────────────────────────────────────
+// Кандидаты путей подобраны под два сценария запуска:
+//  1. http.server из корня репо   → URL .../viewer/admin-etp-profile.html
+//     → относительные `../parser/...` ведут к корню.
+//  2. GitHub Pages со страницы /viewer/... — то же поведение.
+// Если сервер запущен ИЗ viewer/, паттерн `..` не работает (Python http.server
+// блокирует traversal) — нужно перезапустить сервер из корня репо.
 const EXPORT_PATHS = [
   "../parser/exports/etp/object_etp_profile.json",
   "../parser/tests/fixtures/etp/object_etp_profile_sample.json",
+  // Fallback'и для случая нестандартной раскладки (например, deploy под /etp/).
+  "/parser/exports/etp/object_etp_profile.json",
+  "/parser/tests/fixtures/etp/object_etp_profile_sample.json",
 ];
 
 const $ = (id) => document.getElementById(id);
@@ -458,7 +467,16 @@ function wire() {
   if (!loaded) {
     $("boot").remove();
     $("fatal").hidden = false;
-    $("fatal").textContent = `Не удалось загрузить экспорт ни по одному из путей: ${EXPORT_PATHS.join(", ")}.`;
+    const tried = EXPORT_PATHS.map(p => `  ${p}`).join("\n");
+    $("fatal").innerHTML =
+      `<p><b>Не удалось загрузить ЭТП-экспорт.</b></p>` +
+      `<p>Перепробовали пути:</p><pre style="font-size:11px;white-space:pre-wrap">${tried}</pre>` +
+      `<p>Типичная причина — сервер запущен <b>из <code>viewer/</code></b>: ` +
+      `Python <code>http.server</code> не выпускает <code>../</code> наружу. ` +
+      `Запустите из корня репо:</p>` +
+      `<pre style="font-size:11px;white-space:pre-wrap">cd E:\\Code\\ekcelo\\code\npython -m http.server 8000\n# и откройте: http://localhost:8000/viewer/admin-etp-profile.html?cad=${
+        encodeURIComponent(new URLSearchParams(location.search).get("cad") || "61:44:0050706:31")
+      }</pre>`;
     return;
   }
   state.profiles = loaded.profiles;
