@@ -55,7 +55,7 @@ def main(argv: list[str] | None = None) -> int:
         f"skipped: {skipped}  fields_filled: {fields_total}"
     )
 
-    run_export_if_requested(conn, args, dry_run=args.dry_run)
+    run_export_if_requested(conn, args, dry_run=args.dry_run, source_label="nspd")
     return 0
 
 

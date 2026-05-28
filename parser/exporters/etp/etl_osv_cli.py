@@ -45,7 +45,7 @@ def main(argv: list[str] | None = None) -> int:
         f"lot_items: +{report.lot_items_inserted}/-{report.lot_items_deleted}"
     )
 
-    run_export_if_requested(conn, args, dry_run=args.dry_run)
+    run_export_if_requested(conn, args, dry_run=args.dry_run, source_label="osv")
     return 0
 
 
