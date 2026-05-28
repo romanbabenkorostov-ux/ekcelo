@@ -15,5 +15,22 @@
     "no-dupe-keys": "error",
     "no-unreachable": "error",
     "no-unused-vars": ["warn", { "args": "none", "varsIgnorePattern": "^_" }]
-  }
+  },
+  "overrides": [
+    {
+      "files": ["viewer/core/**/*.js", "viewer/ui/**/*.js", "viewer/adapters/**/*.js"],
+      "parserOptions": { "ecmaVersion": 2022, "sourceType": "module" }
+    },
+    {
+      "files": ["viewer/core/**/*.js"],
+      "rules": {
+        "no-restricted-globals": ["error",
+          "document", "window", "navigator", "location",
+          "localStorage", "sessionStorage",
+          "fetch", "XMLHttpRequest",
+          "alert", "confirm", "prompt"
+        ]
+      }
+    }
+  ]
 }
