@@ -48,12 +48,13 @@ _CAD_RE = re.compile(r"^\d{2}:\d{2,3}:\d{6,10}:\d{1,6}(?:/\d+)?$")
 
 @dataclass
 class ExifPhotoMeta:
-    """Декодированный UserComment payload одного JPG."""
+    """Декодированный UserComment payload одного JPG (v1.1 / v1.2)."""
     path: Path
     cad: str | None
     kind: str | None
     category: str | None = None
     semantic: str | None = None
+    note: str | None = None      # v1.2+: per-фото заметка экономиста
 
 
 @dataclass
@@ -61,6 +62,7 @@ class ExifEnrichReport:
     cad_number: str
     photos_count: int = 0
     categories: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)        # v1.2+
     profile_created: bool = False
     extras_filled: list[str] = field(default_factory=list)
     skipped_reason: str | None = None
@@ -101,7 +103,8 @@ def scan_directory(directory: Path) -> list[ExifPhotoMeta]:
     Возвращает только записи с известным `cad` и `kind` (валидные ekcelo-фото).
     """
     out: list[ExifPhotoMeta] = []
-    for jpg in directory.rglob("*.jpg"):
+    # Сортируем для детерминистичного порядка note-merge между ОС.
+    for jpg in sorted(directory.rglob("*.jpg")):
         payload = read_userComment(jpg)
         if not payload:
             continue
@@ -109,12 +112,17 @@ def scan_directory(directory: Path) -> list[ExifPhotoMeta]:
         if cad and not _CAD_RE.match(str(cad).split("/")[0] + (("/" + cad.split("/")[1]) if "/" in str(cad) else "")):
             # Грубая защита — не строгая.
             pass
+        # v1.2+: опциональная заметка экономиста; ограничиваем длину
+        # из соображений безопасности (см. EXIF_USERCOMMENT_SCHEMA §v1.2).
+        raw_note = payload.get("note")
+        note = str(raw_note).strip()[:1000] if raw_note else None
         out.append(ExifPhotoMeta(
             path=jpg,
             cad=cad,
             kind=payload.get("kind"),
             category=payload.get("category"),
             semantic=payload.get("semantic"),
+            note=note or None,
         ))
     return out
 
@@ -146,20 +154,30 @@ def enrich_from_exif(
 
     for cad, items in sorted(by_cad.items()):
         categories = sorted({p.category for p in items if p.category})
+        # v1.2+: уникальные заметки в порядке появления (preserve insertion
+        # order, дубль одной строки на нескольких JPG → одна строка в БД).
+        notes = []
+        seen_notes = set()
+        for p in items:
+            if p.note and p.note not in seen_notes:
+                notes.append(p.note)
+                seen_notes.add(p.note)
+
         report = ExifEnrichReport(
             cad_number=cad,
             photos_count=len(items),
             categories=list(categories),
+            notes=list(notes),
         )
 
-        if not categories:
-            report.skipped_reason = "no_categories_in_exif"
+        if not categories and not notes:
+            report.skipped_reason = "no_categories_or_notes_in_exif"
             reports.append(report)
             continue
 
         try:
             _apply_exif_to_profile(
-                conn, cad, categories,
+                conn, cad, categories, notes,
                 source=source, confidence=confidence,
                 report=report,
             )
@@ -179,12 +197,19 @@ def _apply_exif_to_profile(
     conn: sqlite3.Connection,
     cad: str,
     categories: list[str],
+    notes: list[str],
     *,
     source: str,
     confidence: float,
     report: ExifEnrichReport,
 ) -> None:
-    summary = "Комплексная фотофиксация: " + ", ".join(categories) + "."
+    """Gap-fill: добавляет сводку категорий в extras.advantages и
+    per-фото заметки в extras.notes (joined '«; »'). Идемпотентно:
+    повторный прогон не добавляет уже существующие строки."""
+    summary = (
+        "Комплексная фотофиксация: " + ", ".join(categories) + "."
+        if categories else None
+    )
 
     existing = conn.execute(
         "SELECT extras FROM object_etp_profile WHERE cad_number = ?", (cad,),
@@ -195,15 +220,39 @@ def _apply_exif_to_profile(
     else:
         extras = {}
 
-    advantages = list(extras.get("advantages") or [])
-    if summary in advantages:
-        report.skipped_reason = "photo_summary_already_present"
+    changed = False
+
+    # advantages: «Комплексная фотофиксация: …»
+    if summary:
+        advantages = list(extras.get("advantages") or [])
+        if summary not in advantages:
+            advantages.append(summary)
+            extras["advantages"] = advantages
+            report.extras_filled.append("advantages")
+            changed = True
+
+    # notes (v1.2+): merge per-фото заметок в extras.notes joined «; »
+    if notes:
+        current_notes = str(extras.get("notes") or "").strip()
+        existing_notes_set = (
+            {n.strip() for n in current_notes.split(";") if n.strip()}
+            if current_notes else set()
+        )
+        new_notes = [n for n in notes if n not in existing_notes_set]
+        if new_notes:
+            joined = "; ".join(([current_notes] if current_notes else []) + new_notes)
+            extras["notes"] = joined
+            report.extras_filled.append("notes")
+            changed = True
+
+    if not changed:
+        if not existing:
+            # categories+notes пусты — это уже отловлено выше; сюда не попадаем.
+            return
+        report.skipped_reason = "photo_summary_and_notes_already_present"
         return
 
-    advantages.append(summary)
-    extras["advantages"] = advantages
     extras_json = json.dumps(extras, ensure_ascii=False)
-
     if existing:
         conn.execute(
             "UPDATE object_etp_profile SET extras=?, updated_at=datetime('now') "
@@ -217,5 +266,3 @@ def _apply_exif_to_profile(
             (cad, extras_json, source, confidence),
         )
         report.profile_created = True
-
-    report.extras_filled.append("advantages")

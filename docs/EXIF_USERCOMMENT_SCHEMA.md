@@ -1,6 +1,6 @@
 # EXIF UserComment схема (JPG-документы и фото от парсера ekcelo)
 
-**Статус:** parser-internal **стабильная** схема. Версия: `1.1` (с 2026-05-25, контракт KMZ 2.12.0 §5; v1 — с 2026-05-19, контракт KMZ 2.11.0 §5).
+**Статус:** parser-internal **стабильная** схема. Версия: `1.2` (с 2026-05-28, добавлено опц. поле `note` для per-фото заметок экономиста; v1.1 — с 2026-05-25, контракт KMZ 2.12.0 §5; v1 — с 2026-05-19, контракт KMZ 2.11.0 §5).
 **Эмитент:** `parser/scripts/pirushin_sosn_rocha_07_init_project_v1.py`
 (меню 2: PDF/DOC→JPG; меню 3: сортировка `Не_распределено/`).
 **Потребители (необязательные):**
@@ -98,6 +98,7 @@ if (uc) {
 | `cad`          | string \| null | КН-привязка фото                               |
 | `category`     | string \| null | Подкатегория `Фасад`/`Кровля`/`Интерьер`/…     |
 | `semantic`     | string \| null | Семантическая привязка (`Сооружение`/…)        |
+| **`note`**     | string \| null | **(v1.2+)** Per-фото заметка экономиста (свободный текст, ≤1000 символов). Если несколько заметок — разделять `; `. Stage 6 ETL EXIF собирает `note`-поля по КН в `object_etp_profile.extras.notes`. Опционально; `null` или отсутствие = старая семантика (v1.1-фото). |
 | `source`       | string         | Исходный путь файла (из `Не_распределено/…`)   |
 | `graph_node_id`| string \| null | То же, что выше; для фото = КН-узел            |
 | `migrated_at`  | string         | UTC-таймстемп миграции (ISO-8601 `…Z`)         |
@@ -161,3 +162,4 @@ viewer строит nodeId документа из `payload.doc_id` напрям
 |--------|------------|----------------------------------------------------------|
 | 1      | 2026-05-19 | Первичная редакция. `graph_node_id` добавлен в эту же v1 в рамках контракта KMZ 2.11.0 §5 (информативный пункт). До 2.11.0 поле отсутствовало — viewer должен это учитывать (fallback: документ без `graph_node_id` → UX «к узлу» недоступен). |
 | 1.1    | 2026-05-25 | Аддитивно: поле `doc_id` (ссылка на запись в `documents.json` sidecar — `dev/SPEC_TEMPORAL_REPORTS.md` §4.2); формула резолва `graph_node_id` расширена `doc::<doc_id>` для документ-узлов графа. Контракт KMZ 2.12.0 §5 + CORRESPONDENCE/014-016. Backward-compatible: JPG v1 без поля `doc_id` остаются валидными — viewer fail-safe ignore (старая семантика `cad/inn/ogrn` сохранена). |
+| 1.2    | 2026-05-28 | Аддитивно: опц. поле `note` (string \| null) в payload `kind:"photo"` для per-фото заметок экономиста. Stage 6 ETL EXIF (`parser/exporters/etp/etl_exif.py`) собирает `note`-поля по `cad_number` в `object_etp_profile.extras.notes` (joined `«; »`, idempotent gap-fill). CORRESPONDENCE/027 (parser proposal) + 028 (viewer ack 5/5). Контракт KMZ не затрагивается. Backward-compatible: v1.1-фото без `note` рендерятся как раньше; v1.2-ридер на старых фото не падает. |
