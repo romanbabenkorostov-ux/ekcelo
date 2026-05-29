@@ -163,7 +163,9 @@ Phase 2 (overlay лотов на карте через S5 group-overlay) — о�
 | Stage 6: ETL EXIF → БД | Парсер UserComment для extras.advantages | done | #67 |
 | Auto-export hook | --export флаг во всех ETL CLI | done | #69 |
 | Auto-commit hook | --commit флаг — git add + commit JSON-экспорта | done | #73 |
-| Морфология (pymorphy3) | inflect_loc/gen/ins фильтры в Jinja-шаблоне | done | этот PR |
+| Морфология (pymorphy3) | inflect_loc/gen/ins фильтры в Jinja-шаблоне | done | #74 |
+| EXIF v1.2 per-photo `note` | parser-side bump схемы + extras.notes | done | #78 |
+| PDF/DOCX-конверсия `lot_appendix` | `--appendix-format pdf\|docx`, LibreOffice fallback | done | этот PR |
 | Stage 4b: export JSON для viewer | Замена фикстуры на production-источник | done | #64 |
 | Stage 5: NSPD enrichment | building_type / year_built / use_type_permitted | done | этот PR |
 | viewer Phase 2 | Overlay лотов на карте | YAGNI | — |

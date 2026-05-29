@@ -26,6 +26,7 @@ from pathlib import Path
 
 from parser.exporters.etp.appendix import build_lot_appendix
 from parser.exporters.etp.build_lot_context import build_lot_context
+from parser.exporters.etp.md_convert import convert_appendix
 from parser.exporters.etp.text_render import (
     available_modes,
     available_platforms,
@@ -55,8 +56,15 @@ def main(argv: list[str] | None = None) -> int:
     conn.execute("PRAGMA foreign_keys = ON")
 
     appendix_md = build_lot_appendix(conn, args.lot)
-    (out_root / "lot_appendix.md").write_text(appendix_md, encoding="utf-8")
-    written = [out_root / "lot_appendix.md"]
+    appendix_path = out_root / "lot_appendix.md"
+    appendix_path.write_text(appendix_md, encoding="utf-8")
+    written = [appendix_path]
+
+    # Опциональная конвертация приложения в PDF/DOCX (best-effort).
+    if args.appendix_format != "md":
+        converted = convert_appendix(appendix_path, target=args.appendix_format)
+        if converted is not None:
+            written.append(converted)
 
     for platform in platforms:
         platform_dir = out_root / _safe_dirname(platform)
@@ -105,6 +113,10 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
                    help="short, full или оба через запятую (по умолчанию: short,full).")
     p.add_argument("--target-cad", dest="target_cad",
                    help="Опционально: КН-анкер для identity (по умолчанию — lots.primary_cad_number).")
+    p.add_argument("--appendix-format", default="md", choices=["md", "pdf", "docx"],
+                   help="Формат приложения к лоту: md (default) | pdf | docx. "
+                        "PDF/DOCX требуют LibreOffice или pandoc; при отсутствии — "
+                        "только .md (best-effort).")
     p.add_argument("--quiet", action="store_true", help="Не печатать пути созданных файлов.")
     return p.parse_args(argv)
 

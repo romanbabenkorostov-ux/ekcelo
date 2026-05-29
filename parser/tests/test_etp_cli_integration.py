@@ -241,3 +241,39 @@ def test_cli_unknown_lot_raises(db_file, tmp_path):
         main(["--lot", "lot:nonexistent:999", "--db", str(db_file),
               "--platforms", "torgi.gov.ru", "--modes", "short",
               "--out", str(tmp_path / "out")])
+
+
+def test_cli_appendix_format_md_default(db_file, tmp_path):
+    """Без --appendix-format: только .md в выходе (default poведение)."""
+    out = tmp_path / "etp_out"
+    rc = main(["--lot", "lot:pirushin:001", "--db", str(db_file),
+               "--platforms", "torgi.gov.ru", "--modes", "short",
+               "--out", str(out), "--quiet"])
+    assert rc == 0
+    lot_root = out / "lot_pirushin_001"
+    assert (lot_root / "lot_appendix.md").exists()
+    # .pdf/.docx не должны появляться без явного флага.
+    assert not (lot_root / "lot_appendix.pdf").exists()
+    assert not (lot_root / "lot_appendix.docx").exists()
+
+
+def test_cli_appendix_format_pdf_graceful_without_converter(db_file, tmp_path, monkeypatch):
+    """--appendix-format=pdf без конвертера: .md создаётся, rc=0, .pdf отсутствует."""
+    import parser.exporters.etp.md_convert as mc
+    monkeypatch.setattr(mc, "_has", lambda tool: False)
+    monkeypatch.setattr(mc, "soffice_bin", lambda: None)
+    out = tmp_path / "etp_out"
+    rc = main(["--lot", "lot:pirushin:001", "--db", str(db_file),
+               "--platforms", "torgi.gov.ru", "--modes", "short",
+               "--out", str(out), "--appendix-format", "pdf", "--quiet"])
+    assert rc == 0
+    lot_root = out / "lot_pirushin_001"
+    assert (lot_root / "lot_appendix.md").exists()
+    assert not (lot_root / "lot_appendix.pdf").exists()
+
+
+def test_cli_rejects_unknown_appendix_format(db_file, tmp_path):
+    with pytest.raises(SystemExit):
+        main(["--lot", "lot:pirushin:001", "--db", str(db_file),
+              "--platforms", "torgi.gov.ru", "--modes", "short",
+              "--out", str(tmp_path / "out"), "--appendix-format", "rtf"])
