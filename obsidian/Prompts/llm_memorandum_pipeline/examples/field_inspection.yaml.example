@@ -1,0 +1,65 @@
+inspection:
+  inspector: "Иванов И.И., главный инженер ООО «СтройЭкспертиза-Юг»"
+  date: 2026-05-15
+  document_id: field_inspection_pirushin_2026-05-15
+
+clusters:
+  - cluster_id: liter_A
+    cad_numbers:
+      - "61:44:0050706:31"
+    actual_address: "г. Ростов-на-Дону, ул. Суворова, д. 60, Литер А"
+    actual_area_m2: 1280.5
+    egrn_area_m2: 1245.0
+    delta_area_m2: 35.5
+    delta_comment: "Зашита веранда (Литер А1, ~35.5 м²), не отражена в ЕГРН. Несущие конструкции не затронуты, риск низкий."
+    construction_year: 1908
+    wear_pct: 42
+    perepplanirovki:
+      - description: "Объединены помещения №7 и №8 первого этажа (снесена ненесущая перегородка), оборудован магазин"
+        agreed: false
+        risk: "штраф 30-50 тыс. руб. + предписание восстановить/узаконить"
+    state: "удовлетворительное (косметический ремонт 2022)"
+
+  - cluster_id: liter_B
+    cad_numbers:
+      - "61:44:0050706:42"
+    actual_address: "г. Ростов-на-Дону, ул. Суворова, д. 60, Литер Б"
+    actual_area_m2: 318.0
+    egrn_area_m2: 320.0
+    delta_area_m2: -2.0
+    delta_comment: "В пределах погрешности обмера."
+    construction_year: 1962
+    wear_pct: 58
+    perepplanirovki: []
+    state: "требует капремонта кровли"
+
+  - cluster_id: liter_F
+    cad_numbers: []
+    actual_address: "г. Ростов-на-Дону, ул. Суворова, д. 60, Литер Ф (пристройка)"
+    actual_area_m2: 145.0
+    egrn_area_m2: null
+    delta_area_m2: null
+    delta_comment: "Пристройка 2014 г., НЕ ОТРАЖЕНА в ЕГРН. Требуется техплан и постановка на учёт. Риск: до 1.5 млн руб. штрафа за самовольное строительство."
+    construction_year: 2014
+    wear_pct: 12
+    perepplanirovki: []
+    state: "хорошее"
+
+equipment:
+  - cluster_id: liter_A
+    items:
+      - name: "Газовая котельная Buderus Logano G334X"
+        power_kw: 240
+        year: 2018
+        condition: "рабочая, прошла ТО 2025-09"
+        capex_saving_rub: 4500000
+      - name: "Приточно-вытяжная вентиляция Systemair с рекуперацией"
+        power_kw: 18
+        year: 2020
+        condition: "рабочая"
+        capex_saving_rub: 1200000
+      - name: "ГРЩ 380В, выделенная мощность 150 кВт"
+        power_kw: 150
+        year: 2015
+        condition: "рабочее, ТУ от РСО на руках"
+        capex_saving_rub: 800000
