@@ -108,16 +108,20 @@ def _git_commit_export(
 
     Не падает на ошибке (печатает [commit-skipped] с причиной) — это hook,
     а не основной workflow. Реальный sync пользователь делает руками.
+
+    Использует абсолютный путь и не переопределяет cwd — иначе на Windows
+    относительный путь склеивался дважды: `out/parser/exports/etp/...`.
     """
-    if not _is_inside_git_repo(out_path.parent):
+    abs_path = out_path.resolve()
+    if not _is_inside_git_repo(abs_path.parent):
         print(f"[commit-skipped] {out_path} не внутри git-репо")
         return
 
     # Проверяем, есть ли что коммитить.
     try:
         diff = subprocess.run(
-            ["git", "diff", "--quiet", "--", str(out_path)],
-            cwd=out_path.parent, capture_output=True,
+            ["git", "diff", "--quiet", "--", str(abs_path)],
+            capture_output=True,
         )
     except FileNotFoundError:
         print("[commit-skipped] git недоступен в PATH")
@@ -127,16 +131,16 @@ def _git_commit_export(
     if diff.returncode == 0:
         # Проверим, отслеживается ли вообще файл.
         ls = subprocess.run(
-            ["git", "ls-files", "--error-unmatch", "--", str(out_path)],
-            cwd=out_path.parent, capture_output=True,
+            ["git", "ls-files", "--error-unmatch", "--", str(abs_path)],
+            capture_output=True,
         )
         if ls.returncode == 0:
             print(f"[commit-noop] {out_path}: нет изменений")
             return
 
     add = subprocess.run(
-        ["git", "add", "--", str(out_path)],
-        cwd=out_path.parent, capture_output=True, text=True,
+        ["git", "add", "--", str(abs_path)],
+        capture_output=True, text=True,
     )
     if add.returncode != 0:
         print(f"[commit-skipped] git add failed: {add.stderr.strip()}")
@@ -146,16 +150,16 @@ def _git_commit_export(
     cmd = ["git", "commit", "-m", msg]
     if args.commit_author:
         cmd.extend(["--author", args.commit_author])
-    cmd.extend(["--", str(out_path)])
+    cmd.extend(["--", str(abs_path)])
 
-    commit = subprocess.run(cmd, cwd=out_path.parent, capture_output=True, text=True)
+    commit = subprocess.run(cmd, capture_output=True, text=True)
     if commit.returncode != 0:
         print(f"[commit-skipped] git commit failed: {commit.stderr.strip()}")
         return
 
     sha = subprocess.run(
         ["git", "rev-parse", "--short", "HEAD"],
-        cwd=out_path.parent, capture_output=True, text=True,
+        capture_output=True, text=True,
     ).stdout.strip()
     print(f"[committed] {sha} {shlex.quote(str(out_path))}")
 

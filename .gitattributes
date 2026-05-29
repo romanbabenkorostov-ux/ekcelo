@@ -1,0 +1,13 @@
+# Goldens — байт-в-байт сравнение, держим LF на всех платформах.
+parser/tests/golden/etp/*.txt text eol=lf
+parser/tests/fixtures/etp/*.json text eol=lf
+parser/exports/etp/*.json text eol=lf
+
+# Jinja-шаблоны: LF для воспроизводимого вывода.
+parser/exporters/etp/templates/*.j2 text eol=lf
+
+# SQL-миграции тоже фиксируем (executescript чувствителен к BOM).
+schema/migrations/*.sql text eol=lf
+
+# Python всегда LF.
+*.py text eol=lf

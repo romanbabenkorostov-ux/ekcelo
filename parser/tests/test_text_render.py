@@ -142,6 +142,13 @@ PLATFORM_SLUGS = {
 }
 
 
+def _read_golden(path):
+    """Прочитать golden, нормализуя CRLF→LF для Windows-checkout'ов
+    (даже если .gitattributes не сработал у клиента — например, после
+    переноса архивом или ручного редактирования в Notepad)."""
+    return path.read_text(encoding="utf-8").replace("\r\n", "\n")
+
+
 @pytest.mark.parametrize("platform", list(PLATFORM_SLUGS.keys()))
 @pytest.mark.parametrize("mode", ["short", "full"])
 def test_render_caseA_office_matches_golden(db, platform, mode):
@@ -150,7 +157,7 @@ def test_render_caseA_office_matches_golden(db, platform, mode):
                             target_cad_number="61:44:0050706:31")
     text = render_lot_description(ctx)
     golden = GOLDEN_DIR / f"caseA_office_{PLATFORM_SLUGS[platform]}_{mode}.txt"
-    expected = golden.read_text(encoding="utf-8")
+    expected = _read_golden(golden)
     assert text == expected, (
         f"Diverged from {golden.name}. Re-generate via "
         f"`python3 parser/scripts/dev/gen_etp_golden.py` if change is intentional."
@@ -163,7 +170,7 @@ def test_render_caseC_land_torgi_short(db):
                             target_cad_number="61:44:0050706:7")
     text = render_lot_description(ctx)
     golden = GOLDEN_DIR / "caseC_land_torgi_gov_ru_short.txt"
-    assert text == golden.read_text(encoding="utf-8")
+    assert text == _read_golden(golden)
 
 
 def test_render_caseB_storage_sberbank_full(db):
@@ -171,7 +178,7 @@ def test_render_caseB_storage_sberbank_full(db):
                             platform="sberbank-ast.ru", platform_mode="full")
     text = render_lot_description(ctx)
     golden = GOLDEN_DIR / "caseB_storage_sberbank_ast_ru_full.txt"
-    assert text == golden.read_text(encoding="utf-8")
+    assert text == _read_golden(golden)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -142,7 +142,11 @@ def test_cli_description_matches_golden(db_file, tmp_path):
     lot_dir = out / "lot_pirushin_001" / "torgi.gov.ru"
     for mode in ["short", "full"]:
         actual = (lot_dir / f"description.{mode}.txt").read_text(encoding="utf-8")
-        expected = (GOLDEN_DIR / f"caseA_office_torgi_gov_ru_{mode}.txt").read_text(encoding="utf-8")
+        expected = (
+            (GOLDEN_DIR / f"caseA_office_torgi_gov_ru_{mode}.txt")
+            .read_text(encoding="utf-8")
+            .replace("\r\n", "\n")
+        )
         assert actual == expected
 
 
