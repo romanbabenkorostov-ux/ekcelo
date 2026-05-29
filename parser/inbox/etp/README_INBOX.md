@@ -12,14 +12,30 @@ YAML survey-листы для импорта в БД.
 
 ## Workflow
 
-1. Положить YAML в этот каталог.
-2. Parser-A (или CI-хук) запускает:
-   ```bash
-   python -m parser.exporters.etp.etl_osv_cli --yaml <input> --db <db>
-   python -m parser.exporters.etp.export_json_cli --db <db>
-   ```
-3. После применения файл переносится в `parser/inbox/etp/_applied/`
-   (история сохраняется в репо для аудит-trail).
+### Поштучно (один файл)
+
+```bash
+python -m parser.exporters.etp.etl_osv_cli \
+    --yaml parser/inbox/etp/2026-06-01-<slug>.yml \
+    --db ekcelo.sqlite \
+    --export --commit
+```
+
+### Bulk (вся пачка одной командой)
+
+```bash
+python -m parser.exporters.etp.etl_pipeline_cli \
+    --db ekcelo.sqlite \
+    --move-applied \
+    --export --commit
+```
+
+После прогона успешно применённые YAML переезжают в `_applied/<YYYY-MM-DD>/`
+(история в репо для аудит-trail). Битые YAML остаются в inbox для разбора —
+exit code 3 сигнализирует partial failure.
+
+`--export --commit` обновляют viewer-JSON один раз в конце и коммитят
+автоматически.
 
 ## Контракт
 
