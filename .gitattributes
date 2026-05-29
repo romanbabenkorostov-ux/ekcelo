@@ -11,3 +11,9 @@ schema/migrations/*.sql text eol=lf
 
 # Python всегда LF.
 *.py text eol=lf
+
+# Viewer HTML/JS — стабильные diff'ы при рефакторинге слоёв (CORRESPONDENCE/028 §
+# уточнение, 029 viewer layers scaffold).
+viewer/*.html text eol=lf
+viewer/*.js text eol=lf
+viewer/**/*.js text eol=lf

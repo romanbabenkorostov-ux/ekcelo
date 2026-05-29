@@ -190,7 +190,7 @@ def test_enrich_idempotent(db, tmp_path):
                "category": "Фасад"})
     enrich_from_exif(db, scan_directory(photos))
     reports = enrich_from_exif(db, scan_directory(photos))
-    assert reports[0].skipped_reason == "photo_summary_already_present"
+    assert reports[0].skipped_reason == "photo_summary_and_notes_already_present"
     payload = json.loads(db.execute(
         "SELECT extras FROM object_etp_profile WHERE cad_number=?",
         ("61:44:0050706:31",)).fetchone()[0])
@@ -203,7 +203,7 @@ def test_enrich_skips_photos_without_category(db, tmp_path):
     _make_jpg(photos / "a.jpg",
               {"app": "ekcelo", "kind": "photo", "cad": "61:44:0050706:31"})
     reports = enrich_from_exif(db, scan_directory(photos))
-    assert reports[0].skipped_reason == "no_categories_in_exif"
+    assert reports[0].skipped_reason == "no_categories_or_notes_in_exif"
     assert not reports[0].changed
 
 
@@ -312,3 +312,125 @@ def test_cli_missing_db_returns_2(tmp_path, capsys):
 def test_cli_missing_photos_dir_returns_2(db_file, tmp_path):
     rc = cli_main(["--db", str(db_file), "--photos", str(tmp_path / "nope")])
     assert rc == 2
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  v1.2: per-фото note → extras.notes
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_v12_note_aggregated_into_extras_notes(db, tmp_path):
+    photos = tmp_path / "p"
+    photos.mkdir()
+    _make_jpg(photos / "a.jpg",
+              {"app": "ekcelo", "kind": "photo", "cad": "61:44:0050706:31",
+               "category": "Фасад", "note": "трещина по правому углу"})
+    _make_jpg(photos / "b.jpg",
+              {"app": "ekcelo", "kind": "photo", "cad": "61:44:0050706:31",
+               "category": "Кровля", "note": "новая кровля 2024"})
+    reports = enrich_from_exif(db, scan_directory(photos))
+    assert reports[0].changed
+    assert "notes" in reports[0].extras_filled
+    payload = json.loads(db.execute(
+        "SELECT extras FROM object_etp_profile WHERE cad_number=?",
+        ("61:44:0050706:31",)).fetchone()[0])
+    # joined «; »; порядок появления сохраняется.
+    assert payload["notes"] == "трещина по правому углу; новая кровля 2024"
+
+
+def test_v12_note_only_without_category_still_creates_profile(db, tmp_path):
+    """JPG c note но без category → профиль создаётся (только notes)."""
+    photos = tmp_path / "p"
+    photos.mkdir()
+    _make_jpg(photos / "a.jpg",
+              {"app": "ekcelo", "kind": "photo", "cad": "61:44:0050706:31",
+               "note": "обзорное фото"})
+    reports = enrich_from_exif(db, scan_directory(photos))
+    assert reports[0].changed
+    assert reports[0].extras_filled == ["notes"]  # advantages не добавлено
+    payload = json.loads(db.execute(
+        "SELECT extras FROM object_etp_profile WHERE cad_number=?",
+        ("61:44:0050706:31",)).fetchone()[0])
+    assert payload["notes"] == "обзорное фото"
+    assert "advantages" not in payload  # category отсутствовала
+
+
+def test_v12_note_merged_with_existing_extras_notes(db, tmp_path):
+    """Существующее extras.notes сохраняется, EXIF-note добавляется в конец."""
+    db.execute(
+        "INSERT INTO object_etp_profile(cad_number, extras, source, confidence) "
+        "VALUES (?, ?, 'osv', 1.0)",
+        ("61:44:0050706:31",
+         json.dumps({"notes": "Подробные сведения в отчёте"}, ensure_ascii=False)),
+    )
+    db.commit()
+    photos = tmp_path / "p"
+    photos.mkdir()
+    _make_jpg(photos / "a.jpg",
+              {"app": "ekcelo", "kind": "photo", "cad": "61:44:0050706:31",
+               "category": "Фасад", "note": "новая трещина"})
+    reports = enrich_from_exif(db, scan_directory(photos))
+    payload = json.loads(db.execute(
+        "SELECT extras FROM object_etp_profile WHERE cad_number=?",
+        ("61:44:0050706:31",)).fetchone()[0])
+    assert payload["notes"] == "Подробные сведения в отчёте; новая трещина"
+
+
+def test_v12_note_idempotent_no_duplicate(db, tmp_path):
+    """Повторный прогон того же JPG не дублирует заметку."""
+    photos = tmp_path / "p"
+    photos.mkdir()
+    _make_jpg(photos / "a.jpg",
+              {"app": "ekcelo", "kind": "photo", "cad": "61:44:0050706:31",
+               "category": "Фасад", "note": "одна заметка"})
+    enrich_from_exif(db, scan_directory(photos))
+    reports = enrich_from_exif(db, scan_directory(photos))
+    assert reports[0].skipped_reason == "photo_summary_and_notes_already_present"
+    payload = json.loads(db.execute(
+        "SELECT extras FROM object_etp_profile WHERE cad_number=?",
+        ("61:44:0050706:31",)).fetchone()[0])
+    assert payload["notes"] == "одна заметка"  # не "одна заметка; одна заметка"
+
+
+def test_v12_note_truncated_to_1000_chars(db, tmp_path):
+    """Заметка длиннее 1000 символов обрезается."""
+    long_note = "x" * 2000
+    photos = tmp_path / "p"
+    photos.mkdir()
+    _make_jpg(photos / "a.jpg",
+              {"app": "ekcelo", "kind": "photo", "cad": "61:44:0050706:31",
+               "category": "Фасад", "note": long_note})
+    enrich_from_exif(db, scan_directory(photos))
+    payload = json.loads(db.execute(
+        "SELECT extras FROM object_etp_profile WHERE cad_number=?",
+        ("61:44:0050706:31",)).fetchone()[0])
+    assert len(payload["notes"]) == 1000
+
+
+def test_v12_duplicate_notes_across_jpgs_deduped(db, tmp_path):
+    """Одна и та же заметка на 2 JPG → одна строка в БД."""
+    photos = tmp_path / "p"
+    photos.mkdir()
+    _make_jpg(photos / "a.jpg",
+              {"app": "ekcelo", "kind": "photo", "cad": "61:44:0050706:31",
+               "category": "Фасад", "note": "повтор"})
+    _make_jpg(photos / "b.jpg",
+              {"app": "ekcelo", "kind": "photo", "cad": "61:44:0050706:31",
+               "category": "Кровля", "note": "повтор"})
+    enrich_from_exif(db, scan_directory(photos))
+    payload = json.loads(db.execute(
+        "SELECT extras FROM object_etp_profile WHERE cad_number=?",
+        ("61:44:0050706:31",)).fetchone()[0])
+    assert payload["notes"] == "повтор"
+
+
+def test_v12_backward_compat_v11_photo_without_note(db, tmp_path):
+    """v1.1-фото без поля note → работает как раньше (только categories)."""
+    photos = tmp_path / "p"
+    photos.mkdir()
+    _make_jpg(photos / "a.jpg",
+              {"app": "ekcelo", "kind": "photo", "cad": "61:44:0050706:31",
+               "category": "Фасад"})  # без note
+    reports = enrich_from_exif(db, scan_directory(photos))
+    assert reports[0].changed
+    assert reports[0].extras_filled == ["advantages"]
+    assert reports[0].notes == []  # v1.1-payload
