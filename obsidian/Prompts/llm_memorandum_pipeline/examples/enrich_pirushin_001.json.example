@@ -1,0 +1,264 @@
+{
+  "schema_version": "1.0",
+  "lot_id": "pirushin_001",
+  "generated_at": "2026-05-29T12:00:00+03:00",
+
+  "target_scenario": {
+    "was": "Пул из 8 объектов: Литер А (особняк купца Пирушина, ОКН регионального значения, 1908), Литер Б (хозблок 1960-х), Литер Ф (пристройка 2014, не в ЕГРН), 4 нежилых помещения 1-го этажа (торговля), 1 земельный участок 1850 м². Консолидирован на ООО Антарес в 2006-2007 гг.",
+    "trigger": "Подготовка к продаже пула как ГАБ. Покупатель запросил Due Diligence с верификацией ЕГРН ↔ Поле и оценкой штрафных рисков.",
+    "to_plan": "Аренда/ГАБ — продажа лота инвестору как готового арендного бизнеса без реконструкции."
+  },
+
+  "egrn": {
+    "tables": {
+      "owner": {
+        "name": "ООО Антарес",
+        "inn": "6164012345",
+        "ogrn": "1056164054321",
+        "consolidation_period": "2006-2007"
+      },
+      "objects": [
+        {
+          "cad_number": "61:44:0050706:31",
+          "uslovny_number": "61-61-01/123/2006-001",
+          "obj_type": "building",
+          "purpose": "Нежилое",
+          "area_m2": 1245.0,
+          "cadastral_value_rub": 78500000,
+          "registration_year": 2006,
+          "address": "г. Ростов-на-Дону, ул. Суворова, д. 60, Литер А"
+        },
+        {
+          "cad_number": "61:44:0050706:42",
+          "uslovny_number": "61-61-01/123/2006-002",
+          "obj_type": "building",
+          "purpose": "Нежилое",
+          "area_m2": 320.0,
+          "cadastral_value_rub": 8200000,
+          "registration_year": 2006,
+          "address": "г. Ростов-на-Дону, ул. Суворова, д. 60, Литер Б"
+        },
+        {
+          "cad_number": "61:44:0050706:108",
+          "uslovny_number": "61-61-01/456/2007-014",
+          "obj_type": "land",
+          "purpose": "Земли населённых пунктов",
+          "area_m2": 1850.0,
+          "cadastral_value_rub": 22300000,
+          "registration_year": 2007,
+          "address": "г. Ростов-на-Дону, ул. Суворова, д. 60"
+        },
+        {
+          "cad_number": "61:44:0050706:201",
+          "uslovny_number": "61-61-01/124/2006-003",
+          "obj_type": "room",
+          "purpose": "Нежилое",
+          "area_m2": 142.0,
+          "cadastral_value_rub": 9500000,
+          "registration_year": 2006,
+          "address": "г. Ростов-на-Дону, ул. Суворова, д. 60, пом. 7"
+        },
+        {
+          "cad_number": "61:44:0050706:202",
+          "uslovny_number": "61-61-01/124/2006-004",
+          "obj_type": "room",
+          "purpose": "Нежилое",
+          "area_m2": 138.5,
+          "cadastral_value_rub": 9200000,
+          "registration_year": 2006,
+          "address": "г. Ростов-на-Дону, ул. Суворова, д. 60, пом. 8"
+        }
+      ]
+    }
+  },
+
+  "etp_profile": null,
+  "graph_ref": "graph.html",
+
+  "gpzu_minkult": {
+    "gpzu": {
+      "document_id": "gpzu_RU61301000-001234_2024-03-20",
+      "document_date": "2024-03-20",
+      "covers_cad_numbers": ["61:44:0050706:31"],
+      "zoning": {
+        "territorial_zone": "ОЦ-1 (общественно-деловая зона исторического центра)",
+        "height_limit_m": 18.0,
+        "density_limit_pct": 70
+      }
+    },
+    "okn": {
+      "status": "Объект культурного наследия регионального значения «Особняк купца Пирушина»",
+      "register_number": "611410273450005",
+      "restrictions": [
+        "запрет на изменение габаритов и объёмно-пространственной композиции Литера А",
+        "согласование любых фасадных работ с Минкультом РО",
+        "запрет на наружную рекламу на фасадах Литера А"
+      ]
+    },
+    "archaeology": {
+      "zone_type": "территория археологического наследия",
+      "restrictions": ["земляные работы глубже 0.5 м — только с надзором"]
+    }
+  },
+
+  "field_inspection": {
+    "inspection": {
+      "inspector": "Иванов И.И., главный инженер ООО «СтройЭкспертиза-Юг»",
+      "date": "2026-05-15",
+      "document_id": "field_inspection_pirushin_2026-05-15"
+    },
+    "clusters": [
+      {
+        "cluster_id": "liter_A",
+        "cad_numbers": ["61:44:0050706:31"],
+        "actual_area_m2": 1280.5,
+        "egrn_area_m2": 1245.0,
+        "delta_area_m2": 35.5,
+        "delta_comment": "Зашита веранда (Литер А1, ~35.5 м²), не отражена в ЕГРН.",
+        "wear_pct": 42,
+        "perepplanirovki": [
+          {
+            "description": "Объединены помещения №7 и №8 (снесена ненесущая перегородка)",
+            "agreed": false,
+            "risk": "штраф 30-50 тыс. руб. + предписание восстановить/узаконить"
+          }
+        ]
+      },
+      {
+        "cluster_id": "liter_F",
+        "cad_numbers": [],
+        "actual_area_m2": 145.0,
+        "egrn_area_m2": null,
+        "delta_comment": "Пристройка 2014, НЕ ОТРАЖЕНА в ЕГРН. До 1.5 млн руб. штрафа за самовольное строительство.",
+        "wear_pct": 12
+      }
+    ],
+    "equipment": [
+      {
+        "cluster_id": "liter_A",
+        "items": [
+          {"name": "Газовая котельная Buderus Logano G334X", "power_kw": 240, "capex_saving_rub": 4500000},
+          {"name": "Приточно-вытяжная вентиляция Systemair", "power_kw": 18, "capex_saving_rub": 1200000},
+          {"name": "ГРЩ 380В, выделенная мощность 150 кВт", "power_kw": 150, "capex_saving_rub": 800000}
+        ]
+      }
+    ]
+  },
+
+  "photo_album": {
+    "album_id": "photo_album_pirushin_001",
+    "sections": [
+      {"section_id": "liter_A", "cluster_ref": "liter_A", "photos_count": 47},
+      {"section_id": "liter_B", "cluster_ref": "liter_B", "photos_count": 12},
+      {"section_id": "liter_F", "cluster_ref": "liter_F", "photos_count": 18},
+      {"section_id": "land_parcel", "cluster_ref": "land_61_44_0050706_108", "photos_count": 8}
+    ]
+  },
+
+  "documents_dates": [
+    {
+      "document_id": "egrn_2024-05-12_61_44_0050706_31",
+      "type": "ЕГРН",
+      "registered_date": "2024-05-11",
+      "document_date": "2024-05-12",
+      "covers_cad_numbers": ["61:44:0050706:31"]
+    },
+    {
+      "document_id": "egrn_2025-09-03_61_44_0050706_42",
+      "type": "ЕГРН",
+      "registered_date": "2025-09-02",
+      "document_date": "2025-09-03",
+      "covers_cad_numbers": ["61:44:0050706:42"]
+    },
+    {
+      "document_id": "egrn_2026-04-27_61_44_0050706_31",
+      "type": "ЕГРН",
+      "registered_date": "2026-04-27",
+      "document_date": "2026-04-27",
+      "covers_cad_numbers": ["61:44:0050706:31"]
+    },
+    {
+      "document_id": "egrlul_2026-05-01_OOO_Antares",
+      "type": "ЕГРЮЛ",
+      "registered_date": "2026-04-30",
+      "document_date": "2026-05-01",
+      "covers_entities": [{"inn": "6164012345", "ogrn": "1056164054321", "name": "ООО Антарес"}]
+    }
+  ],
+
+  "facts_index": [
+    {
+      "fact_path": "egrn.tables.objects[0].area_m2",
+      "value": 1245.0,
+      "provenance": {
+        "document_id": "egrn_2024-05-12_61_44_0050706_31",
+        "as_of_date": "2024-05-11",
+        "evidence_level": 1
+      }
+    },
+    {
+      "fact_path": "egrn.tables.objects[0].area_m2",
+      "value": 1245.0,
+      "provenance": {
+        "document_id": "egrn_2026-04-27_61_44_0050706_31",
+        "as_of_date": "2026-04-27",
+        "evidence_level": 1
+      }
+    },
+    {
+      "fact_path": "egrn.tables.objects[0].cadastral_value_rub",
+      "value": 65200000,
+      "provenance": {
+        "document_id": "egrn_2024-05-12_61_44_0050706_31",
+        "as_of_date": "2024-05-11",
+        "evidence_level": 1
+      }
+    },
+    {
+      "fact_path": "egrn.tables.objects[0].cadastral_value_rub",
+      "value": 78500000,
+      "provenance": {
+        "document_id": "egrn_2026-04-27_61_44_0050706_31",
+        "as_of_date": "2026-04-27",
+        "evidence_level": 1
+      }
+    },
+    {
+      "fact_path": "field_inspection.clusters[0].actual_area_m2",
+      "value": 1280.5,
+      "provenance": {
+        "document_id": "field_inspection_pirushin_2026-05-15",
+        "as_of_date": "2026-05-15",
+        "evidence_level": 1
+      }
+    }
+  ],
+
+  "conflicts": [
+    {
+      "fact_path": "egrn.tables.objects[0].cadastral_value_rub",
+      "competing_facts": [
+        {
+          "value": 65200000,
+          "provenance": {
+            "document_id": "egrn_2024-05-12_61_44_0050706_31",
+            "as_of_date": "2024-05-11",
+            "evidence_level": 1
+          }
+        },
+        {
+          "value": 78500000,
+          "provenance": {
+            "document_id": "egrn_2026-04-27_61_44_0050706_31",
+            "as_of_date": "2026-04-27",
+            "evidence_level": 1
+          }
+        }
+      ],
+      "resolution": "newer_wins",
+      "winning_fact_index": 1
+    }
+  ],
+
+  "missing_layers": []
+}

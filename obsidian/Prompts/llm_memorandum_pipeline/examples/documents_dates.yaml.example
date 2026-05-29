@@ -1,0 +1,34 @@
+# Пример с тремя выписками. Третья ЕГРН (от 2026-04-27) умышленно покрывает
+# тот же КН 61:44:0050706:31, что и первая (от 2024-05-12), но с разным
+# правообладателем — для smoke-теста разрешения темпорального конфликта.
+
+documents:
+  - document_id: egrn_2024-05-12_61_44_0050706_31
+    type: ЕГРН
+    registered_date: 2024-05-11
+    document_date: 2024-05-12
+    covers_cad_numbers:
+      - "61:44:0050706:31"
+
+  - document_id: egrn_2025-09-03_61_44_0050706_42
+    type: ЕГРН
+    registered_date: 2025-09-02
+    document_date: 2025-09-03
+    covers_cad_numbers:
+      - "61:44:0050706:42"
+
+  - document_id: egrn_2026-04-27_61_44_0050706_31
+    type: ЕГРН
+    registered_date: 2026-04-27
+    document_date: 2026-04-27
+    covers_cad_numbers:
+      - "61:44:0050706:31"
+
+  - document_id: egrlul_2026-05-01_OOO_Antares
+    type: ЕГРЮЛ
+    registered_date: 2026-04-30
+    document_date: 2026-05-01
+    covers_entities:
+      - inn: "6164012345"
+        ogrn: "1056164054321"
+        name: "ООО Антарес"
