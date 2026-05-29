@@ -1,8 +1,8 @@
-# 027 — Viewer layers scaffold + DB-portability rules (ТЗ-01/02)
+# 029 — Viewer layers scaffold + DB-portability rules (ТЗ-01/02)
 
 - **From:** owner
 - **To:** parser, viewer
-- **Date:** 2026-05-28
+- **Date:** 2026-05-29
 - **Re:** ADR-002 (db-portability), ADR-003 (viewer-layers), `obsidian/Database/dialect-portability.md`, `obsidian/Architecture/viewer-layers.md`, skill `db-portability`, skill `viewer-layers`, subagent `viewer-extract`
 - **Status:** open · awaiting ack от обеих команд
 

@@ -50,8 +50,9 @@ PR: claude/magical-mccarthy-3ZyU4 → main (TBD #).
 
 ### Correspondence
 
-- `docs/CORRESPONDENCE/027-owner-viewer-layers-scaffold.md` — пост от owner к parser+viewer.
-- `INDEX.md` обновлён строкой 027.
+- `docs/CORRESPONDENCE/029-owner-viewer-layers-scaffold.md` — пост от owner к parser+viewer (027 занят parser-EXIF; перенумеровано после rebase на main с PR #65–77).
+- `docs/CORRESPONDENCE/028-viewer-ack-exif-v1-2.md` — ack viewer-team по EXIF v1.2 (027 parser).
+- `INDEX.md` обновлён строками 028 + 029.
 
 ## Карта follow-up PR (зафиксирована в ADR-003)
 
@@ -76,4 +77,4 @@ PR: claude/magical-mccarthy-3ZyU4 → main (TBD #).
 
 - ADR-001 (etp-profile-extension) — параллельный, не пересекается.
 - CLAUDE.md — не трогаем, правила слоёв активируются через skills.
-- `docs/CORRESPONDENCE/INDEX.md`, `docs/CORRESPONDENCE/027-*.md`.
+- `docs/CORRESPONDENCE/INDEX.md`, `docs/CORRESPONDENCE/028-*.md`, `docs/CORRESPONDENCE/029-*.md`.
