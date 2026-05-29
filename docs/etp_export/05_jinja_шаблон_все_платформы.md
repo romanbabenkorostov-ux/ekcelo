@@ -37,7 +37,7 @@
 {# Абзац 1: идентификация и основные параметры для помещений/зданий #}
 {% macro paragraph_identity_premise(ctx) -%}
 Объектом торгов является {{ ctx.identity.title }}
-{%- if ctx.identity.purpose %} {{ ctx.identity.purpose }} назначения{% endif -%}
+{%- if ctx.identity.purpose %} {{ ctx.identity.purpose | inflect_gen }} назначения{% endif -%}
 {%- if ctx.identity.area_total_sqm %} общей площадью {{ ctx.identity.area_total_sqm }} кв. м{% endif -%},
 расположенное{% if ctx.identity.floor and ctx.building.floors_total %} на {{ ctx.identity.floor }}-м этаже {{ ctx.building.floors_total }}-этажного{% elif ctx.identity.floor %} на {{ ctx.identity.floor }}-м этаже{% endif %}{% if ctx.building.building_type %} {{ ctx.building.building_type }}{% endif %} здания по адресу: {{ full_address(ctx.location) }}.
 {%- if ctx.identity.cadastral_number %}
@@ -66,9 +66,9 @@
 {% set loc = ctx.location %}
 {% if loc.environment_short or loc.transport_access or loc.landmark %}
 Объект расположен
-    {%- if loc.environment_short %} в {{ loc.environment_short }}{% elif loc.locality %} в пределах {{ loc.locality }}{% endif -%}.
+    {%- if loc.environment_short %} в {{ loc.environment_short | inflect_loc }}{% elif loc.locality %} в пределах {{ loc.locality | inflect_gen }}{% endif -%}.
 {%- if loc.transport_access %}
- Доступ к объекту обеспечен по {{ loc.transport_access }} улично-дорожной сети.
+ Доступ к объекту обеспечен по {{ loc.transport_access | inflect_loc }} улично-дорожной сети.
 {%- endif -%}
 {%- if loc.landmark %}
  В непосредственной близости находятся {{ loc.landmark }}.
@@ -130,9 +130,9 @@
 {% set l = ctx.legal %}
 {% if l.right_type or l.right_holder or l.basis_type or l.encumbrances or l.use_type_fact or l.use_type_permitted %}
 Право
-    {%- if l.right_type %} {{ l.right_type }}{% else %} на объект недвижимости{% endif -%}
-    {%- if l.right_holder %} зарегистрировано за {{ l.right_holder }}{% endif -%}
-    {%- if l.basis_type %} на основании {{ l.basis_type }}{% endif %}.
+    {%- if l.right_type %} {{ l.right_type | inflect_gen }}{% else %} на объект недвижимости{% endif -%}
+    {%- if l.right_holder %} зарегистрировано за {{ l.right_holder | inflect_ins }}{% endif -%}
+    {%- if l.basis_type %} на основании {{ l.basis_type | inflect_gen }}{% endif %}.
 {%- if l.encumbrances and l.encumbrances|length > 0 %}
  В отношении объекта зарегистрированы следующие обременения: {{ join_encumbrances(l.encumbrances) }}.
 {%- else %}
@@ -250,7 +250,7 @@
 {% macro platform_roseltorg_short(ctx) -%}
 {# Абзац 1: общие сведения #}
 На торги выставляется {{ ctx.identity.title }}
-{%- if ctx.identity.purpose %} {{ ctx.identity.purpose }} назначения{% endif -%}
+{%- if ctx.identity.purpose %} {{ ctx.identity.purpose | inflect_gen }} назначения{% endif -%}
 {%- if ctx.identity.area_total_sqm %} общей площадью {{ ctx.identity.area_total_sqm }} кв. м{% endif -%},
 расположенное по адресу: {{ full_address(ctx.location) }}.
 {%- if ctx.identity.floor and ctx.building.floors_total %}
@@ -276,7 +276,7 @@
 {% macro platform_roseltorg_full(ctx) -%}
 {# Абзац 1: общие сведения #}
 На торги выставляется {{ ctx.identity.title }}
-{%- if ctx.identity.purpose %} {{ ctx.identity.purpose }} назначения{% endif -%}
+{%- if ctx.identity.purpose %} {{ ctx.identity.purpose | inflect_gen }} назначения{% endif -%}
 {%- if ctx.identity.area_total_sqm %} общей площадью {{ ctx.identity.area_total_sqm }} кв. м{% endif -%},
 расположенное по адресу: {{ full_address(ctx.location) }}.
 {%- if ctx.identity.floor and ctx.building.floors_total %}

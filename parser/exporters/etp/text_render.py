@@ -15,6 +15,8 @@ from typing import Any
 
 from jinja2 import ChainableUndefined, Environment, FileSystemLoader
 
+from parser.exporters.etp.morphology import JINJA_FILTERS as _MORPH_FILTERS
+
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 _TEMPLATE_NAME = "torgi_long_description.j2"
@@ -84,6 +86,9 @@ def _env() -> Environment:
             # позволяет цепочки `a.b.c` молча возвращать undefined.
             undefined=ChainableUndefined,
         )
+        # Морфологические фильтры (pymorphy3): inflect_loc / inflect_gen / ...
+        # См. parser/exporters/etp/morphology.py.
+        _env_singleton.filters.update(_MORPH_FILTERS)
     return _env_singleton
 
 
