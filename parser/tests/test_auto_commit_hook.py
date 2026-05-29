@@ -202,6 +202,29 @@ def test_commit_author_override(tmp_path, monkeypatch):
     assert r.stdout.strip() == "Economist <e@example.com>"
 
 
+def test_commit_works_with_relative_out_path(tmp_path, monkeypatch):
+    """Регрессия Windows-бага: --export-out как относительный путь
+    приводил к двойной склейке `parser/exports/etp/parser/exports/etp/`."""
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "commit.gpgsign")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "false")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_git_repo(repo)
+    monkeypatch.chdir(repo)
+    db = _setup_db(repo)
+    rc = osv_main([
+        "--yaml", str(TEMPLATE),
+        "--db", "ekcelo.sqlite",  # относительный
+        "--export",
+        "--export-out", "parser/exports/etp/",  # относительный
+        "--commit",
+    ])
+    assert rc == 0
+    assert (repo / "parser/exports/etp/object_etp_profile.json").exists()
+    assert _commit_count(repo) == 2
+
+
 def test_no_commit_flag_does_not_commit(tmp_path, monkeypatch):
     monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
     monkeypatch.setenv("GIT_CONFIG_KEY_0", "commit.gpgsign")
