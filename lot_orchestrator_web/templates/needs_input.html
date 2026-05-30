@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}target_scenario · {{ lot_id }}{% endblock %}
+{% block content %}
+<h2>target_scenario для лота <code>{{ lot_id }}</code></h2>
+
+{% if run and run.result and run.result.warnings %}
+<aside class="warn">
+    <strong>Состояние:</strong> {{ run.result.phase.value }}
+    <ul>
+        {% for w in run.result.warnings %}<li>{{ w }}</li>{% endfor %}
+    </ul>
+</aside>
+{% endif %}
+
+<form method="post" action="/lots/{{ lot_id }}/provide-input">
+    <label>workspace_path
+        <input type="text" name="workspace_path" required
+               value="{{ run.workspace_path if run else '' }}">
+    </label>
+    <label>was — что было с лотом
+        <textarea name="was" rows="3" required>{{ target.was if target else '' }}</textarea>
+    </label>
+    <label>trigger — что стало триггером
+        <textarea name="trigger" rows="3" required>{{ target.trigger if target else '' }}</textarea>
+    </label>
+    <label>to_plan — что планируется
+        <textarea name="to_plan" rows="3" required>{{ target.to_plan if target else '' }}</textarea>
+    </label>
+    <button type="submit">Сохранить и перезапустить</button>
+</form>
+{% endblock %}

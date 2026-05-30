@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>API endpoints</h2>
+<ul>
+    <li><code>POST /lots/{lot_id}/run</code> — стартовать прогон.</li>
+    <li><code>GET /lots/{lot_id}/status/{run_id}</code> — статус.</li>
+    <li><code>GET /lots/{lot_id}/needs-input</code> — форма для target_scenario.</li>
+    <li><code>POST /lots/{lot_id}/provide-input</code> — приём form-data.</li>
+    <li><code>GET /lots/{lot_id}/artifacts</code> — список артефактов.</li>
+</ul>
+<p>OpenAPI: <a href="/docs">/docs</a> · ReDoc: <a href="/redoc">/redoc</a></p>
+{% endblock %}
