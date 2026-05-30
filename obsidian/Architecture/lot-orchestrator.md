@@ -82,9 +82,12 @@ Exit codes:
 
 | Cycle | Что добавится |
 |---|---|
-| **5** ✅ | FastAPI обёртка (`lot_orchestrator_web/`, ветка `orchestrator/frontend`): 5 endpoint'ов + Jinja2 UI. Реализовано. См. ниже. |
-| **6** | Extraction `parser/utils/folder_match.py` из `pirushin_sosn_rocha_07_init_project_v3.py` — заменит упрощённый SequenceMatcher в `workspace.py` на каноническую логику v3. |
-| **7** | Адаптер `parser/exporters/etp/etl_checko.py` (см. [[ADR-002-parser-checko-integration-policy]]) — checko-данные → `object_etp_profile.legal_extra` с `source='checko'`. Триггер cycle 7 — мердж orchestrator MVP + работа на ≥1 реальном лоте. |
+| **5** ✅ | FastAPI обёртка (`lot_orchestrator_web/`, ветка `orchestrator/frontend`): 5 endpoint'ов + Jinja2 UI. См. ниже. |
+| **6** ✅ | Canonical `parser.utils.folder_match.best_match` в workspace.py (PR #88). |
+| **7** ✅ | `parser/exporters/etp/etl_checko.py` opt-in адаптер innogrn.db → owner_checko (PR #89). |
+| **8** ✅ | SQLite persistence (`runs.sqlite`) + SSE streaming + GLOB-based artifacts (PR #90). |
+| **9** ✅ | Redis-backed `RunStore` для multi-worker через fakeredis-тесты (этот PR). |
+| **10** ✅ | `pyproject.toml` extras `[orchestrator]`/`[orchestrator-web]`/`[orchestrator-redis]`/`[dev]` + CLI `ekcelo-orchestrate-web` (этот PR). |
 
 ## FastAPI обёртка (cycle 5)
 
@@ -98,28 +101,48 @@ Exit codes:
 | `GET` | `/lots/{lot_id}/status/{run_id}` | JSON: `{run_id, lot_id, status, phase, warnings[], errors[]}` |
 | `GET` | `/lots/{lot_id}/needs-input` | HTML-форма target_scenario с предзаполнением из последнего run'а |
 | `POST` | `/lots/{lot_id}/provide-input` | form-data: `workspace_path, was, trigger, to_plan`. Обновляет SSOT идемпотентно (`patch_target_scenario`) + перезапускает прогон. → 202 |
-| `GET` | `/lots/{lot_id}/artifacts` | JSON: пути к `final_report.md`, `investment_slides.md`, `market_template.md`, `_run_log.jsonl` |
+| `GET` | `/lots/{lot_id}/artifacts` | JSON: пути к `final_report.md`, `investment_slides.md`, `market_template.md`, `_run_log.jsonl` (cycle 8: GLOB-based, переживает рестарт) |
+| `GET` | `/lots/{lot_id}/stream/{run_id}` | **cycle 8:** SSE stream `event: phase / done / error / timeout` (polling 200ms, 5min timeout) |
 | `GET` | `/` | index с перечнем endpoints + ссылками на `/docs` / `/redoc` |
 
-### Запуск
+### Запуск (cycle 10 — через canonical CLI)
 
 ```bash
-pip install fastapi 'uvicorn[standard]' jinja2 python-multipart httpx
-uvicorn lot_orchestrator_web.main:app --reload
-# открыть http://localhost:8000/
+# Установка с extras (см. UserGuide/install.md).
+pip install -e ".[orchestrator-web]"
+
+# Dev:
+ekcelo-orchestrate-web --reload
+
+# Production с persistence:
+ekcelo-orchestrate-web --persistence-db ./runs.sqlite
+
+# Production multi-worker через Redis:
+pip install -e ".[orchestrator-redis]"
+ekcelo-orchestrate-web \
+    --redis-url redis://localhost:6379/0 \
+    --persistence-db ./runs.sqlite \
+    --workers 4
 ```
+
+### Multi-worker store (cycle 9)
+
+`lot_orchestrator_web/redis_store.py`:
+- Hash `ekcelo:run:<run_id>` — состояние run'а.
+- Set `ekcelo:lot_runs:<lot_id>` — индекс run_id для лота.
+- Pub/Sub `ekcelo:events:<run_id>` — push phase changes (потенциально для SSE без polling).
+
+API совместим с in-memory `RunStore` (одни и те же сигнатуры). На старте загружает snapshot из SQLite (durable mirror) — если Redis потерял данные, completed-runs восстанавливаются.
 
 ### MVP-упрощения web-слоя
 
-1. **In-memory store** (`RunStore` singleton) — runs не переживают рестарт. Multi-worker / persistence — cycle 7+.
-2. **Нет auth/authz** — деплой только за reverse-proxy с защитой.
-3. **Нет SSE/WebSocket** — статус опрашивается через GET. Streaming — cycle 7+.
-4. **`mock_llm_text` доступен через body** — для smoke без `ANTHROPIC_API_KEY` (удобно для CI и демо).
+1. **Нет auth/authz** — деплой только за reverse-proxy с защитой.
+2. **SSE через polling** (200ms) — Redis pub/sub доступен в `RedisRunStore.subscribe_events()`, но SSE endpoint пока polls. Подключение pub/sub к SSE — будущий cycle.
+3. **`mock_llm_text` доступен через body** — для smoke без `ANTHROPIC_API_KEY`.
 
 ## MVP-упрощения (общие)
 
-1. **Нет `parser.utils.folder_match`** — `workspace.py` использует упрощённый `difflib.SequenceMatcher`. Поведение совместимо в типичных случаях (`Memorandum` ↔ `memorandum`), но не покрывает все edge cases v3-логики.
-2. **`prompts.py` рендерит шаблон без Jinja2** — простая `str.replace` на `{{ enrich_json }}` / `{{ market_analysis }}` / `{{ existing_market_template }}` / `{{ graph_status }}`. Если шаблон обзаведётся `{% if %}` / `{% for %}` — внести Jinja2.
-3. **Нет токен-счётчика** — `usage` приходит из anthropic-ответа как-есть.
+1. **`prompts.py` рендерит шаблон без Jinja2** — простая `str.replace` на `{{ enrich_json }}` / `{{ market_analysis }}` / `{{ existing_market_template }}` / `{{ graph_status }}`. Если шаблон обзаведётся `{% if %}` / `{% for %}` — внести Jinja2.
+2. **Нет токен-счётчика** — `usage` приходит из anthropic-ответа как-есть.
 
 См. [[parallel-parsers-map]] для контекста параллельной разработки.
