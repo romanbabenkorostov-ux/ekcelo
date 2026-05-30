@@ -1,14 +1,14 @@
 """Идемпотентная инициализация `Memorandum/` (orchestrator_spec.md §4 Фаза 1).
 
-MVP: простой mkdir-pass. Полная fuzzy-match-логика (`_resolve_existing_or_new` +
-`best_match` ≥ FUZZY_MATCH_THRESHOLD) — отдельный PR
-`parser/utils/folder_match.py` (extraction из `pirushin_sosn_rocha_07_init_project_v3.py`).
+Использует canonical fuzzy-match из `parser.utils.folder_match.best_match` —
+покрывает регистр / разделители, layout-swap (ЙЦУКЕН↔QWERTY), анаграммы.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from difflib import SequenceMatcher
 from pathlib import Path
+
+from parser.utils.folder_match import best_match
 
 
 _SUBDIRS = ("_data", "incoming")
@@ -44,7 +44,7 @@ def init_workspace(
 
     Идемпотентно: повторный вызов не пересоздаёт и не перезаписывает существующие файлы.
     Если существует директория с похожим (но не каноничным) именем
-    (≥ `fuzzy_threshold` по SequenceMatcher) — переиспользует её при `auto_yes=True`.
+    (`name_similarity` ≥ `fuzzy_threshold`) — переиспользует её при `auto_yes=True`.
     """
     if not root.exists() or not root.is_dir():
         raise FileNotFoundError(f"workspace_path не найден или не директория: {root}")
@@ -64,13 +64,11 @@ def _resolve_or_create(
     if canon_path.exists():
         return canon_path
 
-    canon_lower = canonical.lower()
-    for child in root.iterdir():
-        if not child.is_dir():
-            continue
-        ratio = SequenceMatcher(None, child.name.lower(), canon_lower).ratio()
-        if ratio >= threshold and auto_yes:
-            return child
+    if auto_yes:
+        siblings = [c.name for c in root.iterdir() if c.is_dir()]
+        match = best_match(canonical, siblings, threshold=threshold)
+        if match is not None:
+            return root / match[0]
 
     canon_path.mkdir()
     return canon_path

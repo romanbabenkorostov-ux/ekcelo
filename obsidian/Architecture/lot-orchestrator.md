@@ -83,7 +83,7 @@ Exit codes:
 | Cycle | Что добавится |
 |---|---|
 | **5** ✅ | FastAPI обёртка (`lot_orchestrator_web/`, ветка `orchestrator/frontend`): 5 endpoint'ов + Jinja2 UI. Реализовано. См. ниже. |
-| **6** | Extraction `parser/utils/folder_match.py` из `pirushin_sosn_rocha_07_init_project_v3.py` — заменит упрощённый SequenceMatcher в `workspace.py` на каноническую логику v3. |
+| **6** ✅ | Интеграция `parser/utils/folder_match.best_match` в `workspace.py` — заменил упрощённый SequenceMatcher на canonical-логику с поддержкой layout-swap (ЙЦУКЕН↔QWERTY), анаграмм и separators-only diff. |
 | **7** | Адаптер `parser/exporters/etp/etl_checko.py` (см. [[ADR-002-parser-checko-integration-policy]]) — checko-данные → `object_etp_profile.legal_extra` с `source='checko'`. Триггер cycle 7 — мердж orchestrator MVP + работа на ≥1 реальном лоте. |
 
 ## FastAPI обёртка (cycle 5)
@@ -118,8 +118,7 @@ uvicorn lot_orchestrator_web.main:app --reload
 
 ## MVP-упрощения (общие)
 
-1. **Нет `parser.utils.folder_match`** — `workspace.py` использует упрощённый `difflib.SequenceMatcher`. Поведение совместимо в типичных случаях (`Memorandum` ↔ `memorandum`), но не покрывает все edge cases v3-логики.
-2. **`prompts.py` рендерит шаблон без Jinja2** — простая `str.replace` на `{{ enrich_json }}` / `{{ market_analysis }}` / `{{ existing_market_template }}` / `{{ graph_status }}`. Если шаблон обзаведётся `{% if %}` / `{% for %}` — внести Jinja2.
-3. **Нет токен-счётчика** — `usage` приходит из anthropic-ответа как-есть.
+1. **`prompts.py` рендерит шаблон без Jinja2** — простая `str.replace` на `{{ enrich_json }}` / `{{ market_analysis }}` / `{{ existing_market_template }}` / `{{ graph_status }}`. Если шаблон обзаведётся `{% if %}` / `{% for %}` — внести Jinja2.
+2. **Нет токен-счётчика** — `usage` приходит из anthropic-ответа как-есть.
 
 См. [[parallel-parsers-map]] для контекста параллельной разработки.
