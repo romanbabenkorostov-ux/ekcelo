@@ -33,3 +33,21 @@ def test_raises_if_root_missing(tmp_path):
     import pytest
     with pytest.raises(FileNotFoundError):
         init_workspace(tmp_path / "nope")
+
+
+def test_fuzzy_match_picks_separator_variant(tmp_path):
+    """`Memorandum_archive` ↔ `Memorandum` — separators-only diff (через canonical best_match)."""
+    legacy = tmp_path / "Memorandum_old"
+    legacy.mkdir()
+    layout = init_workspace(tmp_path, fuzzy_threshold=0.7, auto_yes=True)
+    # `Memorandum_old` нормализуется в `memorandumold` — SequenceMatcher даёт ~0.83.
+    assert layout.memorandum == legacy
+
+
+def test_fuzzy_match_disabled_when_auto_yes_false(tmp_path):
+    """Без auto_yes — fuzzy-match не срабатывает; всегда создаётся canonical."""
+    legacy = tmp_path / "memorandum"
+    legacy.mkdir()
+    layout = init_workspace(tmp_path, fuzzy_threshold=0.7, auto_yes=False)
+    assert layout.memorandum == tmp_path / "Memorandum"
+    assert layout.memorandum != legacy
