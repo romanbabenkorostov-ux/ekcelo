@@ -82,15 +82,44 @@ Exit codes:
 
 | Cycle | Что добавится |
 |---|---|
-| **5** | FastAPI + Jinja2 web-UI (`orchestrator/frontend` ветка): `POST /lots/{lot_id}/run`, `GET /needs-input`, `POST /provide-input`, `GET /artifacts`. Заменит ручной запуск CLI. |
+| **5** ✅ | FastAPI обёртка (`lot_orchestrator_web/`, ветка `orchestrator/frontend`): 5 endpoint'ов + Jinja2 UI. Реализовано. См. ниже. |
 | **6** | Extraction `parser/utils/folder_match.py` из `pirushin_sosn_rocha_07_init_project_v3.py` — заменит упрощённый SequenceMatcher в `workspace.py` на каноническую логику v3. |
 | **7** | Адаптер `parser/exporters/etp/etl_checko.py` (см. [[ADR-002-parser-checko-integration-policy]]) — checko-данные → `object_etp_profile.legal_extra` с `source='checko'`. Триггер cycle 7 — мердж orchestrator MVP + работа на ≥1 реальном лоте. |
 
-## MVP-упрощения
+## FastAPI обёртка (cycle 5)
 
-1. **Нет FastAPI/UI** — экономист запускает CLI вручную; интерактивный сбор `target_scenario` пока через ручное редактирование `enrich_*.json` или прогон Этапа 1 в claude.ai.
-2. **Нет `parser.utils.folder_match`** — `workspace.py` использует упрощённый `difflib.SequenceMatcher`. Поведение совместимо в типичных случаях (`Memorandum` ↔ `memorandum`), но не покрывает все edge cases v3-логики.
-3. **`prompts.py` рендерит шаблон без Jinja2** — простая `str.replace` на `{{ enrich_json }}` / `{{ market_analysis }}` / `{{ existing_market_template }}` / `{{ graph_status }}`. Если шаблон обзаведётся `{% if %}` / `{% for %}` — внести Jinja2 в cycle 5.
-4. **Нет токен-счётчика** — `usage` приходит из anthropic-ответа как-есть.
+`lot_orchestrator_web/` — тонкая обёртка над `run_pipeline`. BackgroundTasks + in-memory store.
+
+### Endpoints
+
+| Method | Path | Описание |
+|---|---|---|
+| `POST` | `/lots/{lot_id}/run` | Body: `{workspace_path, mock_llm_text?}`. Создаёт run, ставит в BackgroundTask. → 202 `{run_id, lot_id}` |
+| `GET` | `/lots/{lot_id}/status/{run_id}` | JSON: `{run_id, lot_id, status, phase, warnings[], errors[]}` |
+| `GET` | `/lots/{lot_id}/needs-input` | HTML-форма target_scenario с предзаполнением из последнего run'а |
+| `POST` | `/lots/{lot_id}/provide-input` | form-data: `workspace_path, was, trigger, to_plan`. Обновляет SSOT идемпотентно (`patch_target_scenario`) + перезапускает прогон. → 202 |
+| `GET` | `/lots/{lot_id}/artifacts` | JSON: пути к `final_report.md`, `investment_slides.md`, `market_template.md`, `_run_log.jsonl` |
+| `GET` | `/` | index с перечнем endpoints + ссылками на `/docs` / `/redoc` |
+
+### Запуск
+
+```bash
+pip install fastapi 'uvicorn[standard]' jinja2 python-multipart httpx
+uvicorn lot_orchestrator_web.main:app --reload
+# открыть http://localhost:8000/
+```
+
+### MVP-упрощения web-слоя
+
+1. **In-memory store** (`RunStore` singleton) — runs не переживают рестарт. Multi-worker / persistence — cycle 7+.
+2. **Нет auth/authz** — деплой только за reverse-proxy с защитой.
+3. **Нет SSE/WebSocket** — статус опрашивается через GET. Streaming — cycle 7+.
+4. **`mock_llm_text` доступен через body** — для smoke без `ANTHROPIC_API_KEY` (удобно для CI и демо).
+
+## MVP-упрощения (общие)
+
+1. **Нет `parser.utils.folder_match`** — `workspace.py` использует упрощённый `difflib.SequenceMatcher`. Поведение совместимо в типичных случаях (`Memorandum` ↔ `memorandum`), но не покрывает все edge cases v3-логики.
+2. **`prompts.py` рендерит шаблон без Jinja2** — простая `str.replace` на `{{ enrich_json }}` / `{{ market_analysis }}` / `{{ existing_market_template }}` / `{{ graph_status }}`. Если шаблон обзаведётся `{% if %}` / `{% for %}` — внести Jinja2.
+3. **Нет токен-счётчика** — `usage` приходит из anthropic-ответа как-есть.
 
 См. [[parallel-parsers-map]] для контекста параллельной разработки.
