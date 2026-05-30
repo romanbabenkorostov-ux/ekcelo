@@ -32,12 +32,15 @@ def main(argv: list[str] | None = None) -> int:
 
     persistence_db = _resolve_persistence_db(args)
     redis_url = args.redis_url or os.getenv("REDIS_URL")
+    auth_users = args.auth_users or os.getenv("AUTH_USERS")
 
     # Установка через env — create_app поднимет окружение при импорте.
     if persistence_db:
         os.environ["EKCELO_PERSISTENCE_DB"] = str(persistence_db)
     if redis_url:
         os.environ["EKCELO_REDIS_URL"] = redis_url
+    if auth_users:
+        os.environ["EKCELO_AUTH_USERS"] = auth_users
 
     try:
         import uvicorn
@@ -83,6 +86,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--redis-url",
                    help="Redis URL для multi-worker (например, redis://localhost:6379/0). "
                         "Также читается из env REDIS_URL.")
+    p.add_argument("--auth-users",
+                   help="HTTP Basic Auth: 'user1:pass1,user2:pass2'. Также читается из env "
+                        "AUTH_USERS. Если не задано — auth отключён.")
     return p.parse_args(argv)
 
 
