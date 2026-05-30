@@ -145,7 +145,7 @@ class RunStore:
             self._runs[run.run_id] = run
 
 
-_singleton: RunStore | None = None
+_singleton: "RunStore | object" = None  # может быть RedisRunStore (duck-typed)
 
 
 def get_store() -> RunStore:
@@ -160,6 +160,18 @@ def configure_store(persistence: SQLitePersistence | None) -> RunStore:
     """Пересоздаёт singleton с заданным persistence (на старте приложения)."""
     global _singleton
     _singleton = RunStore(persistence=persistence)
+    return _singleton
+
+
+def configure_redis_store(
+    redis_client,
+    *,
+    persistence: SQLitePersistence | None = None,
+):
+    """Пересоздаёт singleton как RedisRunStore (multi-worker production)."""
+    from lot_orchestrator_web.redis_store import RedisRunStore
+    global _singleton
+    _singleton = RedisRunStore(redis_client, persistence=persistence)
     return _singleton
 
 

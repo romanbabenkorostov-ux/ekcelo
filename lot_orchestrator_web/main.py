@@ -36,7 +36,13 @@ from lot_orchestrator_web.runner import (
     execute_run,
     patch_target_scenario,
 )
-from lot_orchestrator_web.store import Run, RunStore, configure_store, get_store
+from lot_orchestrator_web.store import (
+    Run,
+    RunStore,
+    configure_redis_store,
+    configure_store,
+    get_store,
+)
 
 
 _HERE = Path(__file__).parent
@@ -48,17 +54,21 @@ def create_app(
     settings: Settings | None = None,
     mock_llm_text: str | None = None,
     persistence_db: Path | None = None,
+    redis_client=None,
 ) -> FastAPI:
-    """Factory чтобы тесты могли передать свой Settings / mock_llm_text / persistence."""
+    """Factory: Settings + persistence + опциональный Redis multi-worker store."""
     app = FastAPI(
         title="Ekcelo Orchestrator",
-        description="Memorandum pipeline web-UI (FastAPI cycle 5/8).",
-        version="0.2.0",
+        description="Memorandum pipeline web-UI (FastAPI cycle 5/8/9).",
+        version="0.3.0",
     )
     app.state.settings = settings or Settings.from_env()
     app.state.mock_llm_text = mock_llm_text
-    if persistence_db is not None:
-        configure_store(SQLitePersistence(persistence_db))
+    persistence = SQLitePersistence(persistence_db) if persistence_db else None
+    if redis_client is not None:
+        configure_redis_store(redis_client, persistence=persistence)
+    elif persistence is not None:
+        configure_store(persistence)
     app.mount("/static", StaticFiles(directory=_HERE / "static"), name="static")
     _register_routes(app)
     return app
@@ -312,4 +322,21 @@ def _sse_event(event_name: str, data: dict) -> str:
     return f"event: {event_name}\ndata: {_json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-app = create_app()
+def _build_app_from_env() -> FastAPI:
+    """Reads `EKCELO_PERSISTENCE_DB` / `EKCELO_REDIS_URL` env vars set by cli.py."""
+    persistence_db_env = os.getenv("EKCELO_PERSISTENCE_DB")
+    redis_url_env = os.getenv("EKCELO_REDIS_URL")
+    redis_client = None
+    if redis_url_env:
+        from lot_orchestrator_web.redis_store import make_redis_client
+        redis_client = make_redis_client(redis_url_env)
+    return create_app(
+        persistence_db=Path(persistence_db_env) if persistence_db_env else None,
+        redis_client=redis_client,
+    )
+
+
+# `os` нужен здесь — добавим импорт в верх файла лениво (см. ниже).
+import os  # noqa: E402
+
+app = _build_app_from_env()
