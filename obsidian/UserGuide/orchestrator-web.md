@@ -176,7 +176,21 @@ uvicorn lot_orchestrator_web.main:app \
 
 Workers разделяют состояние через Redis; SQLite — durable snapshot для recovery. Артефакты должны лежать на shared FS (NFS/EFS), иначе разные workers увидят разный `/artifacts`.
 
-⚠️ **Auth не встроен.** Запускайте за reverse-proxy (nginx + basic auth / OAuth-прокси).
+### HTTP Basic Auth (встроенный, cycle 12)
+
+Для одного / пары пользователей доступен опциональный middleware:
+
+```bash
+ekcelo-orchestrate-web --auth-users "alice:secret,bob:s3cret!"
+# или через env:
+AUTH_USERS="alice:secret,bob:s3cret!" ekcelo-orchestrate-web
+```
+
+При первом GET / POST браузер покажет диалог логина. Если `--auth-users` не задан → auth отключён (поведение по умолчанию).
+
+Эндпоинты `/static/*`, `/docs`, `/openapi.json`, `/redoc` остаются открытыми — для документации без логина.
+
+⚠️ Это минимум для приватного использования. **Для production multi-user / SSO** — всё равно за reverse-proxy (oauth2-proxy / Authelia / Authentik / nginx auth).
 
 ## Связи
 

@@ -86,8 +86,11 @@ Exit codes:
 | **6** ✅ | Canonical `parser.utils.folder_match.best_match` в workspace.py (PR #88). |
 | **7** ✅ | `parser/exporters/etp/etl_checko.py` opt-in адаптер innogrn.db → owner_checko (PR #89). |
 | **8** ✅ | SQLite persistence (`runs.sqlite`) + SSE streaming + GLOB-based artifacts (PR #90). |
-| **9** ✅ | Redis-backed `RunStore` для multi-worker через fakeredis-тесты (этот PR). |
-| **10** ✅ | `pyproject.toml` extras `[orchestrator]`/`[orchestrator-web]`/`[orchestrator-redis]`/`[dev]` + CLI `ekcelo-orchestrate-web` (этот PR). |
+| **9** ✅ | Redis-backed `RunStore` для multi-worker через fakeredis-тесты. |
+| **10** ✅ | `pyproject.toml` extras `[orchestrator]`/`[orchestrator-web]`/`[orchestrator-redis]`/`[dev]` + CLI `ekcelo-orchestrate-web`. |
+| **11** ✅ | SSE через Redis pub/sub (instant вместо polling 200ms). Polling — fallback при in-memory store. |
+| **12** ✅ | Опциональная HTTP Basic Auth middleware (env `EKCELO_AUTH_USERS=user:pass,...`). Production multi-user — за reverse-proxy. |
+| httpx2 ✅ | TestClient на `httpx2>=2.0` (убран starlette deprecation warning). |
 
 ## FastAPI обёртка (cycle 5)
 
