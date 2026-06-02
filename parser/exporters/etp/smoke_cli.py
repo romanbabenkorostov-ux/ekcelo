@@ -46,6 +46,7 @@ _REQUIRED_MODULES = [
     "parser.exporters.etp.build_lot_context",
     "parser.exporters.etp.cli",
     "parser.exporters.etp.encumbrance_mapper",
+    "parser.exporters.etp.etl_checko",
     "parser.exporters.etp.etl_exif",
     "parser.exporters.etp.etl_exif_cli",
     "parser.exporters.etp.etl_osv",
