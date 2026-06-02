@@ -39,12 +39,30 @@ pip install -e ".[orchestrator-web]"         # + web
 pip install -e ".[orchestrator,orchestrator-web,orchestrator-redis]"  # full prod
 ```
 
+## Когда нужен ANTHROPIC_API_KEY
+
+**Не нужен для базовой работы**: парсинг ЕГРН, ETP-экспорт, KMZ-сборка, viewer, smoke-тест — всё работает без ключа Anthropic.
+
+Ключ нужен **только** для генерации меморандума через `lot_orchestrator` (CLI или web) на реальном LLM. Smoke-режимы `--mock-llm` / `--dry-run` / `mock_llm_text` в body — для проверки оркестратора без ключа и без сетевых вызовов.
+
+| Сценарий | API-ключ нужен? |
+|---|---|
+| `parser/exporters/etp/*` (ETL OSV / NSPD / EXIF / checko / cli / smoke_cli) | ❌ нет |
+| `parser/scripts/*` (07 init_project, 08 build_kmz) | ❌ нет |
+| `egrn-parser parse/export/migrate` | ❌ нет |
+| `viewer/*.html` | ❌ нет |
+| `ekcelo-orchestrate --mock-llm` или `--dry-run` | ❌ нет |
+| `ekcelo-orchestrate-web` с `mock_llm_text` в body | ❌ нет |
+| `ekcelo-orchestrate` против реального anthropic API | ✅ да |
+| `ekcelo-orchestrate-web` без `mock_llm_text` | ✅ да |
+
 ## Конфигурация (для оркестратора)
 
-Создайте `.env` в корне проекта:
+Создайте `.env` в корне проекта **только если планируете запускать меморандум-пайплайн на реальном LLM**:
 
 ```dotenv
-# Обязательно для production:
+# Нужен только для реального LLM-вызова в orchestrator (CLI или web).
+# Парсер / ЭТП-экспортёр / KMZ / viewer работают без ключа.
 ANTHROPIC_API_KEY=sk-ant-...
 
 # Опционально (значения по умолчанию):
