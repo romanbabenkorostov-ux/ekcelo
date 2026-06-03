@@ -29,8 +29,31 @@ React-миграцию, плюс PR с фиксом белой сетки в YaB
 | #13 | 4 (ui/adapter) | DOM-хелперы: `ui/notifications.js` (showNotice/Chain) + `ui/copy-toast.js` (showCopyToast) + `adapters/clipboard.js` (copyText/fallbackCopy). app.js 63→58 |
 | #14 | 4 (ui/adapter) | vCard download + partners render + partners CSV fetch: `ui/vcard-download.js`, `ui/partners-render.js`, `adapters/partners-fetch.js`. app.js 58→51 |
 | #15 | 4 (ui) | Contact-modal open/close + [data-close]/Escape bindings → `ui/contact-modal.js`. app.js 51→50 |
+| #17 | **P0/2** | `viewer/core/viewmodel.js` — pure фабрика + валидатор по `contracts/api/viewmodel.schema.json` (C4) + 25 тестов |
 
-**Итог:** 13 PR смерджено. 80 unit-тестов зелёные, ESLint 9 чистый, CI workflow рабочий.
+**Итог:** 14 PR смерджено. **105 unit-тестов** зелёные, ESLint 9 чистый, CI workflow рабочий.
+
+## Контекст-сдвиг (вечер 2026-06-03): ViewModel C4
+
+Параллельно стартовал контракт-пакет `contracts/` в `romanbabenkorostov-ux/ekcelo`
+(branch `claude/elegant-gates-eKTMC`, PR #98) — единый источник истины для трёх
+команд: parser / backend / ekcelo-site. Ключевое для фронта:
+
+- **C4 ViewModel** (`contracts/api/viewmodel.schema.json`) — единая нормализованная
+  форма объекта/лота с 4 характеристиками EKCELO (physical/ownership/geo/temporal).
+- **Два адаптера** к одной ViewModel: `kmz→ViewModel` (офлайн / Google Earth Pro)
+  и `api→ViewModel` (веб / REST-рендеринг). Картинка идентична.
+- **Кросс-матч KMZ↔API** — единый ключ `graph_node_id` (из C1 KMZ) = `node.id`
+  (из C4 graph).
+- **React-миграция (P2-P3)** — после фаз 0–5: `ui/*.js` → React-компоненты,
+  импортирующие `core/`+`adapters/` без изменений. ViewModel-контракт не меняется.
+
+PR #17 — первый кирпич P0/2: `viewer/core/viewmodel.js` готов как pure-канон.
+Адаптеры `kmz→ViewModel` (P0/3) и `api→ViewModel` (P1/4) — следующие шаги, но
+оба ломающие, нужен браузерный smoke после каждого.
+
+`contracts/` уже vendored в `ekcelo-site` `dev` (кем-то в параллели), `.sync`
+файл фиксирует версию 1.0.0 и sha256.
 
 ## Метрики `document.*`
 
