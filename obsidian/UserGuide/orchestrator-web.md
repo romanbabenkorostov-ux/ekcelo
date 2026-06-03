@@ -178,19 +178,49 @@ uvicorn lot_orchestrator_web.main:app \
 
 Workers разделяют состояние через Redis; SQLite — durable snapshot для recovery. Артефакты должны лежать на shared FS (NFS/EFS), иначе разные workers увидят разный `/artifacts`.
 
-### HTTP Basic Auth (встроенный, cycle 12)
+### HTTP Basic Auth (встроенный, cycle 12 + 13)
 
-Для одного / пары пользователей доступен опциональный middleware:
+Для одного / пары пользователей доступен опциональный middleware с **хешированными** паролями (cycle 13).
+
+**Шаг 1. Сгенерируйте хеш** (один раз для каждого пользователя):
 
 ```bash
-ekcelo-orchestrate-web --auth-users "alice:secret,bob:s3cret!"
-# или через env:
-AUTH_USERS="alice:secret,bob:s3cret!" ekcelo-orchestrate-web
+python -m lot_orchestrator_web.password --user alice
+# Password: ********
+# alice:pbkdf2_sha256$600000$<salt>$<hash>
 ```
 
-При первом GET / POST браузер покажет диалог логина. Если `--auth-users` не задан → auth отключён (поведение по умолчанию).
+Сохраните вывод. **Никогда не показывайте plaintext-пароль** — хеш безопасно класть даже в `.env` файл.
+
+**Шаг 2. Запустите сервер с хешами в `EKCELO_AUTH_USERS`:**
+
+```bash
+ekcelo-orchestrate-web --auth-users "alice:pbkdf2_sha256$600000$<salt>$<hash>,bob:pbkdf2_sha256$..."
+# или через env:
+AUTH_USERS="alice:pbkdf2_sha256$..." ekcelo-orchestrate-web
+```
+
+**Шаг 3.** При первом GET / POST браузер покажет диалог логина — введите username + **plaintext-пароль** (не хеш!). Сервер проверит хеш на лету.
+
+Если `--auth-users` не задан → auth отключён (поведение по умолчанию).
 
 Эндпоинты `/static/*`, `/docs`, `/openapi.json`, `/redoc` остаются открытыми — для документации без логина.
+
+#### Plaintext (deprecated, но работает)
+
+Cycle 12 формат всё ещё поддерживается:
+
+```bash
+ekcelo-orchestrate-web --auth-users "alice:secret"
+```
+
+При запуске вы получите `UserWarning: EKCELO_AUTH_USERS содержит plaintext-пароли для: ['alice']`. Migration path:
+
+```bash
+# Получите хеш и обновите конфиг:
+python -m lot_orchestrator_web.password --user alice secret
+# → alice:pbkdf2_sha256$...
+```
 
 ⚠️ Это минимум для приватного использования. **Для production multi-user / SSO** — всё равно за reverse-proxy (oauth2-proxy / Authelia / Authentik / nginx auth).
 

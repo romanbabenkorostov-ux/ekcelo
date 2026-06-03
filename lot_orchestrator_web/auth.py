@@ -1,4 +1,4 @@
-"""Опциональная HTTP Basic Auth (cycle 12).
+"""Опциональная HTTP Basic Auth (cycle 12 + cycle 13 hashing).
 
 Pragmatic минимум для single-user / pair-of-users сценариев. Для production
 multi-tenant / SSO — рекомендуется reverse-proxy (oauth2-proxy, nginx auth,
@@ -6,21 +6,27 @@ traefik forward-auth) + полное отключение этого модул�
 
 Активация — через env `EKCELO_AUTH_USERS` (формат `user1:pass1,user2:pass2`).
 Если переменная не задана — middleware не подключается, поведение как раньше.
+
+Cycle 13: пароли могут храниться как pbkdf2-хеши (рекомендуется) или как
+plaintext (обратная совместимость, deprecated). Хеш генерируется через
+`python -m lot_orchestrator_web.password`. См. password.py.
 """
 from __future__ import annotations
 
 import os
-import secrets
+import warnings
 from base64 import b64decode
 from dataclasses import dataclass
 
 from fastapi import HTTPException, Request, status
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from lot_orchestrator_web.password import is_hashed, verify_password
+
 
 @dataclass(frozen=True)
 class _Creds:
-    users: dict[str, str]  # username → password (plain — для production hashed-store см. cycle 13+)
+    users: dict[str, str]  # username → stored secret (pbkdf2-хеш ИЛИ plaintext)
 
     @classmethod
     def from_env(cls, raw: str | None = None) -> "_Creds | None":
@@ -34,7 +40,24 @@ class _Creds:
                 continue
             user, _, password = entry.partition(":")
             users[user.strip()] = password.strip()
-        return cls(users=users) if users else None
+        if not users:
+            return None
+        creds = cls(users=users)
+        creds._warn_plaintext()
+        return creds
+
+    def plaintext_users(self) -> list[str]:
+        """Имена пользователей, чей пароль хранится в plaintext (не хеширован)."""
+        return [u for u, secret in self.users.items() if not is_hashed(secret)]
+
+    def _warn_plaintext(self) -> None:
+        plain = self.plaintext_users()
+        if plain:
+            warnings.warn(
+                f"EKCELO_AUTH_USERS содержит plaintext-пароли для: {plain}. "
+                f"Сгенерируйте хеши: python -m lot_orchestrator_web.password --user <name>",
+                stacklevel=3,
+            )
 
 
 _EXEMPT_PATHS = frozenset({"/static", "/docs", "/openapi.json", "/redoc"})
@@ -76,8 +99,8 @@ def _verify(request: Request, creds: _Creds) -> bool:
     expected = creds.users.get(user)
     if expected is None:
         return False
-    # secrets.compare_digest — защита от timing-side-channel.
-    return secrets.compare_digest(password, expected)
+    # verify_password: constant-time; поддерживает pbkdf2-хеш ИЛИ plaintext.
+    return verify_password(password, expected)
 
 
 def maybe_install_basic_auth(app, *, raw_users_env: str | None = None) -> bool:

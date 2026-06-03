@@ -92,7 +92,7 @@ Exit codes:
 | **10** ✅ | `pyproject.toml` extras `[orchestrator]`/`[orchestrator-web]`/`[orchestrator-redis]`/`[dev]` + CLI `ekcelo-orchestrate-web`. |
 | **11** ✅ | SSE через Redis pub/sub (instant вместо polling 200ms). Polling — fallback при in-memory store. |
 | **12** ✅ | Опциональная HTTP Basic Auth middleware (env `EKCELO_AUTH_USERS=user:pass,...`). Production multi-user — за reverse-proxy. |
-| **13** 🚧 | Хеширование паролей (pbkdf2, stdlib) — env хранит хеши вместо plaintext. См. ниже «Auth cycle 13». |
+| **13** ✅ | Хеширование паролей (pbkdf2-sha256, stdlib) — `EKCELO_AUTH_USERS` хранит хеши вместо plaintext. CLI генерации: `python -m lot_orchestrator_web.password --user alice`. Backward-compat: plaintext всё ещё принимается, но генерирует UserWarning. |
 | httpx2 ✅ | TestClient на `httpx2>=2.0` (убран starlette deprecation warning). |
 
 ## FastAPI обёртка (cycle 5)
@@ -140,10 +140,43 @@ ekcelo-orchestrate-web \
 
 API совместим с in-memory `RunStore` (одни и те же сигнатуры). На старте загружает snapshot из SQLite (durable mirror) — если Redis потерял данные, completed-runs восстанавливаются.
 
+### Auth cycle 13 — хеширование паролей
+
+`lot_orchestrator_web/password.py` (~95 LOC, stdlib-only):
+
+```python
+hash_password(plain, *, iterations=600_000) -> str   # → 'pbkdf2_sha256$600000$<salt>$<hash>'
+is_hashed(stored) -> bool
+verify_password(plain, stored) -> bool               # constant-time; hash ИЛИ plaintext
+```
+
+Формат `pbkdf2_sha256$<iter>$<salt_hex>$<hash_hex>` гарантированно не содержит `:` и `,` — безопасно встраивается в `EKCELO_AUTH_USERS`.
+
+`_Creds.from_env(...)` детектит plaintext-пользователей и эмитит `UserWarning` через `warnings.warn` (не падает — backward-compat с cycle 12). `_Creds.plaintext_users()` отдаёт список имён для аудита.
+
+**CLI генерации:**
+
+```bash
+# Интерактивно (без эха):
+python -m lot_orchestrator_web.password --user alice
+# Password: ********
+# alice:pbkdf2_sha256$600000$<salt>$<hash>
+
+# С готовым паролем в аргументе (для скриптов):
+python -m lot_orchestrator_web.password --user bob mySecret123
+
+# Только хеш без user-префикса:
+python -m lot_orchestrator_web.password mySecret123
+```
+
+Скопируйте вывод в `EKCELO_AUTH_USERS=alice:pbkdf2_sha256$...,bob:pbkdf2_sha256$...`.
+
+OWASP-2023 настройки по умолчанию: 600 000 итераций PBKDF2-HMAC-SHA256, 16-байтовая случайная соль (новая на каждый хеш — одинаковый пароль даёт разные хеши).
+
 ### MVP-упрощения web-слоя
 
-1. **Нет auth/authz** — деплой только за reverse-proxy с защитой.
-2. **SSE через polling** (200ms) — Redis pub/sub доступен в `RedisRunStore.subscribe_events()`, но SSE endpoint пока polls. Подключение pub/sub к SSE — будущий cycle.
+1. ~~Нет auth/authz~~ — Basic Auth (cycle 12) + хеширование (cycle 13). Для multi-tenant / SSO остаётся reverse-proxy.
+2. **SSE polling fallback** — Redis pub/sub активен при `RedisRunStore` (cycle 11), polling — fallback при in-memory.
 3. **`mock_llm_text` доступен через body** — для smoke без `ANTHROPIC_API_KEY`.
 
 ## MVP-упрощения (общие)
