@@ -26,15 +26,18 @@ React-миграцию, плюс PR с фиксом белой сетки в YaB
 | #10 | 3 (geo) | `viewer/core/geo.js`: pointInRing, computeCentroid, formatCentroid + 10 тестов |
 | #11 | 3 (desc) | `viewer/core/desc.js`: extractCadNum, normalizeDesc, markerDescFromLines + 10 тестов |
 | #12 | fix | YB white-grid v2.9.62c: outline-color:var(--map-bg) для `.tile-seam-yandex` |
+| #13 | 4 (ui/adapter) | DOM-хелперы: `ui/notifications.js` (showNotice/Chain) + `ui/copy-toast.js` (showCopyToast) + `adapters/clipboard.js` (copyText/fallbackCopy). app.js 63→58 |
+| #14 | 4 (ui/adapter) | vCard download + partners render + partners CSV fetch: `ui/vcard-download.js`, `ui/partners-render.js`, `adapters/partners-fetch.js`. app.js 58→51 |
+| #15 | 4 (ui) | Contact-modal open/close + [data-close]/Escape bindings → `ui/contact-modal.js`. app.js 51→50 |
 
-**Итог:** 80 unit-тестов зелёные, ESLint 9 чистый, CI workflow рабочий.
+**Итог:** 13 PR смерджено. 80 unit-тестов зелёные, ESLint 9 чистый, CI workflow рабочий.
 
 ## Метрики `document.*`
 
 | Файл | Старт | Сейчас |
 |---|---|---|
 | `viewer/index.html` | 442 | 442 (pure-выносы не снижают эту метрику by design) |
-| `app.js` | 63 | 63 (pure-вынос; DOM-помощники будут снижать в дальнейших PR) |
+| `app.js` | 63 | **50** (–13, –20%; за PR #13/14/15 — DOM-подсистемы лендинга) |
 | `admin-encode.html` | 6 | **0** (вся DOM-логика уехала в `ui/admin-encode.js`) |
 
 > HANDOFF фиксировал `app.js=74` и `admin-encode.html=15` на дату передачи. На фактической
