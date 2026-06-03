@@ -56,7 +56,49 @@ git checkout main
 git pull origin main
 ```
 
-Чтобы посмотреть открытые feature-ветки (на момент 2026-05-30 это #90, #92, #93):
+> ⚠️ **`No module named lot_orchestrator_web.password` (или другой новый модуль)** = ваш локальный клон устарел, на GitHub уже есть обновление. Решение — обновить клон (см. ниже «Обновление существующего клона»).
+
+### Обновление существующего клона (pull через VS Code)
+
+Если репозиторий уже склонирован и нужно подтянуть последние изменения с GitHub:
+
+**Способ A — кнопка в VS Code (проще):**
+1. Открыть папку клона в VS Code (`File → Open Folder` → `ftontback2026-01-02`).
+2. Слева внизу в статус-баре — иконка веток (↻ или название текущей ветки). Кликнуть.
+3. Выбрать `main` (если ещё не на ней).
+4. Нажать круговую стрелку «Synchronize Changes» в статус-баре (внизу слева, рядом с именем ветки) — она делает `git pull` + `git push`. Либо: `Source Control` панель (Ctrl+Shift+G) → меню «...» → `Pull`.
+
+**Способ B — встроенный терминал VS Code (надёжнее):**
+1. `Terminal → New Terminal` (или `` Ctrl+` ``).
+2. Выполнить:
+   ```powershell
+   git checkout main
+   git pull origin main
+   ```
+3. Переустановить пакет (на случай новых зависимостей в `pyproject.toml`):
+   ```powershell
+   .\.venv\Scripts\Activate.ps1
+   pip install -e ".[dev]"
+   ```
+4. Проверить, что новый модуль появился:
+   ```powershell
+   python -c "import lot_orchestrator_web.password; print('OK')"
+   python -m parser.exporters.etp.smoke_cli   # 33/33 passed
+   ```
+
+**Если `git pull` ругается на локальные изменения** (`Your local changes would be overwritten`):
+```powershell
+git stash            # спрятать локальные правки
+git pull origin main
+git stash pop        # вернуть правки (при конфликте — разрешить в VS Code)
+```
+Если локальные правки не нужны:
+```powershell
+git checkout -- .    # ОТМЕНИТЬ все локальные правки (необратимо!)
+git pull origin main
+```
+
+### Просмотр открытых feature-веток
 
 ```powershell
 git fetch --all
