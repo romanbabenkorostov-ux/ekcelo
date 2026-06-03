@@ -80,15 +80,21 @@ code .
 
 ## Шаг 4 — Виртуальное окружение + зависимости
 
+> ⚠️ **Важно**: venv должен быть создан **внутри корня клона** (`ftontback2026-01-02\.venv\`), а не в соседнем проекте. Активация venv из чужого проекта приводит к `ModuleNotFoundError: No module named 'backend'` — у того venv нет нужных зависимостей и Python ищет пакет не там.
+
 ```powershell
-# Win10 PowerShell
+# Win10 PowerShell — обязательно ВНУТРИ ftontback2026-01-02\
+cd E:\Code\ekcelo\ftontback2026-01-02
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
 # Linux/macOS
+cd ~/Code/ekcelo/ftontback2026-01-02
 python -m venv .venv
 source .venv/bin/activate
 ```
+
+После активации проверьте: `where python` (Win10) или `which python` (Linux) должен показывать путь внутри `.venv\Scripts\` или `.venv/bin/`. Если показывает другой путь — деактивируйте чужой venv (`deactivate`) и активируйте свой.
 
 Если PowerShell ругается на execution policy:
 
@@ -123,17 +129,41 @@ python -m parser.exporters.etp.smoke_cli
 
 ## Шаг 6 — Запуск backend (FastAPI)
 
-### Базовый dev-режим
+### Рекомендуемый способ — через `serve.py`
 
 ```powershell
-uvicorn lot_orchestrator_web.main:app --reload --port 8000
+python serve.py
+```
+
+Этот лаунчер:
+- Выставляет `PYTHONPATH=<корень_клона>`, чтобы `uvicorn --reload` корректно находил `backend.*` (без него падает `ModuleNotFoundError: No module named 'backend'`).
+- Предупреждает, если активен venv из другого проекта.
+- Включает auto-reload по умолчанию (`--no-reload` для отключения).
+
+Дополнительные флаги:
+
+```powershell
+python serve.py --port 9000                 # кастомный порт
+python serve.py --host 0.0.0.0              # listen на всех интерфейсах
+python serve.py --no-reload                 # выключить watcher
+python serve.py --log-level debug
 ```
 
 После старта откройте в браузере:
 
-- http://localhost:8000/ — главная страница с перечнем endpoints.
-- http://localhost:8000/docs — Swagger UI (интерактивная документация).
+- http://localhost:8000/ — главная с перечнем endpoints.
+- http://localhost:8000/docs — Swagger UI.
 - http://localhost:8000/redoc — ReDoc.
+
+### Альтернатива — uvicorn напрямую
+
+Если не хотите использовать лаунчер — добавьте `--app-dir .`:
+
+```powershell
+uvicorn --app-dir . backend.app.main:app --reload --port 8000
+```
+
+Без `--app-dir .` Python не найдёт пакет `backend` — это та же ошибка, что бросает прямой `uvicorn backend.app.main:app`.
 
 ### После merge PR #92 — через console script
 
@@ -163,7 +193,12 @@ cd E:\Code\ekcelo\ftontback2026-01-02   # из корня репо
 python -m http.server 8001
 ```
 
-Открыть в браузере: http://localhost:8001/viewer/index.html
+> ⚠️ **Откройте именно `/viewer/index.html`**, а не корень `/`. `http.server` отдаёт листинг папки на `/`, что выглядит как «сайт пустой».
+
+Прямые ссылки:
+
+- http://localhost:8001/viewer/index.html — главная карта + KMZ-загрузчик.
+- http://localhost:8001/viewer/admin-etp-profile.html — редактор ЭТП-профиля.
 
 Через UI «Загрузить KMZ» загрузите любой `.kmz` из `parser/scripts/` или собранный по [[golden-path]].
 
@@ -177,13 +212,14 @@ python -m http.server 8001
 Терминал 1: backend
 
 ```powershell
-uvicorn lot_orchestrator_web.main:app --reload --port 8000
+python serve.py --port 8000
 ```
 
 Терминал 2: frontend
 
 ```powershell
 python -m http.server 8001
+# Откройте http://localhost:8001/viewer/index.html
 ```
 
 Терминал 3: smoke
@@ -210,6 +246,45 @@ curl http://localhost:8001/viewer/index.html -o NUL -w "%%{http_code}\n"
 ### `uvicorn: command not found`
 
 Виртуальное окружение не активировано. Win10: `.\.venv\Scripts\Activate.ps1`. Linux: `source .venv/bin/activate`.
+
+### `ModuleNotFoundError: No module named 'backend'` при запуске uvicorn
+
+uvicorn запущен из активного venv, но текущий каталог не добавлен в `sys.path`. С `--reload` это ещё хуже: reloader-подпроцесс не наследует sys.path-изменения родителя.
+
+Три способа починить (в порядке предпочтения):
+
+```powershell
+# 1. (рекомендуется) — лаунчер выставляет PYTHONPATH автоматически:
+python serve.py --reload
+
+# 2. передать --app-dir в uvicorn:
+uvicorn --app-dir . backend.app.main:app --reload
+
+# 3. вручную выставить env-переменную:
+$env:PYTHONPATH = "."
+uvicorn backend.app.main:app --reload
+```
+
+### Активирован чужой venv (`E:\Code\...\другой_проект\venv`)
+
+Симптом: `python serve.py` пишет `WARNING: активный venv находится вне корня репо` или после `pip install` всё равно `ModuleNotFoundError`.
+
+Причина: пользователь активировал venv из соседнего проекта (`сoder_exif` и т.п.). У того venv свои зависимости и Python ищет пакеты не там.
+
+Фикс:
+
+```powershell
+deactivate                                # выйти из чужого venv
+cd E:\Code\ekcelo\ftontback2026-01-02
+python -m venv .venv                      # создать свой
+.\.venv\Scripts\Activate.ps1              # активировать его
+pip install fastapi "uvicorn[standard]" jinja2 python-multipart httpx2 pydantic anthropic pyyaml pymorphy3 pymorphy3-dicts-ru
+python serve.py                           # запуск
+```
+
+### `http.server` показывает листинг папки на http://localhost:8001/
+
+Это нормально для встроенного сервера Python — `/` отдаёт листинг текущего каталога. Откройте полный путь до viewer'а: **http://localhost:8001/viewer/index.html**.
 
 ### `address already in use` при `python -m http.server 8001`
 
