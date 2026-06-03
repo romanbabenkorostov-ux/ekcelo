@@ -30,8 +30,9 @@ React-миграцию, плюс PR с фиксом белой сетки в YaB
 | #14 | 4 (ui/adapter) | vCard download + partners render + partners CSV fetch: `ui/vcard-download.js`, `ui/partners-render.js`, `adapters/partners-fetch.js`. app.js 58→51 |
 | #15 | 4 (ui) | Contact-modal open/close + [data-close]/Escape bindings → `ui/contact-modal.js`. app.js 51→50 |
 | #17 | **P0/2** | `viewer/core/viewmodel.js` — pure фабрика + валидатор по `contracts/api/viewmodel.schema.json` (C4) + 25 тестов |
+| #18 | 4 (ui) | `ui/frame-render.js`: updateFrames + FRAME_STOPS из app.js. app.js 50→**49**. От старта –14 (–22%) |
 
-**Итог:** 14 PR смерджено. **105 unit-тестов** зелёные, ESLint 9 чистый, CI workflow рабочий.
+**Итог:** 15 PR смерджено. **105 unit-тестов** зелёные, ESLint 9 чистый, CI workflow рабочий.
 
 ## Контекст-сдвиг (вечер 2026-06-03): ViewModel C4
 
