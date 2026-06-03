@@ -24,18 +24,25 @@ from fastapi import (
     Request,
     status,
 )
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 from lot_orchestrator.config import Settings
+from lot_orchestrator_web.persistence import SQLitePersistence
 from lot_orchestrator_web.runner import (
     build_llm_client,
     execute_run,
     patch_target_scenario,
 )
-from lot_orchestrator_web.store import Run, RunStore, get_store
+from lot_orchestrator_web.store import (
+    Run,
+    RunStore,
+    configure_redis_store,
+    configure_store,
+    get_store,
+)
 
 
 _HERE = Path(__file__).parent
@@ -46,17 +53,33 @@ def create_app(
     *,
     settings: Settings | None = None,
     mock_llm_text: str | None = None,
+    persistence_db: Path | None = None,
+    redis_client=None,
+    auth_users: str | None = None,
 ) -> FastAPI:
-    """Factory чтобы тесты могли передать свой Settings / mock_llm_text."""
+    """Factory: Settings + persistence + опциональный Redis + опциональный Basic Auth.
+
+    auth_users — формат `user1:pass1,user2:pass2`. Если None, читается из env
+    `EKCELO_AUTH_USERS`; если и там пусто — auth не подключается.
+    """
+    from lot_orchestrator_web.auth import maybe_install_basic_auth
+
     app = FastAPI(
         title="Ekcelo Orchestrator",
-        description="Memorandum pipeline web-UI (FastAPI cycle 5).",
-        version="0.1.0",
+        description="Memorandum pipeline web-UI (FastAPI cycle 5/8/9/11/12).",
+        version="0.4.0",
     )
     app.state.settings = settings or Settings.from_env()
     app.state.mock_llm_text = mock_llm_text
+    persistence = SQLitePersistence(persistence_db) if persistence_db else None
+    if redis_client is not None:
+        configure_redis_store(redis_client, persistence=persistence)
+    elif persistence is not None:
+        configure_store(persistence)
     app.mount("/static", StaticFiles(directory=_HERE / "static"), name="static")
     _register_routes(app)
+    # Auth middleware последним — оборачивает все routes (включая `/`).
+    maybe_install_basic_auth(app, raw_users_env=auth_users)
     return app
 
 
@@ -197,19 +220,29 @@ def _register_routes(app: FastAPI) -> None:
         store: Annotated[RunStore, Depends(get_store)],
     ) -> ArtifactsResponse:
         run = store.latest_for_lot(lot_id)
-        if run is None or run.result is None or run.result.workspace is None:
+        if run is None:
             raise HTTPException(
                 status_code=404,
                 detail=f"для лота {lot_id} нет завершённых прогонов",
             )
-        wsp = run.result.workspace
-        return ArtifactsResponse(
-            lot_id=lot_id,
-            memorandum=str(wsp.memorandum),
-            final_report=_str_if_exists(run.result.routing.final_report_path if run.result.routing else None),
-            investment_slides=_str_if_exists(run.result.routing.investment_slides_path if run.result.routing else None),
-            market_template=_str_if_exists(run.result.market_template_path),
-            run_log=_str_if_exists(run.result.log_path),
+        # Cycle 8: артефакты подбираются GLOB'ом из workspace_path/Memorandum/.
+        # Это переживает рестарт даже если result потерян.
+        return _build_artifacts(lot_id, run.workspace_path)
+
+    @app.get("/lots/{lot_id}/stream/{run_id}")
+    async def stream_status(
+        lot_id: str,
+        run_id: str,
+        store: Annotated[RunStore, Depends(get_store)],
+    ) -> StreamingResponse:
+        """Server-Sent Events для статуса прогона (cycle 8).
+
+        Эмитит `event: phase\\ndata: <json>\\n\\n` при смене phase.
+        Закрывается при status='complete' или после 5 минут.
+        """
+        return StreamingResponse(
+            _sse_phase_changes(store, lot_id, run_id),
+            media_type="text/event-stream",
         )
 
     @app.get("/", response_class=HTMLResponse)
@@ -218,20 +251,34 @@ def _register_routes(app: FastAPI) -> None:
 
 
 def _build_status(run: Run, store: RunStore) -> StatusResponse:
-    warnings: list[str] = []
-    errors: list[str] = []
-    if run.error:
-        errors.append(run.error)
-    if run.result is not None:
-        warnings = list(run.result.warnings)
-        errors = errors + list(run.result.errors)
     return StatusResponse(
         run_id=run.run_id,
         lot_id=run.lot_id,
         status=run.status,
-        phase=store.phase(run),
-        warnings=warnings,
-        errors=errors,
+        phase=run.phase,
+        warnings=run.warnings,
+        errors=run.errors,
+    )
+
+
+def _build_artifacts(lot_id: str, workspace_path: Path) -> ArtifactsResponse:
+    """GLOB-подбор артефактов из `workspace_path/Memorandum/`.
+
+    Работает даже после рестарта (когда in-memory result потерян).
+    """
+    memo = workspace_path / "Memorandum"
+    if not memo.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Memorandum/ не найден в {workspace_path}",
+        )
+    return ArtifactsResponse(
+        lot_id=lot_id,
+        memorandum=str(memo),
+        final_report=_str_if_exists(memo / "final_report.md"),
+        investment_slides=_str_if_exists(memo / "investment_slides.md"),
+        market_template=_str_if_exists(memo / "market_template.md"),
+        run_log=_str_if_exists(memo / "_data" / "_run_log.jsonl"),
     )
 
 
@@ -241,4 +288,143 @@ def _str_if_exists(path: Path | None) -> str | None:
     return str(path) if path.exists() else None
 
 
-app = create_app()
+async def _sse_phase_changes(
+    store, lot_id: str, run_id: str,
+    *,
+    poll_interval_s: float = 0.2,
+    timeout_s: float = 300.0,
+):
+    """Cycle 11: pub/sub при RedisRunStore (instant), polling — fallback.
+
+    Гибрид: если у store есть `subscribe_events` (RedisRunStore) — используем
+    Redis pub/sub без задержки 200ms. Иначе — старый polling-режим.
+    """
+    if hasattr(store, "subscribe_events"):
+        async for event in _sse_via_pubsub(store, lot_id, run_id, timeout_s=timeout_s):
+            yield event
+        return
+    async for event in _sse_via_polling(
+        store, lot_id, run_id,
+        poll_interval_s=poll_interval_s, timeout_s=timeout_s,
+    ):
+        yield event
+
+
+async def _sse_via_polling(
+    store, lot_id: str, run_id: str,
+    *,
+    poll_interval_s: float = 0.2,
+    timeout_s: float = 300.0,
+):
+    """Polling-based SSE (fallback при in-memory/SQLite-only store)."""
+    import asyncio
+
+    last_phase: str | None = None
+    elapsed = 0.0
+    while elapsed < timeout_s:
+        run = store.get(run_id)
+        if run is None or run.lot_id != lot_id:
+            yield _sse_event("error", {"detail": f"run {run_id} не найден"})
+            return
+        if run.phase != last_phase:
+            yield _sse_event("phase", {
+                "run_id": run_id,
+                "status": run.status,
+                "phase": run.phase,
+                "warnings": run.warnings,
+                "errors": run.errors,
+            })
+            last_phase = run.phase
+        if run.status == "complete":
+            yield _sse_event("done", {"run_id": run_id, "phase": run.phase})
+            return
+        await asyncio.sleep(poll_interval_s)
+        elapsed += poll_interval_s
+    yield _sse_event("timeout", {"run_id": run_id, "elapsed_s": elapsed})
+
+
+async def _sse_via_pubsub(
+    store, lot_id: str, run_id: str,
+    *,
+    timeout_s: float = 300.0,
+    drain_interval_s: float = 0.05,
+):
+    """Cycle 11: Redis pub/sub SSE — мгновенные phase updates без 200ms polling.
+
+    Подписываемся на `ekcelo:events:<run_id>`, парсим сообщения, эмитим SSE.
+    На запуске эмитим текущее состояние (initial snapshot) — клиент сразу видит phase.
+    """
+    import asyncio
+    import json as _json
+
+    # Initial snapshot — клиент сразу получает текущий phase, не ждёт next event.
+    run = store.get(run_id)
+    if run is None or run.lot_id != lot_id:
+        yield _sse_event("error", {"detail": f"run {run_id} не найден"})
+        return
+    yield _sse_event("phase", {
+        "run_id": run_id,
+        "status": run.status,
+        "phase": run.phase,
+        "warnings": run.warnings,
+        "errors": run.errors,
+    })
+    if run.status == "complete":
+        yield _sse_event("done", {"run_id": run_id, "phase": run.phase})
+        return
+
+    ps = store.subscribe_events(run_id)
+    last_phase = run.phase
+    elapsed = 0.0
+    try:
+        while elapsed < timeout_s:
+            msg = await asyncio.to_thread(ps.get_message, ignore_subscribe_messages=True, timeout=drain_interval_s)
+            elapsed += drain_interval_s
+            if msg is None:
+                continue
+            if msg.get("type") != "message":
+                continue
+            raw = msg["data"]
+            if isinstance(raw, bytes):
+                raw = raw.decode()
+            try:
+                payload = _json.loads(raw)
+            except (TypeError, ValueError):
+                continue
+            if payload.get("phase") != last_phase:
+                yield _sse_event("phase", payload)
+                last_phase = payload["phase"]
+            if payload.get("status") == "complete":
+                yield _sse_event("done", {"run_id": run_id, "phase": payload["phase"]})
+                return
+        yield _sse_event("timeout", {"run_id": run_id, "elapsed_s": elapsed})
+    finally:
+        try:
+            ps.close()
+        except Exception:
+            pass
+
+
+def _sse_event(event_name: str, data: dict) -> str:
+    import json as _json
+    return f"event: {event_name}\ndata: {_json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _build_app_from_env() -> FastAPI:
+    """Reads `EKCELO_PERSISTENCE_DB` / `EKCELO_REDIS_URL` env vars set by cli.py."""
+    persistence_db_env = os.getenv("EKCELO_PERSISTENCE_DB")
+    redis_url_env = os.getenv("EKCELO_REDIS_URL")
+    redis_client = None
+    if redis_url_env:
+        from lot_orchestrator_web.redis_store import make_redis_client
+        redis_client = make_redis_client(redis_url_env)
+    return create_app(
+        persistence_db=Path(persistence_db_env) if persistence_db_env else None,
+        redis_client=redis_client,
+    )
+
+
+# `os` нужен здесь — добавим импорт в верх файла лениво (см. ниже).
+import os  # noqa: E402
+
+app = _build_app_from_env()
