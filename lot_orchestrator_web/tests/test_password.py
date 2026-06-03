@@ -118,3 +118,34 @@ def test_cli_custom_iterations(capsys):
     assert rc == 0
     out = capsys.readouterr().out.strip()
     assert out.split("$")[1] == "650000"
+
+
+def test_cli_hint_goes_to_stderr_not_stdout(capsys):
+    """Хеш — чистый в stdout (можно пайпить); подсказка — в stderr."""
+    rc = main(["--user", "alice", "pw"])
+    assert rc == 0
+    captured = capsys.readouterr()
+    # stdout = только entry, без подсказки.
+    assert captured.out.strip().startswith("alice:")
+    assert "что дальше" not in captured.out
+    # stderr = подсказка с упоминанием auth-users и плейн-пароля.
+    assert "--auth-users" in captured.err
+    assert "ПЛЕЙН" in captured.err
+    assert "alice" in captured.err
+
+
+def test_cli_quiet_suppresses_hint(capsys):
+    rc = main(["--quiet", "--user", "alice", "pw"])
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert captured.out.strip().startswith("alice:")
+    assert captured.err.strip() == ""   # подсказки нет
+
+
+def test_cli_stdout_pipeable_is_single_line(capsys):
+    """stdout — ровно одна строка (entry), пригодная для пайпа в env."""
+    rc = main(["--quiet", "pw"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert out.count("\n") == 1   # ровно один перевод строки в конце
+    assert is_hashed(out.strip())
