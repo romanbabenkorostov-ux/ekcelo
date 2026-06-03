@@ -1,0 +1,130 @@
+---
+type: changelog
+status: done
+date: 2026-06-03
+scope: ekcelo-site (внешний репозиторий)
+session: claude-session viewer-decomposition
+---
+
+# 2026-06-03 · ekcelo-site: декомпозиция viewer'а + YB tile-seam fix
+
+## TL;DR
+
+В репозитории `romanbabenkorostov-ux/ekcelo-site` смерджено в `dev` **10 PR**
+поэтапной декомпозиции монолита `viewer/index.html` (12k строк) под будущую
+React-миграцию, плюс PR с фиксом белой сетки в YaBrowser.
+
+| PR | Фаза | Что |
+|----|------|-----|
+| #3 | 0A | удалён `deck-stage.js` (1748 строк dead-кода) |
+| #4 | 0B | тулинг: `package.json`, ESLint 9 flat, `tests.yml` CI, папки-якоря |
+| #5 | 1 | `viewer/core/`: sha256Hex, escapeHtml, escapeXml, rulerFormatDist + `ui/bridge.js` + 13 тестов |
+| #6 | 2 | `viewer/core/nspd-url.js` (DI на Leaflet) + 3 теста |
+| #7 | 4 (pure) | `app.js` IIFE→ES-модуль, `core/`: escape/slug/csv/vcard/phases/frame-math + 32 теста |
+| #8 | 5 | `admin-encode.html`: inline → `ui/admin-encode.js` (ESM). `document.*` 6→0 |
+| #9 | 3 (KMZ-export) | `viewer/core/kml-build.js`: pmToKMLXml, synthStyleXmlFromParsedStyle + 12 тестов |
+| #10 | 3 (geo) | `viewer/core/geo.js`: pointInRing, computeCentroid, formatCentroid + 10 тестов |
+| #11 | 3 (desc) | `viewer/core/desc.js`: extractCadNum, normalizeDesc, markerDescFromLines + 10 тестов |
+| #12 | fix | YB white-grid v2.9.62c: outline-color:var(--map-bg) для `.tile-seam-yandex` |
+
+**Итог:** 80 unit-тестов зелёные, ESLint 9 чистый, CI workflow рабочий.
+
+## Метрики `document.*`
+
+| Файл | Старт | Сейчас |
+|---|---|---|
+| `viewer/index.html` | 442 | 442 (pure-выносы не снижают эту метрику by design) |
+| `app.js` | 63 | 63 (pure-вынос; DOM-помощники будут снижать в дальнейших PR) |
+| `admin-encode.html` | 6 | **0** (вся DOM-логика уехала в `ui/admin-encode.js`) |
+
+> HANDOFF фиксировал `app.js=74` и `admin-encode.html=15` на дату передачи. На фактической
+> ветке `dev` ekcelo-site эти значения = 63 и 6. Расхождение задокументировано в описании
+> PR #7 как docs-discrepancy и принято как новый baseline.
+
+## YB white-grid fix (PR #12)
+
+**Проблема:** между плитками карты в Яндекс.Браузере появлялась белая сетка 1px.
+Chrome / Firefox не затронуты. Существовавшая защита (v2.9.62/62b) — недостаточна
+на отдельных сборках YB.
+
+**Фикс:** одна CSS-строка, гейтированная **только** на YaBrowser:
+
+```css
+html.tile-seam-yandex .leaflet-tile { outline-color: var(--map-bg); }
+```
+
+**Механизм:** у `.leaflet-tile` уже есть прозрачный 1px-outline (закрывает остаточные
+крэки в WebKit). Меняем его цвет на цвет фона карты — соседние плитки рисуют outline
+поверх субпиксельной щели тем же цветом, что и pane → щель невидима.
+
+**Гарантии:**
+- Гейт `html.tile-seam-yandex` ставится **только** при `/YaBrowser/.test(navigator.userAgent)`.
+- Chrome / Firefox байт-в-байт прежние. Нулевая регрессия.
+- Геометрия не меняется (outline уже был) → нет катастрофы v2.9.33 с z>maxNativeZoom.
+
+**Следующий уровень** (если щель всё ещё появится): JS-патч `L.GridLayer` с округлением
+translate3d до целых пикселей. Это **ломающее** изменение, требует полного smoke по
+протоколу.
+
+Полная история подходов и почему остальные провалились — в
+`obsidian/Architecture/ekcelo-site-decomposition.md §7`.
+
+## Документация (этот же commit)
+
+Добавлены / обновлены:
+
+| Файл | Что |
+|---|---|
+| `obsidian/Architecture/ekcelo-site-decomposition.md` | Карта механизмов для devops/repair: слои core/adapters/ui, bridge-паттерн, ESLint flat config, CI, ограничения декомпозиции, TILE SEAM FIX история |
+| `obsidian/UserGuide/ekcelo-site-user-flow.md` | Карта user-flow: лендинг → токен → viewer → KMZ/EXIF/XLSX → admin-encode |
+| `obsidian/Changelog/2026-06-03-ekcelo-site-decomposition.md` | Этот журнал |
+
+Эти три документа предназначены для ментальной воспроизводимости системы:
+- архитектурный — программисту, который никогда не работал с проектом, после прочтения может
+  поломать что угодно с пониманием последствий;
+- user-guide — оператору / новому участнику, после прочтения может пройти любой UX-сценарий
+  от ссылки до экспорта.
+
+## Что осталось вне scope этой сессии
+
+Высокорисковые DOM-подсистемы, требующие либо браузерного smoke после каждого PR,
+либо переустройства порядка инициализации:
+
+- **Фаза 3 (viewer):** role-state (immediate-call `let __ekceloRole = resolveRole()` не
+  дружит с deferred-bridge), NSPD-tile-layer обвязка, KMZ-import (DOMParser),
+  EXIF (exifr/piexif адаптеры), XLSX row-builders (цепочка `_classifyObjectType`,
+  `_XLSX_TYPE_LABELS`, `_RE_CENTROID`), Leaflet map init / UI.
+- **Фаза 4 (лендинг):** DOM-подсистемы app.js — notifications, clipboard, copy-toast,
+  partners-render, vCard-download, frame/phase-render, scroll-controller, token-gate UX.
+  Они снизят `app.js`'у метрику `document.*` с 63.
+
+Для каждой из этих подсистем нужен либо браузерный smoke после merge в `dev`, либо
+крупный preplanning (порядок инициализации, перестройка bridge'а в активный bootstrap).
+
+## Артефакты
+
+- Все 10 PR: <https://github.com/romanbabenkorostov-ux/ekcelo-site/pulls?q=is%3Apr+merged+>
+- `dev` HEAD: `b57526e` (после PR #12).
+- `main` отстаёт от `dev` на 10 коммитов — владелец делает `dev→main` merge вручную
+  после прода-smoke по `ekcelo-site/docs/VERIFICATION_PROTOCOL.md`.
+
+## Чек-листы перед `dev → main`
+
+Минимум по `ekcelo-site/docs/VERIFICATION_PROTOCOL.md` §1.1–1.3:
+- viewer: 12+ пунктов (Chrome + Firefox + YaBrowser),
+- лендинг: 6 пунктов,
+- admin-encode: 3 пункта.
+
+Дополнительно, для PR #12:
+- YaBrowser: открыть `/viewer/?t=<токен>` на светлой и тёмной теме, zoom 10/18/22 →
+  убедиться, что белой сетки между тайлами нет.
+- Chrome + Firefox: смок-проверка, что НИЧЕГО не изменилось (т.к. гейт `tile-seam-yandex`
+  не ставится — должно быть полностью эквивалентно).
+
+## Ссылки
+
+- Reference-ветка `claude/site-decomposition-handoff` в `ekcelo-site`:
+  `docs/ARCHITECT_HANDOFF.md`, `docs/VERIFICATION_PROTOCOL.md`,
+  `docs/VIEWER_MONOLITH_INVENTORY.md`, `docs/decisions/ADR-001-viewer-layers.md`.
+- ADR-001 (ekcelo): `obsidian/Decisions/ADR-001-etp-profile-extension.md` — соседний контекст.
+- CONTRACT_KMZ: `obsidian/CONTRACT_KMZ.md` — формат KMZ-файлов viewer'а.
