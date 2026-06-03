@@ -32,9 +32,10 @@ React-миграцию, плюс PR с фиксом белой сетки в YaB
 | #17 | **P0/2** | `viewer/core/viewmodel.js` — pure фабрика + валидатор по `contracts/api/viewmodel.schema.json` (C4) + 25 тестов |
 | #18 | 4 (ui) | `ui/frame-render.js`: updateFrames + FRAME_STOPS из app.js. app.js 50→49. От старта –14 (–22%) |
 | #19 | 4 (ui) | `ui/phase-render.js`: updatePhase + updateRail + 30 SVG-refs + $docs из app.js. app.js 49→19. От старта –44 (–70%). Самый крупный single-PR drop. |
-| #20 | 4 (ui) | `ui/token-gate.js`: модалка + scroll-attempts + form-submit + header-token Enter. app.js 19→**14**. От старта **–49 (–78%)** |
+| #20 | 4 (ui) | `ui/token-gate.js`: модалка + scroll-attempts + form-submit + header-token Enter. app.js 19→14. От старта –49 (–78%) |
+| #21 | 4 (ui) | `ui/scroll-arrow.js` + `ui/scroll-controller.js`: maybeHideArrow + getProgress + rAF-loop. app.js 14→**11**. От старта **–52 (–82%)** |
 
-**Итог:** 17 PR смерджено. **105 unit-тестов** зелёные, ESLint 9 чистый, CI workflow рабочий.
+**Итог:** 18 PR смерджено. **105 unit-тестов** зелёные, ESLint 9 чистый, CI workflow рабочий.
 
 ## Контекст-сдвиг (вечер 2026-06-03): ViewModel C4
 
@@ -63,7 +64,7 @@ PR #17 — первый кирпич P0/2: `viewer/core/viewmodel.js` готов
 | Файл | Старт | Сейчас |
 |---|---|---|
 | `viewer/index.html` | 442 | 442 (pure-выносы не снижают эту метрику by design) |
-| `app.js` | 63 | **14** (–49, **–78%**; за PR #13/14/15/16/19/20 — DOM-подсистемы лендинга) |
+| `app.js` | 63 | **11** (–52, **–82%**; за PR #13/14/15/16/19/20/21 — DOM-подсистемы лендинга) |
 | `admin-encode.html` | 6 | **0** (вся DOM-логика уехала в `ui/admin-encode.js`) |
 
 > HANDOFF фиксировал `app.js=74` и `admin-encode.html=15` на дату передачи. На фактической
