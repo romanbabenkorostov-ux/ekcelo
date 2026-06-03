@@ -1,0 +1,116 @@
+openapi: 3.1.0
+info:
+  title: EKCELO REST API (C4)
+  version: 1.0.0
+  description: >
+    Веб-шов backend↔frontend. Бэкенд отдаёт нормализованную ViewModel
+    (viewmodel.schema.json) — фронт рендерит её напрямую (полный REST-рендеринг).
+    KMZ/DB/JSON выдаются только на скачивание (Google Earth / локаль / выгрузка).
+servers:
+  - url: https://api.ekcelo.ru/v1
+  - url: http://localhost:8000/v1
+tags:
+  - name: catalog
+  - name: objects
+  - name: lots
+  - name: bundles
+
+paths:
+  /catalog:
+    get:
+      tags: [catalog]
+      summary: Список лотов/объектов (карточки)
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: kind, in: query, schema: { type: string, enum: [object, lot] } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CatalogCard" }
+
+  /objects/{cad}:
+    get:
+      tags: [objects]
+      summary: ViewModel объекта (4 характеристики)
+      parameters:
+        - { name: cad, in: path, required: true, schema: { type: string } }
+        - { name: as_of, in: query, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: ViewModel объекта
+          content:
+            application/json:
+              schema: { $ref: "viewmodel.schema.json" }
+
+  /objects/{cad}/graph:
+    get:
+      tags: [objects]
+      summary: Граф владения (узлы/рёбра, id == graph_node_id из C1)
+      parameters:
+        - { name: cad, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Граф
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  nodes: { type: array, items: { type: object } }
+                  edges: { type: array, items: { type: object } }
+
+  /lots/{lot_id}:
+    get:
+      tags: [lots]
+      summary: ViewModel лота (C5)
+      parameters:
+        - { name: lot_id, in: path, required: true, schema: { type: string } }
+        - { name: as_of, in: query, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: ViewModel лота
+          content:
+            application/json:
+              schema: { $ref: "viewmodel.schema.json" }
+
+  /bundles/import:
+    post:
+      tags: [bundles]
+      summary: Идемпотентный импорт Bundle (C3) в БД §1–§6
+      requestBody:
+        required: true
+        content:
+          application/zip: { schema: { type: string, format: binary } }
+      responses:
+        "200": { description: импортировано (повтор того же Bundle — no-op) }
+
+  /bundles/{id}/download:
+    get:
+      tags: [bundles]
+      summary: Выгрузка Bundle/части (реэкспорт из БД)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: fmt, in: query, schema: { type: string, enum: [kmz, db, json, zip] } }
+      responses:
+        "302": { description: подписанный URL S3 / поток файла }
+
+components:
+  schemas:
+    CatalogCard:
+      type: object
+      required: [kind, id, title]
+      properties:
+        kind: { type: string, enum: [object, lot] }
+        id: { type: string }
+        title: { type: string }
+        address: { type: string }
+        extract_date: { type: string, format: date }
+        thumb_url: { type: string }
+  securitySchemes:
+    # C6 — роли/шеринг: контракт зафиксирован отдельно (ROLES_SPEC.md),
+    # реализация после приземления веб-шва. Сейчас наследует токен-гейт/Basic Auth.
+    bearerAuth: { type: http, scheme: bearer }

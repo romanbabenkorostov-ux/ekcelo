@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ekcelo.ru/contracts/api/viewmodel.schema.json",
+  "title": "EKCELO ViewModel (C4) — нормализованная модель объекта/лота",
+  "description": "Единая форма, которую рендерит фронт. Производится двумя адаптерами: kmz→ViewModel и api→ViewModel. 4 характеристики EKCELO: physical/ownership/geo/temporal.",
+  "$defs": {
+    "sourced": {
+      "type": "object",
+      "description": "Поле с провенансом ЭТП-слоя §6",
+      "required": ["value"],
+      "properties": {
+        "value": {},
+        "source": { "type": "string", "enum": ["egrn", "osv", "exif", "manual", "nspd", "llm", "checko"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "graphNode": {
+      "type": "object",
+      "required": ["id", "kind", "label"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[A-Za-z0-9_:/-]{1,256}$", "description": "= graph_node_id из C1" },
+        "kind": { "type": "string", "enum": ["land", "building", "room", "structure", "ons", "bu", "equipment", "right", "encumbrance", "beneficiary_legal", "beneficiary_person", "level", "doc"] },
+        "label": { "type": "string" }
+      }
+    },
+    "graphEdge": {
+      "type": "object",
+      "required": ["from", "to", "kind"],
+      "properties": {
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "kind": { "type": "string" }
+      }
+    }
+  },
+  "type": "object",
+  "required": ["kind", "id", "physical", "ownership", "geo", "temporal"],
+  "properties": {
+    "kind": { "type": "string", "enum": ["object", "lot"] },
+    "id": { "type": "string", "description": "cad_number для object, lot_id для lot" },
+    "physical": {
+      "type": "object",
+      "description": "ЧТО ЭТО",
+      "properties": {
+        "object_type": { "type": "string" },
+        "address": { "type": "string" },
+        "area_m2": { "type": ["number", "null"] },
+        "floors": { "type": ["integer", "null"] },
+        "etp": { "type": "object", "description": "ЭТП §6 (layout/risks/condition), поля — $defs.sourced" }
+      }
+    },
+    "ownership": {
+      "type": "object",
+      "description": "ЧЬЁ ЭТО",
+      "properties": {
+        "rights": { "type": "array", "items": { "type": "object" } },
+        "beneficiaries": { "type": "array", "items": { "type": "object" } },
+        "graph": {
+          "type": "object",
+          "properties": {
+            "nodes": { "type": "array", "items": { "$ref": "#/$defs/graphNode" } },
+            "edges": { "type": "array", "items": { "$ref": "#/$defs/graphEdge" } }
+          }
+        }
+      }
+    },
+    "geo": {
+      "type": "object",
+      "description": "ГДЕ ЭТО",
+      "properties": {
+        "center": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+        "geometry": { "type": "object", "description": "GeoJSON-подобная геометрия WGS84" },
+        "z_meters_top": { "type": ["number", "null"] },
+        "extrude": { "type": "boolean" }
+      }
+    },
+    "temporal": {
+      "type": "object",
+      "description": "КОГДА ЭТО",
+      "properties": {
+        "extract_date": { "type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "as_of_date": { "type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+      }
+    },
+    "media": {
+      "type": "object",
+      "properties": {
+        "photos": { "type": "array", "items": { "type": "object" } },
+        "documents": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "members": {
+      "type": "array",
+      "description": "для kind=lot: входящие объекты (ViewModel object по ссылке)",
+      "items": { "type": "string" }
+    }
+  }
+}
