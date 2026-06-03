@@ -1,0 +1,81 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ekcelo"
+version = "0.3.0"
+description = "Ekcelo: парсинг ЕГРН, экспорт под ЭТП, оркестратор меморандумов"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+
+# Базовая установка — только parser (ЭТП-экспортёр + smoke-CLI).
+# Не тянем pdfplumber/openpyxl чтобы pip install ekcelo не был тяжёлым.
+dependencies = [
+    "jinja2>=3.1",
+    "pyyaml>=6.0",
+    "pymorphy3>=2.0",
+    "pymorphy3-dicts-ru>=2.4",
+]
+
+[project.optional-dependencies]
+
+# Оркестратор: backend (CLI меморандум-пайплайн)
+orchestrator = [
+    "pydantic>=2.5",
+    "anthropic>=0.30",
+]
+
+# Оркестратор: web (FastAPI обёртка)
+orchestrator-web = [
+    "ekcelo[orchestrator]",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "python-multipart>=0.0.9",
+    "httpx2>=2.0",
+]
+
+# Оркестратор: multi-worker через Redis (production deploy)
+orchestrator-redis = [
+    "ekcelo[orchestrator-web]",
+    "redis>=5.0",
+]
+
+# Полный egrn_parser stack (PDF, XLSX, DOCX парсинг)
+egrn-full = [
+    "pdfplumber>=0.11",
+    "openpyxl>=3.1",
+    "python-docx>=1.1",
+    "piexif>=1.1",
+    "Pillow>=10.0",
+]
+
+# Разработка: тесты, покрытие
+dev = [
+    "ekcelo[orchestrator-redis,egrn-full]",
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "fakeredis>=2.20",
+]
+
+[project.scripts]
+# Backend CLI
+ekcelo-orchestrate = "lot_orchestrator.cli:main"
+# Web CLI (cycle 10)
+ekcelo-orchestrate-web = "lot_orchestrator_web.cli:main"
+# ЭТП-экспортёр (smoke)
+ekcelo-etp-smoke = "parser.exporters.etp.smoke_cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["lot_orchestrator*", "parser*"]
+exclude = ["parser.tests*", "lot_orchestrator.tests*", "lot_orchestrator_web.tests*"]
+
+[tool.setuptools.package-data]
+"lot_orchestrator_web" = ["templates/*.html", "static/*.css"]
+"parser.exporters.etp" = ["templates/*.j2", "templates/*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["lot_orchestrator/tests", "lot_orchestrator_web/tests", "parser/tests"]
+addopts = "-v --tb=short"
