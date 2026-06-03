@@ -34,9 +34,15 @@ React-миграцию, плюс PR с фиксом белой сетки в YaB
 | #19 | 4 (ui) | `ui/phase-render.js`: updatePhase + updateRail + 30 SVG-refs + $docs из app.js. app.js 49→19. От старта –44 (–70%). Самый крупный single-PR drop. |
 | #20 | 4 (ui) | `ui/token-gate.js`: модалка + scroll-attempts + form-submit + header-token Enter. app.js 19→14. От старта –49 (–78%) |
 | #21 | 4 (ui) | `ui/scroll-arrow.js` + `ui/scroll-controller.js`: maybeHideArrow + getProgress + rAF-loop. app.js 14→11. От старта –52 (–82%) |
-| #22 | 4 (ui) | Финальный cleanup: bindCopyButtons + bindVCardDownloadButtons + bindFramePreload + bindTextSectionsReveal + bindContactCTAs + dead-code (copyToast refs). app.js 11→**2**. От старта **–61 (–97%)**. **Фаза 4 фактически завершена.** |
+| #22 | 4 (ui) | Финальный cleanup: bindCopyButtons + bindVCardDownloadButtons + bindFramePreload + bindTextSectionsReveal + bindContactCTAs + dead-code (copyToast refs). app.js 11→2. От старта –61 (–97%). **Фаза 4 фактически завершена.** |
+| #23 | **fix** | YB white-grid v2.9.62d: JS-level Leaflet patch — `Math.round(translate3d.offset)` через override `L.DomUtil.setTransform`. Гейт ТОЛЬКО YaBrowser. Это **escalation** после v2.9.62c, который не помог на отдельных сборках. |
+| #24 | **P0/4 (DRAFT)** | api→ViewModel adapter + mock-server (Node http, без deps) + viewer-bootstrap + 10 тестов api-client + `docs/LOCAL_DEV.md`. **Не смерджен** — ветка `claude/react-foundation` для локальной отладки владельцем. |
 
-**Итог:** 19 PR смерджено. **105 unit-тестов** зелёные, ESLint 9 чистый, CI workflow рабочий.
+**Итог (на dev):** 20 PR смерджено. **105 unit-тестов** зелёные на dev, **115** на react-foundation (+10 api-client). ESLint 9 чистый, CI workflow рабочий.
+
+## Контекст: прод = dev
+
+Подтверждено владельцем: ekcelo.ru обслуживается с ветки `dev` (не main, как декларирует `deploy.yml`). Все 20 merged PR **уже на проде**. Главное следствие: больше не использовать формулу «merge dev → main» в инструкциях — она ошибочна. Прод-smoke == reload ekcelo.ru в браузере.
 
 ## Контекст-сдвиг (вечер 2026-06-03): ViewModel C4
 
