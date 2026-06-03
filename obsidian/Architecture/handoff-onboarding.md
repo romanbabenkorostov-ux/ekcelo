@@ -31,6 +31,10 @@
 
 ### obsidian/ — внутренняя память (читать в порядке)
 
+0. **`obsidian/CHECKPOINT.md`** — живой указатель «где мы прямо сейчас»:
+   текущая ветка, последний commit, что сделано, **следующий конкретный шаг**.
+   Обновляется skill'ом `checkpoint` после каждого подэтапа. Читать ПЕРВЫМ.
+
 1. `obsidian/Architecture/system-state-2026-05-30.md` — снимок всей системы.
 2. `obsidian/Architecture/handoff-onboarding.md` — **этот файл**.
 3. `obsidian/Architecture/roadmap-2026-06.md` — что делать дальше.
