@@ -33,9 +33,10 @@ React-миграцию, плюс PR с фиксом белой сетки в YaB
 | #18 | 4 (ui) | `ui/frame-render.js`: updateFrames + FRAME_STOPS из app.js. app.js 50→49. От старта –14 (–22%) |
 | #19 | 4 (ui) | `ui/phase-render.js`: updatePhase + updateRail + 30 SVG-refs + $docs из app.js. app.js 49→19. От старта –44 (–70%). Самый крупный single-PR drop. |
 | #20 | 4 (ui) | `ui/token-gate.js`: модалка + scroll-attempts + form-submit + header-token Enter. app.js 19→14. От старта –49 (–78%) |
-| #21 | 4 (ui) | `ui/scroll-arrow.js` + `ui/scroll-controller.js`: maybeHideArrow + getProgress + rAF-loop. app.js 14→**11**. От старта **–52 (–82%)** |
+| #21 | 4 (ui) | `ui/scroll-arrow.js` + `ui/scroll-controller.js`: maybeHideArrow + getProgress + rAF-loop. app.js 14→11. От старта –52 (–82%) |
+| #22 | 4 (ui) | Финальный cleanup: bindCopyButtons + bindVCardDownloadButtons + bindFramePreload + bindTextSectionsReveal + bindContactCTAs + dead-code (copyToast refs). app.js 11→**2**. От старта **–61 (–97%)**. **Фаза 4 фактически завершена.** |
 
-**Итог:** 18 PR смерджено. **105 unit-тестов** зелёные, ESLint 9 чистый, CI workflow рабочий.
+**Итог:** 19 PR смерджено. **105 unit-тестов** зелёные, ESLint 9 чистый, CI workflow рабочий.
 
 ## Контекст-сдвиг (вечер 2026-06-03): ViewModel C4
 
@@ -64,7 +65,7 @@ PR #17 — первый кирпич P0/2: `viewer/core/viewmodel.js` готов
 | Файл | Старт | Сейчас |
 |---|---|---|
 | `viewer/index.html` | 442 | 442 (pure-выносы не снижают эту метрику by design) |
-| `app.js` | 63 | **11** (–52, **–82%**; за PR #13/14/15/16/19/20/21 — DOM-подсистемы лендинга) |
+| `app.js` | 63 | **2** (–61, **–97%**; за PR #13/14/15/16/19/20/21/22). Оставшиеся 2: `$scrolly` для getProgress в isAtBottom + `document.baseURI` для VIEWER_BASE. Это **необходимый минимум** при текущих launchFromToken/autoLaunch в app.js. |
 | `admin-encode.html` | 6 | **0** (вся DOM-логика уехала в `ui/admin-encode.js`) |
 
 > HANDOFF фиксировал `app.js=74` и `admin-encode.html=15` на дату передачи. На фактической
