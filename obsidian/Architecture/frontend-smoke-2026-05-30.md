@@ -27,6 +27,8 @@ python -m http.server 8001 --bind 127.0.0.1
 - `images/${safeName}`, `images/...` — шаблонные `src` для динамической вставки фото из KMZ (не отдаются как статика).
 - Внешние ссылки на `nspd.gov.ru`, `pkk.rosreestr.ru` — динамические URL для перехода (не загружаются smoke-ом).
 
+**ЭТП-фикстура — multi-path fallback (2026-06-03):** `loadEtpFixture()` пробует `parser/tests/fixtures/etp/object_etp_profile_sample.json`, затем `../parser/tests/...`. При раздаче из корня репо первый путь даёт 404 (`/viewer/parser/...`), второй — 200 (`/parser/...`). 404 в логе http.server ожидаем и безвреден (опциональный слой; см. `obsidian/UserGuide/data-flows.md` устье A).
+
 **Вывод:** виьюер технически работоспособен (HTML/JS/CSS грузятся без 404), KMZ-загрузчик активируется через UI «Загрузить KMZ». Глубокий e2e — открыть в браузере, загрузить реальный KMZ, проверить рендер.
 
 ### lot_orchestrator_web/ — FastAPI + Jinja

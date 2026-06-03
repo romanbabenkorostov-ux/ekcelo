@@ -1802,14 +1802,28 @@ const TILES={
 // запрос к экспортированному JSON (формат object_etp_profile[] идентичен).
 let _etpProfile = { byKn: new Map(), lots: [], lotItems: [] };
 (async function loadEtpFixture(){
-  try{
-    const r = await fetch('parser/tests/fixtures/etp/object_etp_profile_sample.json');
-    if(!r.ok) return;  // фикстура отсутствует → silent skip (опциональный слой)
-    const j = await r.json();
-    for(const p of (j.object_etp_profile||[])) _etpProfile.byKn.set(p.cad_number, p);
-    _etpProfile.lots = j.lots || [];
-    _etpProfile.lotItems = j.lot_items || [];
-  }catch(e){ console.debug('[etp] fixture not loaded:', e); }
+  // Fixture path зависит от того, как раздаётся viewer:
+  //  • из корня репо (python -m http.server) → /viewer/index.html → нужен '../parser/...'
+  //  • как GitHub Pages с viewer/ = site root → 'parser/...' (если фикстура скопирована рядом)
+  //  • из самой папки viewer/ → 'parser/...'
+  // Пробуем варианты по очереди; первый удачный выигрывает. Все 404 — silent skip
+  // (опциональный Phase-1 слой, БД-экспорт заменит fetch позже).
+  const candidates = [
+    'parser/tests/fixtures/etp/object_etp_profile_sample.json',
+    '../parser/tests/fixtures/etp/object_etp_profile_sample.json',
+  ];
+  for(const url of candidates){
+    try{
+      const r = await fetch(url);
+      if(!r.ok) continue;
+      const j = await r.json();
+      for(const p of (j.object_etp_profile||[])) _etpProfile.byKn.set(p.cad_number, p);
+      _etpProfile.lots = j.lots || [];
+      _etpProfile.lotItems = j.lot_items || [];
+      return;  // загрузили — выходим
+    }catch(e){ console.debug('[etp] fixture try failed:', url, e); }
+  }
+  console.debug('[etp] fixture not loaded (optional layer) — tried:', candidates);
 })();
 TILES.osm.addTo(map);
 let currentLayer='osm';
