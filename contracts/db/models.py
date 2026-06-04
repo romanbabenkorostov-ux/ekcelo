@@ -59,6 +59,7 @@ class EntityKind(str, enum.Enum):
     state_body = "state_body"; level = "level"; doc = "doc"; lot = "lot"
     order = "order"; business_asset = "business_asset"
     flow_node = "flow_node"; demarcation_point = "demarcation_point"
+    accessory = "accessory"  # принадлежность (Block-2 accessories) — PARSER_VOCAB_MAP §6
 
 
 class RelationDomain(str, enum.Enum):
