@@ -11,6 +11,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from contracts.db.models import Base
+import contracts.db.models_egrn  # noqa: F401 — регистрирует §1-§6 на Base.metadata
 
 config = context.config
 
