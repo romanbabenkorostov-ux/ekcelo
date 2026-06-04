@@ -3,7 +3,10 @@
 > Каноника C2. Источник истины — этот файл + `contracts/db/models.py` (SQLAlchemy).
 > `schema/egrn_current_schema.sql` остаётся как ЕГРН-DDL §1–§6 и становится
 > подмножеством этой схемы (генерируется/мигрируется через Alembic).
-> Версия: 0.1 (draft) · Дата: 2026-06-04 · Согласовать с C1 (KMZ), C4 (ViewModel), C5 (Lot).
+> Версия: **0.2** · Дата: 2026-06-04 · Согласовать с C1 (KMZ), C4 (ViewModel), C5 (Lot).
+> Статус: **реализовано** — ORM (`models.py` §7–§12, `models_egrn.py` §1–§6), миграции
+> Alembic `0001..0003`, импортёр Block-2 (`import_block2.py`), граф-эмиттер
+> (`graph_emit.py`), сид `relation_types` — проверено на SQLite (см. §10).
 
 ## 0. Принципы (зафиксированы ответами 1–24)
 
@@ -39,14 +42,14 @@
 
 | § | Слой | Статус | Таблицы |
 |---|------|--------|---------|
-| 1–5 | **ЕГРН-слепок** | как есть (ADR-001) | `objects`, `entity_registry`*, `rights`, `extracts`, `object_restrictions` |
-| 6 | **ЭТП-профиль** | как есть | `object_etp_profile`, `lots`, `lot_items` |
-| 7 | **Граф знаний** | NEW | `entities`, `relations`, `legal_relation`, `tech_relation`, `spatial_relation`, `accounting_relation`, `assertions`, `evidences` |
-| 8 | **Геометрия** | NEW | `geometries` |
-| 9 | **Технологический** | NEW | `devices`, `flow_events` |
-| 10 | **Субъекты+** | NEW (надстройка над `entity_registry`) | `subjects`, `subject_names`, `bank_accounts`, `ip_status_periods`, `subject_external_ref` |
-| 11 | **Коммерческий** | NEW | `lot_snapshots`, `orders`, `contracts`, `invoices`, `upd_documents` |
-| 12 | **Документы** | NEW | `documents`, `doc_links` |
+| 1–5 | **ЕГРН-слепок** | ✅ ORM `models_egrn.py` / mig `0002` | `objects`, `entity_registry`*, `rights`, `extracts`, `object_restrictions` |
+| 6 | **ЭТП-профиль** | ✅ ORM `models_egrn.py` / mig `0002` | `object_etp_profile`, `lots`, `lot_items` |
+| 7 | **Граф знаний** | ✅ ORM `models.py` / mig `0001` | `entities`, `relations`, `legal_relation`, `tech_relation`, `spatial_relation`, `accounting_relation`, `assertions`, `evidences` |
+| 8 | **Геометрия** | ✅ mig `0001` | `geometries` |
+| 9 | **Технологический** | ✅ mig `0001` | `devices`, `flow_events` |
+| 10 | **Субъекты+** | ✅ mig `0001` (надстройка над `entity_registry`) | `subjects`, `subject_names`, `subject_kpp`, `bank_accounts`, `ip_status_periods`, `subject_external_ref` |
+| 11 | **Коммерческий** | ✅ mig `0001` | `lot_snapshots`, `orders`, `contracts`, `invoices`, `upd_documents` |
+| 12 | **Документы** | ✅ mig `0001` | `documents`, `doc_links` |
 
 \* `entity_registry` сохраняется ради совместимости §3 `rights.right_holder_inn`; `subjects`
 — его надстройка (1:1 по `inn`), куда переезжают тип/НДС/история. Миграция — мягкая.
@@ -62,7 +65,7 @@
 |------|-----|-----------|
 | `id` | UUID PK | внутренний |
 | `graph_node_id` | TEXT UNIQUE | C1-адрес узла (`land:61:44:..:31`, `subj:inn:6164...`, UUID и т.п.) |
-| `kind` | ENUM `entity_kind` | land/building/room/structure/ons/bu/equipment/device/right/encumbrance/beneficiary_legal/beneficiary_person/state_body/level/doc/lot/order/business_asset/flow_node/demarcation_point |
+| `kind` | ENUM `entity_kind` | land/building/room/structure/ons/bu/equipment/device/**accessory**/right/encumbrance/beneficiary_legal/beneficiary_person/state_body/level/doc/lot/order/business_asset/flow_node/demarcation_point |
 | `ref_table` | TEXT | на какую таблицу-владельца ссылается (`objects`,`subjects`,`devices`,`documents`,…) |
 | `ref_pk` | TEXT | PK строки-владельца (cad_number / uuid / inn) |
 | `label` | TEXT | отображаемое имя |
@@ -86,8 +89,10 @@
 | `meta` | JSON | прочее |
 
 `relation_types(id, code, name, domain, category)` — справочник. `category ∈ {right, encumbrance,
-restriction, topology, flow, accounting, commercial}` (ответ 6: права и обременения не смешиваем
-на уровне типа).
+restriction, **corporate**, topology, flow, accounting, commercial}` (ответ 6: права и обременения не
+смешиваем на уровне типа). `corporate` (домен `legal`) — бенефициарные цепочки `CONTROLS/FOUNDER_OF/
+MANAGES/BRANCH_OF` (решение от 2026-06-04, см. `PARSER_VOCAB_MAP.md §3`). Стартовый сид всех типов —
+`relation_types_seed.py` (30 кодов, все рёбра парсеров замаплены).
 
 **Коды (стартовые):**
 - legal/right: `OWNS, LEASES, OPERATES(*гос), SERVITUDE, GRATUITOUS_USE`
@@ -206,3 +211,43 @@ invoices, upd_documents, documents, doc_links`.
 | ЧЬЁ (ownership) | `ownership` | `relations[legal]` + `assertions/evidences` + `subjects` |
 | ГДЕ (geo) | `geo` | `geometries` (WKT/bbox, 4326) |
 | КОГДА (temporal) | `temporal` | битемпоральные поля + `extracts.extract_date` + `lots.as_of_date` |
+
+---
+
+## 10. Реализация (что собрано и проверено)
+
+| Артефакт | Файл | Статус |
+|----------|------|--------|
+| ORM §7–§12 | `contracts/db/models.py` | ✅ (+`EntityKind.accessory`) |
+| ORM §1–§6 | `contracts/db/models_egrn.py` | ✅ порт `egrn_current_schema.sql` |
+| Сид типов рёбер | `contracts/db/relation_types_seed.py` | ✅ 30 кодов |
+| Миграции | `contracts/db/migrations/0001..0003` | ✅ upgrade/downgrade на SQLite |
+| Импорт Block-2 | `contracts/db/import_block2.py` | ✅ + pytest |
+| Граф-эмиттер | `contracts/db/graph_emit.py` | ✅ + pytest |
+| Сверка с парсерами | `contracts/db/PARSER_VOCAB_MAP.md` | ✅ |
+
+`0001` = §7–§12 (25 таблиц); `0002` = §1–§6 (8 таблиц); `0003` = enum `accessory`
+(PG `ALTER TYPE`, SQLite no-op). Полный стек: **33 таблицы**.
+
+## 11. Проекция лота в KMZ/сюрвей-презу (через снапшот)
+
+Единица компоновки `.kmz` — **`LotSnapshot`** (неизменяемый слепок §11), не «живой»
+лот. Алгоритм проекции `LotSnapshot → подграф → KMZ`:
+
+1. **Подграф лота.** Из `frozen_data` берём `entities`, входящие в лот, + инцидентные
+   `relations` (на дату снапшота: `valid_from ≤ as_of < valid_to AND superseded_at IS NULL`).
+2. **Названия узлов.** `entity.label`; для объектов — имя + КН; геометрия — из
+   `geometries` (WKT/GeoJSON, МСК-61 → 4326 для KMZ, C1).
+3. **Значения связей в подписи рёбер.** В KMZ `ExtendedData` / label ребра выносятся
+   `relations.meta` (доля, № права, `since/until`) **и `confidence`** активного assertion.
+   Подпись = «`<роль>` · `<значение>` · `conf=<…>`».
+4. **Обезличивание третьих сторон (экспортный слой, C6).** В хранилище субъект реален
+   (ИНН/имя). На выгрузке наружу `beneficiary_*` третьих сторон заменяются **ролью из
+   ребра** (`relation_types.code` → роль: `OWNS`→Собственник, `LEASES`→Арендатор,
+   `SERVITUDE`→Сервитуарий, `MORTGAGED_BY`→Залогодержатель, `CONTROLS`→Контролирующее лицо).
+   Владелец лота себя видит; обезличивание контекстно по роли получателя.
+5. **Документы — на дату.** Узел `doc` подписывается `тип + issue_date`; ребро,
+   которое документ `ESTABLISHES`, имеет `valid_from = issue_date`.
+
+Реализация — отдельный композер `lot_to_kmz.py` (роль-подмена + подписи рёбер поверх
+`graph_emit`); план — этап 2 (см. `c2-roadmap-next.md`).
