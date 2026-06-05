@@ -229,7 +229,9 @@ invoices, upd_documents, documents, doc_links`.
 | Сверка с парсерами | `contracts/db/PARSER_VOCAB_MAP.md` | ✅ |
 
 `0001` = §7–§12 (25 таблиц); `0002` = §1–§6 (8 таблиц); `0003` = enum `accessory`
-(PG `ALTER TYPE`, SQLite no-op). Полный стек: **33 таблицы**.
+(PG `ALTER TYPE`, SQLite no-op); `0004` = +10 полей в `objects` (нормативные аспекты
+выписки П/0329: quarter/parent_cad_number, inventory/conditional_number, cadastral_value,
+floor, okato, kladr, fias_guid, status_egrn). Полный стек: **33 таблицы**.
 
 ## 11. Проекция лота в KMZ/сюрвей-презу (через снапшот)
 

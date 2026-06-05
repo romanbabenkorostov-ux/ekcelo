@@ -33,6 +33,17 @@ class Object(Base):
     permitted_use: Mapped[str | None] = mapped_column(Text, nullable=True)
     purpose: Mapped[str | None] = mapped_column(Text, nullable=True)
     floors: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # §1 расширение (mig 0004) — нормативные аспекты выписки (П/0329), парсер их извлекает
+    quarter_cad_number: Mapped[str | None] = mapped_column(String(50), index=True, nullable=True)
+    parent_cad_number: Mapped[str | None] = mapped_column(String(50), index=True, nullable=True)
+    inventory_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    conditional_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    cadastral_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    floor: Mapped[str | None] = mapped_column(String(32), nullable=True)   # этаж помещения (м.б. «1; 2»)
+    okato: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    kladr: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    fias_guid: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    status_egrn: Mapped[str | None] = mapped_column(Text, nullable=True)   # «актуальные, ранее учтённые»
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 

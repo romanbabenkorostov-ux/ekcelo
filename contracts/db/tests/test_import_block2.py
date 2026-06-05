@@ -64,7 +64,8 @@ def test_import_block2(block2_db):
             select(RelationType.code, func.count()).select_from(Relation)
             .join(RelationType, Relation.relation_type_id == RelationType.id)
             .group_by(RelationType.code))}
-        assert codes == {"OWNS": 1, "LEASES": 1, "CONTAINS": 1, "CONTROLS": 1}
+        # CONTAINS: land→building (parent), building→room (parent), building→accessory
+        assert codes == {"OWNS": 1, "LEASES": 1, "CONTAINS": 3, "CONTROLS": 1}
 
         # провенанс: ЕГРН-права → confidence 1.0; checko-цепочка → 0.4 (LLM)
         confs = sorted({round(a.confidence_score, 3)

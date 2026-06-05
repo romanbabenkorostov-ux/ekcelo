@@ -1,22 +1,139 @@
 {
   "schemaVersion": "graph.json/2.0-c2",
-  "generatedAt": "2026-06-05T07:03:48.729013+00:00",
+  "generatedAt": "2026-06-05T11:04:37.014908+00:00",
   "nodes": [
     {
-      "id": "land:61:44:0040713:100",
+      "id": "land:61:44:0040713:7",
       "type": "land",
       "level": 0,
-      "label": "ЗУ 100",
-      "cadNumber": "61:44:0040713:100",
+      "label": "Земельный участок 61:44:0040713:7, 248.0 кв.м",
+      "cadNumber": "61:44:0040713:7",
       "refTable": "objects",
       "bbox": null
     },
     {
-      "id": "building:61:44:0040713:200",
+      "id": "land:15:05:0000000:2074",
+      "type": "land",
+      "level": 0,
+      "label": "Земельный участок 15:05:0000000:2074, 199174.0 кв.м",
+      "cadNumber": "15:05:0000000:2074",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "land:15:05:0000000:2128",
+      "type": "land",
+      "level": 0,
+      "label": "Земельный участок 15:05:0000000:2128, 250000.0 кв.м",
+      "cadNumber": "15:05:0000000:2128",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "room:61:44:0050706:119",
+      "type": "room",
+      "level": 2,
+      "label": "Нежилое помещение, комнаты в подвале №№1, 1а, 1б, 1в, 1г, 1д, 1е, 1ж, 2, 3; комнаты на 1 этаже №№12з,",
+      "cadNumber": "61:44:0050706:119",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "room:61:44:0040713:311",
+      "type": "room",
+      "level": 2,
+      "label": "Квартира",
+      "cadNumber": "61:44:0040713:311",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "room:61:44:0040713:340",
+      "type": "room",
+      "level": 2,
+      "label": "Квартира, площадью 42,5 кв.м, в т.ч. жилой 25,1 кв.м. Расположена на 3 этаже 3-этажного дома. Литер А",
+      "cadNumber": "61:44:0040713:340",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "room:61:44:0040713:426",
+      "type": "room",
+      "level": 2,
+      "label": "Нежилое помещение, комнаты № 7, 8а, общей площадью 37,4 кв.м. Расположено в подвале 3-этажного дома. Литер: А",
+      "cadNumber": "61:44:0040713:426",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "room:61:44:0040713:354",
+      "type": "room",
+      "level": 2,
+      "label": "Квартира",
+      "cadNumber": "61:44:0040713:354",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "room:61:44:0040713:440",
+      "type": "room",
+      "level": 2,
+      "label": "Квартира",
+      "cadNumber": "61:44:0040713:440",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "room:61:44:0040713:342",
+      "type": "room",
+      "level": 2,
+      "label": "Квартира, площадью 37,6 кв.м, в т.ч. жилой 19,1 кв.м. Расположено на 1 этаже 2-этажного дома. Литер Б",
+      "cadNumber": "61:44:0040713:342",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "room:61:44:0040713:428",
+      "type": "room",
+      "level": 2,
+      "label": "Квартира",
+      "cadNumber": "61:44:0040713:428",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "room:61:44:0040713:343",
+      "type": "room",
+      "level": 2,
+      "label": "Квартира",
+      "cadNumber": "61:44:0040713:343",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "room:61:44:0040713:417",
+      "type": "room",
+      "level": 2,
+      "label": "Квартира, площадью 22,5 кв.м, в т.ч. жилой 22,5 кв.м. Расположена на 2 этаже 3-этажного дома. Литер: А",
+      "cadNumber": "61:44:0040713:417",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "room:61:44:0040713:308",
+      "type": "room",
+      "level": 2,
+      "label": "Квартира",
+      "cadNumber": "61:44:0040713:308",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "building:61:44:0040713:370",
       "type": "building",
       "level": 1,
-      "label": "Склад",
-      "cadNumber": "61:44:0040713:200",
+      "label": "Жилой дом, площадью 173 кв.м, в т.ч. жилой 106,5 кв.м. Литер А; Жилой дом, площадью 126,4 кв.м(с учетом холодной веранды), в т.ч. жилой 76,1 кв.м. Литер Б; Жилой дом, площадью 33,3 кв.м, в т.ч. жилой 16,7 кв.м. Литер Ф.",
+      "cadNumber": "61:44:0040713:370",
       "refTable": "objects",
       "bbox": null
     },
@@ -24,104 +141,1308 @@
       "id": "room:61:44:0040713:446",
       "type": "room",
       "level": 2,
-      "label": "Помещение 8",
+      "label": "Квартира",
       "cadNumber": "61:44:0040713:446",
       "refTable": "objects",
       "bbox": null
     },
     {
-      "id": "accessory:1",
-      "type": "accessory",
+      "id": "room:61:44:0040713:310",
+      "type": "room",
       "level": 2,
-      "label": "Весовая будка",
-      "cadNumber": null,
-      "refTable": "accessories",
+      "label": "Квартира",
+      "cadNumber": "61:44:0040713:310",
+      "refTable": "objects",
       "bbox": null
     },
     {
-      "id": "subj:6164000001",
+      "id": "room:61:44:0040713:448",
+      "type": "room",
+      "level": 2,
+      "label": "Квартира",
+      "cadNumber": "61:44:0040713:448",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "room:61:44:0040713:406",
+      "type": "room",
+      "level": 2,
+      "label": "Квартира, площадью 40,4 кв.м, в т.ч. жилой 30,4 кв.м. Расположена на 2 этаже 3-этажного дома. Литер: А",
+      "cadNumber": "61:44:0040713:406",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "room:61:44:0040713:437",
+      "type": "room",
+      "level": 2,
+      "label": "Квартира",
+      "cadNumber": "61:44:0040713:437",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:763",
+      "type": "structure",
+      "level": 1,
+      "label": "Танцплощадка",
+      "cadNumber": "90:25:020103:763",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3005",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена № 126",
+      "cadNumber": "90:25:020103:3005",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "building:90:25:020103:1013",
+      "type": "building",
+      "level": 1,
+      "label": "Столовая",
+      "cadNumber": "90:25:020103:1013",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "building:90:25:020103:1113",
+      "type": "building",
+      "level": 1,
+      "label": "Спальный корпус 6",
+      "cadNumber": "90:25:020103:1113",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "building:90:25:020103:1370",
+      "type": "building",
+      "level": 1,
+      "label": null,
+      "cadNumber": "90:25:020103:1370",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:1378",
+      "type": "structure",
+      "level": 1,
+      "label": "Дорожка",
+      "cadNumber": "90:25:020103:1378",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:1391",
+      "type": "structure",
+      "level": 1,
+      "label": "Дорожка",
+      "cadNumber": "90:25:020103:1391",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:1393",
+      "type": "structure",
+      "level": 1,
+      "label": "дорожка литер XXXIV",
+      "cadNumber": "90:25:020103:1393",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "building:90:25:020103:1463",
+      "type": "building",
+      "level": 1,
+      "label": "здание водно-оздоровительного комплекса",
+      "cadNumber": "90:25:020103:1463",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:1466",
+      "type": "structure",
+      "level": 1,
+      "label": "Резервуар",
+      "cadNumber": "90:25:020103:1466",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "building:90:25:020103:1486",
+      "type": "building",
+      "level": 1,
+      "label": "Административный корпус 4",
+      "cadNumber": "90:25:020103:1486",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:1556",
+      "type": "structure",
+      "level": 1,
+      "label": "Дорожка",
+      "cadNumber": "90:25:020103:1556",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "room:90:25:020103:1585",
+      "type": "room",
+      "level": 2,
+      "label": null,
+      "cadNumber": "90:25:020103:1585",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "building:90:25:020103:1590",
+      "type": "building",
+      "level": 1,
+      "label": "Насосная станция",
+      "cadNumber": "90:25:020103:1590",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:1627",
+      "type": "structure",
+      "level": 1,
+      "label": "Электрические сети",
+      "cadNumber": "90:25:020103:1627",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:1746",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стенка",
+      "cadNumber": "90:25:020103:1746",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:2803",
+      "type": "structure",
+      "level": 1,
+      "label": "Ливневая канализация",
+      "cadNumber": "90:25:020103:2803",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:2862",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена № 96",
+      "cadNumber": "90:25:020103:2862",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:2877",
+      "type": "structure",
+      "level": 1,
+      "label": "Дорога № 1",
+      "cadNumber": "90:25:020103:2877",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:2886",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена №23",
+      "cadNumber": "90:25:020103:2886",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:2889",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена 22",
+      "cadNumber": "90:25:020103:2889",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:2892",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена №22а",
+      "cadNumber": "90:25:020103:2892",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:2901",
+      "type": "structure",
+      "level": 1,
+      "label": "Сооружение",
+      "cadNumber": "90:25:020103:2901",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:2910",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена №7",
+      "cadNumber": "90:25:020103:2910",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:2917",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена №10",
+      "cadNumber": "90:25:020103:2917",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:2923",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена № 63",
+      "cadNumber": "90:25:020103:2923",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:2927",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена",
+      "cadNumber": "90:25:020103:2927",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:2951",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена",
+      "cadNumber": "90:25:020103:2951",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:2972",
+      "type": "structure",
+      "level": 1,
+      "label": "открытый бассейн",
+      "cadNumber": "90:25:020103:2972",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:2975",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена",
+      "cadNumber": "90:25:020103:2975",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:2977",
+      "type": "structure",
+      "level": 1,
+      "label": "Сети канализации",
+      "cadNumber": "90:25:020103:2977",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:2987",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена № 39",
+      "cadNumber": "90:25:020103:2987",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:2993",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена № 19а",
+      "cadNumber": "90:25:020103:2993",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:2994",
+      "type": "structure",
+      "level": 1,
+      "label": "Сооружение дорожного транспорта подпорная стена №6",
+      "cadNumber": "90:25:020103:2994",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:2995",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена № 116",
+      "cadNumber": "90:25:020103:2995",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:2998",
+      "type": "structure",
+      "level": 1,
+      "label": "подпорная стена №14",
+      "cadNumber": "90:25:020103:2998",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:2999",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена № 11",
+      "cadNumber": "90:25:020103:2999",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3001",
+      "type": "structure",
+      "level": 1,
+      "label": "Сооружение подпорная стена №34",
+      "cadNumber": "90:25:020103:3001",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3026",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена № 25",
+      "cadNumber": "90:25:020103:3026",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3042",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена №4",
+      "cadNumber": "90:25:020103:3042",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3047",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена № 177",
+      "cadNumber": "90:25:020103:3047",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3054",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена № 185",
+      "cadNumber": "90:25:020103:3054",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3055",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена № 174",
+      "cadNumber": "90:25:020103:3055",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3076",
+      "type": "structure",
+      "level": 1,
+      "label": "Сооружение подпорная стена №89",
+      "cadNumber": "90:25:020103:3076",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3077",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена №94",
+      "cadNumber": "90:25:020103:3077",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3078",
+      "type": "structure",
+      "level": 1,
+      "label": "138 колодцев сети хозяйственно-фекальной канализации",
+      "cadNumber": "90:25:020103:3078",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3079",
+      "type": "structure",
+      "level": 1,
+      "label": "Асфальтовая дорога №XXXXV",
+      "cadNumber": "90:25:020103:3079",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3104",
+      "type": "structure",
+      "level": 1,
+      "label": "Асфальтовая дорожка №XXXXIV",
+      "cadNumber": "90:25:020103:3104",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3105",
+      "type": "structure",
+      "level": 1,
+      "label": "Асфальтовая дорожка № XXXXII",
+      "cadNumber": "90:25:020103:3105",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3153",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена № 111",
+      "cadNumber": "90:25:020103:3153",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3161",
+      "type": "structure",
+      "level": 1,
+      "label": "Асфальтовая дорога №XXV",
+      "cadNumber": "90:25:020103:3161",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3167",
+      "type": "structure",
+      "level": 1,
+      "label": "Бетонная дорожка № 33",
+      "cadNumber": "90:25:020103:3167",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3168",
+      "type": "structure",
+      "level": 1,
+      "label": "Асфальтовая дорога №XXIV",
+      "cadNumber": "90:25:020103:3168",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3170",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена № 44",
+      "cadNumber": "90:25:020103:3170",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3171",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена №164",
+      "cadNumber": "90:25:020103:3171",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3172",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена № 180",
+      "cadNumber": "90:25:020103:3172",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3173",
+      "type": "structure",
+      "level": 1,
+      "label": "Асфальтовая дорога №XXXIX",
+      "cadNumber": "90:25:020103:3173",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3175",
+      "type": "structure",
+      "level": 1,
+      "label": "Дорожка №XXXVIII",
+      "cadNumber": "90:25:020103:3175",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3176",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена № 159",
+      "cadNumber": "90:25:020103:3176",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3201",
+      "type": "structure",
+      "level": 1,
+      "label": "Асфальтовая дорожка №XVII",
+      "cadNumber": "90:25:020103:3201",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3227",
+      "type": "structure",
+      "level": 1,
+      "label": "Асфальтовая дорожка №XXI",
+      "cadNumber": "90:25:020103:3227",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3228",
+      "type": "structure",
+      "level": 1,
+      "label": "Асфальтовая дорожка №XX",
+      "cadNumber": "90:25:020103:3228",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3232",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена №2",
+      "cadNumber": "90:25:020103:3232",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "building:90:25:020102:324",
+      "type": "building",
+      "level": 1,
+      "label": "Нижняя станция канатной дороги",
+      "cadNumber": "90:25:020102:324",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3242",
+      "type": "structure",
+      "level": 1,
+      "label": "Бетонная дорога №XXXXVI",
+      "cadNumber": "90:25:020103:3242",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "building:90:25:020102:325",
+      "type": "building",
+      "level": 1,
+      "label": "Верхняя станция канатной дороги",
+      "cadNumber": "90:25:020102:325",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3257",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена № 30",
+      "cadNumber": "90:25:020103:3257",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020102:326",
+      "type": "structure",
+      "level": 1,
+      "label": "мощение XV",
+      "cadNumber": "90:25:020102:326",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:3260",
+      "type": "structure",
+      "level": 1,
+      "label": "Подпорная стена №20а",
+      "cadNumber": "90:25:020103:3260",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:356",
+      "type": "structure",
+      "level": 1,
+      "label": "Навес-площадка",
+      "cadNumber": "90:25:020103:356",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:000000:3899",
+      "type": "structure",
+      "level": 1,
+      "label": null,
+      "cadNumber": "90:25:000000:3899",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "building:90:25:020103:4644",
+      "type": "building",
+      "level": 1,
+      "label": "насосная",
+      "cadNumber": "90:25:020103:4644",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "building:90:25:020103:4650",
+      "type": "building",
+      "level": 1,
+      "label": "склад",
+      "cadNumber": "90:25:020103:4650",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "building:90:25:020103:4654",
+      "type": "building",
+      "level": 1,
+      "label": "склад",
+      "cadNumber": "90:25:020103:4654",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "building:90:25:020103:4655",
+      "type": "building",
+      "level": 1,
+      "label": "насосная",
+      "cadNumber": "90:25:020103:4655",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:4918",
+      "type": "structure",
+      "level": 1,
+      "label": "Резервуар",
+      "cadNumber": "90:25:020103:4918",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "building:90:25:020103:682",
+      "type": "building",
+      "level": 1,
+      "label": "бар",
+      "cadNumber": "90:25:020103:682",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "building:90:25:020102:685",
+      "type": "building",
+      "level": 1,
+      "label": null,
+      "cadNumber": "90:25:020102:685",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020102:686",
+      "type": "structure",
+      "level": 1,
+      "label": null,
+      "cadNumber": "90:25:020102:686",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:748",
+      "type": "structure",
+      "level": 1,
+      "label": "Навес-ротонда",
+      "cadNumber": "90:25:020103:748",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "building:90:25:020103:749",
+      "type": "building",
+      "level": 1,
+      "label": "корпус №5",
+      "cadNumber": "90:25:020103:749",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "building:90:25:020103:753",
+      "type": "building",
+      "level": 1,
+      "label": "Технические помещения",
+      "cadNumber": "90:25:020103:753",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "building:90:25:020103:760",
+      "type": "building",
+      "level": 1,
+      "label": "Склад",
+      "cadNumber": "90:25:020103:760",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:762",
+      "type": "structure",
+      "level": 1,
+      "label": "Площадка",
+      "cadNumber": "90:25:020103:762",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:764",
+      "type": "structure",
+      "level": 1,
+      "label": "Площадка тенисного корта",
+      "cadNumber": "90:25:020103:764",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:8056",
+      "type": "structure",
+      "level": 1,
+      "label": "Сети теплоснабжения и горячего водоснабжения протяженностью 4280 п.м",
+      "cadNumber": "90:25:020103:8056",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:8057",
+      "type": "structure",
+      "level": 1,
+      "label": "Непосредственно сети водопровода протяженностью 2693 п.м.",
+      "cadNumber": "90:25:020103:8057",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:8095",
+      "type": "structure",
+      "level": 1,
+      "label": "Сети внешнего освещения",
+      "cadNumber": "90:25:020103:8095",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "building:90:25:020103:9278",
+      "type": "building",
+      "level": 1,
+      "label": null,
+      "cadNumber": "90:25:020103:9278",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:9281",
+      "type": "structure",
+      "level": 1,
+      "label": null,
+      "cadNumber": "90:25:020103:9281",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "building:90:25:020103:9282",
+      "type": "building",
+      "level": 1,
+      "label": null,
+      "cadNumber": "90:25:020103:9282",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "building:90:25:020103:9283",
+      "type": "building",
+      "level": 1,
+      "label": null,
+      "cadNumber": "90:25:020103:9283",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:9285",
+      "type": "structure",
+      "level": 1,
+      "label": null,
+      "cadNumber": "90:25:020103:9285",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:9287",
+      "type": "structure",
+      "level": 1,
+      "label": null,
+      "cadNumber": "90:25:020103:9287",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:9288",
+      "type": "structure",
+      "level": 1,
+      "label": null,
+      "cadNumber": "90:25:020103:9288",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:9290",
+      "type": "structure",
+      "level": 1,
+      "label": null,
+      "cadNumber": "90:25:020103:9290",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:9291",
+      "type": "structure",
+      "level": 1,
+      "label": null,
+      "cadNumber": "90:25:020103:9291",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:9293",
+      "type": "structure",
+      "level": 1,
+      "label": null,
+      "cadNumber": "90:25:020103:9293",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:9294",
+      "type": "structure",
+      "level": 1,
+      "label": null,
+      "cadNumber": "90:25:020103:9294",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:9295",
+      "type": "structure",
+      "level": 1,
+      "label": null,
+      "cadNumber": "90:25:020103:9295",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:9296",
+      "type": "structure",
+      "level": 1,
+      "label": null,
+      "cadNumber": "90:25:020103:9296",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:9298",
+      "type": "structure",
+      "level": 1,
+      "label": null,
+      "cadNumber": "90:25:020103:9298",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:9300",
+      "type": "structure",
+      "level": 1,
+      "label": null,
+      "cadNumber": "90:25:020103:9300",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:9303",
+      "type": "structure",
+      "level": 1,
+      "label": null,
+      "cadNumber": "90:25:020103:9303",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:9308",
+      "type": "structure",
+      "level": 1,
+      "label": null,
+      "cadNumber": "90:25:020103:9308",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "structure:90:25:020103:9302",
+      "type": "structure",
+      "level": 1,
+      "label": null,
+      "cadNumber": "90:25:020103:9302",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "subj:2312122992",
       "type": "beneficiary_legal",
       "level": null,
-      "label": "ООО Лебеди",
+      "label": "ООО \"Антарес\"",
       "cadNumber": null,
       "refTable": "subjects",
       "bbox": null
     },
     {
-      "id": "subj:6164000002",
+      "id": "subj:holder:14",
       "type": "beneficiary_legal",
       "level": null,
-      "label": "ООО Холдинг",
+      "label": null,
       "cadNumber": null,
-      "refTable": "subjects",
+      "refTable": "right_holders",
+      "bbox": null
+    },
+    {
+      "id": "subj:holder:18",
+      "type": "beneficiary_legal",
+      "level": null,
+      "label": "Российская Федерация",
+      "cadNumber": null,
+      "refTable": "right_holders",
       "bbox": null
     }
   ],
   "edges": [
     {
-      "id": "edge:b337e8b3",
-      "source": "building:61:44:0040713:200",
-      "target": "accessory:1",
-      "kind": "contains",
-      "code": "CONTAINS",
-      "domain": "spatial",
-      "confidence": 1.0,
-      "directed": true,
-      "metadata": {}
-    },
-    {
-      "id": "edge:d053c566",
-      "source": "subj:6164000001",
-      "target": "building:61:44:0040713:200",
+      "id": "edge:bb4ddd71",
+      "source": "subj:2312122992",
+      "target": "room:61:44:0040713:311",
       "kind": "owns",
       "code": "OWNS",
       "domain": "legal",
       "confidence": 1.0,
       "directed": true,
       "metadata": {
-        "right_number": "61-61/001",
-        "since": "2020-01-15"
+        "right_number": "61-61-01/324/2006-259",
+        "since": "2006-08-31"
       }
     },
     {
-      "id": "edge:812c0613",
-      "source": "subj:6164000001",
-      "target": "land:61:44:0040713:100",
-      "kind": "leases",
-      "code": "LEASES",
+      "id": "edge:92f9829b",
+      "source": "subj:2312122992",
+      "target": "room:61:44:0040713:340",
+      "kind": "owns",
+      "code": "OWNS",
       "domain": "legal",
       "confidence": 1.0,
       "directed": true,
       "metadata": {
-        "right_number": "61-61/002",
-        "since": "2021-03-10"
+        "right_number": "61-61-01/324/2006-296",
+        "since": "2006-09-04"
       }
     },
     {
-      "id": "edge:137a76b3",
-      "source": "subj:6164000002",
-      "target": "subj:6164000001",
-      "kind": "controls",
-      "code": "CONTROLS",
+      "id": "edge:24e5f7e5",
+      "source": "subj:2312122992",
+      "target": "room:61:44:0040713:426",
+      "kind": "owns",
+      "code": "OWNS",
       "domain": "legal",
-      "confidence": 0.4,
+      "confidence": 1.0,
       "directed": true,
       "metadata": {
-        "share_pct": 75.0
+        "right_number": "61-61-01/256/2006-155",
+        "since": "2006-07-18"
+      }
+    },
+    {
+      "id": "edge:109a35b7",
+      "source": "subj:2312122992",
+      "target": "room:61:44:0040713:354",
+      "kind": "owns",
+      "code": "OWNS",
+      "domain": "legal",
+      "confidence": 1.0,
+      "directed": true,
+      "metadata": {
+        "right_number": "61-61-01/177/2006-157",
+        "since": "2006-05-29"
+      }
+    },
+    {
+      "id": "edge:b947a9f3",
+      "source": "subj:2312122992",
+      "target": "room:61:44:0040713:440",
+      "kind": "owns",
+      "code": "OWNS",
+      "domain": "legal",
+      "confidence": 1.0,
+      "directed": true,
+      "metadata": {
+        "right_number": "61:44:0040713:440-61/001/2019-2",
+        "since": "2019-06-03 12:21:39"
+      }
+    },
+    {
+      "id": "edge:9b868e00",
+      "source": "subj:2312122992",
+      "target": "room:61:44:0040713:342",
+      "kind": "owns",
+      "code": "OWNS",
+      "domain": "legal",
+      "confidence": 1.0,
+      "directed": true,
+      "metadata": {
+        "right_number": "61-61-01/356/2006-129",
+        "since": "2006-09-08"
+      }
+    },
+    {
+      "id": "edge:1bc32612",
+      "source": "subj:2312122992",
+      "target": "room:61:44:0040713:428",
+      "kind": "owns",
+      "code": "OWNS",
+      "domain": "legal",
+      "confidence": 1.0,
+      "directed": true,
+      "metadata": {
+        "right_number": "61-61-01/272/2006-13",
+        "since": "2006-07-19"
+      }
+    },
+    {
+      "id": "edge:564803e0",
+      "source": "subj:2312122992",
+      "target": "room:61:44:0040713:343",
+      "kind": "owns",
+      "code": "OWNS",
+      "domain": "legal",
+      "confidence": 1.0,
+      "directed": true,
+      "metadata": {
+        "right_number": "61-61-01/245/2006-379",
+        "since": "2006-09-18"
+      }
+    },
+    {
+      "id": "edge:cdf6d6a6",
+      "source": "subj:2312122992",
+      "target": "room:61:44:0040713:417",
+      "kind": "owns",
+      "code": "OWNS",
+      "domain": "legal",
+      "confidence": 1.0,
+      "directed": true,
+      "metadata": {
+        "right_number": "61-61-01/178/2006-171",
+        "since": "2006-05-26"
+      }
+    },
+    {
+      "id": "edge:268cabdb",
+      "source": "subj:2312122992",
+      "target": "room:61:44:0040713:308",
+      "kind": "owns",
+      "code": "OWNS",
+      "domain": "legal",
+      "confidence": 1.0,
+      "directed": true,
+      "metadata": {
+        "right_number": "61-61-01/177/2006-126",
+        "since": "2006-05-25"
+      }
+    },
+    {
+      "id": "edge:67d99050",
+      "source": "subj:2312122992",
+      "target": "building:61:44:0040713:370",
+      "kind": "owns",
+      "code": "OWNS",
+      "domain": "legal",
+      "confidence": 1.0,
+      "directed": true,
+      "metadata": {
+        "right_number": "61:44:0040713:370-61/192/2021-5",
+        "since": "2021-06-07 11:20:57"
+      }
+    },
+    {
+      "id": "edge:611649ba",
+      "source": "subj:holder:14",
+      "target": "building:61:44:0040713:370",
+      "kind": "owns",
+      "code": "OWNS",
+      "domain": "legal",
+      "confidence": 1.0,
+      "directed": true,
+      "metadata": {
+        "right_number": "61-01/44-214/2004-328",
+        "since": "2004-09-15"
+      }
+    },
+    {
+      "id": "edge:f9327bf9",
+      "source": "subj:2312122992",
+      "target": "room:61:44:0040713:446",
+      "kind": "owns",
+      "code": "OWNS",
+      "domain": "legal",
+      "confidence": 1.0,
+      "directed": true,
+      "metadata": {
+        "right_number": "61-61-01/224/2006-335",
+        "since": "2006-07-07"
+      }
+    },
+    {
+      "id": "edge:d64aa754",
+      "source": "subj:2312122992",
+      "target": "room:61:44:0040713:310",
+      "kind": "owns",
+      "code": "OWNS",
+      "domain": "legal",
+      "confidence": 1.0,
+      "directed": true,
+      "metadata": {
+        "right_number": "61-61-01/425/2007-499",
+        "since": "2007-11-01"
+      }
+    },
+    {
+      "id": "edge:d1e49fdb",
+      "source": "subj:2312122992",
+      "target": "room:61:44:0040713:448",
+      "kind": "owns",
+      "code": "OWNS",
+      "domain": "legal",
+      "confidence": 1.0,
+      "directed": true,
+      "metadata": {
+        "right_number": "61-61/001-61/001/009/2016-3133/3",
+        "since": "2016-03-16 11:48:14"
+      }
+    },
+    {
+      "id": "edge:41c4e610",
+      "source": "subj:holder:18",
+      "target": "land:61:44:0040713:7",
+      "kind": "owns",
+      "code": "OWNS",
+      "domain": "legal",
+      "confidence": 1.0,
+      "directed": true,
+      "metadata": {
+        "right_number": "61:44:0040713:7-61/192/2026-43",
+        "since": "2026-03-25 10:26:15"
+      }
+    },
+    {
+      "id": "edge:4efbfe38",
+      "source": "subj:2312122992",
+      "target": "land:61:44:0040713:7",
+      "kind": "owns",
+      "code": "OWNS",
+      "domain": "legal",
+      "confidence": 1.0,
+      "directed": true,
+      "metadata": {
+        "right_number": "61-61-01/674/2007-199",
+        "since": "2008-02-21"
+      }
+    },
+    {
+      "id": "edge:a33e441b",
+      "source": "subj:2312122992",
+      "target": "room:61:44:0040713:406",
+      "kind": "owns",
+      "code": "OWNS",
+      "domain": "legal",
+      "confidence": 1.0,
+      "directed": true,
+      "metadata": {
+        "right_number": "61-61-01/116/2007-7",
+        "since": "2007-02-27"
+      }
+    },
+    {
+      "id": "edge:50dcdf57",
+      "source": "subj:2312122992",
+      "target": "room:61:44:0040713:437",
+      "kind": "owns",
+      "code": "OWNS",
+      "domain": "legal",
+      "confidence": 1.0,
+      "directed": true,
+      "metadata": {
+        "right_number": "61-61/001-61/001/009/2016-4398/2",
+        "since": "2016-04-08 12:40:12"
       }
     }
   ],
   "groups": [],
   "metadata": {
-    "nodeCount": 6,
-    "edgeCount": 4,
+    "nodeCount": 129,
+    "edgeCount": 19,
     "nodesByKind": {
-      "land": 1,
-      "building": 1,
-      "room": 1,
-      "accessory": 1,
-      "beneficiary_legal": 2
+      "land": 3,
+      "room": 17,
+      "building": 21,
+      "structure": 85,
+      "beneficiary_legal": 3
     },
-    "geometryAvailable": true
+    "geometryAvailable": false
   }
 }
