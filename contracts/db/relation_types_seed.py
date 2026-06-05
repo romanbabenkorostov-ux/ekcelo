@@ -35,11 +35,14 @@ RELATION_TYPES_SEED: list[dict] = [
     {"code": "ARRESTED_BY",   "name": "Арест",                    "domain": "legal", "category": "encumbrance", "parser_edge": "enc"},
     # ── legal / restriction ──────────────────────────────────────────────────
     {"code": "RESTRICTED_BY", "name": "Ограничение (СЗЗ/ВОЗ/ОКН)","domain": "legal", "category": "restriction", "parser_edge": None},
-    # ── legal / corporate (бенефициарные цепочки, EGRUL) ─────────────────────
+    # ── legal / corporate (бенефициарные цепочки + реорганизация, EGRUL) ─────
     {"code": "CONTROLS",      "name": "Контроль (доля)",          "domain": "legal", "category": "corporate",   "parser_edge": "controls"},
     {"code": "FOUNDER_OF",    "name": "Учредитель",               "domain": "legal", "category": "corporate",   "parser_edge": None},
-    {"code": "MANAGES",       "name": "Руководитель/УК",          "domain": "legal", "category": "corporate",   "parser_edge": None},
+    {"code": "MANAGES",       "name": "Руководитель/УК (без доверенности)", "domain": "legal", "category": "corporate", "parser_edge": None},
     {"code": "BRANCH_OF",     "name": "Обособленное подразделение","domain": "legal","category": "corporate",   "parser_edge": None},
+    # правопреемство при реорганизации (от=правопреемник, к=правопредшественник); reorg_type в meta
+    {"code": "SUCCESSOR_OF",      "name": "Правопреемник (реорганизация)", "domain": "legal", "category": "corporate", "parser_edge": None},
+    {"code": "REORGANIZING_WITH", "name": "Участвует в реорганизации",     "domain": "legal", "category": "corporate", "parser_edge": None},
     # ── spatial / topology ───────────────────────────────────────────────────
     {"code": "CONTAINS",      "name": "Содержит",                 "domain": "spatial", "category": "topology",  "parser_edge": "contains"},
     {"code": "INSIDE",        "name": "Внутри",                   "domain": "spatial", "category": "topology",  "parser_edge": "level_in_building"},
@@ -71,3 +74,13 @@ PARSER_EDGE_TO_CODE: dict[str, str] = {
 }
 # equipment_at_object тоже → LOCATED_ON (несколько рёбер парсера на один код)
 PARSER_EDGE_TO_CODE["equipment_at_object"] = "LOCATED_ON"
+
+# Виды реорганизации (ЕГРЮЛ, ФЗ-129 ст.5 п.1 пп «ж») — значения relations.meta.reorg_type
+# для рёбер SUCCESSOR_OF / REORGANIZING_WITH.
+REORG_TYPES: dict[str, str] = {
+    "merger":         "слияние",        # A + B → C (новое ЮЛ)
+    "affiliation":    "присоединение",  # B → A (B прекращается, права к A)
+    "division":       "разделение",     # A → B + C (A прекращается)
+    "spin_off":       "выделение",      # A → A + B (A продолжает, B новое)
+    "transformation": "преобразование", # A → A' (смена ОПФ)
+}
