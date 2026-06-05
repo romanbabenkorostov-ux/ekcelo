@@ -43,8 +43,8 @@ def ask_diff_action(
 
     print(format_diff_report(cad_number, name, changed))
     print("\nДействие?")
+    print("  [e] обогатить (enrich, объединить) — рекомендуется")
     print("  [r] заменить (replace)")
-    print("  [e] обогатить (enrich, объединить)")
     print("  [n] создать новый объект (new)")
     print("  [s] оставить как есть (skip)")
     print("  [d] показать полный diff")
@@ -57,12 +57,17 @@ def ask_diff_action(
         "s": "skip",     "skip":   "skip",
         "q": "quit",     "quit":   "quit",
     }
+    default_action = "enrich"  # рекомендация: непедеструктивное объединение
 
     while True:
         try:
-            ans = input("\nВыбор [r/e/n/s/д/q]: ").strip().lower()
+            ans = input(f"\nВыбор [e/r/n/s/d/q] (Enter — {default_action}): ").strip().lower()
         except (EOFError, KeyboardInterrupt):
             return "skip"
+
+        if ans == "":
+            _log_decision(decisions_log_path, cad_number, changed, default_action, auto=False)
+            return default_action
 
         if ans in ("d", "д"):
             print(json.dumps(changed, ensure_ascii=False, indent=2, default=str))
@@ -79,7 +84,7 @@ def ask_diff_action(
             _log_decision(decisions_log_path, cad_number, changed, action, auto=False)
             return action
 
-        print("Введите r/з (заменить), e/о (обогатить), n (новый), s/с (пропуск), д (diff), q (выход)")
+        print("Введите e (обогатить), r (заменить), n (новый), s (пропуск), d (diff), q (выход)")
 
 
 def _log_decision(
@@ -137,28 +142,35 @@ def ask_enrich_fields(
         print(f"    В БД:          {str(old_val)[:60] if old_val is not None else '—'}")
         print(f"    В выписке:     {str(new_val)[:60] if new_val is not None else '—'}")
 
-        # Авто-подсказка: если в БД пусто — рекомендуем принять
+        # Рекомендация парсера → дефолт по Enter
         if old_val is None and new_val is not None:
+            rec = "accept"
             print("    → Рекомендация: принять (в БД пусто)")
-        elif old_val is not None and new_val is not None:
-            print("    → Значения различаются")
         elif old_val is not None and new_val is None:
-            print("    → Рекомендация: пропустить (в выписке отсутствует)")
+            rec = "skip"
+            print("    → Рекомендация: пропустить (в выписке отсутствует — не затирать)")
+        else:
+            rec = "skip"
+            print("    → Рекомендация: пропустить (значения различаются — оставить значение БД)")
 
+        prompt = "[Y/n]" if rec == "accept" else "[y/N]"
         while True:
             try:
-                ans = input("    Принять из выписки? [Д/н]: ").strip().lower()
+                ans = input(f"    Принять из выписки? {prompt} (Enter — рекомендация): ").strip().lower()
             except (EOFError, KeyboardInterrupt):
-                ans = "н"
+                ans = ""
 
-            if ans in ("", "д", "y", "yes", "д"):
+            if ans == "":
+                decisions[field] = rec
+                break
+            elif ans in ("y", "yes", "д", "да"):
                 decisions[field] = "accept"
                 break
-            elif ans in ("н", "n", "no", "нет"):
+            elif ans in ("n", "no", "н", "нет"):
                 decisions[field] = "skip"
                 break
             else:
-                print("    Введите Д или н")
+                print("    Введите y/n (Enter — рекомендация)")
 
     if decisions_log_path:
         _log_decision(decisions_log_path, cad_number, changed,

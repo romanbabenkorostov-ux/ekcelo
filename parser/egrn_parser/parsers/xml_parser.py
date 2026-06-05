@@ -38,6 +38,7 @@ from egrn_parser.parsers._common import (
 )
 from egrn_parser.utils.personal_data_filter import filter_personal_data
 from egrn_parser.parsers.pdf_parser import _clean_status_text
+from egrn_parser.parsers.restrictions_common import classify_restriction_type
 from egrn_parser.dictionaries import (
     OBJECT_TYPE_RU_TO_CODE,
     XML_ROOT_TO_OBJECT_TYPE,
@@ -775,10 +776,8 @@ def _parse_xml_object_restrictions(root: ET.Element, extract_number: Optional[st
             continue
         seen_reg_nums.add(key)
 
-        # Классификация
-        restr_type = "czuit_zone"
-        if "культурного наследия" in type_name.lower() or "культурного наследия" in (desc or "").lower():
-            restr_type = "okn_territory"
+        # Классификация (единый алгоритм с PDF)
+        restr_type = classify_restriction_type(type_name, desc)
 
         # Документ-основание
         doc_elem = _find_recursive(enc, "underlying_document")

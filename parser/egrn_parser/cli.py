@@ -111,6 +111,12 @@ def cmd_parse(args: argparse.Namespace) -> int:
         else:
             accepted.append(p)
 
+    # Дедуп: один отчёт лежит в PDF и XML → берём XML (машиночитаемый, авторитетный),
+    # PDF того же отчёта отбрасываем. Снимает двойной парсинг и ложные diff'ы.
+    accepted, dropped_dups = _dedup_pdf_xml(accepted)
+    for d in dropped_dups:
+        print_info(f"  Дубль PDF (есть XML того же отчёта), пропуск: {d.name}")
+
     # Вывод статистики сканирования
     _print_scan_summary(accepted)
 
@@ -573,6 +579,39 @@ def _scan_directory(root: Path) -> list[Path]:
     for ext in ("*.pdf", "*.PDF", "*.xml", "*.XML", "*.xlsx", "*.XLSX", "*.docx", "*.DOCX", "*.doc"):
         found.extend(root.rglob(ext))
     return sorted(set(found))
+
+
+def _report_key(p: Path) -> str:
+    """Ключ отчёта по имени файла: без расширения, без суффикса ' ЭП', без хвостов.
+    PDF и XML одного отчёта дают одинаковый ключ."""
+    import re as _re
+    stem = p.stem.lower().strip()
+    stem = _re.sub(r"\s*эп$", "", stem)          # '… [0] ЭП' → '… [0]'
+    stem = _re.sub(r"\s+", " ", stem).strip()
+    return stem
+
+
+def _dedup_pdf_xml(paths: list[Path]) -> tuple[list[Path], list[Path]]:
+    """Если один отчёт есть и в .pdf, и в .xml — оставить .xml, .pdf отбросить.
+    Возвращает (оставленные, отброшенные_pdf). Файлы прочих типов не трогаются."""
+    by_key: dict[str, dict[str, Path]] = {}
+    others: list[Path] = []
+    for p in paths:
+        ext = p.suffix.lower()
+        if ext in (".pdf", ".xml"):
+            by_key.setdefault(_report_key(p), {})[ext] = p
+        else:
+            others.append(p)
+
+    kept: list[Path] = []
+    dropped: list[Path] = []
+    for group in by_key.values():
+        if ".xml" in group and ".pdf" in group:
+            kept.append(group[".xml"])
+            dropped.append(group[".pdf"])
+        else:
+            kept.extend(group.values())
+    return sorted(set(kept + others)), dropped
 
 
 def _print_scan_summary(paths: list[Path]) -> None:

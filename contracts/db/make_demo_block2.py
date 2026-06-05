@@ -6,6 +6,7 @@ import_block2 и graph_emit как настоящую БД парсера.
 
     python -m contracts.db.make_demo_block2 demo_block2.db
 """
+import os
 import sqlite3
 import sys
 
@@ -41,7 +42,22 @@ def build(path: str) -> None:
 
 
 def main() -> None:
-    out = sys.argv[1] if len(sys.argv) > 1 else "demo_block2.db"
+    args = [a for a in sys.argv[1:] if a != "--force"]
+    force = "--force" in sys.argv
+    out = args[0] if args else "demo_block2.db"
+
+    if os.path.exists(out):
+        if force:
+            os.remove(out)
+        elif not sys.stdin.isatty():
+            sys.exit(f"БД {out} уже существует. Удалите её или запустите с --force.")
+        else:
+            ans = input(f"БД {out} уже существует. Удалить и создать заново? [y/N]: ").strip().lower()
+            if ans in ("y", "yes", "д", "да"):
+                os.remove(out)
+            else:
+                print("Оставлено без изменений.")
+                return
     build(out)
 
 

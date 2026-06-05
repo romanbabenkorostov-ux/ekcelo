@@ -1,2 +1,19 @@
 {"ts": "2026-05-12T11:19:15.102015+00:00", "cad_number": "61:44:0040713:7", "action": "enrich", "auto": false, "changed_fields": ["address", "object_restrictions"]}
 {"ts": "2026-05-12T11:20:15.854112+00:00", "cad_number": "61:44:0040713:7", "action": "enrich", "auto": false, "changed_fields": ["address", "object_restrictions"]}
+{"ts": "2026-06-05T06:34:30.103195+00:00", "cad_number": "61:44:0040713:311", "action": "enrich", "auto": false, "changed_fields": ["parent_cad_number"]}
+{"ts": "2026-06-05T06:34:34.767284+00:00", "cad_number": "61:44:0040713:340", "action": "enrich", "auto": false, "changed_fields": ["parent_cad_number"]}
+{"ts": "2026-06-05T06:34:36.375291+00:00", "cad_number": "61:44:0040713:426", "action": "enrich", "auto": false, "changed_fields": ["name", "parent_cad_number"]}
+{"ts": "2026-06-05T06:35:39.775271+00:00", "cad_number": "61:44:0040713:354", "action": "skip", "auto": false, "changed_fields": ["parent_cad_number"]}
+{"ts": "2026-06-05T06:35:42.382957+00:00", "cad_number": "61:44:0040713:440", "action": "skip", "auto": false, "changed_fields": ["parent_cad_number"]}
+{"ts": "2026-06-05T06:35:48.799408+00:00", "cad_number": "61:44:0040713:342", "action": "skip", "auto": false, "changed_fields": ["parent_cad_number"]}
+{"ts": "2026-06-05T06:35:50.487102+00:00", "cad_number": "61:44:0040713:428", "action": "skip", "auto": false, "changed_fields": ["parent_cad_number"]}
+{"ts": "2026-06-05T06:35:51.822682+00:00", "cad_number": "61:44:0040713:343", "action": "skip", "auto": false, "changed_fields": ["parent_cad_number"]}
+{"ts": "2026-06-05T06:35:53.166934+00:00", "cad_number": "61:44:0040713:417", "action": "skip", "auto": false, "changed_fields": ["parent_cad_number"]}
+{"ts": "2026-06-05T06:35:54.499541+00:00", "cad_number": "61:44:0040713:308", "action": "skip", "auto": false, "changed_fields": ["parent_cad_number"]}
+{"ts": "2026-06-05T06:35:56.262559+00:00", "cad_number": "61:44:0040713:370", "action": "skip", "auto": false, "changed_fields": ["name", "floors_total", "floors_above_ground", "underground_floors"]}
+{"ts": "2026-06-05T06:35:57.687399+00:00", "cad_number": "61:44:0040713:446", "action": "skip", "auto": false, "changed_fields": ["parent_cad_number"]}
+{"ts": "2026-06-05T06:35:59.215715+00:00", "cad_number": "61:44:0040713:310", "action": "skip", "auto": false, "changed_fields": ["parent_cad_number"]}
+{"ts": "2026-06-05T06:36:00.695075+00:00", "cad_number": "61:44:0040713:448", "action": "skip", "auto": false, "changed_fields": ["parent_cad_number"]}
+{"ts": "2026-06-05T06:36:11.367225+00:00", "cad_number": "61:44:0040713:7", "action": "enrich", "auto": false, "changed_fields": ["address", "object_restrictions"]}
+{"ts": "2026-06-05T07:04:44.967956+00:00", "cad_number": "61:44:0040713:311", "action": "skip", "auto": false, "changed_fields": ["parent_cad_number"]}
+{"ts": "2026-06-05T07:04:47.120110+00:00", "cad_number": "61:44:0040713:340", "action": "skip", "auto": false, "changed_fields": ["parent_cad_number"]}

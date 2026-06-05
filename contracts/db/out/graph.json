@@ -1,6 +1,6 @@
 {
   "schemaVersion": "graph.json/2.0-c2",
-  "generatedAt": "2026-06-05T06:13:52.549228+00:00",
+  "generatedAt": "2026-06-05T07:03:48.729013+00:00",
   "nodes": [
     {
       "id": "land:61:44:0040713:100",
@@ -59,7 +59,7 @@
   ],
   "edges": [
     {
-      "id": "edge:dc175533",
+      "id": "edge:b337e8b3",
       "source": "building:61:44:0040713:200",
       "target": "accessory:1",
       "kind": "contains",
@@ -70,7 +70,7 @@
       "metadata": {}
     },
     {
-      "id": "edge:38f88910",
+      "id": "edge:d053c566",
       "source": "subj:6164000001",
       "target": "building:61:44:0040713:200",
       "kind": "owns",
@@ -84,7 +84,7 @@
       }
     },
     {
-      "id": "edge:01207fa0",
+      "id": "edge:812c0613",
       "source": "subj:6164000001",
       "target": "land:61:44:0040713:100",
       "kind": "leases",
@@ -98,7 +98,7 @@
       }
     },
     {
-      "id": "edge:0ae49f03",
+      "id": "edge:137a76b3",
       "source": "subj:6164000002",
       "target": "subj:6164000001",
       "kind": "controls",

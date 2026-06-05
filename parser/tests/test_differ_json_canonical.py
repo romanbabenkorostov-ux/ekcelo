@@ -1,5 +1,5 @@
-"""Замок: JSON-массивы (object_restrictions и др.) сравниваются канонически —
-порядок элементов не вызывает ложный diff при повторном парсинге одного отчёта."""
+"""Замки детерминизма differ: JSON-массивы сравниваются канонически;
+отсутствие поля в источнике (new=None) не считается изменением (провенанс)."""
 import json
 
 from egrn_parser.merge.differ import diff_objects
@@ -31,3 +31,16 @@ def test_permitted_uses_reorder_not_a_diff():
 def test_none_vs_empty_list_not_a_diff():
     assert diff_objects({"object_restrictions": None},
                         {"object_restrictions": "[]"}, "land") == {}
+
+
+def test_absent_field_in_source_is_not_a_diff():
+    # parent_cad_number обогащён в БД, в сырой выписке отсутствует → НЕ изменение
+    old = {"parent_cad_number": "61:44:0040713:298"}
+    new = {"parent_cad_number": None}
+    assert diff_objects(old, new, "building") == {}
+
+
+def test_new_value_appears_is_a_diff():
+    old = {"parent_cad_number": None}
+    new = {"parent_cad_number": "61:44:0040713:298"}
+    assert "parent_cad_number" in diff_objects(old, new, "building")
