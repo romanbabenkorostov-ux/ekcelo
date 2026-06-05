@@ -1,0 +1,127 @@
+{
+  "schemaVersion": "graph.json/2.0-c2",
+  "generatedAt": "2026-06-05T06:13:52.549228+00:00",
+  "nodes": [
+    {
+      "id": "land:61:44:0040713:100",
+      "type": "land",
+      "level": 0,
+      "label": "ЗУ 100",
+      "cadNumber": "61:44:0040713:100",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "building:61:44:0040713:200",
+      "type": "building",
+      "level": 1,
+      "label": "Склад",
+      "cadNumber": "61:44:0040713:200",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "room:61:44:0040713:446",
+      "type": "room",
+      "level": 2,
+      "label": "Помещение 8",
+      "cadNumber": "61:44:0040713:446",
+      "refTable": "objects",
+      "bbox": null
+    },
+    {
+      "id": "accessory:1",
+      "type": "accessory",
+      "level": 2,
+      "label": "Весовая будка",
+      "cadNumber": null,
+      "refTable": "accessories",
+      "bbox": null
+    },
+    {
+      "id": "subj:6164000001",
+      "type": "beneficiary_legal",
+      "level": null,
+      "label": "ООО Лебеди",
+      "cadNumber": null,
+      "refTable": "subjects",
+      "bbox": null
+    },
+    {
+      "id": "subj:6164000002",
+      "type": "beneficiary_legal",
+      "level": null,
+      "label": "ООО Холдинг",
+      "cadNumber": null,
+      "refTable": "subjects",
+      "bbox": null
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge:dc175533",
+      "source": "building:61:44:0040713:200",
+      "target": "accessory:1",
+      "kind": "contains",
+      "code": "CONTAINS",
+      "domain": "spatial",
+      "confidence": 1.0,
+      "directed": true,
+      "metadata": {}
+    },
+    {
+      "id": "edge:38f88910",
+      "source": "subj:6164000001",
+      "target": "building:61:44:0040713:200",
+      "kind": "owns",
+      "code": "OWNS",
+      "domain": "legal",
+      "confidence": 1.0,
+      "directed": true,
+      "metadata": {
+        "right_number": "61-61/001",
+        "since": "2020-01-15"
+      }
+    },
+    {
+      "id": "edge:01207fa0",
+      "source": "subj:6164000001",
+      "target": "land:61:44:0040713:100",
+      "kind": "leases",
+      "code": "LEASES",
+      "domain": "legal",
+      "confidence": 1.0,
+      "directed": true,
+      "metadata": {
+        "right_number": "61-61/002",
+        "since": "2021-03-10"
+      }
+    },
+    {
+      "id": "edge:0ae49f03",
+      "source": "subj:6164000002",
+      "target": "subj:6164000001",
+      "kind": "controls",
+      "code": "CONTROLS",
+      "domain": "legal",
+      "confidence": 0.4,
+      "directed": true,
+      "metadata": {
+        "share_pct": 75.0
+      }
+    }
+  ],
+  "groups": [],
+  "metadata": {
+    "nodeCount": 6,
+    "edgeCount": 4,
+    "nodesByKind": {
+      "land": 1,
+      "building": 1,
+      "room": 1,
+      "accessory": 1,
+      "beneficiary_legal": 2
+    },
+    "geometryAvailable": true
+  }
+}

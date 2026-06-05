@@ -70,3 +70,17 @@ def test_import_block2(block2_db):
         confs = sorted({round(a.confidence_score, 3)
                         for a in s.scalars(select(Assertion))})
         assert confs == [0.4, 1.0]
+
+
+def test_import_block2_idempotent(block2_db):
+    """Повторный импорт не плодит дубли и не падает (UNIQUE)."""
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    with Session(engine) as s:
+        import_block2(block2_db, s)
+        ent1 = s.scalar(select(func.count()).select_from(Entity))
+        rel1 = s.scalar(select(func.count()).select_from(Relation))
+        counts2 = import_block2(block2_db, s)   # второй прогон
+        assert counts2["entities"] == 0 and counts2["relations"] == 0
+        assert s.scalar(select(func.count()).select_from(Entity)) == ent1
+        assert s.scalar(select(func.count()).select_from(Relation)) == rel1

@@ -59,6 +59,13 @@ graph.json: 6 nodes, 4 edges → contracts\db\out\graph.json
 
 ## ТРЕК B — на реальных выписках ЕГРН
 
+> **Импортёр идемпотентный** — повторный прогон не падает и не плодит дубли. Но
+> демо и реальные данные **смешивать не нужно**. Перед треком B — чистая C2 БД:
+> ```powershell
+> Remove-Item contracts\db\ekcelo.db -ErrorAction SilentlyContinue
+> cd contracts\db; alembic upgrade head; cd ..\..
+> ```
+
 ### B1. Создать БД парсера из PDF выписок ЕГРН
 Парсер строит свою БД командой `parse`. Запуск из папки `parser`:
 ```powershell

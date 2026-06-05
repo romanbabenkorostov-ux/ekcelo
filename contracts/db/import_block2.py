@@ -73,8 +73,13 @@ def import_block2(src_db_path: str, session: Session) -> dict[str, int]:
 
     def get_entity(kind: EntityKind, gnid: str, ref_table: str, ref_pk: str,
                    label: Optional[str] = None, cad: Optional[str] = None) -> Entity:
+        # идемпотентно: кэш сессии → существующий в БД (по graph_node_id) → создать
         if gnid in ent_cache:
             return ent_cache[gnid]
+        existing = session.scalar(select(Entity).where(Entity.graph_node_id == gnid))
+        if existing is not None:
+            ent_cache[gnid] = existing
+            return existing
         e = Entity(graph_node_id=gnid, kind=kind, ref_table=ref_table,
                    ref_pk=ref_pk, label=label, cad_number=cad)
         session.add(e); session.flush()
@@ -85,6 +90,12 @@ def import_block2(src_db_path: str, session: Session) -> dict[str, int]:
     def add_relation(frm: Entity, to: Entity, code: str, *,
                      source: DataSourceType, doc_meta: Optional[dict] = None) -> Relation:
         rt = rt_index[code]
+        # идемпотентно: не плодим дубль ребра (from,to,type) при повторном импорте
+        existing = session.scalar(select(Relation).where(
+            Relation.from_entity_id == frm.id, Relation.to_entity_id == to.id,
+            Relation.relation_type_id == rt.id, Relation.superseded_at.is_(None)))
+        if existing is not None:
+            return existing
         rel = Relation(from_entity_id=frm.id, to_entity_id=to.id,
                        relation_type_id=rt.id, domain=rt.domain, meta=doc_meta)
         session.add(rel); session.flush()
@@ -119,6 +130,9 @@ def import_block2(src_db_path: str, session: Session) -> dict[str, int]:
     for g in _rows(src, "object_geometries"):
         if not g.get("is_current", 1):
             continue
+        # идемпотентно: не дублируем геометрию по cad_number
+        if session.scalar(select(Geometry.id).where(Geometry.cad_number == g["cad_number"])):
+            continue
         ent = obj_entity.get(g["cad_number"])
         srid = 4326 if str(g.get("crs", "")).endswith("4326") else 4326
         session.add(Geometry(
@@ -136,7 +150,8 @@ def import_block2(src_db_path: str, session: Session) -> dict[str, int]:
         aid = a["accessory_id"]
         ae = get_entity(EntityKind.accessory, f"accessory:{aid}", "accessories", str(aid),
                         label=a.get("item_name"))
-        if a.get("lat") is not None and a.get("lon") is not None:
+        has_geom = session.scalar(select(Geometry.id).where(Geometry.entity_id == ae.id))
+        if not has_geom and a.get("lat") is not None and a.get("lon") is not None:
             session.add(Geometry(
                 entity_id=ae.id, geometry_type="POINT",
                 coordinates_wkt=f"POINT({a['lon']} {a['lat']})", srid=4326,
@@ -154,17 +169,21 @@ def import_block2(src_db_path: str, session: Session) -> dict[str, int]:
         inn = er.get("inn")
         stype = _ENTITY_TYPE_TO_SUBJECT.get((er.get("entity_type") or "").lower(),
                                             SubjectType.LEGAL_ENTITY)
-        subj = Subject(subject_type=stype, inn=inn, ogrn=er.get("ogrn"),
-                       name_current=er.get("name_full") or er.get("name_short") or (inn or "?"))
-        session.add(subj); session.flush()
-        counts["subjects"] += 1
+        # идемпотентно: субъект по ИНН переиспользуется (не плодим дубли при ре-импорте)
+        subj = session.scalar(select(Subject).where(Subject.inn == inn)) if inn else None
+        if subj is None:
+            subj = Subject(subject_type=stype, inn=inn, ogrn=er.get("ogrn"),
+                           name_current=er.get("name_full") or er.get("name_short") or (inn or "?"))
+            session.add(subj); session.flush()
+            counts["subjects"] += 1
+            if inn:
+                session.merge(EntityRegistry(
+                    inn=inn, name_full=subj.name_current, name_short=er.get("name_short"),
+                    ogrn=er.get("ogrn"), entity_type=er.get("entity_type")))
+            if er.get("kpp"):
+                session.add(SubjectKpp(subject_id=subj.id, kpp=er["kpp"], is_main=True))
         if inn:
             subj_by_inn[inn] = subj
-            session.merge(EntityRegistry(
-                inn=inn, name_full=subj.name_current, name_short=er.get("name_short"),
-                ogrn=er.get("ogrn"), entity_type=er.get("entity_type")))
-        if er.get("kpp"):
-            session.add(SubjectKpp(subject_id=subj.id, kpp=er["kpp"], is_main=True))
         gnid = f"subj:{inn}" if inn else f"subj:uuid:{uuid.uuid4().hex[:12]}"
         skind = (EntityKind.beneficiary_person if stype == SubjectType.INDIVIDUAL
                  else EntityKind.state_body if stype == SubjectType.STATE_BODY
@@ -194,15 +213,17 @@ def import_block2(src_db_path: str, session: Session) -> dict[str, int]:
             if inn and inn in subj_entity:
                 subj_e = subj_entity[inn]
             else:
-                gnid = f"subj:uuid:{uuid.uuid4().hex[:12]}"
-                subj_e = get_entity(EntityKind.beneficiary_legal, gnid, "right_holders",
-                                    str(h["holder_id"]), label=h.get("name"))
+                # стабильный адрес правообладателя без ИНН (идемпотентно по holder_id)
+                subj_e = get_entity(EntityKind.beneficiary_legal, f"subj:holder:{h['holder_id']}",
+                                    "right_holders", str(h["holder_id"]), label=h.get("name"))
             rel = add_relation(subj_e, obj_e, code, source=DataSourceType.EGRN,
                                doc_meta={"right_number": r.get("right_number"),
                                          "since": r.get("right_date")})
-            session.add(LegalRelation(
-                relation_id=rel.id, registration_number=r.get("right_number"),
-                registry_source="EGRN", right_type_code=r.get("right_type_code")))
+            # legal_relation 1:1 к ребру — только если ещё нет (идемпотентно)
+            if session.get(LegalRelation, rel.id) is None:
+                session.add(LegalRelation(
+                    relation_id=rel.id, registration_number=r.get("right_number"),
+                    registry_source="EGRN", right_type_code=r.get("right_type_code")))
 
     # ── ownership_chain → relations[legal/corporate CONTROLS] ─────────────────
     er_id_to_inn = {er["entity_id"]: er.get("inn")
