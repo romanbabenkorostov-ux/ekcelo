@@ -10,11 +10,34 @@
 хранит контракт ролей. Эмитит **C4** (REST/ViewModel), реэкспорт **C3**.
 Потребляет **C2**, **C3**. Прод: timeweb, FastAPI + SQLite(локаль)/Postgres(масштаб) + S3.
 
-## Текущее состояние
+## Текущее состояние (на 2026-06-08)
 
-FastAPI cycle 5 — только оркестратор меморандумов (6 эндпоинтов lots/run/status/
-artifacts); БД §1–§6 в `schema/`; нет импорта Bundle, каталога объектов, API
-рендеринга, ролей; легаси `viewer/`.
+**P0 контрактного пакета — закрыто на ⅔.** В `main`:
+- ✅ **P0.2 импортёр Bundle** (PR #104): `POST /bundles/import` + CLI
+  `ekcelo-import-bundle`; идемпотентный импорт §1..§6 + ЭТП §6, ADR-001
+  manual/osv-приоритет, sha256 verify.
+- ✅ **P0.3 ViewModel REST C4** (PR #105/#106): `GET /catalog`,
+  `/objects/{cad}`, `/lots/{lot_id}`, `/objects/{cad}/graph`; 4 канонические
+  характеристики physical/ownership/geo/temporal. См. `obsidian/Architecture/
+  p0-viewmodel.md`.
+- ✅ **P0.3.3 Bundle storage + reverse-export** (PR #107/#108): sidecar
+  таблица `bundles`, KMZ-хранилище, `GET /bundles/{id}/download?fmt=` для
+  kmz/manifest/db/json/zip. Round-trip контракт C3 зелёный
+  (export(zip)→import=no-op). См. `p0-bundle-storage.md`, `p0-bundle-export.md`.
+- ✅ **P0.1.1 DB-контракт C2** (готов локально, zip-handoff):
+  машиночитаемый `contracts/db/schema.json` + `validate_db` + CI sync-guard
+  schema.sql ↔ contract. См. `p0-db-contract.md`.
+
+**Осталось в P0:**
+- P0.1.2 — интеграция `validate_db` в `import_bundle` (early-fail 422).
+- C3.3 — materialization `geo` (KMZ→БД). **Отложен**, не блокирует фронт.
+
+Все P1+ треки (auth-эволюция, RBAC, оркестратор-интеграция) — после
+закрытия остатков P0. См. `obsidian/Architecture/roadmap-2026-06.md`.
+
+Старое описание (для истории): FastAPI cycle 5 — только оркестратор
+меморандумов (6 эндпоинтов lots/run/status/artifacts); БД §1–§6 в `schema/`;
+нет импорта Bundle, каталога объектов, API рендеринга, ролей; легаси `viewer/`.
 
 ## Целевое состояние
 

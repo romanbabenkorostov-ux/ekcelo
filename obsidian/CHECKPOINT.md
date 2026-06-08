@@ -1,82 +1,68 @@
-# CHECKPOINT — 2026-06-08 (P0.3 sub-stages C1/C2/C3.1/C3.2 done · zip-handoff)
+# CHECKPOINT — 2026-06-08 (P0.3 ✅ closed · P0.1.1 done · zip-handoff)
 
 > Живой указатель «где мы». Обновляется каждым чекпойнтом (skill `checkpoint`).
 > Снимок, не хронология (хронология — `obsidian/Changelog/`). Для въезда новой
 > команды — сначала `obsidian/Architecture/handoff-onboarding.md`.
 
 ## Сейчас
-- **Ветка (sandbox):** `backend/p0-bundle-storage-c3-1` (C1+C2+C3.1+C3.2 накоплены).
-- **Подэтап:** P0.3 — **C1 + C2 + C3.1 + C3.2** закрыты локально.
-- **Тесты:** 286 passed в sandbox (191 + 28 C1 + 24 C2 + 25 C3.1 + 18 C3.2).
-- **main на:** C1 (#105) + C2 (#106) смержены.
-- **Канал доставки:** zip-handoff. Архивы:
-  - C1: смержен (#105).
-  - C2: смержен (#106).
-  - C3.1: доставлен (`ekcelo-C3-1-CLEAN-v2.zip`), запушен, ждёт merge.
-  - C3.2: готов к доставке (ждёт merge C3.1).
+- **Ветка (sandbox):** `backend/p0-1-db-contract` (P0.1.1 поверх C3.2).
+- **Подэтап:** P0.3 закрыт (C1+C2+C3.1+C3.2 в main), **P0.1.1** готов локально.
+- **Тесты:** 299 passed в sandbox (191 baseline + 28 C1 + 24 C2 + 25 C3.1 + 18 C3.2 + 13 P0.1.1).
+- **main:** PR #105 (C1), #106 (C2), #107 (C3.1), #108 (C3.2) смержены.
+- **PR в полёте:**
+  - 🟡 fix workspace-test Windows-portable — открыт пользователем.
+  - 🟡 P0.1.1 db-contract — готов локально, ждёт доставки.
+- **Стратегическое решение (2026-06-08):** НЕ писать parser-team. Идём по
+  пути A (P0.1 DB-контракт C2). C3.3 (geo materialization) — отложен, не
+  блокирует фронт. См. `obsidian/Architecture/p0-db-contract.md` §«Почему НЕ
+  блокирует parser-team».
 
-## Сделано
+## Сделано (P0.1.1)
 
-### C1 (см. `obsidian/Architecture/p0-viewmodel.md`)
-- `backend/app/services/viewmodel.py` — Pydantic + `build_catalog` +
-  `build_object_viewmodel`.
-- `lot_orchestrator_web/main.py` — `+GET /catalog`, `+GET /objects/{cad}`,
-  `+ekcelo_db` параметр, `+_require_ekcelo_db`.
-- 28 тестов (18 + 10).
-
-### C2
-- Тот же `viewmodel.py` — +`build_lot_viewmodel`, `build_object_graph`,
-  `LotNotFound`, `_OBJECT_TYPE_TO_NODE_KIND`.
-- `main.py` — `+GET /lots/{lot_id}`, `+GET /objects/{cad}/graph`.
-- 24 теста (16 + 8). Граф: `has_right`, `held_by`; узлы object=cad,
-  right=`right:<id>`, beneficiary=`inn:<inn>`.
-
-### C3.1 (см. `obsidian/Architecture/p0-bundle-storage.md`)
-- ✨ `schema/migrations/0002_bundles.sql` — sidecar table.
-- ✨ `backend/app/services/bundle_storage.py` — `compute_bundle_id`,
-  `store_bundle`, `get_bundle`, `ensure_bundles_schema`.
-- `main.py` — `+bundles_dir` параметр + расширение `POST /bundles/import`
-  (возвращает `bundle_id`, кладёт KMZ) + `+GET /bundles/{bundle_id}/download`.
-- 25 тестов (14 + 11). KMZ хранится на ФС `<bundles_dir>/<bundle_id>.kmz`.
+- ✨ `contracts/db/schema.json` — машиночитаемый контракт interchange-схемы
+  (8 таблиц §1..§6, restorable=true/false по ADR-001).
+- ✨ `contracts/db/DB_SPEC.md` — человекочитаемая спека.
+- ✨ `backend/app/services/db_contract.py`:
+  - `load_contract()` → dict;
+  - `validate_db(db_path, require_section6=False)` → list[str] нарушений;
+  - `check_contract_matches_ddl()` → list[str] (CI sync-guard).
+- 13 тестов (3 load + 5 validate + 5 sync-guard).
 
 ## В процессе / не закончено
 
-- **C3.2** — реверс-экспорт `fmt={zip,db,json}` (round-trip Bundle из БД).
-  Требует генерации manifest.json + slicing db.sqlite по objects[] из manifest.
-- **C3.3** — materialization `geo` (KMZ → objects.geo_*). Зависит от
-  parser-team (KMZ-parser → DB pipeline ещё не написан).
-- `ownership.graph` в `build_object_viewmodel` остаётся `None` — граф
-  через отдельный endpoint.
+- **P0.1.2** — интеграция `validate_db` в `import_bundle` (early-fail 422
+  на невалидном db.sqlite) + CLI `ekcelo-validate-bundle-db <path>`. Не начат.
+- **P0.1.3** — кодогенерация Pydantic/dataclass моделей из контракта. Опц.
+- **P0.1.4** — мапа богатой parser-схемы → interchange-схемы. Опц.
+- **C3.3** — geo materialization. **Отложен**, не блокирует фронт.
 - Push из sandbox в GitHub не работает — продолжаем zip-handoff.
 
 ## Следующий конкретный шаг
 
-После merge C1 (#105):
-1. Применить архив C2 (`backend/p0-viewmodel-c2`), открыть PR, прислать номер.
-
-После merge C2:
-2. Применить архив C3.1 (`backend/p0-bundle-storage-c3-1`), открыть PR.
-
-После merge C3.1:
-3. Старт **C3.2** (реверс-экспорт).
+После применения архива P0.1.1 на стороне пользователя:
+1. Создать ветку `backend/p0-1-db-contract`, скопировать `files/`, commit, push.
+2. Открыть PR + сообщить номер.
+3. Старт **P0.1.2** (валидация в import).
 
 ## Открытые PR
 
-- ✅ #104 (A+B Bundle importer) — смержен.
-- 🟡 #105 (C1 ViewModel) — открыт пользователем, ждёт merge.
-- 🟡 Готов локально C2 (24 теста), zip доставлен — ждёт merge C1.
-- 🟡 Готов локально C3.1 (25 тестов), zip готов — ждёт merge C2.
+- ✅ #105 C1, #106 C2, #107 C3.1, #108 C3.2 — смержены.
+- 🟡 fix workspace-test Windows-portable — открыт пользователем.
+- 🟡 Готов локально P0.1.1 (13 тестов) — ждёт доставки.
 
 ## Указатели
 - Планы: `obsidian/Architecture/roadmap-2026-06.md`
 - Подэтап-снимки:
   - `obsidian/Architecture/p0-viewmodel.md` (C1+C2)
   - `obsidian/Architecture/p0-bundle-storage.md` (C3.1)
+  - `obsidian/Architecture/p0-bundle-export.md` (C3.2)
+  - `obsidian/Architecture/p0-db-contract.md` (P0.1.1) ← новый
   - `obsidian/Architecture/p0-bundle-importer.md` (A+B)
 - Спека: `docs/specs/SPEC_backend.md`
 - Контракты:
-  - `contracts/api/viewmodel.schema.json` + `openapi.yaml`
-  - `contracts/bundle/bundle.schema.json`
+  - `contracts/db/schema.json` + `DB_SPEC.md` (C2) ← новый
+  - `contracts/api/viewmodel.schema.json` + `openapi.yaml` (C4)
+  - `contracts/bundle/bundle.schema.json` (C3)
 - Онбординг: `obsidian/Architecture/handoff-onboarding.md`
 - Workflow zip-handoff: `obsidian/UserGuide/local-handoff-workflow.md`
 - Принципы: `CLAUDE.md` (EKCELO OPERATIONAL LOOP)
