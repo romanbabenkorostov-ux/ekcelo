@@ -57,6 +57,7 @@ def create_app(
     mock_llm_text: str | None = None,
     persistence_db: Path | None = None,
     ekcelo_db: Path | None = None,
+    bundles_dir: Path | None = None,
     redis_client=None,
     auth_users: str | None = None,
 ) -> FastAPI:
@@ -68,6 +69,10 @@ def create_app(
     ekcelo_db — путь к ekcelo.sqlite (БД §1..§6) для ViewModel-эндпоинтов
     (`/catalog`, `/objects/{cad}`). Если None — читается из env `EKCELO_DB`;
     если и там пусто — эндпоинты отвечают 503.
+
+    bundles_dir — каталог KMZ-хранилища для `GET /bundles/{id}/download` (C3.1).
+    Если None — читается из env `EKCELO_BUNDLES_DIR`; если и там пусто —
+    `/bundles/import` импортирует, но не сохраняет KMZ, и `/download` 503.
     """
     import os
     from lot_orchestrator_web.auth import maybe_install_basic_auth
@@ -81,6 +86,8 @@ def create_app(
     app.state.mock_llm_text = mock_llm_text
     env_db = os.environ.get("EKCELO_DB")
     app.state.ekcelo_db = ekcelo_db or (Path(env_db) if env_db else None)
+    env_bundles = os.environ.get("EKCELO_BUNDLES_DIR")
+    app.state.bundles_dir = bundles_dir or (Path(env_bundles) if env_bundles else None)
     persistence = SQLitePersistence(persistence_db) if persistence_db else None
     if redis_client is not None:
         configure_redis_store(redis_client, persistence=persistence)
@@ -302,7 +309,24 @@ def _register_routes(app: FastAPI) -> None:
             except FileNotFoundError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+            # C3.1 — sidecar storage: после успешного НЕ-dry-run импорта
+            # сохраняем bundle_id + KMZ в `bundles_dir` (если он сконфигурирован).
+            bundle_id: str | None = None
+            if (not dry_run
+                    and not report.errors
+                    and not report.files_failed
+                    and app.state.bundles_dir is not None
+                    and report.manifest is not None):
+                from backend.app.services.bundle_storage import store_bundle as _store
+                bundle_id = _store(
+                    Path(target_db),
+                    Path(app.state.bundles_dir),
+                    bundle_root,
+                    report.manifest,
+                )
+
         payload = {
+            "bundle_id": bundle_id,
             "is_noop": report.is_noop,
             "objects_inserted": report.objects_inserted,
             "objects_updated": report.objects_updated,
@@ -413,6 +437,61 @@ def _register_routes(app: FastAPI) -> None:
                 detail=f"объект {cad} не найден",
             ) from None
         return JSONResponse(content=graph)
+
+    @app.get("/bundles/{bundle_id}/download")
+    async def bundle_download_endpoint(
+        bundle_id: str,
+        fmt: str = "kmz",
+    ) -> JSONResponse:
+        """Выгрузка KMZ или manifest сохранённого Bundle (C3.1).
+
+        `openapi.yaml::/bundles/{id}/download`. Поддерживаемые `fmt`:
+        - `kmz` — отдаёт сохранённый project.kmz (Content-Type application/vnd.google-earth.kmz).
+        - `manifest` — JSON манифест Bundle (как при импорте).
+        `db`, `json`, `zip` — будут в C3.2 (реверс-экспорт).
+        """
+        from fastapi.responses import FileResponse
+
+        from backend.app.services.bundle_storage import get_bundle
+
+        if fmt not in {"kmz", "manifest"}:
+            if fmt in {"db", "json", "zip"}:
+                raise HTTPException(
+                    status_code=501,
+                    detail=f"fmt={fmt} будет реализован в C3.2",
+                )
+            raise HTTPException(
+                status_code=422,
+                detail=f"неподдерживаемый fmt: {fmt}",
+            )
+
+        target_db = _require_ekcelo_db(app)
+        bundles_dir = getattr(app.state, "bundles_dir", None)
+        if bundles_dir is None:
+            raise HTTPException(
+                status_code=503,
+                detail="bundles_dir не сконфигурирован (env EKCELO_BUNDLES_DIR пуст)",
+            )
+        rec = get_bundle(target_db, Path(bundles_dir), bundle_id)
+        if rec is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"bundle {bundle_id} не найден",
+            )
+
+        if fmt == "manifest":
+            return JSONResponse(content=rec.manifest_json)
+        # fmt == "kmz"
+        if rec.kmz_path is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"kmz для bundle {bundle_id} недоступен (файл потерян или не загружен)",
+            )
+        return FileResponse(  # type: ignore[return-value]
+            path=str(rec.kmz_path),
+            media_type="application/vnd.google-earth.kmz",
+            filename=f"{bundle_id}.kmz",
+        )
 
     @app.get("/", response_class=HTMLResponse)
     async def index(request: Request) -> HTMLResponse:

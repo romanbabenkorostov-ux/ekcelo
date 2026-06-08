@@ -23,7 +23,9 @@
 | **B** | REST `POST /bundles/import` (multipart zip, 8 тестов) + CLI `ekcelo-import-bundle` (7 тестов, exit codes 0/2/3/4) + `pyproject.scripts`. Регистрация KMZ в локальном хранилище — отложена до C. | ✅ done (2026-06-03; те же 4 файла + `bundle_cli.py` + `_find_bundle_root` helper) |
 | **C1** (= P0.3.1) | ViewModel ядро + `GET /catalog` + `GET /objects/{cad}` (4 характеристики). 28 тестов. | ✅ done (2026-06-08; см. `p0-viewmodel.md`) |
 | **C2** (= P0.3.2) | `GET /lots/{lot_id}` + `GET /objects/{cad}/graph` (узлы/рёбра, graph_node_id из C1-контракта). 24 теста. | ✅ done (2026-06-08; см. `p0-viewmodel.md`) |
-| **C3** (= P0.3.3) | KMZ-storage (`bundles/<id>.kmz`) + `GET /bundles/{id}/download?fmt=` + материализация `geo` (центр/геометрия в БД). | план |
+| **C3.1** (= P0.3.3.1) | Sidecar `bundles` table + KMZ-storage + `GET /bundles/{id}/download?fmt={kmz,manifest}` + расширение `POST /bundles/import` (возвращает `bundle_id`). 25 тестов. | ✅ done (2026-06-08; см. `p0-bundle-storage.md`) |
+| **C3.2** (= P0.3.3.2) | Реверс-экспорт `fmt={zip,db,json}` — round-trip Bundle из БД. | план |
+| **C3.3** (= P0.3.3.3) | Материализация `geo` (центр/геометрия из KMZ в БД). Зависит от parser-team. | план |
 | P0.1 — DB-контракт C2 (синхронизация `schema/` и `egrn_parser/db/schema.sql`, машиночитаемая выжимка → `contracts/db/`). | Не начат. Параллельный трек parser-team. | план |
 
 ---
