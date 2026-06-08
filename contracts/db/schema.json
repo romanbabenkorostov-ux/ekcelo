@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ekcelo.ru/contracts/db/schema.json",
+  "title": "EKCELO C2 — DB interchange contract (Bundle db.sqlite)",
+  "description": "Машиночитаемая каноническая схема, которую содержит db.sqlite внутри Bundle (C3). Parser ЭКСПОРТИРУЕТ свою богатую модель (parser/egrn_parser/db/schema.sql, 23 таблицы) ВНИЗ в эту упрощённую interchange-форму; backend (import_bundle) ИМПОРТИРУЕТ её. Источник правды DDL — schema/egrn_current_schema.sql. ADR-001: §1..§5 — слепок ЕГРН (restorable=true); §6 — не-ЕГРН ЭТП-слой (restorable=false, имеет source+confidence).",
+  "contract_version": "1.0.0",
+  "ddl_source": "schema/egrn_current_schema.sql",
+  "sections": {
+    "1": "Основные объекты недвижимости (ЕГРН)",
+    "2": "Реестр правообладателей (ЕГРН)",
+    "3": "Права и доли (ЕГРН)",
+    "4": "История выписок (ЕГРН)",
+    "5": "Ограничения/обременения (ЕГРН)",
+    "6": "ЭТП-профиль + лоты (не-ЕГРН слой, ADR-001 §6)"
+  },
+  "tables": {
+    "objects": {
+      "section": "1",
+      "restorable": true,
+      "primary_key": ["cad_number"],
+      "columns": {
+        "cad_number":    { "type": "TEXT", "nullable": false, "pk": true },
+        "object_type":   { "type": "TEXT", "nullable": false, "note": "land|building|construction|flat|room" },
+        "address":       { "type": "TEXT", "nullable": true },
+        "area":          { "type": "REAL", "nullable": true },
+        "category":      { "type": "TEXT", "nullable": true },
+        "permitted_use": { "type": "TEXT", "nullable": true },
+        "purpose":       { "type": "TEXT", "nullable": true },
+        "floors":        { "type": "INTEGER", "nullable": true },
+        "updated_at":    { "type": "TEXT", "nullable": true, "default": "datetime('now')" }
+      }
+    },
+    "entity_registry": {
+      "section": "2",
+      "restorable": true,
+      "primary_key": ["inn"],
+      "columns": {
+        "inn":         { "type": "TEXT", "nullable": false, "pk": true },
+        "name_full":   { "type": "TEXT", "nullable": false },
+        "name_short":  { "type": "TEXT", "nullable": true },
+        "ogrn":        { "type": "TEXT", "nullable": true },
+        "entity_type": { "type": "TEXT", "nullable": true, "note": "ЮЛ|ИП|ФЛ|Гос (legal|person|...)" },
+        "updated_at":  { "type": "TEXT", "nullable": true, "default": "datetime('now')" }
+      }
+    },
+    "rights": {
+      "section": "3",
+      "restorable": true,
+      "primary_key": ["id"],
+      "foreign_keys": [
+        { "columns": ["cad_number"], "references": "objects(cad_number)" },
+        { "columns": ["right_holder_inn"], "references": "entity_registry(inn)" }
+      ],
+      "columns": {
+        "id":                  { "type": "INTEGER", "nullable": false, "pk": true, "autoincrement": true },
+        "cad_number":          { "type": "TEXT", "nullable": false },
+        "right_type":          { "type": "TEXT", "nullable": false },
+        "right_holder_inn":    { "type": "TEXT", "nullable": true },
+        "share_numerator":     { "type": "INTEGER", "nullable": true },
+        "share_denominator":   { "type": "INTEGER", "nullable": true },
+        "registration_number": { "type": "TEXT", "nullable": true },
+        "registration_date":   { "type": "TEXT", "nullable": true },
+        "source_extract_id":   { "type": "INTEGER", "nullable": true },
+        "updated_at":          { "type": "TEXT", "nullable": true, "default": "datetime('now')" }
+      }
+    },
+    "extracts": {
+      "section": "4",
+      "restorable": true,
+      "primary_key": ["id"],
+      "foreign_keys": [
+        { "columns": ["cad_number"], "references": "objects(cad_number)" }
+      ],
+      "columns": {
+        "id":             { "type": "INTEGER", "nullable": false, "pk": true, "autoincrement": true },
+        "extract_number": { "type": "TEXT", "nullable": true },
+        "cad_number":     { "type": "TEXT", "nullable": false },
+        "extract_date":   { "type": "TEXT", "nullable": false },
+        "document_type":  { "type": "TEXT", "nullable": true },
+        "raw_json":       { "type": "TEXT", "nullable": true },
+        "parsed_at":      { "type": "TEXT", "nullable": true, "default": "datetime('now')" },
+        "parser_version": { "type": "TEXT", "nullable": true }
+      }
+    },
+    "object_restrictions": {
+      "section": "5",
+      "restorable": true,
+      "primary_key": ["id"],
+      "foreign_keys": [
+        { "columns": ["cad_number"], "references": "objects(cad_number)" }
+      ],
+      "columns": {
+        "id":              { "type": "INTEGER", "nullable": false, "pk": true, "autoincrement": true },
+        "cad_number":      { "type": "TEXT", "nullable": false },
+        "restrict_type":   { "type": "TEXT", "nullable": true, "note": "czuit_zone|okn_territory|..." },
+        "description":     { "type": "TEXT", "nullable": true },
+        "registry_number": { "type": "TEXT", "nullable": true },
+        "valid_from":      { "type": "TEXT", "nullable": true },
+        "valid_to":        { "type": "TEXT", "nullable": true },
+        "basis_doc":       { "type": "TEXT", "nullable": true },
+        "updated_at":      { "type": "TEXT", "nullable": true, "default": "datetime('now')" }
+      }
+    },
+    "object_etp_profile": {
+      "section": "6",
+      "restorable": false,
+      "primary_key": ["cad_number"],
+      "foreign_keys": [
+        { "columns": ["cad_number"], "references": "objects(cad_number)" }
+      ],
+      "columns": {
+        "cad_number":     { "type": "TEXT", "nullable": false, "pk": true },
+        "location_extra": { "type": "TEXT", "nullable": true, "note": "JSON" },
+        "building_extra": { "type": "TEXT", "nullable": true, "note": "JSON" },
+        "layout":         { "type": "TEXT", "nullable": true, "note": "JSON" },
+        "legal_extra":    { "type": "TEXT", "nullable": true, "note": "JSON" },
+        "risks":          { "type": "TEXT", "nullable": true, "note": "JSON" },
+        "extras":         { "type": "TEXT", "nullable": true, "note": "JSON" },
+        "source":         { "type": "TEXT", "nullable": false, "check_in": ["osv", "exif", "manual", "nspd", "llm"] },
+        "confidence":     { "type": "REAL", "nullable": false, "check_range": [0.0, 1.0] },
+        "updated_at":     { "type": "TEXT", "nullable": true, "default": "datetime('now')" }
+      }
+    },
+    "lots": {
+      "section": "6",
+      "restorable": false,
+      "primary_key": ["lot_id"],
+      "foreign_keys": [
+        { "columns": ["primary_cad_number"], "references": "objects(cad_number)" }
+      ],
+      "columns": {
+        "lot_id":             { "type": "TEXT", "nullable": false, "pk": true, "note": "pattern [A-Za-z0-9_:/-]{1,256}" },
+        "name":               { "type": "TEXT", "nullable": false },
+        "platform_targets":   { "type": "TEXT", "nullable": true, "note": "JSON array" },
+        "procedure_type":     { "type": "TEXT", "nullable": true },
+        "deal_type":          { "type": "TEXT", "nullable": true, "check_in": ["sale", "lease", "other"] },
+        "primary_cad_number": { "type": "TEXT", "nullable": true },
+        "notes_md":           { "type": "TEXT", "nullable": true },
+        "created_at":         { "type": "TEXT", "nullable": true, "default": "datetime('now')" }
+      }
+    },
+    "lot_items": {
+      "section": "6",
+      "restorable": false,
+      "primary_key": ["lot_id", "cad_number"],
+      "foreign_keys": [
+        { "columns": ["lot_id"], "references": "lots(lot_id)" },
+        { "columns": ["cad_number"], "references": "objects(cad_number)" }
+      ],
+      "columns": {
+        "lot_id":     { "type": "TEXT", "nullable": false, "pk": true },
+        "cad_number": { "type": "TEXT", "nullable": false, "pk": true },
+        "role":       { "type": "TEXT", "nullable": false, "check_in": ["building", "land", "room", "equipment", "structure"] },
+        "ord":        { "type": "INTEGER", "nullable": false, "default": "1" }
+      }
+    }
+  }
+}

@@ -25,8 +25,11 @@
 | **C2** (= P0.3.2) | `GET /lots/{lot_id}` + `GET /objects/{cad}/graph` (узлы/рёбра, graph_node_id из C1-контракта). 24 теста. | ✅ done (2026-06-08; см. `p0-viewmodel.md`) |
 | **C3.1** (= P0.3.3.1) | Sidecar `bundles` table + KMZ-storage + `GET /bundles/{id}/download?fmt={kmz,manifest}` + расширение `POST /bundles/import` (возвращает `bundle_id`). 25 тестов. | ✅ done (2026-06-08; см. `p0-bundle-storage.md`) |
 | **C3.2** (= P0.3.3.2) | Реверс-экспорт `fmt={zip,db,json}` — round-trip Bundle из БД. 18 тестов. | ✅ done (2026-06-08; см. `p0-bundle-export.md`) |
-| **C3.3** (= P0.3.3.3) | Материализация `geo` (центр/геометрия из KMZ в БД). Зависит от parser-team. | план |
-| P0.1 — DB-контракт C2 (синхронизация `schema/` и `egrn_parser/db/schema.sql`, машиночитаемая выжимка → `contracts/db/`). | Не начат. Параллельный трек parser-team. | план |
+| **C3.3** (= P0.3.3.3) | Материализация `geo` (центр/геометрия из KMZ в БД). Зависит от parser-team. | план (отложено, не блокирует) |
+| **P0.1.1** | DB-контракт C2 — машиночитаемая схема `contracts/db/schema.json` + `validate_db` + CI sync-guard. 13 тестов. | ✅ done (2026-06-08; см. `p0-db-contract.md`) |
+| **P0.1.2** | Интеграция `validate_db` в `import_bundle` (early-fail 422 + список нарушений) + CLI `ekcelo-validate-bundle-db`. | план |
+| **P0.1.3** | Опц.: кодогенерация Pydantic/dataclass моделей из `contracts/db/schema.json`. | план |
+| **P0.1.4** | Опц.: мапа `parser/egrn_parser/db/schema.sql` (богатая) → `contracts/db/schema.json` (interchange). Для parser-team. | план |
 
 ---
 
