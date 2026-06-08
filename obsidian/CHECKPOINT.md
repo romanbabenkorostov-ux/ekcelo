@@ -1,19 +1,19 @@
-# CHECKPOINT — 2026-06-08 (P0.3 sub-stages C1/C2/C3.1 done · zip-handoff)
+# CHECKPOINT — 2026-06-08 (P0.3 sub-stages C1/C2/C3.1/C3.2 done · zip-handoff)
 
 > Живой указатель «где мы». Обновляется каждым чекпойнтом (skill `checkpoint`).
 > Снимок, не хронология (хронология — `obsidian/Changelog/`). Для въезда новой
 > команды — сначала `obsidian/Architecture/handoff-onboarding.md`.
 
 ## Сейчас
-- **Ветка (sandbox):** `backend/p0-bundle-storage-c3-1` (C3.1 поверх C2 поверх C1).
-- **Подэтап:** P0.3 ViewModel + Storage — **C1 + C2 + C3.1** закрыты локально.
-- **Тесты:** 268 passed в sandbox (191 baseline + 28 C1 + 24 C2 + 25 C3.1).
-- **main на:** PR #104 (A+B Bundle importer).
-- **PR C1:** открыт (#105 по сообщению пользователя), готов к merge.
+- **Ветка (sandbox):** `backend/p0-bundle-storage-c3-1` (C1+C2+C3.1+C3.2 накоплены).
+- **Подэтап:** P0.3 — **C1 + C2 + C3.1 + C3.2** закрыты локально.
+- **Тесты:** 286 passed в sandbox (191 + 28 C1 + 24 C2 + 25 C3.1 + 18 C3.2).
+- **main на:** C1 (#105) + C2 (#106) смержены.
 - **Канал доставки:** zip-handoff. Архивы:
-  - C1: доставлен ранее (`#105`).
-  - C2: доставлен ранее (ждёт merge C1).
-  - C3.1: готов к доставке (ждёт merge C2).
+  - C1: смержен (#105).
+  - C2: смержен (#106).
+  - C3.1: доставлен (`ekcelo-C3-1-CLEAN-v2.zip`), запушен, ждёт merge.
+  - C3.2: готов к доставке (ждёт merge C3.1).
 
 ## Сделано
 
