@@ -1,48 +1,68 @@
-# CHECKPOINT — 2026-06-03
+# CHECKPOINT — 2026-06-03 (P0.2 sub-stages A+B done · zip-handoff active)
 
 > Живой указатель «где мы». Обновляется каждым чекпойнтом (skill `checkpoint`).
 > Снимок, не хронология (хронология — `obsidian/Changelog/`). Для въезда новой
 > команды — сначала `obsidian/Architecture/handoff-onboarding.md`.
 
 ## Сейчас
-- **Ветка:** `chore/checkpoint-mechanism-and-password-ux` (ответвлена от main `ae1e5b1`)
-- **Подэтап:** checkpoint-механизм (skill) + password CLI UX
-- **Тесты:** 177 passed; smoke 33/33
-- **main на:** cycle 13 (PBKDF2 hashing) после merge #99; roadmap+handoff после #100
+- **Ветка (sandbox):** `backend/p0-bundle-importer` (2 коммита: sub-stage A + sub-stage B на одной ветке для одного PR)
+- **Подэтап:** P0.2 Bundle importer — **sub-stages A + B** закрыты.
+- **Тесты:** 205 passed; smoke 33/33
+- **main на:** cycle 13 (PBKDF2) + roadmap+handoff (#100) + checkpoint-skill+password-UX (#101)
+- **Канал доставки:** ⚠️ **zip-handoff** (git push из sandbox через proxy
+  отдаёт «Invalid username or token»). Архивы складируются в чате через
+  `SendUserFile`; пользователь распаковывает + пушит со своей машины. См.
+  `obsidian/UserGuide/local-handoff-workflow.md`.
 
-## Сделано в этом подэтапе
-- Добавлен skill `.claude/skills/checkpoint/SKILL.md` — процедура фиксации
-  состояния после каждого подэтапа (verification → CHECKPOINT.md → Changelog →
-  roadmap-статус → commit+push на ветке, без merge в main).
-- `lot_orchestrator_web/password.py` CLI стал самообъясняющимся:
-  - prompt с именем пользователя («Введите пароль для 'alice' (ввод скрыт…)»);
-  - hint «что дальше» в **stderr** (хеш остаётся чистым в stdout для пайпа);
-  - `--quiet` подавляет hint;
-  - epilog в `--help` с полным сценарием (генерация → env → вход в браузер).
-- Создан этот `obsidian/CHECKPOINT.md`.
-- +4 теста CLI (hint→stderr, --quiet, pipeable stdout).
+## Сделано (на этой ветке)
+
+### Sub-stage A — ядро Bundle importer
+- `backend/app/services/bundle.py` (~415 LOC): Pydantic-схема манифеста C3,
+  `load_manifest`, `verify_files`, идемпотентный `import_bundle` с upsert по
+  content-hash. Уважает ADR-001 §6 (manual/osv не перезатирается).
+- `backend/tests/test_bundle.py` — 16 service-тестов.
+
+### Sub-stage B — REST + CLI
+- `lot_orchestrator_web/bundle_cli.py` — CLI `ekcelo-import-bundle` (тонкая
+  обёртка над сервисом; exit codes 0/2/3/4; `--dry-run`, `--no-verify`, `--json`).
+- `lot_orchestrator_web/main.py` — `POST /bundles/import` (multipart upload,
+  поддерживает 2 формы архива: файлы в корне или в подкаталоге).
+- `pyproject.toml::[project.scripts]::ekcelo-import-bundle`.
+- 15 новых тестов (7 CLI + 8 endpoint).
+
+### Документация
+- `obsidian/Architecture/p0-bundle-importer.md` (объединённый снимок A+B).
+- `obsidian/Architecture/roadmap-2026-06.md` (A ✅ B ✅ C 🚧).
+- `obsidian/Changelog/2026-06-03-p0-bundle-importer-substage-b.md`.
+- `obsidian/UserGuide/local-handoff-workflow.md` (workflow zip-handoff — для пользователя).
+- `.claude/skills/checkpoint/SKILL.md` (+ fallback на zip).
 
 ## В процессе / не закончено
-- Подэтап закрыт целиком. PR ещё не создан (создаётся следующим шагом).
+
+- **Sub-stage C** (= P0.3) — ViewModel REST endpoints. Не начат.
+- Регистрация KMZ в локальном хранилище для будущего `/bundles/{id}/download`
+  отложена до C (потребует sidecar-таблицы `bundles`).
+- Push из sandbox в GitHub не работает — продолжаем через zip-handoff.
 
 ## Следующий конкретный шаг
-```bash
-# Закоммитить+запушить текущую ветку, открыть PR (base=main).
-# Затем — следующий цикл по плану. Кандидат №1 (независим, parser-сторона):
-git checkout main && git pull origin main
-git checkout -b parser/exif-v1-2-per-photo-note
-# Читать: obsidian/Architecture/roadmap-2026-06.md §EXIF v1.2
-#         docs/CORRESPONDENCE/027-*.md, 028-*.md (ack)
-# Править: docs/EXIF_USERCOMMENT_SCHEMA.md (v1.1→v1.2) + parser/exporters/etp/etl_exif.py
-```
-Альтернатива — cycle 14 (OAuth), но требует решения о приоритете vs P0
-контрактного пакета (см. roadmap §Порядок).
+
+После получения архива sub-stages A+B (или отдельных архивов для A и B):
+
+1. Распаковать в `C:\Users\Соня\Downloads\ekcelo-handoff\`.
+2. Скопировать содержимое `files/` в `E:\Code\ekcelo\ftontback2026-01-02\`.
+3. По инструкции `HANDOFF.md` внутри архива: создать ветку, коммит, push, открыть PR.
+4. Сообщить мне номер PR. Я начну sub-stage C.
 
 ## Открытые PR
-- (этот подэтап) — будет PR с base=main после commit+push.
+
+- Локально готово: sub-stage A (16 тестов) + sub-stage B (15 тестов) на одной
+  ветке. PR ещё не открыт (zip-handoff в процессе).
 
 ## Указатели
-- Планы: `obsidian/Architecture/roadmap-2026-06.md`
+- Планы: `obsidian/Architecture/roadmap-2026-06.md` (P0.2 sub-stages A+B done)
+- Подэтап-снимок: `obsidian/Architecture/p0-bundle-importer.md`
+- Спека: `docs/specs/SPEC_backend.md`
+- Контракт: `contracts/bundle/BUNDLE_SPEC.md` + `contracts/api/openapi.yaml`
 - Онбординг: `obsidian/Architecture/handoff-onboarding.md`
-- Снимок системы: `obsidian/Architecture/system-state-2026-05-30.md`
+- Workflow zip-handoff: `obsidian/UserGuide/local-handoff-workflow.md`
 - Принципы: `CLAUDE.md` (EKCELO OPERATIONAL LOOP)

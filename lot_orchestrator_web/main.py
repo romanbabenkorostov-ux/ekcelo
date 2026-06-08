@@ -19,9 +19,11 @@ from fastapi import (
     BackgroundTasks,
     Depends,
     FastAPI,
+    File,
     Form,
     HTTPException,
     Request,
+    UploadFile,
     status,
 )
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
@@ -245,6 +247,72 @@ def _register_routes(app: FastAPI) -> None:
             media_type="text/event-stream",
         )
 
+    @app.post("/bundles/import")
+    async def import_bundle_endpoint(
+        bundle_zip: Annotated[UploadFile, File(description="ZIP-архив Bundle (C3).")],
+        target_db: Annotated[str, Form(description="Путь к ekcelo.sqlite на сервере.")],
+        verify_hashes: Annotated[bool, Form()] = True,
+        dry_run: Annotated[bool, Form()] = False,
+    ) -> JSONResponse:
+        """Идемпотентный импорт Bundle (C3) — multipart-upload zip.
+
+        Реализует `contracts/api/openapi.yaml::/bundles/import`. Распаковывает
+        zip во временный каталог, валидирует manifest по C3, выполняет
+        идемпотентный upsert через `backend.app.services.bundle.import_bundle`.
+        Повтор того же Bundle = no-op.
+        """
+        import tempfile
+        import zipfile
+
+        from backend.app.services.bundle import import_bundle as _import
+
+        if not bundle_zip.filename or not bundle_zip.filename.lower().endswith(".zip"):
+            raise HTTPException(status_code=400, detail="Ожидается .zip-архив Bundle")
+
+        with tempfile.TemporaryDirectory(prefix="ekcelo-bundle-") as tmp:
+            tmp_path = Path(tmp)
+            zip_path = tmp_path / "bundle.zip"
+            with zip_path.open("wb") as fh:
+                fh.write(await bundle_zip.read())
+            try:
+                with zipfile.ZipFile(zip_path) as zf:
+                    zf.extractall(tmp_path / "extracted")
+            except zipfile.BadZipFile as exc:
+                raise HTTPException(status_code=400,
+                                    detail=f"Битый zip: {exc}") from exc
+            bundle_root = _find_bundle_root(tmp_path / "extracted")
+            if bundle_root is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="В архиве не найден manifest.json",
+                )
+            try:
+                report = _import(
+                    bundle_root, Path(target_db),
+                    verify_hashes=verify_hashes, dry_run=dry_run,
+                )
+            except FileNotFoundError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        payload = {
+            "is_noop": report.is_noop,
+            "objects_inserted": report.objects_inserted,
+            "objects_updated": report.objects_updated,
+            "objects_skipped_identical": report.objects_skipped_identical,
+            "entities_inserted": report.entities_inserted,
+            "rights_inserted": report.rights_inserted,
+            "etp_profiles_inserted": report.etp_profiles_inserted,
+            "etp_profiles_skipped_authoritative":
+                report.etp_profiles_skipped_authoritative,
+            "files_verified": report.files_verified,
+            "files_failed": report.files_failed,
+            "warnings": report.warnings,
+            "errors": report.errors,
+        }
+        if report.errors or report.files_failed:
+            return JSONResponse(status_code=422, content=payload)
+        return JSONResponse(status_code=200, content=payload)
+
     @app.get("/", response_class=HTMLResponse)
     async def index(request: Request) -> HTMLResponse:
         return templates.TemplateResponse(request, "index.html", {})
@@ -280,6 +348,19 @@ def _build_artifacts(lot_id: str, workspace_path: Path) -> ArtifactsResponse:
         market_template=_str_if_exists(memo / "market_template.md"),
         run_log=_str_if_exists(memo / "_data" / "_run_log.jsonl"),
     )
+
+
+def _find_bundle_root(extracted: Path) -> Path | None:
+    """Найти каталог с manifest.json в распакованном архиве.
+
+    Поддерживает 2 формы: archive/manifest.json или archive/<single-subdir>/manifest.json.
+    """
+    if (extracted / "manifest.json").is_file():
+        return extracted
+    children = [p for p in extracted.iterdir() if p.is_dir()]
+    if len(children) == 1 and (children[0] / "manifest.json").is_file():
+        return children[0]
+    return None
 
 
 def _str_if_exists(path: Path | None) -> str | None:

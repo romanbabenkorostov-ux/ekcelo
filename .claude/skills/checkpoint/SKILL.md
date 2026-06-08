@@ -7,6 +7,8 @@ description: >-
   (e.g. "зафиксируй состояние", "сделай чекпойнт", "checkpoint", "заверши подэтап").
   Создаёт/обновляет obsidian/Changelog + CHECKPOINT.md (живой указатель «где мы»),
   гоняет тесты+smoke, коммитит на ветке и пушит. НЕ мержит в main без явной просьбы.
+  Если git-push через прокси падает с auth-ошибкой — переходит на zip-handoff
+  (см. obsidian/UserGuide/local-handoff-workflow.md).
 ---
 
 # checkpoint
@@ -26,7 +28,7 @@ description: >-
 - Перед вероятным обрывом (лимиты на исходе).
 - По явной просьбе пользователя.
 
-## Процедура
+## Procedure — основная (git push работает)
 
 1. **Прогнать verification** (не коммитить красное):
    ```bash
@@ -65,6 +67,28 @@ description: >-
    (одна строка), что мержить. НЕ создавать PR и НЕ мержить, если пользователь
    не просил.
 
+## Procedure — fallback (git push не идёт через прокси)
+
+Если шаг 5 даёт `fatal: could not read Password` / `Authentication failed` /
+`Invalid username or token` — НЕ перебирать токены/прокси-варианты бесконечно.
+Один-два разумных пробника достаточно. Затем переход на **zip-handoff**:
+
+5b. Собрать архив `ekcelo-<subtask>-<YYYY-MM-DD>.zip` со структурой:
+    ```
+    HANDOFF.md          — инструкция для этого подэтапа (ветка, коммит-msg, PR title/body)
+    files/<repo-relative>/...   — все новые/изменённые файлы
+    manifest.json       — список файлов + sha256 + base/branch
+    ```
+    Файлы — те, что попадали бы в `git commit` (см. `git status --porcelain`).
+
+6b. Отдать пользователю через `SendUserFile` (status=proactive) с caption,
+    указывающим: куда сохранить (Downloads), что делать дальше (читать HANDOFF.md
+    из архива). Пользователь распаковывает, копирует, push'ит со своей машины.
+
+7b. В отчёте указать: «push не прошёл (proxy auth), отдал zip-архив; жду
+    подтверждение и номер PR от вас». См. `obsidian/UserGuide/local-handoff-workflow.md`
+    для полной процедуры пользователя.
+
 ## Инварианты
 
 - **Никогда не коммитить красные тесты молча.** Либо зелёное, либо явный
@@ -74,8 +98,11 @@ description: >-
 - **Следующий шаг — исполнимая команда**, не абстракция («доделать X» — плохо;
   «`git checkout -b orchestrator/cycle-14-oauth`, читать roadmap §Cycle 14,
   создать `lot_orchestrator_web/oauth.py`» — хорошо).
-- **Не мержить в main** без явной просьбы — чекпойнт фиксирует на ветке.
+- **Не мержить в main** без явной просьбы — чекпойнт фиксирует на ветке (или
+  в zip-handoff).
 - README.md в obsidian/ — gitignored; указатель называется `CHECKPOINT.md`.
+- **Не утопать в попытках починить транспорт.** Два разумных пробника push'а —
+  затем zip-handoff.
 
 ## Шаблон CHECKPOINT.md
 
@@ -91,6 +118,7 @@ description: >-
 - **Подэтап:** <что делали>
 - **Тесты:** <N> passed; smoke <X/Y>
 - **main на:** <последний merge / cycle>
+- **Канал доставки:** git push ИЛИ zip-handoff (см. local-handoff-workflow.md)
 
 ## Сделано в этом подэтапе
 - ...
@@ -111,4 +139,5 @@ description: >-
 - Планы: `obsidian/Architecture/roadmap-2026-06.md`
 - Онбординг: `obsidian/Architecture/handoff-onboarding.md`
 - Снимок системы: `obsidian/Architecture/system-state-2026-05-30.md`
+- Workflow zip-handoff: `obsidian/UserGuide/local-handoff-workflow.md`
 ```

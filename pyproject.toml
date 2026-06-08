@@ -66,6 +66,8 @@ ekcelo-orchestrate = "lot_orchestrator.cli:main"
 ekcelo-orchestrate-web = "lot_orchestrator_web.cli:main"
 # ЭТП-экспортёр (smoke)
 ekcelo-etp-smoke = "parser.exporters.etp.smoke_cli:main"
+# Bundle importer (P0.2 sub-stage B)
+ekcelo-import-bundle = "lot_orchestrator_web.bundle_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
