@@ -1,3 +1,0 @@
-lot_orchestrator
-lot_orchestrator_web
-parser
