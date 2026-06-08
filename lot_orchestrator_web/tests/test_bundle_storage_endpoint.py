@@ -236,12 +236,13 @@ def test_download_invalid_fmt_returns_422(
     assert resp.status_code == 422
 
 
-def test_download_db_fmt_returns_501_until_c3_2(
+def test_download_db_fmt_returns_200_after_c3_2(
     client: TestClient, target_db: Path,
 ) -> None:
+    # C3.2 реализовал реверс-экспорт fmt=db (раньше было 501).
     bid = _import_and_get_id(client, target_db)
     resp = client.get(f"/bundles/{bid}/download?fmt=db")
-    assert resp.status_code == 501
+    assert resp.status_code == 200
 
 
 def test_download_503_when_bundles_dir_not_configured(

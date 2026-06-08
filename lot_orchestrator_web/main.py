@@ -442,24 +442,21 @@ def _register_routes(app: FastAPI) -> None:
     async def bundle_download_endpoint(
         bundle_id: str,
         fmt: str = "kmz",
-    ) -> JSONResponse:
-        """Выгрузка KMZ или manifest сохранённого Bundle (C3.1).
+    ):
+        """Выгрузка Bundle/части (C3.1 + C3.2).
 
         `openapi.yaml::/bundles/{id}/download`. Поддерживаемые `fmt`:
-        - `kmz` — отдаёт сохранённый project.kmz (Content-Type application/vnd.google-earth.kmz).
-        - `manifest` — JSON манифест Bundle (как при импорте).
-        `db`, `json`, `zip` — будут в C3.2 (реверс-экспорт).
+        - `kmz` — сохранённый project.kmz (application/vnd.google-earth.kmz).
+        - `manifest` — JSON манифест Bundle.
+        - `db` (C3.2) — sqlite-срез БД по objects[] манифеста.
+        - `json` (C3.2) — нормализованные ViewModel объектов.
+        - `zip` (C3.2) — полный реэкспорт Bundle (round-trip-идемпотентный).
         """
-        from fastapi.responses import FileResponse
+        from fastapi.responses import FileResponse, Response
 
         from backend.app.services.bundle_storage import get_bundle
 
-        if fmt not in {"kmz", "manifest"}:
-            if fmt in {"db", "json", "zip"}:
-                raise HTTPException(
-                    status_code=501,
-                    detail=f"fmt={fmt} будет реализован в C3.2",
-                )
+        if fmt not in {"kmz", "manifest", "db", "json", "zip"}:
             raise HTTPException(
                 status_code=422,
                 detail=f"неподдерживаемый fmt: {fmt}",
@@ -481,17 +478,47 @@ def _register_routes(app: FastAPI) -> None:
 
         if fmt == "manifest":
             return JSONResponse(content=rec.manifest_json)
-        # fmt == "kmz"
-        if rec.kmz_path is None:
-            raise HTTPException(
-                status_code=404,
-                detail=f"kmz для bundle {bundle_id} недоступен (файл потерян или не загружен)",
+
+        if fmt == "kmz":
+            if rec.kmz_path is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"kmz для bundle {bundle_id} недоступен (файл потерян или не загружен)",
+                )
+            return FileResponse(
+                path=str(rec.kmz_path),
+                media_type="application/vnd.google-earth.kmz",
+                filename=f"{bundle_id}.kmz",
             )
-        return FileResponse(  # type: ignore[return-value]
-            path=str(rec.kmz_path),
-            media_type="application/vnd.google-earth.kmz",
-            filename=f"{bundle_id}.kmz",
+
+        # fmt ∈ {db, json, zip} — реверс-экспорт (C3.2)
+        from backend.app.services.bundle_export import (
+            BundleExportError,
+            export_bundle_db,
+            export_bundle_json,
+            export_bundle_zip,
         )
+        try:
+            if fmt == "json":
+                return JSONResponse(content=export_bundle_json(target_db, rec))
+            if fmt == "db":
+                data = export_bundle_db(target_db, rec)
+                return Response(
+                    content=data,
+                    media_type="application/vnd.sqlite3",
+                    headers={"Content-Disposition":
+                             f'attachment; filename="{bundle_id}.sqlite"'},
+                )
+            # fmt == "zip"
+            data = export_bundle_zip(target_db, rec)
+            return Response(
+                content=data,
+                media_type="application/zip",
+                headers={"Content-Disposition":
+                         f'attachment; filename="{bundle_id}.zip"'},
+            )
+        except BundleExportError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @app.get("/", response_class=HTMLResponse)
     async def index(request: Request) -> HTMLResponse:
