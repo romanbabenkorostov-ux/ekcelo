@@ -56,6 +56,7 @@ def create_app(
     settings: Settings | None = None,
     mock_llm_text: str | None = None,
     persistence_db: Path | None = None,
+    ekcelo_db: Path | None = None,
     redis_client=None,
     auth_users: str | None = None,
 ) -> FastAPI:
@@ -63,7 +64,12 @@ def create_app(
 
     auth_users — формат `user1:pass1,user2:pass2`. Если None, читается из env
     `EKCELO_AUTH_USERS`; если и там пусто — auth не подключается.
+
+    ekcelo_db — путь к ekcelo.sqlite (БД §1..§6) для ViewModel-эндпоинтов
+    (`/catalog`, `/objects/{cad}`). Если None — читается из env `EKCELO_DB`;
+    если и там пусто — эндпоинты отвечают 503.
     """
+    import os
     from lot_orchestrator_web.auth import maybe_install_basic_auth
 
     app = FastAPI(
@@ -73,6 +79,8 @@ def create_app(
     )
     app.state.settings = settings or Settings.from_env()
     app.state.mock_llm_text = mock_llm_text
+    env_db = os.environ.get("EKCELO_DB")
+    app.state.ekcelo_db = ekcelo_db or (Path(env_db) if env_db else None)
     persistence = SQLitePersistence(persistence_db) if persistence_db else None
     if redis_client is not None:
         configure_redis_store(redis_client, persistence=persistence)
@@ -313,6 +321,52 @@ def _register_routes(app: FastAPI) -> None:
             return JSONResponse(status_code=422, content=payload)
         return JSONResponse(status_code=200, content=payload)
 
+    @app.get("/catalog")
+    async def catalog_endpoint(
+        q: str | None = None,
+        kind: str | None = None,
+    ) -> JSONResponse:
+        """Список карточек объектов/лотов (`openapi.yaml::/catalog`).
+
+        Источник — `EKCELO_DB` (или `ekcelo_db=` в `create_app`).
+        """
+        from backend.app.services.viewmodel import build_catalog
+
+        db = _require_ekcelo_db(app)
+        if kind not in (None, "object", "lot"):
+            raise HTTPException(
+                status_code=422,
+                detail="kind должен быть 'object' либо 'lot'",
+            )
+        cards = build_catalog(db, q=q, kind=kind)  # type: ignore[arg-type]
+        return JSONResponse(
+            content=[c.model_dump(exclude_none=True) for c in cards]
+        )
+
+    @app.get("/objects/{cad}")
+    async def object_viewmodel_endpoint(
+        cad: str,
+        as_of: str | None = None,
+    ) -> JSONResponse:
+        """ViewModel объекта (`openapi.yaml::/objects/{cad}`).
+
+        4 канонические характеристики physical/ownership/geo/temporal.
+        """
+        from backend.app.services.viewmodel import (
+            ObjectNotFound,
+            build_object_viewmodel,
+        )
+
+        db = _require_ekcelo_db(app)
+        try:
+            vm = build_object_viewmodel(db, cad, as_of=as_of)
+        except ObjectNotFound:
+            raise HTTPException(
+                status_code=404,
+                detail=f"объект {cad} не найден",
+            ) from None
+        return JSONResponse(content=vm.model_dump(exclude_none=False))
+
     @app.get("/", response_class=HTMLResponse)
     async def index(request: Request) -> HTMLResponse:
         return templates.TemplateResponse(request, "index.html", {})
@@ -348,6 +402,22 @@ def _build_artifacts(lot_id: str, workspace_path: Path) -> ArtifactsResponse:
         market_template=_str_if_exists(memo / "market_template.md"),
         run_log=_str_if_exists(memo / "_data" / "_run_log.jsonl"),
     )
+
+
+def _require_ekcelo_db(app: FastAPI) -> Path:
+    """Достать сконфигурированный ekcelo_db или 503 если не задан."""
+    db = getattr(app.state, "ekcelo_db", None)
+    if db is None:
+        raise HTTPException(
+            status_code=503,
+            detail="ekcelo_db не сконфигурирован (env EKCELO_DB пуст)",
+        )
+    if not Path(db).exists():
+        raise HTTPException(
+            status_code=503,
+            detail=f"ekcelo_db не найден: {db}",
+        )
+    return Path(db)
 
 
 def _find_bundle_root(extracted: Path) -> Path | None:
