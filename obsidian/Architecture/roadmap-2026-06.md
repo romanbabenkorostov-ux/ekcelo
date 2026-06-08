@@ -15,6 +15,15 @@
 
 > ⚠️ Важно: пакет `contracts/` ввёл бóльшую цель — **REST-шов + Bundle** (C3/C4) и deprecated `viewer/` в пользу `ekcelo-site`. Auth-трек (14-16) совместим с этой целью (auth нужен и текущему orchestrator-web, и будущему REST-бэкенду), но **приоритет P0 по SPEC_backend** — это DB-контракт C2, импортёр Bundle, ViewModel REST C4. Auth-трек — P1+. Координируйте порядок с владельцем репозитория.
 
+## P0.2 Bundle importer — статус подэтапов
+
+| Подэтап | Что | Статус |
+|---|---|---|
+| **A** | Pydantic-схема манифеста C3 + `load_manifest` + `verify_files` + идемпотентный `import_bundle(bundle, target_db, dry_run=…)`. Уважает ADR-001 §6 (manual/osv не перезатирается). | ✅ done (2026-06-03; см. `p0-bundle-importer.md`) |
+| **B** | REST `POST /bundles/import` (multipart zip, 8 тестов) + CLI `ekcelo-import-bundle` (7 тестов, exit codes 0/2/3/4) + `pyproject.scripts`. Регистрация KMZ в локальном хранилище — отложена до C. | ✅ done (2026-06-03; те же 4 файла + `bundle_cli.py` + `_find_bundle_root` helper) |
+| **C** (= P0.3) | ViewModel REST: `GET /catalog`, `/objects/{cad}`, `/lots/{lot_id}`, `/objects/{cad}/graph`. | план |
+| P0.1 — DB-контракт C2 (синхронизация `schema/` и `egrn_parser/db/schema.sql`, машиночитаемая выжимка → `contracts/db/`). | Не начат. Параллельный трек parser-team. | план |
+
 ---
 
 ## Cycle 14 — OAuth2 / OIDC (token-based auth)
