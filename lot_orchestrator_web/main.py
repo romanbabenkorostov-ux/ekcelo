@@ -367,6 +367,53 @@ def _register_routes(app: FastAPI) -> None:
             ) from None
         return JSONResponse(content=vm.model_dump(exclude_none=False))
 
+    @app.get("/lots/{lot_id}")
+    async def lot_viewmodel_endpoint(
+        lot_id: str,
+        as_of: str | None = None,
+    ) -> JSONResponse:
+        """ViewModel лота (`openapi.yaml::/lots/{lot_id}`).
+
+        kind="lot", members[] из `lot_items`, физ/ownership/temporal —
+        агрегация с `primary_cad_number`.
+        """
+        from backend.app.services.viewmodel import (
+            LotNotFound,
+            build_lot_viewmodel,
+        )
+
+        db = _require_ekcelo_db(app)
+        try:
+            vm = build_lot_viewmodel(db, lot_id, as_of=as_of)
+        except LotNotFound:
+            raise HTTPException(
+                status_code=404,
+                detail=f"лот {lot_id} не найден",
+            ) from None
+        return JSONResponse(content=vm.model_dump(exclude_none=False))
+
+    @app.get("/objects/{cad}/graph")
+    async def object_graph_endpoint(cad: str) -> JSONResponse:
+        """Граф владения (`openapi.yaml::/objects/{cad}/graph`).
+
+        {nodes[], edges[]}. graph_node_id по C1-контракту:
+        object=cad, right=`right:{id}`, beneficiary=`inn:{inn}`.
+        """
+        from backend.app.services.viewmodel import (
+            ObjectNotFound,
+            build_object_graph,
+        )
+
+        db = _require_ekcelo_db(app)
+        try:
+            graph = build_object_graph(db, cad)
+        except ObjectNotFound:
+            raise HTTPException(
+                status_code=404,
+                detail=f"объект {cad} не найден",
+            ) from None
+        return JSONResponse(content=graph)
+
     @app.get("/", response_class=HTMLResponse)
     async def index(request: Request) -> HTMLResponse:
         return templates.TemplateResponse(request, "index.html", {})

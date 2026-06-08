@@ -22,7 +22,7 @@
 | **A** | Pydantic-схема манифеста C3 + `load_manifest` + `verify_files` + идемпотентный `import_bundle(bundle, target_db, dry_run=…)`. Уважает ADR-001 §6 (manual/osv не перезатирается). | ✅ done (2026-06-03; см. `p0-bundle-importer.md`) |
 | **B** | REST `POST /bundles/import` (multipart zip, 8 тестов) + CLI `ekcelo-import-bundle` (7 тестов, exit codes 0/2/3/4) + `pyproject.scripts`. Регистрация KMZ в локальном хранилище — отложена до C. | ✅ done (2026-06-03; те же 4 файла + `bundle_cli.py` + `_find_bundle_root` helper) |
 | **C1** (= P0.3.1) | ViewModel ядро + `GET /catalog` + `GET /objects/{cad}` (4 характеристики). 28 тестов. | ✅ done (2026-06-08; см. `p0-viewmodel.md`) |
-| **C2** (= P0.3.2) | `GET /lots/{lot_id}` + `GET /objects/{cad}/graph` (узлы/рёбра, graph_node_id из C1-контракта). | план |
+| **C2** (= P0.3.2) | `GET /lots/{lot_id}` + `GET /objects/{cad}/graph` (узлы/рёбра, graph_node_id из C1-контракта). 24 теста. | ✅ done (2026-06-08; см. `p0-viewmodel.md`) |
 | **C3** (= P0.3.3) | KMZ-storage (`bundles/<id>.kmz`) + `GET /bundles/{id}/download?fmt=` + материализация `geo` (центр/геометрия в БД). | план |
 | P0.1 — DB-контракт C2 (синхронизация `schema/` и `egrn_parser/db/schema.sql`, машиночитаемая выжимка → `contracts/db/`). | Не начат. Параллельный трек parser-team. | план |
 
