@@ -58,7 +58,8 @@ ORDER BY p.lot_id, cc.season_year, p.parcel_code;
 
 
 _VALUATION_DDL = """
-CREATE VIEW IF NOT EXISTS v_vineyard_valuation AS
+DROP VIEW IF EXISTS v_vineyard_valuation;
+CREATE VIEW v_vineyard_valuation AS
 SELECT p.parcel_id, p.parcel_code, p.land_cad, p.area_ha,
        json_extract(p.attrs,'$.federal_reg_no') AS federal_reg_no,
        CAST(json_extract(p.attrs,'$.vines_count') AS INTEGER) AS vines_count,
@@ -68,7 +69,9 @@ SELECT p.parcel_id, p.parcel_code, p.land_cad, p.area_ha,
        (CAST(strftime('%Y','now') AS INTEGER) - CAST(cc.sow_date AS INTEGER)) AS vine_age_years,
        lc.contour_area_sqm, lc.centroid_lon, lc.centroid_lat,
        COALESCE(ev.n_operations,0) AS n_care_operations,
-       COALESCE(ev.n_treatments,0) AS n_treatments
+       COALESCE(ev.n_treatments,0) AS n_treatments,
+       w.gdd AS accum_gdd, w.precip_mm AS accum_precip_mm,
+       w.radiation_mj AS accum_radiation_mj, w.n_days AS weather_days
 FROM agro_parcel p
 JOIN agro_crop_cycle cc ON cc.parcel_id=p.parcel_id AND cc.crop='виноград'
 LEFT JOIN (SELECT parent_cad, SUM(area_sqm) AS contour_area_sqm,
@@ -77,7 +80,11 @@ LEFT JOIN (SELECT parent_cad, SUM(area_sqm) AS contour_area_sqm,
 LEFT JOIN (SELECT parcel_id,
                   SUM(CASE WHEN event_type='operation' THEN 1 ELSE 0 END) AS n_operations,
                   SUM(CASE WHEN event_type='treatment' THEN 1 ELSE 0 END) AS n_treatments
-           FROM agro_event GROUP BY parcel_id) ev ON ev.parcel_id=p.parcel_id;
+           FROM agro_event GROUP BY parcel_id) ev ON ev.parcel_id=p.parcel_id
+LEFT JOIN (SELECT parcel_id, gdd, precip_mm, radiation_mj, n_days,
+                  ROW_NUMBER() OVER (PARTITION BY parcel_id ORDER BY end_date DESC) AS rn
+           FROM weather_accumulated WHERE parcel_id IS NOT NULL) w
+       ON w.parcel_id=p.parcel_id AND w.rn=1;
 """
 
 
@@ -89,10 +96,12 @@ def ensure_views(conn: sqlite3.Connection) -> None:
 def ensure_valuation_view(conn: sqlite3.Connection) -> None:
     """Идемпотентно создать оценочную вьюху виноградника (миграция 0009).
 
-    Требует таблиц agro_parcel/agro_crop_cycle/agro_event; land_contours создаётся
-    при отсутствии (land_db.ensure_schema), чтобы вьюха работала без земли."""
+    Требует таблиц agro_parcel/agro_crop_cycle/agro_event; land_contours и
+    weather_accumulated создаются при отсутствии, чтобы вьюха работала без земли/погоды."""
     from egrn_parser.parsers import land_db as _land_db
+    from egrn_parser.parsers import weather_open_meteo as _weather
     _land_db.ensure_schema(conn)
+    _weather.ensure_schema(conn)
     conn.executescript(_VALUATION_DDL)
 
 

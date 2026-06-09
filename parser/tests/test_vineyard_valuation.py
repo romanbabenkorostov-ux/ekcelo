@@ -5,6 +5,7 @@ import sqlite3
 from egrn_parser.parsers import agro_reports as R
 from egrn_parser.parsers import vineyard_perechen as VP
 from egrn_parser.parsers import land_db as LDB
+from egrn_parser.parsers import weather_open_meteo as W
 
 _PLANTING = (
     "Многолетние насаждения (виноградные насаждения), расположенные на Предмете залога 66:\n"
@@ -52,6 +53,17 @@ def test_valuation_view_collects_land_planting_care():
     assert v["contour_area_sqm"] and v["contour_area_sqm"] > 0
     assert v["centroid_lon"] is not None and v["centroid_lat"] is not None
     assert v["n_care_operations"] == 2 and v["n_treatments"] == 1
+    # погоды ещё нет → колонки NULL
+    assert v["accum_gdd"] is None
+
+    # добавляем накопленную погоду по геоточке насаждения → попадает в оценку
+    W.store_accumulated(c, {"lat": v["centroid_lat"], "lon": v["centroid_lon"],
+                            "start": "2022-01-01", "end": "2024-07-03",
+                            "n_days": 900, "gdd": 4200.0, "precip_mm": 1500.0,
+                            "radiation_mj": 18000.0}, parcel_id=pid)
+    v2 = R.vineyard_valuation(c)[0]
+    assert v2["accum_gdd"] == 4200.0 and v2["accum_precip_mm"] == 1500.0
+    assert v2["weather_days"] == 900
 
 
 def test_valuation_view_no_contour_is_ok():

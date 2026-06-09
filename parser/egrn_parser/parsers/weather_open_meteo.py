@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+import sqlite3
 import urllib.parse
 import urllib.request
 from typing import Any, Optional
@@ -110,3 +111,60 @@ def accumulated_since_planting(lat: float, lon: float, planting_year: int, *,
     out = accumulate(parse_daily(payload), base_temp=base_temp)
     out.update({"lat": lat, "lon": lon, "start": start, "end": end})
     return out
+
+
+# ── Персистентность накопленной погоды (ADR-006 §J: погода в БД и оценке) ──────
+_WEATHER_DDL = """
+CREATE TABLE IF NOT EXISTS weather_accumulated (
+    weather_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    parcel_id     INTEGER,                 -- насаждение (agro_parcel), опц.
+    lat           REAL,
+    lon           REAL,
+    start_date    TEXT,
+    end_date      TEXT,
+    n_days        INTEGER,
+    gdd           REAL,                     -- Σ активных температур (база base_temp)
+    precip_mm     REAL,
+    radiation_mj  REAL,
+    wind_max      REAL,
+    gust_max      REAL,
+    temp_mean_avg REAL,
+    base_temp     REAL DEFAULT 10.0,
+    source        TEXT DEFAULT 'open_meteo',
+    fetched_at    TEXT DEFAULT (datetime('now')),
+    UNIQUE(parcel_id, start_date, end_date)
+);
+"""
+
+
+def ensure_schema(conn: sqlite3.Connection) -> None:
+    """Создать таблицу weather_accumulated (идемпотентно)."""
+    conn.executescript(_WEATHER_DDL)
+
+
+def store_accumulated(conn: sqlite3.Connection, acc: dict[str, Any], *,
+                      parcel_id: Optional[int] = None,
+                      base_temp: float = VINE_BASE_TEMP_C) -> int:
+    """Записать накопленную погоду (результат accumulate/accumulated_since_planting).
+
+    Идемпотентно по (parcel_id, start_date, end_date). Возвращает weather_id."""
+    ensure_schema(conn)
+    conn.execute(
+        """INSERT INTO weather_accumulated
+               (parcel_id, lat, lon, start_date, end_date, n_days, gdd, precip_mm,
+                radiation_mj, wind_max, gust_max, temp_mean_avg, base_temp)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+           ON CONFLICT(parcel_id, start_date, end_date) DO UPDATE SET
+               n_days=excluded.n_days, gdd=excluded.gdd, precip_mm=excluded.precip_mm,
+               radiation_mj=excluded.radiation_mj, wind_max=excluded.wind_max,
+               gust_max=excluded.gust_max, temp_mean_avg=excluded.temp_mean_avg,
+               fetched_at=datetime('now')""",
+        (parcel_id, acc.get("lat"), acc.get("lon"), acc.get("start"), acc.get("end"),
+         acc.get("n_days"), acc.get("gdd"), acc.get("precip_mm"), acc.get("radiation_mj"),
+         acc.get("wind_max"), acc.get("gust_max"), acc.get("temp_mean_avg"), base_temp))
+    conn.commit()
+    row = conn.execute(
+        "SELECT weather_id FROM weather_accumulated WHERE parcel_id IS ? "
+        "AND start_date IS ? AND end_date IS ?",
+        (parcel_id, acc.get("start"), acc.get("end"))).fetchone()
+    return row[0] if row else -1

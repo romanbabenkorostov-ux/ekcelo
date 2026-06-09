@@ -112,7 +112,11 @@
     обработки). **Накопленная погода — ✅** (`weather_open_meteo.py`, Open-Meteo
     Archive, без ключа): за день t/осадки/радиация/ветер/порывы → GDD(база 10)/Σ с
     года посадки по геоточке контура (fetch/parse разделены; parse тестируется
-    офлайн). Граф-рёбра/связь землёй — §11.
+    офлайн). **Погода в БД и оценке — ✅** (`0010_weather_accumulated.sql`,
+    `weather_open_meteo.store_accumulated`): снимок накопленных условий на насаждение;
+    `v_vineyard_valuation` дополнен `accum_gdd`/`accum_precip_mm`/`accum_radiation_mj`
+    (последний снимок). Сетевой прогон — позже (наполнит реальными числами).
+    Граф-рёбра/связь землёй — §11.
 
 ### P2–P3
 6. **Lot-сборщик (под C5).** Отбор по include/exclude + as-of → `lots`/`lot_items`

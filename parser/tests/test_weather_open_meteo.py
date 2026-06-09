@@ -47,3 +47,16 @@ def test_accumulate_uses_minmax_when_mean_absent():
 def test_accumulate_empty():
     acc = W.accumulate([])
     assert acc["n_days"] == 0 and acc["gdd"] == 0.0 and acc["temp_mean_avg"] is None
+
+
+def test_store_accumulated_idempotent():
+    import sqlite3
+    c = sqlite3.connect(":memory:")
+    acc = W.accumulate(W.parse_daily(PAYLOAD))
+    acc.update({"lat": 45.04, "lon": 38.97, "start": "2022-01-01", "end": "2024-07-03"})
+    wid1 = W.store_accumulated(c, acc, parcel_id=7)
+    wid2 = W.store_accumulated(c, acc, parcel_id=7)        # повтор → апдейт, не дубль
+    assert wid1 == wid2
+    assert c.execute("SELECT COUNT(*) FROM weather_accumulated").fetchone()[0] == 1
+    row = c.execute("SELECT gdd, precip_mm, parcel_id FROM weather_accumulated").fetchone()
+    assert row == (41.9, 17.5, 7)
