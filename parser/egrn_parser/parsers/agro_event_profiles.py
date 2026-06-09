@@ -38,6 +38,14 @@ PROFILES: dict[str, dict[str, Any]] = {
         "required": ["seeding_rate"],
         "fields": {"seeding_rate": "number", "variety": "text", "depth_cm": "number"},
     },
+    # Обобщённая агро-операция (техкарта: вспашка, культивация, подвязка, удобрение…).
+    "operation": {
+        "required": [],
+        "fields": {"work": "text", "code": "text", "phase": "text", "unit": "text",
+                   "qty": "number", "unit_cost": "number", "total": "number",
+                   "year": "number", "kind": "text", "name": "text",
+                   "rate_per_ha": "number", "note": "text"},
+    },
 }
 
 

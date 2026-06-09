@@ -47,8 +47,8 @@ def test_detect_from_land_object_geojson():
     assert L.detect_from_land_object(obj2) == "ЕЗП"
 
 
-def test_techcard_stub_raises():
+def test_techcard_parser_implemented():
+    """Заглушка заменена реализацией (трек A): parse_techcard — алиас parse_workbook."""
     from egrn_parser.parsers import agro_techcard
-    import pytest
-    with pytest.raises(NotImplementedError, match="образец"):
-        agro_techcard.parse_techcard("nope.xlsx")
+    assert agro_techcard.parse_techcard is not None
+    assert callable(agro_techcard.parse_workbook)

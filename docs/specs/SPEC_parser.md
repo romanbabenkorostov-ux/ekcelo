@@ -93,13 +93,15 @@
     план/факт строками `crop_status`+датировка §F), `agro_event` (события+JSON,
     `cycle_id`/`asset_id`), `agro_attribute_dict` (словарь+стартовые 5 строк).
     **JSON-профили `agro_event.attrs` + валидатор — ✅** (`agro_event_profiles.py`:
-    harvest/treatment/observation/phenology/sowing; `validate_event_attrs`,
-    неизвестные ключи допускаются). Парсер техкарты — **техдолг** (заглушка
-    `agro_techcard.py` + ТЗ `fixtures/agro/TZ_techcard.md`, ждёт образец). Дальше
-    (по получении техкарты): наполнение `agro_parcel`/`agro_crop_cycle`/`agro_event`.
-    **Агро-агрегаты — ✅** (`0008_agro_aggregates.sql` + `agro_reports.py`): вьюхи
-    урожай по сортам/полям, сроки+кислотность/сахар, пестицидная нагрузка (разворот
-    `active_substances[]`), техсхема лота. Граф-рёбра/связь землёй — см. §11.
+    harvest/treatment/observation/phenology/sowing/operation; `validate_event_attrs`).
+    **Парсер техкарты — ✅ (виноградники)** (`agro_techcard.py`): xlsx-смета →
+    `agro_parcel`/`agro_crop_cycle(perennial)`/`agro_event`; листы смета/СЗР/
+    плодоносящие; **виноград-гейт** (другие культуры пропускаются, структура
+    переиспользуема); СЗР → `treatment.active_substances`; ingest валидирует attrs.
+    Проверено на реальном образце (`fixtures/agro/vineyard_techcard_sample.xlsx`:
+    54 операции, 12 пестицидов/8 удобрений). **Агро-агрегаты — ✅**
+    (`0008_agro_aggregates.sql` + `agro_reports.py`): урожай по сортам/полям, сроки+
+    кислотность/сахар, пест. нагрузка, техсхема лота. Граф-рёбра/связь землёй — §11.
 
 ### P2–P3
 6. **Lot-сборщик (под C5).** Отбор по include/exclude + as-of → `lots`/`lot_items`
