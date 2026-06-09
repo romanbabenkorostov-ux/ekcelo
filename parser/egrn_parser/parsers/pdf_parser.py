@@ -57,6 +57,7 @@ from egrn_parser.dictionaries import (
     ENCUMBRANCE_RU_TO_CODE,
     RESTRICTION_PHRASE_TO_CODE,
 )
+from egrn_parser.parsers.restrictions_common import classify_restriction_type
 
 log = logging.getLogger(__name__)
 
@@ -551,11 +552,10 @@ def _parse_object_restrictions(text: str, extract_number) -> list:
         date_m = DATE_RE.search(block)
         num_m  = NUM_RE.search(block)
 
-        restr_type = "czuit_zone"
-        if tip_m and "культурного наследия" in tip_m.group(1).lower():
-            restr_type = "okn_territory"
-        elif vid_m and "культурного наследия" in vid_m.group(1).lower():
-            restr_type = "okn_territory"
+        restr_type = classify_restriction_type(
+            tip_m.group(1) if tip_m else None,
+            vid_m.group(1) if vid_m else None,
+        )
 
         desc = None
         if vid_m:
@@ -584,7 +584,7 @@ def _parse_object_restrictions(text: str, extract_number) -> list:
                     continue
                 date_m = DATE_RE.search(chunk)
                 num_m  = NUM_RE.search(chunk)
-                rtype  = "okn_territory" if "культурного наследия" in chunk.lower() else "czuit_zone"
+                rtype  = classify_restriction_type(chunk)
                 desc_raw = normalize_whitespace(chunk[:200])
                 # Пропустить ложноположительные («данные отсутствуют», «Сведения, необходимые»)
                 _FALSE_POSITIVE_PATTERNS = (
