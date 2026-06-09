@@ -49,5 +49,8 @@ def test_fuzzy_match_disabled_when_auto_yes_false(tmp_path):
     legacy = tmp_path / "memorandum"
     legacy.mkdir()
     layout = init_workspace(tmp_path, fuzzy_threshold=0.7, auto_yes=False)
-    assert layout.memorandum == tmp_path / "Memorandum"
-    assert layout.memorandum != legacy
+    # NB: `pathlib.PureWindowsPath` сравнивает регистронезависимо
+    # (`Path('Memorandum') == Path('memorandum')` на Windows = True). Поэтому
+    # верифицируем КАНОНИЧЕСКОЕ имя через `.name` (str-сравнение portable).
+    assert layout.memorandum.name == "Memorandum"
+    assert layout.memorandum.name != legacy.name  # "Memorandum" vs "memorandum"
