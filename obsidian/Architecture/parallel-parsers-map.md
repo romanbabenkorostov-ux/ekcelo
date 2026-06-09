@@ -119,3 +119,15 @@
 2. **Orchestrator MVP** — учитывает возможность checko-обогащения в `EgrnLayer.tables.entity_registry`, но pull-парсер не вызывает (deferred, см. ADR-002).
 3. **NSPD-стенд** оставить у разработчиков; в `main` каноничные `01_parsing_nspd_v8.py` + `03_enrich_v17.py` + `04_nspd_graph_v14.py`.
 4. **Pirushin-скрипты 01-05** мигрированы в `parser/egrn_parser/` CLI — отдельные scripts не нужны.
+
+## Пайплайн земли (ADR-005): NSPD → sidecar → БД ✅
+
+```
+01_parsing_nspd_v8.py   → session_export/per-object JSON (геометрия WFS/PKK/CV)
+01b_ingest_contours.py  → _data/contours.json   (sidecar, upgrade-merge по источнику)
+01c_contours_to_db.py   → land_contours          (ЗУ/МКУ по геометрии; ЕЗП не понижается)
+```
+- Мост sidecar→БД: `egrn_parser/parsers/land_ingest.py`
+  (`ingest_sidecar_contours` — геометрия→МКУ/ЗУ; `ingest_land_extract_text` —
+  текст выписки→ЕЗП). Классификация/запись — `land_layout.py`/`land_db.py`.
+- Тесты: `test_land_layout`, `test_land_db`, `test_land_ingest` (22 passed).

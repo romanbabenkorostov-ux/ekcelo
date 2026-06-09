@@ -70,15 +70,30 @@
       учредитель (страна/иностр.рег.№) — ✅.
 
 ### P1++ — земли и агро-слой (proposed)
-11. **ЗУ/ЕЗП/МКУ — многоконтурность (ADR-005, proposed).** Детектор
-    `land_layout.detect_land_layout` (ЗУ/ЕЗП/МКУ по маркеру/дочерним КН/числу
-    контуров) — ✅ сделано. Дальше: `land_layout_type` в land_objects,
-    `land_contours`, связи `linked_objects` (`ezp_child`/`mku_contour`/`reorg_*`).
-12. **Агро-слой §6 (ADR-006, proposed).** `fixed_asset` из ОСВ (счета 01.x, ОКС
-    01.08) — ✅ сделано (`osv_assets.py`, миграция 0003). `agro_parcel`/`agro_event`
-    (события+JSON, датирование F, словарь H) — спроектировано; парсер техкарты —
-    **заглушка** `agro_techcard.py` + ТЗ `fixtures/agro/TZ_techcard.md` (ждёт образец).
-    Агрегаты: урожай по сортам/датам/полям, пест. нагрузка, техсхема лота.
+11. **ЗУ/ЕЗП/МКУ — многоконтурность (ADR-005).** ✅ сделано: детектор
+    `land_layout.detect_land_layout`; извлечение ЕЗП из Росреестр-выписки
+    (`parse_land_extract`: главный КН + дочерние КН, проверено на реальном ЕЗП
+    `23:15:0804000:51`); миграция `0004_land_contours.sql` (`land_layout_type` +
+    `land_contours`); запись `land_db.upsert_land_extract` (ЕЗП-дети → контуры).
+    **МКУ-контуры из геометрии — ✅**: `split_geometry_contours` (MultiPolygon →
+    Polygon/контур, `contour_cad=NULL`) + `land_db.upsert_geometry_contours`
+    (классификация ЗУ/МКУ по числу полигонов, идемпотентно). **ЕЗП не понижается
+    геометрией** (MultiPolygon ЕЗП ≠ МКУ). **Ingest подключён — ✅**:
+    `land_ingest.py` + CLI `01c_contours_to_db.py` (sidecar `_data/contours.json`
+    от 01b → `land_contours`; текст выписки → ЕЗП). Сверено с офлайн-ядром
+    NSPD-парсера v8 (`_geojson_to_local_meters`). Дальше: связи `linked_objects`
+    (`ezp_child`/`mku_contour`), граф-рендер (см.
+    `docs/specs/GRAPH_SCHEMA_land_and_entities.md`).
+12. **Агро-слой §6 (ADR-006).** `fixed_asset` из ОСВ (счета 01.x, ОКС 01.08) —
+    ✅ (`osv_assets.py`, миграция 0003). **Миграция `0005_agro_layer.sql` — ✅
+    написана** (ADR-006 §A/C/H/I): `agro_parcel` (поле-снимок), `agro_crop_cycle`
+    (цикл sow→harvest, `season_year`=год уборки, `cycle_kind winter|spring|perennial`,
+    план/факт строками `crop_status`+датировка §F), `agro_event` (события+JSON,
+    `cycle_id`/`asset_id`), `agro_attribute_dict` (словарь+стартовые 5 строк).
+    Парсер техкарты — **заглушка** `agro_techcard.py` + ТЗ
+    `fixtures/agro/TZ_techcard.md` (ждёт образец). Дальше (по получении техкарты):
+    наполнение `agro_parcel`/`agro_crop_cycle`/`agro_event`, JSON-схемы профилей
+    `attrs`, агрегаты-вьюхи (урожай по сортам/датам/полям, пест. нагрузка, техсхема лота).
 
 ### P2–P3
 6. **Lot-сборщик (под C5).** Отбор по include/exclude + as-of → `lots`/`lot_items`
