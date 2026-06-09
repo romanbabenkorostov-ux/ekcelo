@@ -96,8 +96,10 @@
     harvest/treatment/observation/phenology/sowing; `validate_event_attrs`,
     неизвестные ключи допускаются). Парсер техкарты — **техдолг** (заглушка
     `agro_techcard.py` + ТЗ `fixtures/agro/TZ_techcard.md`, ждёт образец). Дальше
-    (по получении техкарты): наполнение `agro_parcel`/`agro_crop_cycle`/`agro_event`,
-    агрегаты-вьюхи (урожай по сортам/датам/полям, пест. нагрузка, техсхема лота).
+    (по получении техкарты): наполнение `agro_parcel`/`agro_crop_cycle`/`agro_event`.
+    **Агро-агрегаты — ✅** (`0008_agro_aggregates.sql` + `agro_reports.py`): вьюхи
+    урожай по сортам/полям, сроки+кислотность/сахар, пестицидная нагрузка (разворот
+    `active_substances[]`), техсхема лота. Граф-рёбра/связь землёй — см. §11.
 
 ### P2–P3
 6. **Lot-сборщик (под C5).** Отбор по include/exclude + as-of → `lots`/`lot_items`
