@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS agro_parcel (
     geom_geojson  TEXT,                      -- геометрия поля сезона, опц.
     lot_id        TEXT,                      -- принадлежность лоту, опц.
     attrs         TEXT,                      -- JSON: прочие признаки поля
-    source        TEXT NOT NULL CHECK (source IN ('osv','techcard','exif','manual','nspd','llm')),
+    source        TEXT NOT NULL CHECK (source IN ('osv','techcard','exif','manual','nspd','llm','perechen')),
     confidence    REAL NOT NULL CHECK (confidence BETWEEN 0 AND 1),
     updated_at    TEXT DEFAULT (datetime('now')),
     UNIQUE(parcel_code, season_year)
@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS agro_crop_cycle (
     valid_from    TEXT,                      -- с какой даты назначение действует
     valid_to      TEXT,                      -- по какую (NULL = открыт)
     known_from    TEXT,                      -- с какой даты стало известно
-    source        TEXT NOT NULL CHECK (source IN ('osv','techcard','exif','manual','nspd','llm')),
+    source        TEXT NOT NULL CHECK (source IN ('osv','techcard','exif','manual','nspd','llm','perechen')),
     confidence    REAL NOT NULL CHECK (confidence BETWEEN 0 AND 1),
     updated_at    TEXT DEFAULT (datetime('now'))
 );
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS agro_event (
     event_date  TEXT,                        -- дата (сбор/обработка/замер/сев)
     asset_id    INTEGER REFERENCES fixed_asset(asset_id),  -- техника (§G), опц.
     attrs       TEXT NOT NULL,               -- JSON: показатели события (профиль по type)
-    source      TEXT NOT NULL CHECK (source IN ('osv','techcard','exif','manual','nspd','llm')),
+    source      TEXT NOT NULL CHECK (source IN ('osv','techcard','exif','manual','nspd','llm','perechen')),
     confidence  REAL NOT NULL CHECK (confidence BETWEEN 0 AND 1),
     created_at  TEXT DEFAULT (datetime('now'))
 );
