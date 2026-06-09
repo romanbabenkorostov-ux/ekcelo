@@ -57,9 +57,51 @@ ORDER BY p.lot_id, cc.season_year, p.parcel_code;
 """
 
 
+_VALUATION_DDL = """
+CREATE VIEW IF NOT EXISTS v_vineyard_valuation AS
+SELECT p.parcel_id, p.parcel_code, p.land_cad, p.area_ha,
+       json_extract(p.attrs,'$.federal_reg_no') AS federal_reg_no,
+       CAST(json_extract(p.attrs,'$.vines_count') AS INTEGER) AS vines_count,
+       json_extract(p.attrs,'$.rootstock') AS rootstock,
+       cc.variety,
+       CAST(cc.sow_date AS INTEGER) AS planting_year,
+       (CAST(strftime('%Y','now') AS INTEGER) - CAST(cc.sow_date AS INTEGER)) AS vine_age_years,
+       lc.contour_area_sqm, lc.centroid_lon, lc.centroid_lat,
+       COALESCE(ev.n_operations,0) AS n_care_operations,
+       COALESCE(ev.n_treatments,0) AS n_treatments
+FROM agro_parcel p
+JOIN agro_crop_cycle cc ON cc.parcel_id=p.parcel_id AND cc.crop='виноград'
+LEFT JOIN (SELECT parent_cad, SUM(area_sqm) AS contour_area_sqm,
+                  AVG(centroid_lon) AS centroid_lon, AVG(centroid_lat) AS centroid_lat
+           FROM land_contours GROUP BY parent_cad) lc ON lc.parent_cad=p.land_cad
+LEFT JOIN (SELECT parcel_id,
+                  SUM(CASE WHEN event_type='operation' THEN 1 ELSE 0 END) AS n_operations,
+                  SUM(CASE WHEN event_type='treatment' THEN 1 ELSE 0 END) AS n_treatments
+           FROM agro_event GROUP BY parcel_id) ev ON ev.parcel_id=p.parcel_id;
+"""
+
+
 def ensure_views(conn: sqlite3.Connection) -> None:
     """Идемпотентно создать агро-вьюхи (миграция 0008)."""
     conn.executescript(_VIEWS_DDL)
+
+
+def ensure_valuation_view(conn: sqlite3.Connection) -> None:
+    """Идемпотентно создать оценочную вьюху виноградника (миграция 0009).
+
+    Требует таблиц agro_parcel/agro_crop_cycle/agro_event; land_contours создаётся
+    при отсутствии (land_db.ensure_schema), чтобы вьюха работала без земли."""
+    from egrn_parser.parsers import land_db as _land_db
+    _land_db.ensure_schema(conn)
+    conn.executescript(_VALUATION_DDL)
+
+
+def vineyard_valuation(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Оценочный профиль виноградника: контур ЗУ × насаждение × уход (ADR-006 §J)."""
+    ensure_valuation_view(conn)
+    cur = conn.execute("SELECT * FROM v_vineyard_valuation")
+    cols = [d[0] for d in cur.description]
+    return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
 def _rows(conn: sqlite3.Connection, view: str) -> list[dict[str, Any]]:
