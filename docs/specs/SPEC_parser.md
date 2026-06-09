@@ -45,9 +45,11 @@
    `egrn_parser/merge/content_hash.py`. **Manifest-ядро — ✅** (`bundle_manifest.py`):
    `sha256_file`/`file_entry` + `build_manifest`(C3, allowed-keys) + `validate_manifest`
    (required/semver/sha256/lot-блок). Сборку каталога (kmz/db/json) делает golden-path.
-5. **ЭТП-слой §6.** `object_etp_profile`/`lots`/`lot_items` с `source`+`confidence`;
-   gap-fill merge (osv/manual > nspd/exif/llm/checko). §6 при пересоздании БД не
-   восстанавливается (ADR-001) → в manifest помечается отдельно.
+5. **ЭТП-слой §6. ✅** (`etp_merge.py`): единый **gap-fill merge** в
+   `object_etp_profile` — приоритет `manual>osv>nspd>exif>llm` (источник ≥ ROW —
+   перезаписывает, ниже — заполняет пустоты; глубокий merge по 6 JSON-колонкам,
+   идемпотентно). `etp_layer_present` → флаг для manifest (ADR-001: §6 при
+   пересоздании БД не восстанавливается). `lots`/`lot_items` — см. item 6.
 
 ### P1+ — приём данных о субъектах (ЕГРЮЛ/ЕГРИП, мультиисточник) — ADR-004
 8. **ФНС-XML парсер (✅ сделано 2026-06-05).** `egrn_parser/parsers/egrul_egrip_parser.py`:
