@@ -292,11 +292,17 @@ ALTER TABLE agro_event ADD cycle_id INTEGER REFERENCES agro_crop_cycle(cycle_id)
   Схема спроектирована; наполнение — по получении образца техкарты.
 
 ## Дальнейшие шаги (план реализации)
-1. **Сейчас:** миграция `0003_fixed_assets.sql` + парсер ОСВ → `fixed_asset`
-   (счета 01.x, флаг 01.08-ОКС). Тест на образце.
-2. Миграция `0004_agro_layer.sql` (agro_parcel/**agro_crop_cycle** (§I)/
+1. ✅ Миграция `0003_fixed_assets.sql` + парсер ОСВ → `fixed_asset` (счета 01.x,
+   01.08-ОКС). `osv_assets.py` + тест.
+2. ✅ Миграция `0005_agro_layer.sql` (agro_parcel/**agro_crop_cycle** (§I)/
    agro_event/agro_attribute_dict + датирование F, связь `asset_id`/`cycle_id`).
-3. Парсер техкарты → `agro_parcel`+`agro_event` (по образцу — ожидается).
-4. JSON-схемы профилей `attrs` + валидатор.
-5. Вьюхи-агрегаты (урожай по сортам/датам/полям, пест. нагрузка, техсхема лота).
-6. Связь с ADR-005 (`land_cad`/`contour_no`; ОКС 01.08 → постановка на учёт).
+3. ⏳ **ТЕХДОЛГ — парсер техкарты** → `agro_parcel`+`agro_crop_cycle`+`agro_event`
+   (заблокирован: нужен обезличенный образец техкарты в `fixtures/agro/`).
+   Заглушка `agro_techcard.py` + ТЗ `fixtures/agro/TZ_techcard.md`.
+4. ✅ JSON-профили `attrs` + валидатор (`agro_event_profiles.py`,
+   `validate_event_attrs`: harvest/treatment/observation/phenology/sowing).
+5. ⏳ Вьюхи-агрегаты (урожай по сортам/датам/полям, пест. нагрузка, техсхема лота)
+   — **после п.3** (нужны данные техкарты).
+6. ◻️ Связь с ADR-005 (`land_cad`/`contour_no`; ОКС 01.08 → постановка на учёт).
+
+См. сводный план остатка: `obsidian/Architecture/roadmap-land-agro-graph.md`.
