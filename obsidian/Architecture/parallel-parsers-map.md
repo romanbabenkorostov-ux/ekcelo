@@ -10,6 +10,25 @@
 | **`parsing_nspd`** | NSPD-парсеры (8 скриптов, парс свидетельств, пометок, merge JSON) | НЕ в репо | dev-стенд, в репо едут только нужные (`01_parsing_nspd_v8.py` уже здесь) |
 | **`pirushin_sosn_rocha`** | OS-данные → realty + KMZ контракт + переписка teams | частично в репо (`parser/scripts/`) | используется |
 | **`parser_checko_ru`** | Клиент checko.ru + dadata.ru + НПД ФНС, SQLite-кэш | **новый, не в репо** | план: ADR-002, отложенная интеграция в orchestrator |
+| **`egrul_egrip_parser`** | Парсер ФНС-XML выписок ЕГРЮЛ (4.08) / ЕГРИП (4.07) → нормализ. запись (субъект+связи) | ✅ **в репо** `parser/egrn_parser/parsers/egrul_egrip_parser.py` | ADR-004, источник §6 legal-слоя; запись в БД ждёт `contracts/db` |
+
+## 0. `egrul_egrip_parser` — ФНС-XML ЕГРЮЛ/ЕГРИП (ADR-004, выполнено 2026-06-05)
+
+Официальный источник данных о субъектах (юрлица/ИП) — параллельно checko/dadata
+(ADR-002, отложен) и PDF. Отдельный домен от Росреестр-ЕГРН (`xml_parser.py`).
+
+- **Автоопределение** по корню `Файл`: реестр из `@ТипИнф` (`ЕГРЮЛ_*`/`ЕГРИП_*`),
+  версия из `@ВерсФорм`. `SUPPORTED_FORMATS={(ЕГРЮЛ,4.08),(ЕГРИП,4.07)}`,
+  неизвестная версия → `ValueError`.
+- **XSD по реестрам** (как `xsd/upd`): `parser/schema/xsd/{egrul,egrip}/` —
+  оригиналы cp1251 + `NOTES.md`, свежайшая редакция по сортировке имени;
+  валидация через lxml (опц.).
+- **Нормализованная запись** (одна на `Документ`, единая для всех источников):
+  `{subject, directors, managing_orgs, founders, predecessors, successors, source}`.
+- **Тесты:** `parser/tests/test_egrul_egrip_parser.py` (9/9) + cp1251-фикстуры
+  `parser/tests/fixtures/fns/` (без ПД).
+- **Не сделано (по плану):** адаптеры checko/dadata-JSON и PDF → та же запись;
+  враппер «запись → БД-слой subjects/relations» (ждёт `contracts/db/SCHEMA_SPEC.md`).
 
 ## 1. `egrn_parser` — packaging delta v1.10
 

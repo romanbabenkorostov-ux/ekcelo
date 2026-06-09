@@ -420,6 +420,26 @@ CREATE TABLE IF NOT EXISTS ownership_chain (
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Прочие направленные связи субъектов (НЕ владение): руководитель,
+-- управляющая организация, право-предшественник/преемник (реорганизация).
+-- Отдельно от ownership_chain (там — только доли владения).
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS entity_relations (
+    rel_id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_entity_id  INTEGER NOT NULL REFERENCES entity_registry(entity_id),
+    target_entity_id  INTEGER NOT NULL REFERENCES entity_registry(entity_id),
+    relation_type     TEXT NOT NULL,   -- director|managing_org|predecessor|successor
+    post              TEXT,
+    source            TEXT NOT NULL,
+    source_date       TEXT,
+    is_active         INTEGER NOT NULL DEFAULT 1,
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(source_entity_id, target_entity_id, relation_type)
+);
+CREATE INDEX IF NOT EXISTS idx_entity_relations_src ON entity_relations(source_entity_id);
+CREATE INDEX IF NOT EXISTS idx_entity_relations_type ON entity_relations(relation_type);
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- СЛУЖЕБНЫЕ ТАБЛИЦЫ
 -- ─────────────────────────────────────────────────────────────────────────────
 
