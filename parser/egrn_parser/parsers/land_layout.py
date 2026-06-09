@@ -15,6 +15,7 @@ egrn_parser/parsers/land_layout.py — классификация предста
 from __future__ import annotations
 
 import json
+import math
 import re
 from typing import Optional, Sequence
 
@@ -119,20 +120,82 @@ def parse_land_extract(text: str) -> dict:
     return {"cad_number": cad, "layout": layout, "children": children}
 
 
+# ── Геометрия: площадь/центроид контура (локальная равноугольная проекция) ────
+def _lonlat_to_local_meters(lon, lat, lon0, lat0):
+    """Локальная плоская проекция от центроида (точность ±0.1% до ~10 км)."""
+    dx = (lon - lon0) * 111320.0 * math.cos(math.radians(lat0))
+    dy = (lat - lat0) * 110540.0
+    return dx, dy
+
+
+def _ring_centroid_wgs84(ring) -> tuple[float, float]:
+    """Центроид кольца (lon, lat) по формуле планарного полигона."""
+    if len(ring) < 3:
+        return (ring[0][0], ring[0][1]) if ring else (0.0, 0.0)
+    A = cx = cy = 0.0
+    n = len(ring)
+    for i in range(n):
+        x1, y1 = ring[i][0], ring[i][1]
+        x2, y2 = ring[(i + 1) % n][0], ring[(i + 1) % n][1]
+        cross = x1 * y2 - x2 * y1
+        A += cross
+        cx += (x1 + x2) * cross
+        cy += (y1 + y2) * cross
+    A *= 0.5
+    if abs(A) < 1e-12:
+        return (sum(p[0] for p in ring) / n, sum(p[1] for p in ring) / n)
+    return (cx / (6.0 * A), cy / (6.0 * A))
+
+
+def _ring_area_sqm_local(ring_local_m) -> float:
+    """Площадь кольца в м² (shoelace по локальным метрам)."""
+    n = len(ring_local_m)
+    if n < 3:
+        return 0.0
+    s = sum(ring_local_m[i][0] * ring_local_m[(i + 1) % n][1]
+            - ring_local_m[(i + 1) % n][0] * ring_local_m[i][1] for i in range(n))
+    return abs(s) * 0.5
+
+
+def polygon_area_centroid(polygon_coords) -> tuple[Optional[float], Optional[float], Optional[float]]:
+    """Polygon coords ([outer, hole1, …] в WGS84) → (area_sqm, lon, lat).
+
+    Площадь = внешнее кольцо − дыры; центроид — внешнее кольцо. None при пустом."""
+    if not polygon_coords or not polygon_coords[0]:
+        return (None, None, None)
+    outer = polygon_coords[0]
+    lon0, lat0 = _ring_centroid_wgs84(outer)
+    def proj(ring):
+        return [_lonlat_to_local_meters(p[0], p[1], lon0, lat0) for p in ring]
+    area = _ring_area_sqm_local(proj(outer))
+    for hole in polygon_coords[1:]:
+        area -= _ring_area_sqm_local(proj(hole))
+    return (round(area, 2), round(lon0, 7), round(lat0, 7))
+
+
 # ── МКУ: контуры из геометрии (MultiPolygon → отдельные полигоны) ────────────
 def split_geometry_contours(geom: Optional[dict]) -> list[dict]:
-    """GeoJSON геометрии → список контуров {geom_geojson(Polygon)}.
+    """GeoJSON геометрии → список контуров {geom_geojson(Polygon), area_sqm,
+    centroid_lon, centroid_lat}.
 
     Polygon → 1 контур; MultiPolygon → по контуру на полигон (для МКУ/ЕЗП).
-    contour_cad НЕ заполняется (у контура МКУ нет своего КН)."""
+    contour_cad НЕ заполняется (у контура МКУ нет своего КН). Площадь/центроид
+    считаются из геометрии (локальная проекция)."""
     if not isinstance(geom, dict):
         return []
     t = geom.get("type")
     coords = geom.get("coordinates") or []
     if t == "Polygon":
-        return [{"geom_geojson": json.dumps(geom, ensure_ascii=False)}]
-    if t == "MultiPolygon":
-        return [{"geom_geojson": json.dumps(
-                    {"type": "Polygon", "coordinates": poly}, ensure_ascii=False)}
-                for poly in coords]
-    return []
+        polys = [coords]
+    elif t == "MultiPolygon":
+        polys = coords
+    else:
+        return []
+    out = []
+    for poly in polys:
+        area, lon, lat = polygon_area_centroid(poly)
+        out.append({"geom_geojson": json.dumps(
+                        {"type": "Polygon", "coordinates": poly}, ensure_ascii=False),
+                    "area_sqm": area, "centroid_lon": lon, "centroid_lat": lat,
+                    "geom_source": "geometry"})
+    return out

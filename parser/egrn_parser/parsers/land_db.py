@@ -79,6 +79,8 @@ def upsert_contours(conn: sqlite3.Connection, parent_cad: str,
                    contour_cad  = COALESCE(excluded.contour_cad, land_contours.contour_cad),
                    geom_geojson = COALESCE(excluded.geom_geojson, land_contours.geom_geojson),
                    area_sqm     = COALESCE(excluded.area_sqm, land_contours.area_sqm),
+                   centroid_lon = COALESCE(excluded.centroid_lon, land_contours.centroid_lon),
+                   centroid_lat = COALESCE(excluded.centroid_lat, land_contours.centroid_lat),
                    geom_source  = COALESCE(excluded.geom_source, land_contours.geom_source)""",
             (parent_cad, i, c.get("contour_cad"), c.get("geom_geojson"),
              c.get("area_sqm"), c.get("centroid_lon"), c.get("centroid_lat"),
@@ -150,3 +152,24 @@ def upsert_geometry_contours(conn: sqlite3.Connection, parent_cad: str,
     out["contours"] = upsert_contours(conn, parent_cad, contours, source=source)
     conn.commit()
     return out
+
+
+def land_graph_edges(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Рёбра граф-слоя из land_contours (GRAPH_SCHEMA §Рёбра).
+
+    Узлы: land_<parent>, contour_<parent>_<no>. Тип ребра — по contour_cad:
+    заполнен → 'ezp_child' (дочерний КН ЕЗП), NULL → 'mku_contour' (контур МКУ).
+    """
+    ensure_schema(conn)
+    rows = conn.execute(
+        "SELECT parent_cad, contour_no, contour_cad FROM land_contours "
+        "ORDER BY parent_cad, contour_no").fetchall()
+    edges = []
+    for parent_cad, contour_no, contour_cad in rows:
+        edges.append({
+            "from_node": f"land_{parent_cad}",
+            "to_node": f"contour_{parent_cad}_{contour_no}",
+            "edge_type": "ezp_child" if contour_cad else "mku_contour",
+            "to_cad": contour_cad,
+        })
+    return edges

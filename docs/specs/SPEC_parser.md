@@ -81,19 +81,23 @@
     геометрией** (MultiPolygon ЕЗП ≠ МКУ). **Ingest подключён — ✅**:
     `land_ingest.py` + CLI `01c_contours_to_db.py` (sidecar `_data/contours.json`
     от 01b → `land_contours`; текст выписки → ЕЗП). Сверено с офлайн-ядром
-    NSPD-парсера v8 (`_geojson_to_local_meters`). Дальше: связи `linked_objects`
-    (`ezp_child`/`mku_contour`), граф-рендер (см.
-    `docs/specs/GRAPH_SCHEMA_land_and_entities.md`).
+    NSPD-парсера v8 (`_geojson_to_local_meters`). **Рёбра графа — ✅**: вьюхи
+    `v_land_graph_edges`/`v_land_graph_nodes` (миграция `0006_land_graph_edges.sql`)
+    + `land_db.land_graph_edges` (`ezp_child`/`mku_contour`). **Площадь/центроид
+    контуров — ✅** (`polygon_area_centroid`, пишутся в `land_contours`). Дальше:
+    граф-рендер в просмотрщике (см. `docs/specs/GRAPH_SCHEMA_land_and_entities.md`).
 12. **Агро-слой §6 (ADR-006).** `fixed_asset` из ОСВ (счета 01.x, ОКС 01.08) —
     ✅ (`osv_assets.py`, миграция 0003). **Миграция `0005_agro_layer.sql` — ✅
     написана** (ADR-006 §A/C/H/I): `agro_parcel` (поле-снимок), `agro_crop_cycle`
     (цикл sow→harvest, `season_year`=год уборки, `cycle_kind winter|spring|perennial`,
     план/факт строками `crop_status`+датировка §F), `agro_event` (события+JSON,
     `cycle_id`/`asset_id`), `agro_attribute_dict` (словарь+стартовые 5 строк).
-    Парсер техкарты — **заглушка** `agro_techcard.py` + ТЗ
-    `fixtures/agro/TZ_techcard.md` (ждёт образец). Дальше (по получении техкарты):
-    наполнение `agro_parcel`/`agro_crop_cycle`/`agro_event`, JSON-схемы профилей
-    `attrs`, агрегаты-вьюхи (урожай по сортам/датам/полям, пест. нагрузка, техсхема лота).
+    **JSON-профили `agro_event.attrs` + валидатор — ✅** (`agro_event_profiles.py`:
+    harvest/treatment/observation/phenology/sowing; `validate_event_attrs`,
+    неизвестные ключи допускаются). Парсер техкарты — **техдолг** (заглушка
+    `agro_techcard.py` + ТЗ `fixtures/agro/TZ_techcard.md`, ждёт образец). Дальше
+    (по получении техкарты): наполнение `agro_parcel`/`agro_crop_cycle`/`agro_event`,
+    агрегаты-вьюхи (урожай по сортам/датам/полям, пест. нагрузка, техсхема лота).
 
 ### P2–P3
 6. **Lot-сборщик (под C5).** Отбор по include/exclude + as-of → `lots`/`lot_items`
