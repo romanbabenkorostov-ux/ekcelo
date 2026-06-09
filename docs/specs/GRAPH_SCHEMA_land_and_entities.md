@@ -31,12 +31,13 @@
 | Техника на объекте | `fixed_asset.cad_number` | asset → build/land | `asset_of` (если ОКС) |
 
 ## Что добавить в `contracts/db` (предложение PR)
-1. Зафиксировать `graph_node_id`-конвенции для `land_contours` и `fixed_asset`.
-2. Описать вьюхи рёбер: `v_graph_edges` UNION ALL по таблицам выше с колонкой
-   `edge_type`. Кросс-матч с C1/C4 (`graph_node_id` == `node.id`).
-3. Тип ребра `ezp_child` vs `mku_contour` различать по `contour_cad IS NULL`.
-4. ОКС на счёте `01.08` (`fixed_asset.on_cadastre=0`) — узел-кандидат «без КН»;
-   при постановке на учёт `cad_number` заполняется → перелинковка на `build_<cad>`.
+1. ✅ Зафиксированы `graph_node_id`-конвенции: `land_<cad>` · `contour_<parent>_<no>`
+   · `build_<cad>` · `entity_<inn|id>` · `asset_<id>`.
+2. ✅ Вьюха `v_graph_edges` (миграция `0007_graph_edges_union.sql`) — UNION ALL по
+   источникам с `edge_type`. Канонический Python-аналог: `graph_edges.all_graph_edges`.
+3. ✅ Тип ребра `ezp_child` vs `mku_contour` — по `contour_cad IS NULL`.
+4. ◻️ ОКС `01.08` → постановка на учёт: `agro_link.register_asset_cadastre`
+   проставляет `cad_number`/`on_cadastre=1` → ребро `asset_of` на `build_<cad>`.
 
 ## Уже реализовано parser-частью (готово к графу)
 - `entity_registry` + `ownership_chain` + `entity_relations` (ЕГРЮЛ/ЕГРИП ingest).
@@ -49,4 +50,10 @@
   (`land_layout.polygon_area_centroid`, локальная проекция), пишутся в
   `land_contours.area_sqm/centroid_lon/centroid_lat`.
 - `fixed_asset` (ОСВ, миграция 0003).
+- **Все рёбра графа — ✅** (`graph_edges.py` + миграция `0007`): `located_on`
+  (linked_objects), `right_holder` (rights+right_holders→entity), `asset_of`
+  (fixed_asset→build), `owns` (ownership_chain), `director`/… (entity_relations),
+  `ezp_child`/`mku_contour` (land_contours). Единый `v_graph_edges`/`all_graph_edges`.
+- **Связь агро↔земля/кадастр — ✅** (`agro_link.py`): `link_parcel_to_land`,
+  `assets_pending_cadastre` (01.08), `register_asset_cadastre`.
 Все записи идемпотентны; источники помечены (`source`).
