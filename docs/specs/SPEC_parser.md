@@ -42,7 +42,9 @@
    по `contracts/bundle/BUNDLE_SPEC.md`: `project.kmz` (08), `db.sqlite` (§1–§6),
    `json/{structure,enriched,objects/*}`, `manifest.json` (версии contracts +
    content-хеши + extract_date + состав лота). Опц. `raw/`. Хеши —
-   `egrn_parser/merge/content_hash.py`.
+   `egrn_parser/merge/content_hash.py`. **Manifest-ядро — ✅** (`bundle_manifest.py`):
+   `sha256_file`/`file_entry` + `build_manifest`(C3, allowed-keys) + `validate_manifest`
+   (required/semver/sha256/lot-блок). Сборку каталога (kmz/db/json) делает golden-path.
 5. **ЭТП-слой §6.** `object_etp_profile`/`lots`/`lot_items` с `source`+`confidence`;
    gap-fill merge (osv/manual > nspd/exif/llm/checko). §6 при пересоздании БД не
    восстанавливается (ADR-001) → в manifest помечается отдельно.
@@ -119,8 +121,9 @@
     Граф-рёбра/связь землёй — §11.
 
 ### P2–P3
-6. **Lot-сборщик (под C5).** Отбор по include/exclude + as-of → `lots`/`lot_items`
-   + `manifest.lot` (детерминированный `members[]`).
+6. **Lot-сборщик (под C5). ✅** (`lot_assembler.py`): отбор по include/exclude
+   (cads/globs/types) + as-of → `lots`/`lot_items` (роль по object_type) +
+   `manifest.lot` (детерминированный `members[]`, сортировка по КН, идемпотентно).
 7. **checko/nspd (отложено, ADR-002).** Standalone; интеграция — адаптер
    `etl_checko.py` → §6 `legal_extra` (`source='checko'`). В Bundle — только через §6.
    Прим.: ФНС-XML (трек 8, ADR-004) — официальный источник тех же данных без secrets.
