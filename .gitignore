@@ -30,3 +30,10 @@ __pycache__/
 venv/
 
 .coverage
+
+# local DBs / build artifacts (Ekcelo)
+*.sqlite
+*.db
+*.db-shm
+*.db-wal
+parser/output/
