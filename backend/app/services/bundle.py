@@ -99,6 +99,7 @@ class ImportReport:
     etp_profiles_skipped_authoritative: int = 0
     files_verified: int = 0
     files_failed: list[str] = field(default_factory=list)
+    schema_violations: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
@@ -147,6 +148,7 @@ def import_bundle(
     *,
     verify_hashes: bool = True,
     dry_run: bool = False,
+    validate_schema: bool = False,
 ) -> ImportReport:
     """Главная точка входа: валидирует Bundle и идемпотентно импортирует в `target_db`.
 
@@ -155,6 +157,11 @@ def import_bundle(
         target_db: путь к ekcelo.sqlite (целевая БД).
         verify_hashes: если True — сверяет sha256 файлов с manifest.files[].
         dry_run: если True — открывает транзакцию и откатывает (отчёт остаётся).
+        validate_schema: если True — сверяет `db.sqlite` Bundle'а с C2-контрактом
+            (`contracts/db/schema.json`) ДО мутации target_db. Нарушения → в
+            `report.schema_violations` + `report.errors`; импорт прерывается.
+            По умолчанию False (не ломает минимальные тест-фикстуры; реальные
+            Bundle от парсера — полная схема, для них имеет смысл True).
 
     Returns:
         ImportReport с детализацией. `is_noop=True` при повторе того же Bundle.
@@ -180,6 +187,16 @@ def import_bundle(
     if not source_db_path.is_file():
         report.errors.append("Bundle invalid: db.sqlite отсутствует")
         return report
+
+    if validate_schema:
+        from backend.app.services.db_contract import validate_db
+        violations = validate_db(source_db_path)
+        if violations:
+            report.schema_violations = violations
+            report.errors.append(
+                f"schema contract: {len(violations)} нарушений C2-схемы"
+            )
+            return report
 
     target_db.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(target_db)

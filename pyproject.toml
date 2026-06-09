@@ -68,6 +68,8 @@ ekcelo-orchestrate-web = "lot_orchestrator_web.cli:main"
 ekcelo-etp-smoke = "parser.exporters.etp.smoke_cli:main"
 # Bundle importer (P0.2 sub-stage B)
 ekcelo-import-bundle = "lot_orchestrator_web.bundle_cli:main"
+# DB-contract validator (P0.1.2)
+ekcelo-validate-bundle-db = "lot_orchestrator_web.validate_bundle_db_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

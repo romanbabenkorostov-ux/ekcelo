@@ -268,6 +268,7 @@ def _register_routes(app: FastAPI) -> None:
         target_db: Annotated[str, Form(description="Путь к ekcelo.sqlite на сервере.")],
         verify_hashes: Annotated[bool, Form()] = True,
         dry_run: Annotated[bool, Form()] = False,
+        validate_schema: Annotated[bool, Form()] = False,
     ) -> JSONResponse:
         """Идемпотентный импорт Bundle (C3) — multipart-upload zip.
 
@@ -305,6 +306,7 @@ def _register_routes(app: FastAPI) -> None:
                 report = _import(
                     bundle_root, Path(target_db),
                     verify_hashes=verify_hashes, dry_run=dry_run,
+                    validate_schema=validate_schema,
                 )
             except FileNotFoundError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -338,10 +340,11 @@ def _register_routes(app: FastAPI) -> None:
                 report.etp_profiles_skipped_authoritative,
             "files_verified": report.files_verified,
             "files_failed": report.files_failed,
+            "schema_violations": report.schema_violations,
             "warnings": report.warnings,
             "errors": report.errors,
         }
-        if report.errors or report.files_failed:
+        if report.errors or report.files_failed or report.schema_violations:
             return JSONResponse(status_code=422, content=payload)
         return JSONResponse(status_code=200, content=payload)
 
