@@ -32,15 +32,19 @@
   - P0.1.3 — Pydantic codegen из контракта + GitHub Actions
     `apply-handoff.yml` для автоматизации zip-handoff.
   - См. `p0-db-contract.md`.
-- 🟡 **Cycle 14 M1 OAuth/OIDC** (готов локально, zip-handoff): Bearer-JWT
-  верификация + `OAuthMiddleware` + strategy dispatcher (OIDC > Basic > none).
+- ✅ **Cycle 14 M1 OAuth/OIDC** (PR #114): Bearer-JWT верификация +
+  `OAuthMiddleware` + strategy dispatcher (OIDC > Basic > none).
   Реализует частично C6 ROLES_SPEC. См. `cycle-14-oauth.md`.
+- 🟡 **Cycle 15 M1 RBAC** (готов локально, zip-handoff): Principal/Grant/can/
+  delegate/share + InMemoryGrantStore. Реализует ядро C6 ROLES_SPEC. 44 теста.
+  См. `cycle-15-rbac.md`.
 
 **Остаётся опциональным/отложенным:**
 - C3.3 — materialization `geo` (KMZ→БД). **Отложен**, не блокирует фронт.
 - P0.1.4 — мапа богатой parser-схемы → interchange. Опц.
 - Cycle 14 M2 — `/auth/login` + `/auth/callback` browser code-flow.
-- Cycle 15 — RBAC поверх `Subject.roles` (требует M2 или статической карты).
+- Cycle 15 M2 — SQLite `access_grants` persistence + миграция.
+- Cycle 15 M3 — FastAPI `Depends(require(...))` + `POST/DELETE /grants` endpoints.
 - Cycle 16 — Rate limiting на auth-провалы.
 
 См. `obsidian/Architecture/roadmap-2026-06.md` для приоритетов.
