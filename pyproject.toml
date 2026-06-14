@@ -70,6 +70,8 @@ ekcelo-etp-smoke = "parser.exporters.etp.smoke_cli:main"
 ekcelo-import-bundle = "lot_orchestrator_web.bundle_cli:main"
 # DB-contract validator (P0.1.2)
 ekcelo-validate-bundle-db = "lot_orchestrator_web.validate_bundle_db_cli:main"
+# DB-contract Pydantic models codegen (P0.1.3)
+ekcelo-db-codegen = "backend.app.services.db_codegen:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

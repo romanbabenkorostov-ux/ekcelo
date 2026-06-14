@@ -28,7 +28,7 @@
 | **C3.3** (= P0.3.3.3) | Материализация `geo` (центр/геометрия из KMZ в БД). Зависит от parser-team. | план (отложено, не блокирует) |
 | **P0.1.1** | DB-контракт C2 — машиночитаемая схема `contracts/db/schema.json` + `validate_db` + CI sync-guard. 13 тестов. | ✅ done (2026-06-08; см. `p0-db-contract.md`) |
 | **P0.1.2** | Интеграция `validate_db` в `import_bundle` (`validate_schema` flag, early-fail 422 + `schema_violations[]`) + CLI `ekcelo-validate-bundle-db`. 14 тестов. | ✅ done (2026-06-08; см. `p0-db-contract.md`) |
-| **P0.1.3** | Опц.: кодогенерация Pydantic/dataclass моделей из `contracts/db/schema.json`. | план |
+| **P0.1.3** | Кодогенерация Pydantic-моделей из `contracts/db/schema.json` + CI sync-guard codegen↔contract + CLI `ekcelo-db-codegen` + GitHub Actions workflow `apply-handoff.yml`. 10 тестов. | ✅ done (2026-06-09) |
 | **P0.1.4** | Опц.: мапа `parser/egrn_parser/db/schema.sql` (богатая) → `contracts/db/schema.json` (interchange). Для parser-team. | план |
 
 ---
