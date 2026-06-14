@@ -1,3 +1,17 @@
+# CHECKPOINT — 2026-06-14 (P0 ✅ · #114 cycle 14 M1 ✅ · cycle 15 M1 done)
+
+> **2026-06-14 (вечер):** Cycle 15 M1 RBAC done — Principal/Grant/can/delegate/
+> share + InMemoryGrantStore. 44 теста. Suite 398 passed. Также убран
+> InsecureKeyLengthWarning из cycle 14 (HMAC secrets ≥32 байт).
+> Применять ПОСЛЕ merge cycle 14 (#114 ✅).
+>
+> ⚠️ В main параллельно появилась работа parser-team в `contracts/db/` —
+> 33-таблиц backend storage (7163 insertions, 73 файла). Архитектурное
+> расхождение с моим C2 interchange-контрактом (8 таблиц). Согласовать
+> через post 029 после merge cycle 15 M1.
+>
+> Ниже — утренняя запись 2026-06-14; обновится после merge.
+
 # CHECKPOINT — 2026-06-14 (P0 ✅ · cycle 14 M1 done · zip + Actions)
 
 > **2026-06-14:** Cycle 14 M1 done — Bearer-JWT verifier + OAuthMiddleware +

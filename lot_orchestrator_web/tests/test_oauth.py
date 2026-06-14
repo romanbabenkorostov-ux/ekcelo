@@ -193,8 +193,8 @@ def test_verify_hs256_with_hmac_secret(jwks_provider):
         jwks={"keys": []},
         algorithms=("HS256",),
     )
-    token = jwt.encode(_base_claims(), "shared-secret", algorithm="HS256")
-    subject = verify_jwt(token, cfg, jwks_provider, hmac_secret="shared-secret")
+    token = jwt.encode(_base_claims(), "shared-secret-at-least-32-bytes-long-x", algorithm="HS256")
+    subject = verify_jwt(token, cfg, jwks_provider, hmac_secret="shared-secret-at-least-32-bytes-long-x")
     assert subject.sub == "alice@example.com"
 
 
@@ -206,7 +206,7 @@ def test_verify_hs256_without_secret_raises(jwks_provider):
         jwks={"keys": []},
         algorithms=("HS256",),
     )
-    token = jwt.encode(_base_claims(), "shared-secret", algorithm="HS256")
+    token = jwt.encode(_base_claims(), "shared-secret-at-least-32-bytes-long-x", algorithm="HS256")
     with pytest.raises(OAuthConfigError, match="hmac_secret"):
         verify_jwt(token, cfg, jwks_provider)
 
