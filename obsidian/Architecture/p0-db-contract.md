@@ -86,8 +86,14 @@ Standalone-валидатор для парсер-команды (проверк
 
 ## Что НЕ в этом подэтапе
 
-Будет в **P0.1.3** (опц.):
-- Кодогенерация Pydantic/dataclass моделей из `contracts/db/schema.json`.
+**P0.1.3** ✅ (2026-06-09):
+- Кодогенерация Pydantic-моделей из `contracts/db/schema.json` —
+  `backend/app/services/db_codegen.py` + сгенерированный `db_models.py`.
+- CLI `ekcelo-db-codegen --output backend/app/services/db_models.py`.
+- CI sync-guard codegen ↔ контракт (тест проверяет что committed файл
+  совпадает с текущим `generate()`).
+- GitHub Actions `apply-handoff.yml` — автоматизация zip-handoff (см.
+  `obsidian/UserGuide/github-actions-handoff.md`).
 
 Будет в **P0.1.4** (опц.):
 - Машиночитаемая мапа богатой parser-схемы (`parser/egrn_parser/db/schema.sql`,

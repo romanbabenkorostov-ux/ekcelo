@@ -1,3 +1,13 @@
+# CHECKPOINT — 2026-06-09 (P0.3 ✅ · P0.1.1+P0.1.2+P0.1.3 done · zip + Actions)
+
+> **2026-06-09:** P0.1.3 done — Pydantic codegen из C2-контракта (10 тестов)
+> + GitHub Actions workflow `apply-handoff.yml` для автоматизации
+> zip-handoff. Suite 323 passed. См.
+> `obsidian/Changelog/2026-06-09-p0-1-3-codegen-and-actions.md` и
+> `obsidian/UserGuide/github-actions-handoff.md` (setup PAT).
+>
+> Ниже — старая запись от 2026-06-08; обновится после merge P0.1.3.
+
 # CHECKPOINT — 2026-06-08 (P0.3 ✅ · P0.1.1+P0.1.2 done · zip-handoff)
 
 > Живой указатель «где мы». Обновляется каждым чекпойнтом (skill `checkpoint`).

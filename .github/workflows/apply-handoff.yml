@@ -1,0 +1,132 @@
+name: Apply Handoff
+
+# Применяет zip-handoff архив от Claude к main:
+# создаёт ветку, распаковывает files/*, коммитит, пушит, открывает PR.
+#
+# Запуск: Actions → Apply Handoff → Run workflow → заполнить inputs:
+#   archive_url    — URL zip-архива (см. ниже как получить)
+#   branch_name    — backend/p0-1-3-codegen
+#   commit_message — feat(backend): P0.1.3 — ...
+#   pr_title       — P0.1.3 — Pydantic models codegen
+#
+# Как получить archive_url:
+#   1. Скачайте zip от Claude в Downloads.
+#   2. gh gist create "ekcelo-handoff.zip" --public=false
+#      (вернёт URL вида https://gist.github.com/.../raw/.../ekcelo-handoff.zip)
+#   3. Подставьте URL в input archive_url.
+#
+# Требуется secret EKCELO_APPLY_PAT — Fine-grained PAT с правами:
+#   Contents: read/write, Pull requests: read/write на этом репо.
+
+on:
+  workflow_dispatch:
+    inputs:
+      archive_url:
+        description: "URL zip-архива handoff (gist raw URL)"
+        required: true
+        type: string
+      branch_name:
+        description: "Имя feature-ветки (например backend/p0-1-3-codegen)"
+        required: true
+        type: string
+      commit_message:
+        description: "Сообщение коммита"
+        required: true
+        type: string
+      pr_title:
+        description: "Title PR"
+        required: true
+        type: string
+
+permissions:
+  contents: read   # явный минимум, остальное — через PAT
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.EKCELO_APPLY_PAT }}
+
+      - name: Configure git
+        run: |
+          git config user.name "ekcelo-handoff-bot"
+          git config user.email "ekcelo-handoff-bot@users.noreply.github.com"
+
+      - name: Validate branch name
+        run: |
+          if ! echo "${{ inputs.branch_name }}" | grep -qE '^[A-Za-z0-9_/-]+$'; then
+            echo "::error::branch_name содержит недопустимые символы"
+            exit 1
+          fi
+          if [ "${{ inputs.branch_name }}" = "main" ]; then
+            echo "::error::branch_name не может быть 'main'"
+            exit 1
+          fi
+
+      - name: Create branch
+        run: |
+          git checkout -b "${{ inputs.branch_name }}"
+
+      - name: Download archive
+        run: |
+          mkdir -p /tmp/handoff
+          curl -fSL "${{ inputs.archive_url }}" -o /tmp/handoff/archive.zip
+          ls -la /tmp/handoff/archive.zip
+
+      - name: Extract files/ into repo root
+        run: |
+          mkdir -p /tmp/handoff/unpacked
+          unzip -q /tmp/handoff/archive.zip -d /tmp/handoff/unpacked
+          # Найти files/ (может быть на верхнем уровне или в подкаталоге)
+          FILES_DIR=$(find /tmp/handoff/unpacked -type d -name "files" | head -1)
+          if [ -z "$FILES_DIR" ]; then
+            echo "::error::Не найден каталог files/ внутри архива"
+            exit 1
+          fi
+          echo "Найден files/: $FILES_DIR"
+          # Скопировать в репо
+          cp -rT "$FILES_DIR" .
+          # Опц. — показать HANDOFF.md для отчёта
+          HANDOFF=$(find /tmp/handoff/unpacked -name "HANDOFF.md" | head -1)
+          if [ -n "$HANDOFF" ]; then
+            echo "=== HANDOFF.md preview ==="
+            head -40 "$HANDOFF"
+          fi
+
+      - name: Status before commit
+        run: git status --short
+
+      - name: Commit
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "::error::Архив не внёс никаких изменений"
+            exit 1
+          fi
+          git commit -m "${{ inputs.commit_message }}"
+
+      - name: Push branch
+        env:
+          GH_TOKEN: ${{ secrets.EKCELO_APPLY_PAT }}
+        run: |
+          git push -u origin "${{ inputs.branch_name }}"
+
+      - name: Open PR
+        env:
+          GH_TOKEN: ${{ secrets.EKCELO_APPLY_PAT }}
+        run: |
+          gh pr create \
+            --title "${{ inputs.pr_title }}" \
+            --body "Applied via Actions workflow from handoff archive.
+
+          Branch: \`${{ inputs.branch_name }}\`
+          Source: ${{ inputs.archive_url }}
+
+          ⚠️ Перед merge: проверьте локально \`python -m pytest -q\` и просмотрите diff." \
+            --base main \
+            --head "${{ inputs.branch_name }}"
