@@ -1,3 +1,12 @@
+# CHECKPOINT — 2026-06-14 (P0 ✅ · cycle 14 M1 done · zip + Actions)
+
+> **2026-06-14:** Cycle 14 M1 done — Bearer-JWT verifier + OAuthMiddleware +
+> strategy dispatcher (OIDC > Basic > none). 31 теста. Suite 354 passed.
+> См. `obsidian/Changelog/2026-06-14-cycle-14-oauth-m1.md` и
+> `obsidian/Architecture/cycle-14-oauth.md`. Применять ПОСЛЕ merge P0.1.3.
+>
+> Ниже — старая запись от 2026-06-09; обновится после merge.
+
 # CHECKPOINT — 2026-06-09 (P0.3 ✅ · P0.1.1+P0.1.2+P0.1.3 done · zip + Actions)
 
 > **2026-06-09:** P0.1.3 done — Pydantic codegen из C2-контракта (10 тестов)
