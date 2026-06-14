@@ -76,6 +76,7 @@ def create_app(
     """
     import os
     from lot_orchestrator_web.auth import maybe_install_basic_auth
+    from lot_orchestrator_web.oauth import maybe_install_auth
 
     app = FastAPI(
         title="Ekcelo Orchestrator",
@@ -96,7 +97,8 @@ def create_app(
     app.mount("/static", StaticFiles(directory=_HERE / "static"), name="static")
     _register_routes(app)
     # Auth middleware последним — оборачивает все routes (включая `/`).
-    maybe_install_basic_auth(app, raw_users_env=auth_users)
+    # Стратегия: OIDC (cycle 14) > Basic (cycle 12-13) > none. См. oauth.py.
+    app.state.auth_strategy = maybe_install_auth(app, raw_users_env=auth_users)
     return app
 
 

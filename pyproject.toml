@@ -36,6 +36,12 @@ orchestrator-web = [
     "httpx2>=2.0",
 ]
 
+# Оркестратор: OIDC/JWT auth (cycle 14). Без extra работает Basic Auth.
+orchestrator-oauth = [
+    "ekcelo[orchestrator-web]",
+    "PyJWT[crypto]>=2.8",
+]
+
 # Оркестратор: multi-worker через Redis (production deploy)
 orchestrator-redis = [
     "ekcelo[orchestrator-web]",

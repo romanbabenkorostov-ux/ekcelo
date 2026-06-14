@@ -10,9 +10,9 @@
 хранит контракт ролей. Эмитит **C4** (REST/ViewModel), реэкспорт **C3**.
 Потребляет **C2**, **C3**. Прод: timeweb, FastAPI + SQLite(локаль)/Postgres(масштаб) + S3.
 
-## Текущее состояние (на 2026-06-08)
+## Текущее состояние (на 2026-06-14)
 
-**P0 контрактного пакета — закрыто на ⅔.** В `main`:
+**P0 контрактного пакета — закрыто. P1 auth-трек начат (cycle 14 M1).** В `main`:
 - ✅ **P0.2 импортёр Bundle** (PR #104): `POST /bundles/import` + CLI
   `ekcelo-import-bundle`; идемпотентный импорт §1..§6 + ЭТП §6, ADR-001
   manual/osv-приоритет, sha256 verify.
@@ -24,16 +24,26 @@
   таблица `bundles`, KMZ-хранилище, `GET /bundles/{id}/download?fmt=` для
   kmz/manifest/db/json/zip. Round-trip контракт C3 зелёный
   (export(zip)→import=no-op). См. `p0-bundle-storage.md`, `p0-bundle-export.md`.
-- ✅ **P0.1.1 DB-контракт C2** (готов локально, zip-handoff):
-  машиночитаемый `contracts/db/schema.json` + `validate_db` + CI sync-guard
-  schema.sql ↔ contract. См. `p0-db-contract.md`.
+- ✅ **P0.1 DB-контракт C2** (PR #109+#110+#113):
+  - P0.1.1 — машиночитаемый `contracts/db/schema.json` + `validate_db` + CI
+    sync-guard schema.sql ↔ contract.
+  - P0.1.2 — `validate_schema` в `import_bundle` (early-fail 422) + CLI
+    `ekcelo-validate-bundle-db` для parser-team.
+  - P0.1.3 — Pydantic codegen из контракта + GitHub Actions
+    `apply-handoff.yml` для автоматизации zip-handoff.
+  - См. `p0-db-contract.md`.
+- 🟡 **Cycle 14 M1 OAuth/OIDC** (готов локально, zip-handoff): Bearer-JWT
+  верификация + `OAuthMiddleware` + strategy dispatcher (OIDC > Basic > none).
+  Реализует частично C6 ROLES_SPEC. См. `cycle-14-oauth.md`.
 
-**Осталось в P0:**
-- P0.1.2 — интеграция `validate_db` в `import_bundle` (early-fail 422).
+**Остаётся опциональным/отложенным:**
 - C3.3 — materialization `geo` (KMZ→БД). **Отложен**, не блокирует фронт.
+- P0.1.4 — мапа богатой parser-схемы → interchange. Опц.
+- Cycle 14 M2 — `/auth/login` + `/auth/callback` browser code-flow.
+- Cycle 15 — RBAC поверх `Subject.roles` (требует M2 или статической карты).
+- Cycle 16 — Rate limiting на auth-провалы.
 
-Все P1+ треки (auth-эволюция, RBAC, оркестратор-интеграция) — после
-закрытия остатков P0. См. `obsidian/Architecture/roadmap-2026-06.md`.
+См. `obsidian/Architecture/roadmap-2026-06.md` для приоритетов.
 
 Старое описание (для истории): FastAPI cycle 5 — только оркестратор
 меморандумов (6 эндпоинтов lots/run/status/artifacts); БД §1–§6 в `schema/`;
