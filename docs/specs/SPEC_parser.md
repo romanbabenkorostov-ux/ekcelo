@@ -35,9 +35,12 @@
    `parser-internal` (вне C1, см. `CONTRACT_KMZ.md` §2).
 
 ### P1
-3. **egrn_parser как ядро.** Принять packaging-delta (`MIGRATION.md`/`README.md`/
-   `pyproject.toml`); legacy `01_parsing_OS…`, `05_parse_egrn_folder…` →
-   депрекейт в пользу CLI `egrn-parser`. Сверить `db/schema.sql` пакета с **C2** (§1–§5).
+3. **egrn_parser как ядро. ✅ (в основном).** packaging-delta готов: `pyproject.toml`
+   (`egrn-parser = egrn_parser.cli:main`, v1.10), CLI на 9 команд
+   (parse/export/migrate/dict-load/validate/enrich/monitor/serve/folders),
+   `MIGRATION.md` (маппинг legacy-скриптов → CLI). Legacy `01_parsing_OS…`/
+   `05_parse_egrn_folder…` — **уже отсутствуют** (мигрированы). Остаётся: сверка
+   `db/schema.sql` пакета с C2 (§1–§5) при ближайшей синхронизации.
 4. **Эмиттер Bundle (главный новый артефакт).** Стадия после 08 собирает каталог
    по `contracts/bundle/BUNDLE_SPEC.md`: `project.kmz` (08), `db.sqlite` (§1–§6),
    `json/{structure,enriched,objects/*}`, `manifest.json` (версии contracts +
@@ -48,8 +51,11 @@
 5. **ЭТП-слой §6. ✅** (`etp_merge.py`): единый **gap-fill merge** в
    `object_etp_profile` — приоритет `manual>osv>nspd>exif>llm` (источник ≥ ROW —
    перезаписывает, ниже — заполняет пустоты; глубокий merge по 6 JSON-колонкам,
-   идемпотентно). `etp_layer_present` → флаг для manifest (ADR-001: §6 при
-   пересоздании БД не восстанавливается). `lots`/`lot_items` — см. item 6.
+   идемпотентно). Стратегии `priority`/`gapfill` + `append_keys` (аддитивные списки)
+   покрывают семантику nspd/checko/exif/osv. `etp_layer_present` → флаг для manifest
+   (ADR-001). Консолидация существующих ETL на эту точку — план
+   `obsidian/Architecture/etp-merge-consolidation.md` (рефактор там, где исполнимы
+   ETL-тесты: нужен pymorphy3). `lots`/`lot_items` — см. item 6.
 
 ### P1+ — приём данных о субъектах (ЕГРЮЛ/ЕГРИП, мультиисточник) — ADR-004
 8. **ФНС-XML парсер (✅ сделано 2026-06-05).** `egrn_parser/parsers/egrul_egrip_parser.py`:

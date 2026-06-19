@@ -94,3 +94,45 @@ def test_etp_layer_present():
     assert EM.etp_layer_present(c) is False
     EM.merge_profile(c, CAD, {"extras": {"notes": "x"}}, source="osv", confidence=0.9)
     assert EM.etp_layer_present(c) is True
+
+
+def test_strategy_gapfill_never_overwrites():
+    """strategy='gapfill': даже высший источник не затирает существующее."""
+    c = _db()
+    EM.merge_profile(c, CAD, {"building_extra": {"wear_degree": 60}},
+                     source="nspd", confidence=0.8)
+    EM.merge_profile(c, CAD, {"building_extra": {"wear_degree": 35, "year_built": 1990}},
+                     source="manual", confidence=0.95, strategy="gapfill")
+    be = json.loads(c.execute("SELECT building_extra FROM object_etp_profile").fetchone()[0])
+    assert be["wear_degree"] == 60                  # gapfill — не затёрто даже manual
+    assert be["year_built"] == 1990                 # пустое заполнено
+
+
+def test_append_keys_additive_exif_like():
+    """append_keys: advantages/notes объединяются без дублей (семантика etl_exif)."""
+    c = _db()
+    EM.merge_profile(c, CAD, {"extras": {"advantages": ["Комплексная фотофиксация: Кровля."]}},
+                     source="osv", confidence=0.9)
+    res = EM.merge_profile(c, CAD,
+        {"extras": {"advantages": ["Комплексная фотофиксация: Фасад."],
+                    "notes": "скол на фасаде"}},
+        source="exif", confidence=0.7,
+        append_keys={"extras": ["advantages", "notes"]})
+    ex = json.loads(c.execute("SELECT extras FROM object_etp_profile").fetchone()[0])
+    assert ex["advantages"] == ["Комплексная фотофиксация: Кровля.",
+                                "Комплексная фотофиксация: Фасад."]   # union, без затирания
+    assert ex["notes"] == "скол на фасаде"
+    # повтор тех же advantages → без дублей (идемпотентно)
+    EM.merge_profile(c, CAD, {"extras": {"advantages": ["Комплексная фотофиксация: Фасад."]}},
+                     source="exif", confidence=0.7, append_keys={"extras": ["advantages"]})
+    ex2 = json.loads(c.execute("SELECT extras FROM object_etp_profile").fetchone()[0])
+    assert len(ex2["advantages"]) == 2
+
+
+def test_bad_strategy_rejected():
+    c = _db()
+    try:
+        EM.merge_profile(c, CAD, {"extras": {}}, source="osv", confidence=0.9, strategy="x")
+        assert False
+    except ValueError:
+        pass
