@@ -6,7 +6,15 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+# Пути для обеих конвенций импорта репозитория, независимо от cwd/способа запуска
+# (`pytest` или `python -m pytest`):
+#   • parser/        → `egrn_parser.*`, `exporters.*`, `scripts`
+#   • корень репо    → `parser.*` (parser/__init__.py делает его пакетом; ETL-тесты)
+_PARSER_DIR = Path(__file__).resolve().parents[1]
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+for _p in (str(_PARSER_DIR / "scripts"), str(_PARSER_DIR), str(_REPO_ROOT)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 
 @pytest.fixture
