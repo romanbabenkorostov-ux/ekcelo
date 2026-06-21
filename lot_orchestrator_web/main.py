@@ -61,11 +61,21 @@ def create_app(
     access_db: Path | None = None,
     redis_client=None,
     auth_users: str | None = None,
+    auth_roles: str | None = None,
+    enforce_rbac: bool = False,
 ) -> FastAPI:
     """Factory: Settings + persistence + опциональный Redis + опциональный Basic Auth.
 
     auth_users — формат `user1:pass1,user2:pass2`. Если None, читается из env
     `EKCELO_AUTH_USERS`; если и там пусто — auth не подключается.
+
+    auth_roles — cycle 15 M4: связь Basic Auth username с RBAC-ролями. Формат
+    `user1:role1,user2:role2|role3`. Из env `EKCELO_AUTH_ROLES` если не передан.
+
+    enforce_rbac — cycle 15 M4: при True навешивает `require_action` на
+    защищаемые роуты (`/objects/{cad}`, `/lots/{lot_id}`,
+    `/objects/{cad}/graph`, `/bundles/{id}/download`). Требует access_db
+    (иначе 503 на этих роутах). Default False — backward-compat.
 
     ekcelo_db — путь к ekcelo.sqlite (БД §1..§6) для ViewModel-эндпоинтов
     (`/catalog`, `/objects/{cad}`). Если None — читается из env `EKCELO_DB`;
@@ -103,15 +113,18 @@ def create_app(
         configure_redis_store(redis_client, persistence=persistence)
     elif persistence is not None:
         configure_store(persistence)
+    app.state.enforce_rbac = enforce_rbac
     app.mount("/static", StaticFiles(directory=_HERE / "static"), name="static")
-    _register_routes(app)
+    _register_routes(app, rbac_enforce=enforce_rbac)
     # Cycle 15 M3: RBAC grant-management endpoints (POST/DELETE /grants,
     # GET /grants/me). Активны всегда; требуют grant_store (иначе 503).
     from lot_orchestrator_web.rbac_api import register_grant_routes
     register_grant_routes(app)
     # Auth middleware последним — оборачивает все routes (включая `/`).
     # Стратегия: OIDC (cycle 14) > Basic (cycle 12-13) > none. См. oauth.py.
-    app.state.auth_strategy = maybe_install_auth(app, raw_users_env=auth_users)
+    app.state.auth_strategy = maybe_install_auth(
+        app, raw_users_env=auth_users, raw_roles_env=auth_roles,
+    )
     return app
 
 
@@ -154,7 +167,20 @@ class ArtifactsResponse(BaseModel):
 # Routes
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _register_routes(app: FastAPI) -> None:
+def _register_routes(app: FastAPI, *, rbac_enforce: bool = False) -> None:
+    # Cycle 15 M4: dependency-списки для защищаемых роутов. Пустой список =
+    # backward-compat (текущее поведение).
+    if rbac_enforce:
+        from lot_orchestrator_web.rbac import Action, ResourceType
+        from lot_orchestrator_web.rbac_api import require_action
+        _DEP_VIEW_OBJ = [Depends(require_action(Action.VIEW, ResourceType.OBJECT, "cad"))]
+        _DEP_VIEW_LOT = [Depends(require_action(Action.VIEW, ResourceType.LOT, "lot_id"))]
+        _DEP_EXPORT_BUNDLE = [Depends(require_action(Action.EXPORT, ResourceType.BUNDLE, "bundle_id"))]
+    else:
+        _DEP_VIEW_OBJ = []
+        _DEP_VIEW_LOT = []
+        _DEP_EXPORT_BUNDLE = []
+
 
     @app.post(
         "/lots/{lot_id}/run",
@@ -385,7 +411,7 @@ def _register_routes(app: FastAPI) -> None:
             content=[c.model_dump(exclude_none=True) for c in cards]
         )
 
-    @app.get("/objects/{cad}")
+    @app.get("/objects/{cad}", dependencies=_DEP_VIEW_OBJ)
     async def object_viewmodel_endpoint(
         cad: str,
         as_of: str | None = None,
@@ -409,7 +435,7 @@ def _register_routes(app: FastAPI) -> None:
             ) from None
         return JSONResponse(content=vm.model_dump(exclude_none=False))
 
-    @app.get("/lots/{lot_id}")
+    @app.get("/lots/{lot_id}", dependencies=_DEP_VIEW_LOT)
     async def lot_viewmodel_endpoint(
         lot_id: str,
         as_of: str | None = None,
@@ -434,7 +460,7 @@ def _register_routes(app: FastAPI) -> None:
             ) from None
         return JSONResponse(content=vm.model_dump(exclude_none=False))
 
-    @app.get("/objects/{cad}/graph")
+    @app.get("/objects/{cad}/graph", dependencies=_DEP_VIEW_OBJ)
     async def object_graph_endpoint(cad: str) -> JSONResponse:
         """Граф владения (`openapi.yaml::/objects/{cad}/graph`).
 
@@ -456,7 +482,7 @@ def _register_routes(app: FastAPI) -> None:
             ) from None
         return JSONResponse(content=graph)
 
-    @app.get("/bundles/{bundle_id}/download")
+    @app.get("/bundles/{bundle_id}/download", dependencies=_DEP_EXPORT_BUNDLE)
     async def bundle_download_endpoint(
         bundle_id: str,
         fmt: str = "kmz",

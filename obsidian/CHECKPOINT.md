@@ -1,3 +1,16 @@
+# CHECKPOINT — 2026-06-21 (P0 ✅ · cycle 14 ✅ · cycle 15 RBAC ЗАКРЫТ M1-M4)
+
+> **2026-06-21:** Cycle 15 M4 done — enforcement на боевых роутах
+> (`create_app(enforce_rbac=True)`) + Basic Auth roles-карта
+> `EKCELO_AUTH_ROLES`. **Трек RBAC закрыт целиком (C6 ROLES_SPEC).** 14 M4
+> тестов, suite 458 passed. Применять ПОСЛЕ merge #117 (M3).
+> Защищаемые роуты: `/objects/{cad}`, `/objects/{cad}/graph`,
+> `/lots/{lot_id}`, `/bundles/{id}/download`. `/catalog` — листинг, не под
+> require_action. См. `obsidian/Architecture/cycle-15-rbac.md`,
+> `obsidian/Changelog/2026-06-21-cycle-15-rbac-m4.md`.
+>
+> Ниже — запись M3; обновится после merge.
+
 # CHECKPOINT — 2026-06-15 (P0 ✅ · #114/#115/#116 · cycle 15 M3 done)
 
 > **2026-06-15 (M3):** Cycle 15 M3 RBAC FastAPI integration — `require_action`

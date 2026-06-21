@@ -1,9 +1,10 @@
-# Cycle 15 — RBAC (M1 + M2 + M3)
+# Cycle 15 — RBAC (M1 + M2 + M3 + M4) — ЗАКРЫТ
 
-> Реализация `contracts/roles/ROLES_SPEC.md` (C6). M1 ядро (Principal/Grant/
-> can/delegate/share + InMemoryGrantStore), M2 SQLite persistence в отдельной
-> access.sqlite, M3 FastAPI integration (Depends factory + REST grant-endpoints).
-> M4 (enforcement на существующих роутах) — следующий sub-stage.
+> Реализация `contracts/roles/ROLES_SPEC.md` (C6) **целиком**. M1 ядро
+> (Principal/Grant/can/delegate/share + InMemoryGrantStore), M2 SQLite
+> persistence в отдельной access.sqlite, M3 FastAPI integration (Depends
+> factory + REST grant-endpoints), **M4 enforcement на боевых роутах +
+> Basic Auth roles-карта**. Трек RBAC закрыт.
 
 ## Зачем
 
@@ -142,15 +143,43 @@ POST логика по C6:
 - `action=view` + роль client (без assessor/superadmin) → `share()` (view-only).
 - иначе → `delegate()` (grantor должен иметь роль + сам мочь action).
 
-## Что НЕ в M1+M2+M3
+## Поведение (M4 — enforcement + Basic Auth roles)
 
-Будет в **M4**:
-- Wire-up `Depends(require_action(...))` в существующие роуты (`/catalog`,
-  `/objects/{cad}`, `/lots/{lot_id}`, `/bundles/{bundle_id}/download`) —
-  через opt-in флаг `enforce_rbac=True` в `create_app` (чтобы существующие
-  425+ тестов без auth не сломались).
-- Source Principal для Basic Auth — статическая карта `EKCELO_AUTH_ROLES`
-  (`alice:assessor,bob:client`).
+### `create_app(enforce_rbac=True)`
+Навешивает `require_action` на per-resource роуты:
+| Роут | Action | ResourceType | id_param |
+|---|---|---|---|
+| `GET /objects/{cad}` | VIEW | OBJECT | cad |
+| `GET /objects/{cad}/graph` | VIEW | OBJECT | cad |
+| `GET /lots/{lot_id}` | VIEW | LOT | lot_id |
+| `GET /bundles/{bundle_id}/download` | EXPORT | BUNDLE | bundle_id |
+
+`/catalog` НЕ под require_action — это листинг (не per-resource); фильтрация
+видимого каталога по грантам — отдельная задача (M5+, если понадобится).
+
+**Default `enforce_rbac=False`** — существующие тесты/деплои без auth работают
+как раньше. Включение требует `access_db` (иначе require_action отдаёт 503).
+
+### Basic Auth roles-карта
+`EKCELO_AUTH_ROLES` (или `create_app(auth_roles=...)`): формат
+`user:role[|role2][,...]`, например `alice:assessor,root:superadmin|assessor`.
+
+`BasicAuthMiddleware` после успешной верификации кладёт
+`request.state.subject = Subject(sub=username, roles=...)`. Это даёт
+`get_principal` (M3) рабочий Principal и для Basic Auth, не только OIDC.
+
+### Порядок middleware
+Auth middleware (Basic/OAuth) выполняется ДО route-dependency `require_action`.
+Поэтому:
+- нет credentials → `401` (auth middleware) — раньше RBAC.
+- credentials есть, но нет гранта → `403` (require_action).
+
+## Что НЕ в cycle 15 (возможные расширения)
+
+- **M5 (опц.)** — фильтрация `/catalog` по грантам (показывать только
+  видимые лоты/объекты). Сейчас каталог открыт (листинг).
+- Cycle 14 M2 — browser code-flow (`/auth/login`) — отдельный трек.
+- Cycle 16 — rate limiting.
 
 ## Связи
 
