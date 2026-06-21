@@ -35,15 +35,23 @@
 - ✅ **Cycle 14 M1 OAuth/OIDC** (PR #114): Bearer-JWT верификация +
   `OAuthMiddleware` + strategy dispatcher (OIDC > Basic > none).
   Реализует частично C6 ROLES_SPEC. См. `cycle-14-oauth.md`.
-- 🟡 **Cycle 15 M1 RBAC** (готов локально, zip-handoff): Principal/Grant/can/
-  delegate/share + InMemoryGrantStore. Реализует ядро C6 ROLES_SPEC. 44 теста.
-  См. `cycle-15-rbac.md`.
+- ✅ **Cycle 15 M1 RBAC** (PR #115): Principal/Grant/can/delegate/share +
+  InMemoryGrantStore. 44 теста. См. `cycle-15-rbac.md`.
+- 🟡 **Cycle 15 M2 RBAC SQLite** (готов локально, zip-handoff):
+  `SQLiteGrantStore` поверх отдельной access.sqlite (НЕ ekcelo.sqlite —
+  ADR-001 + Bundle security). Миграция
+  `schema/migrations/access/0001_access_grants.sql`. 25 тестов
+  (параметризованных по обоим store). См. `cycle-15-rbac.md`.
+- 🟡 **Bridge namespace split** (готов локально, zip-handoff):
+  `contracts/db/schema.json` → `contracts/bundle-db-slice/schema.json` —
+  разделение моей 8-таблиц wire-slice от parser-team's 33-таблиц backend
+  storage в `contracts/db/`. Post 029 + bridge-guard тест. См.
+  `docs/CORRESPONDENCE/029-backend-bundle-db-slice-namespace.md`.
 
 **Остаётся опциональным/отложенным:**
 - C3.3 — materialization `geo` (KMZ→БД). **Отложен**, не блокирует фронт.
 - P0.1.4 — мапа богатой parser-схемы → interchange. Опц.
 - Cycle 14 M2 — `/auth/login` + `/auth/callback` browser code-flow.
-- Cycle 15 M2 — SQLite `access_grants` persistence + миграция.
 - Cycle 15 M3 — FastAPI `Depends(require(...))` + `POST/DELETE /grants` endpoints.
 - Cycle 16 — Rate limiting на auth-провалы.
 

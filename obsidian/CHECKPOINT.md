@@ -1,3 +1,13 @@
+# CHECKPOINT — 2026-06-15 (P0 ✅ · #114/#115 ✅ · cycle 15 M2 + bridge done)
+
+> **2026-06-15:** Cycle 15 M2 (SQLiteGrantStore в отдельной access.sqlite) +
+> Bridge burst 1 (namespace split contracts/bundle-db-slice/ + post 029) +
+> datetime cleanup. 25 M2 тестов + 3 bridge-guard. Suite 423 passed.
+> См. `obsidian/Architecture/cycle-15-rbac.md` (M1+M2), `docs/CORRESPONDENCE/
+> 029-backend-bundle-db-slice-namespace.md`. Применять ПОСЛЕ merge #115.
+>
+> Ниже — старая запись от утра 2026-06-14; обновится после merge.
+
 # CHECKPOINT — 2026-06-14 (P0 ✅ · #114 cycle 14 M1 ✅ · cycle 15 M1 done)
 
 > **2026-06-14 (вечер):** Cycle 15 M1 RBAC done — Principal/Grant/can/delegate/

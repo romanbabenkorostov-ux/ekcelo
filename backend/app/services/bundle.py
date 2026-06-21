@@ -158,7 +158,7 @@ def import_bundle(
         verify_hashes: если True — сверяет sha256 файлов с manifest.files[].
         dry_run: если True — открывает транзакцию и откатывает (отчёт остаётся).
         validate_schema: если True — сверяет `db.sqlite` Bundle'а с C2-контрактом
-            (`contracts/db/schema.json`) ДО мутации target_db. Нарушения → в
+            (`contracts/bundle-db-slice/schema.json`) ДО мутации target_db. Нарушения → в
             `report.schema_violations` + `report.errors`; импорт прерывается.
             По умолчанию False (не ломает минимальные тест-фикстуры; реальные
             Bundle от парсера — полная схема, для них имеет смысл True).

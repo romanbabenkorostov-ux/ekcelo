@@ -58,6 +58,7 @@ def create_app(
     persistence_db: Path | None = None,
     ekcelo_db: Path | None = None,
     bundles_dir: Path | None = None,
+    access_db: Path | None = None,
     redis_client=None,
     auth_users: str | None = None,
 ) -> FastAPI:
@@ -89,6 +90,14 @@ def create_app(
     app.state.ekcelo_db = ekcelo_db or (Path(env_db) if env_db else None)
     env_bundles = os.environ.get("EKCELO_BUNDLES_DIR")
     app.state.bundles_dir = bundles_dir or (Path(env_bundles) if env_bundles else None)
+    # Cycle 15 M2: access_db — отдельный sqlite для access_grants (НЕ ekcelo.sqlite).
+    env_access = os.environ.get("EKCELO_ACCESS_DB")
+    app.state.access_db = access_db or (Path(env_access) if env_access else None)
+    if app.state.access_db is not None:
+        from lot_orchestrator_web.rbac_store import SQLiteGrantStore
+        app.state.grant_store = SQLiteGrantStore(app.state.access_db)
+    else:
+        app.state.grant_store = None  # cycle 15 M3 wire-up в роуты при наличии
     persistence = SQLitePersistence(persistence_db) if persistence_db else None
     if redis_client is not None:
         configure_redis_store(redis_client, persistence=persistence)
