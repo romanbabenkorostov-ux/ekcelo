@@ -1,8 +1,9 @@
-# Cycle 15 — RBAC (M1 + M2)
+# Cycle 15 — RBAC (M1 + M2 + M3)
 
 > Реализация `contracts/roles/ROLES_SPEC.md` (C6). M1 ядро (Principal/Grant/
 > can/delegate/share + InMemoryGrantStore), M2 SQLite persistence в отдельной
-> access.sqlite. M3 (FastAPI Depends + REST endpoints) — следующий sub-stage.
+> access.sqlite, M3 FastAPI integration (Depends factory + REST grant-endpoints).
+> M4 (enforcement на существующих роутах) — следующий sub-stage.
 
 ## Зачем
 
@@ -107,15 +108,49 @@ in-memory→SQLite ничего не ломает.
 **Тесты M1+M2:** 44 + 25 = 69; полный suite **423 pass**
 (354 после cycle 14 + 44 M1 + 25 M2).
 
-## Что НЕ в M1+M2
+## Поведение (M3 — FastAPI integration)
 
-Будет в **M3**:
-- FastAPI `Depends(require_action(action, resource_type))` factory.
-- `POST /grants`, `DELETE /grants/{id}`, `GET /grants/me`.
-- Source Principal: для OIDC — из `request.state.subject` (cycle 14);
-  для Basic Auth — статическая карта `EKCELO_AUTH_ROLES`.
-- Wire-up в существующие роуты (`/catalog`, `/objects/{cad}`, `/lots/{lot_id}`,
-  `/bundles/{bundle_id}/download`).
+`lot_orchestrator_web/rbac_api.py`:
+
+### `get_principal(request) → Principal`
+Извлекает Principal из `request.state.subject` (cycle 14 OAuth). Если subject
+отсутствует — anonymous (`sub=""`, roles пусто).
+
+### `require_action(action, resource_type, id_param) → Depends`
+Фабрика FastAPI-dependency. **Opt-in enforcement**:
+- `app.state.grant_store is None` → пропускает (backward-compat).
+- иначе строит `Resource` из path-параметра `id_param`, проверяет `can()`,
+  отказ → `403`.
+
+Использование (M4):
+```python
+@app.get("/objects/{cad}",
+         dependencies=[Depends(require_action(Action.VIEW,
+                               ResourceType.OBJECT, "cad"))])
+```
+
+### Grant-management endpoints (`register_grant_routes`)
+| Метод | Путь | Описание |
+|---|---|---|
+| POST | `/grants` | Выдать грант. assessor/superadmin → delegate; client+view → share. 201/403/503 |
+| DELETE | `/grants/{grant_id}` | Отозвать. Только автор (granted_by) или superadmin. 204/403/404/409 |
+| GET | `/grants/me` | Список грантов текущего Principal. 200 |
+
+Все требуют сконфигурированного `grant_store` (иначе 503).
+
+POST логика по C6:
+- `action=view` + роль client (без assessor/superadmin) → `share()` (view-only).
+- иначе → `delegate()` (grantor должен иметь роль + сам мочь action).
+
+## Что НЕ в M1+M2+M3
+
+Будет в **M4**:
+- Wire-up `Depends(require_action(...))` в существующие роуты (`/catalog`,
+  `/objects/{cad}`, `/lots/{lot_id}`, `/bundles/{bundle_id}/download`) —
+  через opt-in флаг `enforce_rbac=True` в `create_app` (чтобы существующие
+  425+ тестов без auth не сломались).
+- Source Principal для Basic Auth — статическая карта `EKCELO_AUTH_ROLES`
+  (`alice:assessor,bob:client`).
 
 ## Связи
 

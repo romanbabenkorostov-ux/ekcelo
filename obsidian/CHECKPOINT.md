@@ -1,3 +1,13 @@
+# CHECKPOINT — 2026-06-15 (P0 ✅ · #114/#115/#116 · cycle 15 M3 done)
+
+> **2026-06-15 (M3):** Cycle 15 M3 RBAC FastAPI integration — `require_action`
+> dependency (opt-in) + REST `POST/DELETE /grants` + `GET /grants/me`. 19
+> тестов. Suite 444 passed. Применять ПОСЛЕ merge #116 (M2+bridge).
+> Существующие роуты НЕ затронуты (enforcement = M4 через флаг).
+> См. `obsidian/Architecture/cycle-15-rbac.md` (M1+M2+M3).
+>
+> Ниже — запись M2+bridge; обновится после merge.
+
 # CHECKPOINT — 2026-06-15 (P0 ✅ · #114/#115 ✅ · cycle 15 M2 + bridge done)
 
 > **2026-06-15:** Cycle 15 M2 (SQLiteGrantStore в отдельной access.sqlite) +

@@ -134,6 +134,7 @@ class GrantStore(Protocol):
         resource: Resource,
     ) -> Grant | None: ...
     def list_for_subject(self, subject_sub: str) -> list[Grant]: ...
+    def get(self, grant_id: str) -> Grant | None: ...
 
 
 class InMemoryGrantStore:
@@ -170,6 +171,9 @@ class InMemoryGrantStore:
 
     def list_for_subject(self, subject_sub: str) -> list[Grant]:
         return [g for g in self._by_id.values() if g.subject_sub == subject_sub]
+
+    def get(self, grant_id: str) -> Grant | None:
+        return self._by_id.get(grant_id)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

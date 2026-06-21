@@ -161,6 +161,17 @@ class SQLiteGrantStore:
             conn.close()
         return [_row_to_grant(r) for r in rows]
 
+    def get(self, grant_id: str) -> Grant | None:
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT * FROM access_grants WHERE grant_id = ? LIMIT 1",
+                (grant_id,),
+            ).fetchone()
+        finally:
+            conn.close()
+        return _row_to_grant(row) if row else None
+
 
 def _row_to_grant(row: sqlite3.Row) -> Grant:
     expires_at = None
