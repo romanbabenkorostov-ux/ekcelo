@@ -302,8 +302,22 @@ class OAuthMiddleware(BaseHTTPMiddleware):
         if any(path.startswith(p) for p in _EXEMPT_PREFIXES) or path == "/":
             return await call_next(request)
 
+        # Cycle 16: rate-limit по IP (для Bearer username == sub из токена,
+        # но он недоступен до verify; используем IP как лимит-ключ).
+        limiter = getattr(request.app.state, "rate_limiter", None)
+        ip = request.client.host if request.client else "unknown"
+        key = f"bearer:{ip}"
+        if limiter is not None:
+            blocked, retry = limiter.is_blocked(key)
+            if blocked:
+                return _too_many_bearer(retry)
+
         auth = request.headers.get("authorization", "")
         if not auth.lower().startswith("bearer "):
+            if limiter is not None:
+                blocked, retry = limiter.record_failure(key)
+                if blocked:
+                    return _too_many_bearer(retry)
             return _unauthorized("missing Bearer token")
         token = auth.split(" ", 1)[1].strip()
 
@@ -313,10 +327,27 @@ class OAuthMiddleware(BaseHTTPMiddleware):
                 hmac_secret=self._hmac_secret,
             )
         except JWTVerificationError as exc:
+            if limiter is not None:
+                blocked, retry = limiter.record_failure(key)
+                if blocked:
+                    return _too_many_bearer(retry)
             return _unauthorized(str(exc))
 
+        if limiter is not None:
+            limiter.reset(key)
         request.state.subject = subject
         return await call_next(request)
+
+
+def _too_many_bearer(retry_after: int):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Too many failed auth attempts. Retry later."},
+        headers={
+            "Retry-After": str(retry_after),
+            "WWW-Authenticate": 'Bearer realm="ekcelo"',
+        },
+    )
 
 
 def _unauthorized(detail: str) -> JSONResponse:

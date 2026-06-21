@@ -114,6 +114,9 @@ def create_app(
     elif persistence is not None:
         configure_store(persistence)
     app.state.enforce_rbac = enforce_rbac
+    # Cycle 16: rate-limiter на auth-провалы (используется auth middleware).
+    from lot_orchestrator_web.ratelimit import RateLimitConfig, RateLimiter
+    app.state.rate_limiter = RateLimiter(RateLimitConfig.from_env())
     app.mount("/static", StaticFiles(directory=_HERE / "static"), name="static")
     _register_routes(app, rbac_enforce=enforce_rbac)
     # Cycle 15 M3: RBAC grant-management endpoints (POST/DELETE /grants,

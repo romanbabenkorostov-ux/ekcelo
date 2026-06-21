@@ -1,3 +1,13 @@
+# CHECKPOINT — 2026-06-21 (P0 ✅ · cycles 14/15/16 ✅ AUTH-ТРЕК ЗАКРЫТ)
+
+> **2026-06-21 (cycle 16):** Rate limiting на auth-провалы done — 22 теста,
+> suite 480 passed. **Auth-трек 12-13-14-15-16 завершён.** Дополнительно
+> сделан investor overview документ `obsidian/Investor/overview-2026-06.md`
+> с золотым путём демонстрации (артефакт прислан отдельно).
+> Применять ПОСЛЕ merge #118.
+>
+> Ниже — запись cycle 15 M4; обновится после merge.
+
 # CHECKPOINT — 2026-06-21 (P0 ✅ · cycle 14 ✅ · cycle 15 RBAC ЗАКРЫТ M1-M4)
 
 > **2026-06-21:** Cycle 15 M4 done — enforcement на боевых роутах
