@@ -123,6 +123,10 @@ def create_app(
     # GET /grants/me). Активны всегда; требуют grant_store (иначе 503).
     from lot_orchestrator_web.rbac_api import register_grant_routes
     register_grant_routes(app)
+    # Cycle 14 M2: browser code-flow роуты (/auth/login, /auth/callback).
+    # Регистрируются если EKCELO_OIDC_CLIENT_ID задан (browser-flow сконфигурирован).
+    from lot_orchestrator_web.oauth_browser import register_auth_routes
+    app.state.browser_auth = register_auth_routes(app)
     # Auth middleware последним — оборачивает все routes (включая `/`).
     # Стратегия: OIDC (cycle 14) > Basic (cycle 12-13) > none. См. oauth.py.
     app.state.auth_strategy = maybe_install_auth(

@@ -32,7 +32,7 @@
   - P0.1.3 — Pydantic codegen из контракта + GitHub Actions
     `apply-handoff.yml` для автоматизации zip-handoff.
   - См. `p0-db-contract.md`.
-- ✅ **Cycle 14 M1 OAuth/OIDC** (PR #114): Bearer-JWT верификация +
+- ✅ **Cycle 14 M1+M2 OAuth/OIDC** (PR #114 + M2 локально): Bearer-JWT верификация +
   `OAuthMiddleware` + strategy dispatcher (OIDC > Basic > none).
   Реализует частично C6 ROLES_SPEC. См. `cycle-14-oauth.md`.
 - ✅ **Cycle 15 M1 RBAC** (PR #115): Principal/Grant/can/delegate/share +
@@ -59,7 +59,6 @@
 **Остаётся опциональным/отложенным:**
 - C3.3 — materialization `geo` (KMZ→БД). **Отложен**, не блокирует фронт.
 - P0.1.4 — мапа богатой parser-схемы → interchange. Опц.
-- Cycle 14 M2 — `/auth/login` + `/auth/callback` browser code-flow.
 - Cycle 15 M5 — фильтрация `/catalog` по грантам (опц. полировка).
 
 См. `obsidian/Architecture/roadmap-2026-06.md` для приоритетов.
