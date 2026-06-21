@@ -4,7 +4,7 @@
 
     python -m backend.app.services.db_codegen --output backend/app/services/db_models.py
 
-Источник: contracts/db/schema.json
+Источник: contracts/bundle-db-slice/schema.json
 Sha256 контракта (на момент генерации): 7f329dc5c30ad5b2269b8fbf0c15ec6aac88c2ede929d89c58cbbc5935a65d4e
 
 Каждая модель соответствует одной таблице sidecar-схемы Bundle. Используйте

@@ -1,6 +1,6 @@
 """DB-контракт C2 — кодогенерация Pydantic-моделей (P0.1.3).
 
-Берёт `contracts/db/schema.json` и генерирует Pydantic-модели для каждой таблицы.
+Берёт `contracts/bundle-db-slice/schema.json` и генерирует Pydantic-модели для каждой таблицы.
 Сгенерированный файл — `backend/app/services/db_models.py` — committed в репо
 (для IDE/refactoring), но может быть перерегенерирован командой:
 
@@ -17,7 +17,8 @@ schema.json).
   (`from backend.app.services.db_models import ObjectRow`).
 - Sync-guard codegen ↔ schema.json не даёт моделям отстать от контракта.
 
-См. также: `contracts/db/schema.json` (источник), `contracts/db/DB_SPEC.md`,
+См. также: `contracts/bundle-db-slice/schema.json` (источник),
+`contracts/bundle-db-slice/SLICE_SPEC.md`,
 `obsidian/Architecture/p0-db-contract.md`.
 """
 from __future__ import annotations
@@ -69,7 +70,7 @@ _FILE_HEADER = '''"""AUTO-GENERATED Pydantic models for C2 DB-contract interchan
 
     python -m backend.app.services.db_codegen --output backend/app/services/db_models.py
 
-Источник: contracts/db/schema.json
+Источник: contracts/bundle-db-slice/schema.json
 Sha256 контракта (на момент генерации): {contract_sha256}
 
 Каждая модель соответствует одной таблице sidecar-схемы Bundle. Используйте
@@ -146,7 +147,7 @@ def write_to(path: Path, *, contract: dict[str, Any] | None = None) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="ekcelo-db-codegen",
-        description="Кодогенерация Pydantic-моделей из contracts/db/schema.json.",
+        description="Кодогенерация Pydantic-моделей из contracts/bundle-db-slice/schema.json.",
     )
     parser.add_argument(
         "--output", "-o", type=Path,

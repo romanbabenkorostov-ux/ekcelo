@@ -1,117 +1,126 @@
-# Cycle 15 — RBAC (M1: core in-memory)
+# Cycle 15 — RBAC (M1 + M2)
 
-> Реализация `contracts/roles/ROLES_SPEC.md` (C6) — per-lot/object/bundle
-> разграничение доступа. M1 — ядро (Principal/Grant/can/delegate/share) с
-> in-memory хранилищем. M2 — SQLite `access_grants`. M3 — FastAPI
-> `Depends(require(...))` + REST endpoints.
+> Реализация `contracts/roles/ROLES_SPEC.md` (C6). M1 ядро (Principal/Grant/
+> can/delegate/share + InMemoryGrantStore), M2 SQLite persistence в отдельной
+> access.sqlite. M3 (FastAPI Depends + REST endpoints) — следующий sub-stage.
 
 ## Зачем
 
-Cycle 14 M1 (OAuth) даёт «кто пришёл» (Subject из JWT). Cycle 15 M1 даёт
-«что ему позволено»: трёхуровневая модель ролей (superadmin/assessor/client)
-+ scoped-гранты на конкретные ресурсы (lot/object/bundle).
+Cycle 14 M1 OAuth даёт «кто пришёл». Cycle 15 даёт «что позволено»:
+трёхуровневая модель ролей + scoped-гранты на конкретные ресурсы.
 
-C6 фиксирует:
-- **superadmin** — обходит все проверки.
-- **assessor** — гранты scoped на лоты/объекты; может делегировать другому
-  assessor (передача роли с подмножеством).
-- **client** — read-only (view+export+share); может расшарить view-токен
-  третьему лицу.
-
-## Архитектура
+## Архитектура (M1+M2)
 
 ```
 oauth.Subject (cycle 14)
    │
    ▼  Principal.from_oauth_subject(...)
-Principal(sub, roles={Role.ASSESSOR, ...})
+Principal(sub, roles)
    │
    ├──► can(principal, action, resource, store) → bool
-   ├──► require(principal, ...)               → raises AuthorizationError
-   ├──► delegate(grantor, grantee, action, resource, store)
-   └──► share(sharer, recipient, resource, store)
+   ├──► require(...)
+   ├──► delegate(grantor, grantee_sub, action, resource, store)
+   └──► share(sharer, recipient_sub, resource, store)
               │
               ▼
-        GrantStore (Protocol)
-        ├─ InMemoryGrantStore (M1, тесты/dev)
-        └─ SQLiteGrantStore  (M2, persistence)
+        GrantStore Protocol
+        ├─ InMemoryGrantStore    (M1, тесты/dev)
+        └─ SQLiteGrantStore       (M2, отдельная access.sqlite)
+              │
+              ▼
+        access.sqlite (НЕ ekcelo.sqlite!)
+        путь: env EKCELO_ACCESS_DB или create_app(access_db=...)
+        миграция: schema/migrations/access/0001_access_grants.sql
 ```
 
-## Поведение
+## Поведение (M1)
 
-### `can(principal, action, resource, store)`
-1. **superadmin** в ролях → True (минует всё).
-2. **client** без assessor-роли + action ∈ {input, edit, delegate} → False
-   (C6 read-only enforcement).
-3. Ищем активный (не истёкший) грант `(subject_sub, action, resource)` —
-   action-grain: view-грант НЕ даёт edit, нужен явный edit-грант.
-4. expires_at в прошлом → грант не действует.
+См. полное описание M1 в этом файле выше (Role/Action/ResourceType,
+superadmin bypass, client read-only, action-grain гранты, delegate/share
+с двойной проверкой, TTL).
 
-### `delegate(grantor, grantee_sub, action, resource, store)`
-- grantor должен быть assessor или superadmin.
-- grantor сам должен мочь выполнить action над resource.
-- Создаёт грант на имя grantee_sub с `granted_by=grantor.sub`.
-- → grant_id.
+## Поведение (M2 — SQLite)
 
-### `share(sharer, recipient_sub, resource, store)`
-- sharer должен быть client или superadmin.
-- sharer должен видеть resource (`can(sharer, VIEW, ...)`).
-- Создаёт фиксированный VIEW-грант для recipient (нельзя расшарить edit).
-- → grant_id.
+### Зачем отдельная access.sqlite
 
-### `Revoke`
-- `store.revoke(grant_id)` → True/False. Не-revocable гранты нельзя отозвать.
-- После revoke `can(...) → False` для отозванного гранта.
+Решение принято в обсуждении после M1 (см. post 029 для parser-team):
 
-### TTL (`expires_at`)
-- Naive datetime трактуется как UTC (защита от типичной ошибки).
-- expires_at в прошлом → грант истёк (как будто отозван).
+- **ADR-001 строго соблюдается**: «БД = слепок ЕГРН + ЭТП-профиль» (ekcelo.sqlite).
+  Access — отдельная категория данных, в ту же БД не смешивается.
+- **Bundle security by construction**: Bundle export не может физически
+  утечь гранты — они в другой БД. Если бы access_grants был §7 в
+  ekcelo.sqlite, каждый новый формат экспорта (db/zip/json) был бы
+  обязан явно исключать §7. Один пропуск = утечка. Раздельные БД устраняют
+  риск механически.
+- **Multi-tenant ready**: shared ekcelo + per-tenant access — работает «даром».
+- **Industry standard**: Cognito/Auth0/Keycloak всегда отдельны от app DB.
 
-## Что НЕ в M1
+### Конфигурация
 
-Будет в **M2**:
-- `lot_orchestrator_web/rbac_store.py::SQLiteGrantStore` — реализация
-  GrantStore поверх таблицы `access_grants`.
-- Миграция `schema/migrations/0003_access_grants.sql`.
-- CRUD-операции с persistence.
+| Способ | Описание |
+|---|---|
+| `EKCELO_ACCESS_DB=/var/lib/ekcelo/access.sqlite` | env, для production |
+| `create_app(access_db=Path("..."))` | явный override, для тестов |
+| отсутствует | `app.state.grant_store = None`; M3 wire-up в роуты пропускается |
 
-Будет в **M3**:
-- FastAPI `Depends(require_action(...))` для роутов C4
-  (`/catalog`, `/objects/{cad}`, `/lots/{lot_id}`).
-- Эндпоинты `POST /grants`, `DELETE /grants/{id}`, `GET /grants/me`.
-- Source Principal: для OIDC — из `request.state.subject` (cycle 14);
-  для Basic Auth — статическая карта `EKCELO_AUTH_ROLES=alice:assessor,bob:client`.
+### Миграция
+
+`schema/migrations/access/0001_access_grants.sql` — отдельный поднамеспейс
+от ekcelo.sqlite миграций (`schema/migrations/0001_etp_profile.sql`,
+`0002_bundles.sql`). Lazy-инициализация при создании SQLiteGrantStore.
+
+Схема таблицы (см. файл миграции):
+```
+access_grants (
+  grant_id TEXT PK, subject_sub, action, resource_type, resource_id,
+  granted_by, revocable, expires_at, created_at
+)
++ idx_lookup (subject_sub, action, resource_type, resource_id)
++ idx_subject (subject_sub)
+```
+
+### Контракт-эквивалентность
+
+Тесты в `test_rbac_store.py` параметризованы `@pytest.fixture(params=["memory","sqlite"])`.
+Те же 8 контрактных тестов проходят на обоих store — гарантия что замена
+in-memory→SQLite ничего не ломает.
+
+### Persistence-специфичные тесты
+
+- `test_sqlite_persistence_survives_reopen` — данные переживают перезапуск
+  процесса.
+- `test_sqlite_creates_parent_dirs` — `access_db` может указывать на пока
+  не существующий путь.
+- `test_sqlite_schema_has_indices` — миграция создала индексы.
 
 ## Файлы и тесты
 
-| Файл | LOC | Назначение |
+| Файл | LOC | Подэтап |
 |---|---|---|
-| `lot_orchestrator_web/rbac.py` | ~280 | Role/Action/Resource/Principal/Grant/can/delegate/share |
-| `lot_orchestrator_web/tests/test_rbac.py` | ~280 | 44 теста |
+| `lot_orchestrator_web/rbac.py` | ~280 | M1 |
+| `lot_orchestrator_web/tests/test_rbac.py` | ~280 | M1 (44 теста) |
+| `lot_orchestrator_web/rbac_store.py` | ~150 | M2 |
+| `lot_orchestrator_web/tests/test_rbac_store.py` | ~200 | M2 (25 тестов) |
+| `schema/migrations/access/0001_access_grants.sql` | ~30 | M2 |
+| `lot_orchestrator_web/main.py` | +5 | M2 (access_db param) |
 
-**Тесты:** 44 (cycle 15 M1); полный suite **398 pass** (354 + 44).
+**Тесты M1+M2:** 44 + 25 = 69; полный suite **423 pass**
+(354 после cycle 14 + 44 M1 + 25 M2).
 
-Покрытие:
-- Principal.from_oauth_subject: extract known roles, ignore noise, empty.
-- superadmin × все Action × все Resource → True (параметризованная матрица).
-- client: hard-deny INPUT/EDIT/DELEGATE даже с грантом; VIEW с грантом
-  работает; VIEW без гранта — отказ.
-- assessor: action-grain (view-грант не даёт edit), scoped (LOT1 ≠ LOT2).
-- delegate: success, fails если grantor не может, отвергает client,
-  superadmin может всё делегировать.
-- revoke: removes access, unknown returns False, non-revocable fails.
-- share: создаёт view-only грант, fails если sharer не видит, отвергает
-  assessor.
-- TTL: expired denies, future allows, naive datetime → UTC.
-- require: raises на отказ, проходит для superadmin.
-- list_for_subject: фильтр по subject.
+## Что НЕ в M1+M2
+
+Будет в **M3**:
+- FastAPI `Depends(require_action(action, resource_type))` factory.
+- `POST /grants`, `DELETE /grants/{id}`, `GET /grants/me`.
+- Source Principal: для OIDC — из `request.state.subject` (cycle 14);
+  для Basic Auth — статическая карта `EKCELO_AUTH_ROLES`.
+- Wire-up в существующие роуты (`/catalog`, `/objects/{cad}`, `/lots/{lot_id}`,
+  `/bundles/{bundle_id}/download`).
 
 ## Связи
 
 - C6: `contracts/roles/ROLES_SPEC.md`.
-- Предшественник: `obsidian/Architecture/cycle-14-oauth.md` (источник Principal).
-- Roadmap: `obsidian/Architecture/roadmap-2026-06.md` §Cycle 15.
-- DB-контракт (для M2): добавим `access_grants` как §7 sidecar (НЕ в ЕГРН §1-§6).
-
-## Triggers (по roadmap C6)
-OAuth (cycle 14) приземлён ✅ ИЛИ появление assessor/client сценария.
+- Cycle 14: `obsidian/Architecture/cycle-14-oauth.md` (источник Subject).
+- ADR-001: `CLAUDE.md §3` (разделение ЕГРН/ЭТП vs access).
+- Post 029: `docs/CORRESPONDENCE/029-backend-bundle-db-slice-namespace.md`.
+- Roadmap: `obsidian/Architecture/roadmap-2026-06.md`.

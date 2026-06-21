@@ -289,7 +289,8 @@ def test_future_expiry_allows(assessor_a, store):
 
 
 def test_naive_datetime_treated_as_utc(assessor_a, store):
-    past_naive = datetime.utcnow() - timedelta(hours=1)  # без tz
+    # naive datetime — без tzinfo; rbac.can() трактует как UTC
+    past_naive = (datetime.now(timezone.utc) - timedelta(hours=1)).replace(tzinfo=None)
     store.add(Grant(
         subject_sub=assessor_a.sub, action=Action.VIEW, resource=LOT1,
         granted_by="root", expires_at=past_naive,

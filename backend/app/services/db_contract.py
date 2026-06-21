@@ -1,9 +1,9 @@
-"""DB-контракт C2 — загрузка `contracts/db/schema.json` + валидация sqlite.
+"""DB-контракт C2 — загрузка `contracts/bundle-db-slice/schema.json` + валидация sqlite.
 
 Реализует `SPEC_backend.md §P0.1` (sub-stage P0.1.1): машиночитаемый
 DB-контракт interchange-схемы Bundle. Источник правды DDL —
 `schema/egrn_current_schema.sql`; контракт — его JSON-зеркало
-(`contracts/db/schema.json`).
+(`contracts/bundle-db-slice/schema.json`).
 
 Зачем (ADR-001 + CLAUDE.md §3):
 - Bundle's `db.sqlite` использует упрощённую §1..§6 модель backend'а (не
@@ -33,7 +33,7 @@ from typing import Any
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-_CONTRACT_PATH = _REPO_ROOT / "contracts" / "db" / "schema.json"
+_CONTRACT_PATH = _REPO_ROOT / "contracts" / "bundle-db-slice" / "schema.json"
 _DDL_PATH = _REPO_ROOT / "schema" / "egrn_current_schema.sql"
 
 
@@ -42,7 +42,7 @@ _DDL_PATH = _REPO_ROOT / "schema" / "egrn_current_schema.sql"
 # ─────────────────────────────────────────────────────────────────────────────
 
 def load_contract(path: Path | None = None) -> dict[str, Any]:
-    """Читает и парсит `contracts/db/schema.json`."""
+    """Читает и парсит `contracts/bundle-db-slice/schema.json`."""
     p = path or _CONTRACT_PATH
     return json.loads(p.read_text(encoding="utf-8"))
 
