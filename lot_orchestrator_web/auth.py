@@ -94,6 +94,9 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
     Cycle 15 M4: после успешной верификации кладёт `request.state.subject`
     (объект совместимый с oauth.Subject) — username + роли из `roles_map`.
     Это даёт downstream Principal.from_oauth_subject для RBAC.
+
+    Cycle 16: при наличии `app.state.rate_limiter` — rate-limit по
+    (client_ip, attempted_username). N провалов в окне → 429 + Retry-After.
     """
 
     def __init__(self, app, creds: _Creds,
@@ -106,14 +109,30 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
         if any(request.url.path == p or request.url.path.startswith(p + "/")
                for p in _EXEMPT_PATHS):
             return await call_next(request)
+
+        # Cycle 16: rate-limit key = (IP, attempted-username из заголовка).
+        limiter = getattr(request.app.state, "rate_limiter", None)
+        attempted_user = _attempted_basic_user(request)
+        key = _rl_key(request, attempted_user)
+        if limiter is not None:
+            blocked, retry = limiter.is_blocked(key)
+            if blocked:
+                return _too_many(retry)
+
         username = _verify(request, self._creds)
         if username is None:
+            if limiter is not None:
+                blocked, retry = limiter.record_failure(key)
+                if blocked:
+                    return _too_many(retry)
             from fastapi.responses import JSONResponse
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content={"detail": "Authentication required"},
                 headers={"WWW-Authenticate": "Basic realm=\"ekcelo\""},
             )
+        if limiter is not None:
+            limiter.reset(key)
         # M4: subject injection для downstream RBAC
         from lot_orchestrator_web.oauth import Subject
         request.state.subject = Subject(
@@ -122,6 +141,35 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
             claims={},
         )
         return await call_next(request)
+
+
+def _attempted_basic_user(request: Request) -> str:
+    """Извлекает username из Basic header (без верификации). Для rate-limit ключа."""
+    auth = request.headers.get("authorization", "")
+    if not auth.lower().startswith("basic "):
+        return ""
+    try:
+        decoded = b64decode(auth.split(" ", 1)[1].strip()).decode("utf-8", errors="replace")
+        return decoded.partition(":")[0]
+    except Exception:
+        return ""
+
+
+def _rl_key(request: Request, user_hint: str) -> str:
+    ip = request.client.host if request.client else "unknown"
+    return f"basic:{ip}:{user_hint}"
+
+
+def _too_many(retry_after: int):
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Too many failed auth attempts. Retry later."},
+        headers={
+            "Retry-After": str(retry_after),
+            "WWW-Authenticate": "Basic realm=\"ekcelo\"",
+        },
+    )
 
 
 def _verify(request: Request, creds: _Creds) -> str | None:
