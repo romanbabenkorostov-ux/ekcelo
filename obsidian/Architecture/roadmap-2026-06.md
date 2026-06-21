@@ -35,7 +35,7 @@
 
 ## Cycle 14 — OAuth2 / OIDC (token-based auth)
 
-**Статус:** **M1 ✅ done** (2026-06-14, см. `cycle-14-oauth.md`) — Bearer-JWT verifier + OAuthMiddleware + strategy dispatcher (OIDC > Basic > none). 31 тест. M2 (`/auth/login` + `/auth/callback` browser flow) и M3 (RBAC поверх Subject.roles, cycle 15) — план. **Реализует:** C6 ROLES_SPEC «OAuth/JWT — будущий триггер». **Триггер:** появление >2 пользователей ИЛИ внешний (не-LAN) доступ ИЛИ требование SSO.
+**Статус:** **M1+M2 ✅ done** — M1 (2026-06-14, `cycle-14-oauth.md`) Bearer-JWT verifier + OAuthMiddleware + strategy dispatcher (OIDC > Basic > none), 31 тест; M2 (2026-06-21, `cycle-14-m2-browser-flow.md`) browser code-flow `/auth/login` + `/auth/callback` + session-cookie, 15 тестов. M3 (RBAC) = cycle 15 ✅. **Реализует:** C6 ROLES_SPEC «OAuth/JWT». **Триггер:** появление >2 пользователей ИЛИ внешний доступ ИЛИ SSO.
 
 ### Зачем
 Basic Auth (cycle 12-13) хранит креды в env — годится для пары операторов за reverse-proxy, но не для multi-tenant с ролями assessor/client (C6). OAuth2/OIDC даёт: внешний IdP (Keycloak/Authentik/Google), refresh-токены, отзыв сессий, готовую интеграцию с ROLES.

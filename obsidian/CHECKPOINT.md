@@ -1,3 +1,17 @@
+# CHECKPOINT — 2026-06-21 (auth полн. ✅ · FE-0 OAuth M2 done · FRONTEND старт)
+
+> **2026-06-21 (FE-0):** Cycle 14 M2 OAuth browser code-flow done —
+> `/auth/login` + `/auth/callback` + session-cookie. 15 тестов, suite 495.
+> Это FE-0 в плане frontend `ekcelo-site` (выбор пользователя: монорепо subdir,
+> рефактор viewer/, полный scope, OAuth M2 сначала). Применять ПОСЛЕ merge #119.
+>
+> **План frontend** (4 под-этапа): FE-0 OAuth M2 ✅ → FE-1 scaffold
+> ekcelo-site/ + api-adapter + catalog/object UI + login → FE-2 граф +
+> kmz-adapter (порт из viewer/) → FE-3 карта + единый рендер.
+> См. `cycle-14-m2-browser-flow.md`, `SPEC_frontend.md`.
+>
+> Ниже — запись cycle 16; обновится после merge.
+
 # CHECKPOINT — 2026-06-21 (P0 ✅ · cycles 14/15/16 ✅ AUTH-ТРЕК ЗАКРЫТ)
 
 > **2026-06-21 (cycle 16):** Rate limiting на auth-провалы done — 22 теста,

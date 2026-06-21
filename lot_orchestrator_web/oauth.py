@@ -278,7 +278,10 @@ def _extract_roles(claims: dict[str, Any], path: str) -> list[str]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Пути, не требующие auth (по аналогии с BasicAuthMiddleware):
-_EXEMPT_PREFIXES = ("/static/", "/docs", "/openapi.json", "/redoc")
+_EXEMPT_PREFIXES = ("/static/", "/docs", "/openapi.json", "/redoc", "/auth/")
+
+# Cookie с access-токеном для browser-flow (cycle 14 M2).
+SESSION_COOKIE = "ekcelo_token"
 
 
 class OAuthMiddleware(BaseHTTPMiddleware):
@@ -312,14 +315,18 @@ class OAuthMiddleware(BaseHTTPMiddleware):
             if blocked:
                 return _too_many_bearer(retry)
 
+        # Токен из Authorization header (API) ИЛИ из session-cookie (browser-flow M2).
         auth = request.headers.get("authorization", "")
-        if not auth.lower().startswith("bearer "):
+        if auth.lower().startswith("bearer "):
+            token = auth.split(" ", 1)[1].strip()
+        else:
+            token = request.cookies.get(SESSION_COOKIE, "")
+        if not token:
             if limiter is not None:
                 blocked, retry = limiter.record_failure(key)
                 if blocked:
                     return _too_many_bearer(retry)
             return _unauthorized("missing Bearer token")
-        token = auth.split(" ", 1)[1].strip()
 
         try:
             subject = verify_jwt(
