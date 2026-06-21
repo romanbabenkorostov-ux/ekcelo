@@ -105,6 +105,10 @@ def create_app(
         configure_store(persistence)
     app.mount("/static", StaticFiles(directory=_HERE / "static"), name="static")
     _register_routes(app)
+    # Cycle 15 M3: RBAC grant-management endpoints (POST/DELETE /grants,
+    # GET /grants/me). Активны всегда; требуют grant_store (иначе 503).
+    from lot_orchestrator_web.rbac_api import register_grant_routes
+    register_grant_routes(app)
     # Auth middleware последним — оборачивает все routes (включая `/`).
     # Стратегия: OIDC (cycle 14) > Basic (cycle 12-13) > none. См. oauth.py.
     app.state.auth_strategy = maybe_install_auth(app, raw_users_env=auth_users)
