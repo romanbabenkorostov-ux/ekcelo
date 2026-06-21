@@ -336,6 +336,7 @@ def maybe_install_auth(
     *,
     oidc_config: OIDCConfig | None = None,
     raw_users_env: str | None = None,
+    raw_roles_env: str | None = None,
     hmac_secret: str | None = None,
 ) -> str:
     """Выбирает auth-стратегию: OIDC > Basic > none. Возвращает имя установленной.
@@ -344,6 +345,7 @@ def maybe_install_auth(
     Иначе fallback на Basic Auth (как раньше).
 
     hmac_secret — для тестов/dev (HS256 algoritm). В prod — RS256 через JWKS URL.
+    raw_roles_env — cycle 15 M4: связь username с RBAC-ролями для Basic Auth.
     """
     from lot_orchestrator_web.auth import maybe_install_basic_auth
 
@@ -355,6 +357,8 @@ def maybe_install_auth(
             hmac_secret=hmac_secret,
         )
         return "oidc"
-    if maybe_install_basic_auth(app, raw_users_env=raw_users_env):
+    if maybe_install_basic_auth(
+        app, raw_users_env=raw_users_env, raw_roles_env=raw_roles_env,
+    ):
         return "basic"
     return "none"

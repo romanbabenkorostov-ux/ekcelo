@@ -47,17 +47,17 @@
   разделение моей 8-таблиц wire-slice от parser-team's 33-таблиц backend
   storage в `contracts/db/`. Post 029 + bridge-guard тест. См.
   `docs/CORRESPONDENCE/029-backend-bundle-db-slice-namespace.md`.
-- 🟡 **Cycle 15 M3 RBAC FastAPI** (готов локально, zip-handoff):
-  `require_action` dependency (opt-in) + REST `POST/DELETE /grants` +
-  `GET /grants/me`. 19 тестов. Wire-up в боевые роуты — M4. См.
-  `cycle-15-rbac.md`.
+- ✅ **Cycle 15 RBAC ЗАКРЫТ** (M1-M4): M3 (PR #117) `require_action` +
+  REST `/grants`; M4 (готов локально) enforcement на роутах через
+  `create_app(enforce_rbac=True)` + Basic Auth roles-карта
+  `EKCELO_AUTH_ROLES`. **C6 ROLES_SPEC реализован целиком.** 102 RBAC-теста
+  суммарно. См. `cycle-15-rbac.md`.
 
 **Остаётся опциональным/отложенным:**
 - C3.3 — materialization `geo` (KMZ→БД). **Отложен**, не блокирует фронт.
 - P0.1.4 — мапа богатой parser-схемы → interchange. Опц.
 - Cycle 14 M2 — `/auth/login` + `/auth/callback` browser code-flow.
-- Cycle 15 M4 — enforcement wire-up в роуты (`create_app(enforce_rbac=True)`)
-  + Basic Auth roles-карта `EKCELO_AUTH_ROLES`.
+- Cycle 15 M5 — фильтрация `/catalog` по грантам (опц. полировка).
 - Cycle 16 — Rate limiting на auth-провалы.
 
 См. `obsidian/Architecture/roadmap-2026-06.md` для приоритетов.
