@@ -92,6 +92,22 @@ export async function parseKmzFile(file: File): Promise<KmzDocument> {
   return parseKmzBytes(buf);
 }
 
+/** Читает сырой .kml из File (без распаковки — это не ZIP). */
+export async function parseKmlFile(file: File): Promise<KmzDocument> {
+  return parseKmlText(await file.text());
+}
+
+/**
+ * Универсальный вход для drag-drop: .kml читается как текст, .kmz
+ * распаковывается. Различаем по расширению (а не по сигнатуре) — File из
+ * браузера несёт имя; .kml — это XML, .kmz — ZIP с doc.kml.
+ */
+export async function parseGeoFile(file: File): Promise<KmzDocument> {
+  return file.name.toLowerCase().endsWith(".kml")
+    ? parseKmlFile(file)
+    : parseKmzFile(file);
+}
+
 /**
  * Tag lookup устойчивый к окружению:
  * - браузер (XML): `getElementsByTagName` матчит qualifiedName = localName
@@ -108,12 +124,15 @@ function childTag(parent: Element, tag: string): Element | null {
   for (const child of Array.from(parent.children)) {
     if (child.tagName.toUpperCase() === upper) return child;
   }
-  return null;
+  // happy-dom обрывает .children после CDATA-соседа (<name/><description>
+  // <![CDATA[…]]>… у Yandex KML) — fallback на scoped getElementsByTagName.
+  // KML не вкладывает name/description/value, поэтому первый = искомый.
+  return parent.getElementsByTagName(tag)[0] ?? null;
 }
 
 /** Парсит doc.kml текст → KmzDocument. */
 export function parseKmlText(kml: string): KmzDocument {
-  const doc = new DOMParser().parseFromString(kml, "application/xml");
+  const doc = new DOMParser().parseFromString(normalizeKml(kml), "application/xml");
   const parseError = doc.getElementsByTagName("parsererror")[0];
   if (parseError) {
     throw new KmzParseError(`невалидный KML: ${parseError.textContent ?? ""}`);
@@ -132,19 +151,44 @@ export function parseKmlText(kml: string): KmzDocument {
   return { placemarks, extractDate };
 }
 
+/** Кадастровый номер РФ: «23:15:0314001:617». Первое вхождение = основной. */
+const CAD_RE = /\d+:\d+:\d+:\d+/;
+
+/**
+ * Разворачивает пустые self-closing `<name/>` / `<description/>` в парные теги.
+ * Yandex Map Constructor пишет `<name/>` у полигонов; happy-dom (HTML-режим
+ * парсера) не самозакрывает их и ошибочно вкладывает соседей (styleUrl,
+ * Polygon) внутрь, ломая структуру. Реальный браузерный DOMParser в режиме
+ * application/xml корректен и без этого — правка безвредна (CDATA не трогаем).
+ */
+function normalizeKml(kml: string): string {
+  return kml.replace(/<(name|description)\s*\/>/gi, "<$1></$1>");
+}
+
 function parsePlacemark(pm: Element): KmzPlacemark {
   const ext = readExtendedData(childTag(pm, "ExtendedData"));
-  const name = cdataText(childTag(pm, "name"));
+  const rawName = cdataText(childTag(pm, "name"));
   const description = cdataText(childTag(pm, "description"));
   const fields = parseDescription(description);
 
   const { center, geometry, extrude } = parseGeometry(pm);
   const zTop = ext.z_meters_top ? Number(ext.z_meters_top) : null;
 
+  // cad_number: сначала ExtendedData (CONTRACT_KMZ), иначе — regex из текста
+  // (Yandex Map Constructor кладёт кадастр в <description>/<name>, не в ExtData).
+  const cadNumber =
+    ext.cad_number ??
+    CAD_RE.exec(description)?.[0] ??
+    CAD_RE.exec(rawName)?.[0] ??
+    null;
+
+  // name: у Yandex-полигонов <name/> пустой — берём метку из description.
+  const name = rawName || descriptionLabel(description);
+
   return {
     objectType: ext.object_type ?? "",
-    cadNumber: ext.cad_number ?? null,
-    graphNodeId: ext.graph_node_id ?? ext.cad_number ?? name,
+    cadNumber,
+    graphNodeId: ext.graph_node_id ?? cadNumber ?? name,
     name,
     description,
     fields,
@@ -155,6 +199,14 @@ function parsePlacemark(pm: Element): KmzPlacemark {
     extrude,
     parentCad: ext.parent_cad ?? null,
   };
+}
+
+/** Короткая метка из description: текст до первого «·», без `<br/>`. */
+function descriptionLabel(desc: string): string {
+  return (desc.split("·")[0] ?? "")
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /** Глобально ищет первое `<Data name="key"><value>…</value></Data>`. */
@@ -252,8 +304,11 @@ function centroid(ring: Array<[number, number]>): [number, number] {
  */
 function cdataText(node: Element | null): string {
   if (!node) return "";
-  const direct = node.textContent?.trim();
-  if (direct) return direct;
+  // Сначала собираем ТОЛЬКО прямые text(3)/cdata(4)/comment(8) узлы. Это важно
+  // для happy-dom: при `<description><![CDATA[…]]></description>` со следующими
+  // соседями (styleUrl/Polygon) парсер ошибочно вкладывает их в description, и
+  // node.textContent вернул бы их текст (styleUrl+координаты). Берём данные
+  // CDATA напрямую, элементы-потомки игнорируем.
   let acc = "";
   for (const child of Array.from(node.childNodes)) {
     const t = child.nodeType;
@@ -261,7 +316,9 @@ function cdataText(node: Element | null): string {
       acc += (child as { data?: string }).data ?? child.textContent ?? "";
     }
   }
-  return acc.trim();
+  if (acc.trim()) return acc.trim();
+  // Реальный браузер без CDATA: обычный текст.
+  return node.textContent?.trim() ?? "";
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
