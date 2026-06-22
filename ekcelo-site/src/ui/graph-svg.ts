@@ -61,6 +61,21 @@ export function renderGraphSvg(
   svg.setAttribute("role", "img");
   svg.setAttribute("aria-label", "Граф владения");
 
+  // Прозрачный фон — стабильная hit-зона для pan/dblclick (на пустых местах
+  // svg-узлов нет). Фиксирован, под вьюпортом.
+  const bg = document.createElementNS(SVG_NS, "rect");
+  bg.setAttribute("class", "graph-bg");
+  bg.setAttribute("x", "0");
+  bg.setAttribute("y", "0");
+  bg.setAttribute("width", String(WIDTH));
+  bg.setAttribute("height", String(HEIGHT));
+  svg.append(bg);
+
+  // Вьюпорт: всё содержимое графа в одном <g>; pan/zoom = transform на нём.
+  const viewport = document.createElementNS(SVG_NS, "g");
+  viewport.setAttribute("class", "graph-viewport");
+  svg.append(viewport);
+
   // Рёбра (под узлами)
   const edgeEls = new Map<GraphEdge, SVGLineElement>();
   for (const e of graph.edges) {
@@ -75,7 +90,7 @@ export function renderGraphSvg(
     line.setAttribute("class", `edge edge-${e.kind}`);
     line.setAttribute("data-from", e.from);
     line.setAttribute("data-to", e.to);
-    svg.append(line);
+    viewport.append(line);
     edgeEls.set(e, line);
   }
 
@@ -120,10 +135,107 @@ export function renderGraphSvg(
         if (ev.key === "Enter" || ev.key === " ") cb.onNodeClick?.(node);
       });
     }
-    svg.append(g);
+    viewport.append(g);
   }
 
+  enablePanZoom(svg, viewport, bg);
   container.append(svg);
+}
+
+/**
+ * Pan (перетаскивание фона) + zoom (колесо к курсору) через transform на
+ * вьюпорте. Двойной клик по фону — сброс. Тянем только фон (`bg`), не узлы,
+ * чтобы не конфликтовать с кликом-навигацией. Координаты считаем в единицах
+ * viewBox (через getBoundingClientRect) — pan ощущается 1:1.
+ */
+function enablePanZoom(
+  svg: SVGSVGElement,
+  viewport: SVGGElement,
+  bg: SVGRectElement,
+): void {
+  let scale = 1;
+  let tx = 0;
+  let ty = 0;
+  let dragging = false;
+  let startX = 0;
+  let startY = 0;
+  let startTx = 0;
+  let startTy = 0;
+
+  const apply = (): void => {
+    viewport.setAttribute("transform", `translate(${tx} ${ty}) scale(${scale})`);
+  };
+
+  // viewBox-единиц на CSS-пиксель (0 в тест-среде happy-dom → fallback 1:1).
+  const metrics = (): { ux: number; uy: number; left: number; top: number } => {
+    const r = svg.getBoundingClientRect();
+    return {
+      ux: WIDTH / (r.width || WIDTH),
+      uy: HEIGHT / (r.height || HEIGHT),
+      left: r.left,
+      top: r.top,
+    };
+  };
+
+  const onBackground = (t: EventTarget | null): boolean => t === bg || t === svg;
+
+  svg.addEventListener("wheel", (ev: WheelEvent) => {
+    ev.preventDefault();
+    const { ux, uy, left, top } = metrics();
+    const cx = (ev.clientX - left) * ux; // курсор в координатах viewBox
+    const cy = (ev.clientY - top) * uy;
+    const factor = ev.deltaY < 0 ? 1.1 : 1 / 1.1;
+    const next = Math.min(5, Math.max(0.3, scale * factor));
+    // зум вокруг курсора: точка под ним остаётся на месте
+    tx = cx - ((cx - tx) * next) / scale;
+    ty = cy - ((cy - ty) * next) / scale;
+    scale = next;
+    apply();
+  });
+
+  svg.addEventListener("pointerdown", (ev: PointerEvent) => {
+    if (!onBackground(ev.target)) return; // узлы тянуть нельзя — это клик
+    dragging = true;
+    startX = ev.clientX;
+    startY = ev.clientY;
+    startTx = tx;
+    startTy = ty;
+    svg.classList.add("grabbing");
+    try {
+      svg.setPointerCapture(ev.pointerId);
+    } catch {
+      /* happy-dom / нет pointerId */
+    }
+  });
+
+  svg.addEventListener("pointermove", (ev: PointerEvent) => {
+    if (!dragging) return;
+    const { ux, uy } = metrics();
+    tx = startTx + (ev.clientX - startX) * ux;
+    ty = startTy + (ev.clientY - startY) * uy;
+    apply();
+  });
+
+  const endDrag = (ev: PointerEvent): void => {
+    if (!dragging) return;
+    dragging = false;
+    svg.classList.remove("grabbing");
+    try {
+      svg.releasePointerCapture(ev.pointerId);
+    } catch {
+      /* happy-dom */
+    }
+  };
+  svg.addEventListener("pointerup", endDrag);
+  svg.addEventListener("pointerleave", endDrag);
+
+  svg.addEventListener("dblclick", (ev) => {
+    if (!onBackground(ev.target)) return;
+    scale = 1;
+    tx = 0;
+    ty = 0;
+    apply();
+  });
 }
 
 /** Радиальный layout по слоям (детерминированный). */
