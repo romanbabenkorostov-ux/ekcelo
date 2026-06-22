@@ -111,6 +111,10 @@ body {
 
 /* FE-2: SVG-граф */
 .graph-svg { width: 100%; height: auto; max-height: 460px; }
+/* FE-4: pan (тащим фон) + zoom (колесо), dblclick — сброс */
+.graph-svg { cursor: grab; touch-action: none; }
+.graph-svg.grabbing { cursor: grabbing; }
+.graph-bg { fill: transparent; }
 .graph-svg .edge { stroke: var(--border); stroke-width: 1.5; }
 .graph-svg .edge-active { stroke: var(--accent); stroke-width: 2.5; }
 .graph-svg .gnode circle {

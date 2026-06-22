@@ -100,3 +100,68 @@ describe("renderGraphSvg", () => {
     expect(node?.getAttribute("tabindex")).toBe("0");
   });
 });
+
+describe("renderGraphSvg pan/zoom (FE-4)", () => {
+  it("содержимое в вьюпорте + фон-хитзона", () => {
+    const c = container();
+    renderGraphSvg(c, sampleGraph());
+    expect(c.querySelector(".graph-viewport")).toBeTruthy();
+    expect(c.querySelector(".graph-bg")).toBeTruthy();
+    // узлы и рёбра теперь внутри вьюпорта
+    expect(c.querySelectorAll(".graph-viewport .gnode")).toHaveLength(3);
+    expect(c.querySelectorAll(".graph-viewport .edge")).toHaveLength(2);
+  });
+
+  it("колесо вверх → zoom-in (scale растёт)", () => {
+    const c = container();
+    renderGraphSvg(c, sampleGraph());
+    const svg = c.querySelector("svg.graph-svg")!;
+    svg.dispatchEvent(
+      new WheelEvent("wheel", {
+        deltaY: -100,
+        clientX: 100,
+        clientY: 100,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    const vp = c.querySelector(".graph-viewport")!;
+    expect(vp.getAttribute("transform")).toMatch(/scale\(1\.1/);
+  });
+
+  it("тащим фон → pan (translate меняется 1:1)", () => {
+    const c = container();
+    renderGraphSvg(c, sampleGraph());
+    const svg = c.querySelector("svg.graph-svg")!;
+    const bg = c.querySelector(".graph-bg")!;
+    bg.dispatchEvent(new MouseEvent("pointerdown", { clientX: 10, clientY: 10, bubbles: true }));
+    svg.dispatchEvent(new MouseEvent("pointermove", { clientX: 60, clientY: 40, bubbles: true }));
+    const vp = c.querySelector(".graph-viewport")!;
+    expect(vp.getAttribute("transform")).toMatch(/translate\(50 30/);
+  });
+
+  it("двойной клик по фону → сброс pan/zoom", () => {
+    const c = container();
+    renderGraphSvg(c, sampleGraph());
+    const svg = c.querySelector("svg.graph-svg")!;
+    const bg = c.querySelector(".graph-bg")!;
+    svg.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: -100, clientX: 50, clientY: 50, bubbles: true, cancelable: true }),
+    );
+    bg.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    const vp = c.querySelector(".graph-viewport")!;
+    expect(vp.getAttribute("transform")).toBe("translate(0 0) scale(1)");
+  });
+
+  it("перетаскивание узла НЕ паннит (target = узел, не фон)", () => {
+    const c = container();
+    renderGraphSvg(c, sampleGraph());
+    const svg = c.querySelector("svg.graph-svg")!;
+    const node = c.querySelector(".gnode")!;
+    node.dispatchEvent(new MouseEvent("pointerdown", { clientX: 10, clientY: 10, bubbles: true }));
+    svg.dispatchEvent(new MouseEvent("pointermove", { clientX: 99, clientY: 99, bubbles: true }));
+    const vp = c.querySelector(".graph-viewport")!;
+    // pan не стартовал → transform не задан (или пустой)
+    expect(vp.getAttribute("transform")).toBeNull();
+  });
+});
