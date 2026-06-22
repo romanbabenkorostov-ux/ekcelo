@@ -14,7 +14,7 @@
 import { ApiClient, redirectToLogin } from "@adapters/api";
 import {
   kmzToViewModel,
-  parseKmzFile,
+  parseGeoFile,
   type KmzDocument,
 } from "@adapters/kmz";
 import type { CatalogCard, GrantCreate, ViewModel } from "@core/viewmodel";
@@ -207,21 +207,29 @@ function modeBar(): HTMLElement {
   const drop = el("label", {
     class: "kmz-drop",
     text: offlineKmz
-      ? `KMZ загружен: ${offlineKmz.placemarks.length} placemark'ов`
-      : "Перетащите .kmz сюда или кликните (офлайн-просмотр)",
+      ? `Загружено: ${offlineKmz.placemarks.length} placemark'ов`
+      : "Перетащите .kml / .kmz сюда или кликните (офлайн-просмотр)",
   });
   const input = el("input") as HTMLInputElement;
   input.type = "file";
-  input.accept = ".kmz";
+  input.accept = ".kml,.kmz";
   input.style.display = "none";
   drop.append(input);
 
+  // Список загруженных объектов (с кадастром) — кликабельный.
+  const list = el("div", { class: "kmz-objects" });
+  if (offlineKmz) renderKmzObjects(list, offlineKmz);
+
   const loadFile = async (file: File): Promise<void> => {
     try {
-      offlineKmz = await parseKmzFile(file);
-      drop.firstChild!.textContent = `KMZ загружен: ${offlineKmz.placemarks.length} placemark'ов. Откройте объект по cad.`;
+      offlineKmz = await parseGeoFile(file);
+      const withCad = offlineKmz.placemarks.filter((p) => p.cadNumber).length;
+      drop.firstChild!.textContent =
+        `Загружено: ${offlineKmz.placemarks.length} placemark'ов, ` +
+        `${withCad} с кадастром. Кликните объект ниже.`;
+      renderKmzObjects(list, offlineKmz);
     } catch (err) {
-      drop.firstChild!.textContent = `Ошибка KMZ: ${(err as Error).message}`;
+      drop.firstChild!.textContent = `Ошибка загрузки: ${(err as Error).message}`;
     }
   };
 
@@ -242,7 +250,41 @@ function modeBar(): HTMLElement {
   });
 
   bar.append(drop);
+  bar.append(list);
   return bar;
+}
+
+/**
+ * Рендерит список загруженных объектов с кадастром (дедуп по cad). Полигон и
+ * точка одного cad → одна кликабельная строка → #/objects/{cad}.
+ */
+function renderKmzObjects(container: HTMLElement, doc: KmzDocument): void {
+  clear(container);
+  const seen = new Set<string>();
+  const items: Array<{ cad: string; label: string }> = [];
+  for (const pm of doc.placemarks) {
+    if (!pm.cadNumber || pm.objectType === "photo") continue;
+    if (seen.has(pm.cadNumber)) continue;
+    seen.add(pm.cadNumber);
+    items.push({ cad: pm.cadNumber, label: pm.name || pm.cadNumber });
+  }
+  if (items.length === 0) {
+    container.append(el("p", { class: "status", text: "Объектов с кадастром не найдено." }));
+    return;
+  }
+  const ul = el("ul", { class: "kmz-objects-list" });
+  for (const { cad, label } of items) {
+    const li = el("li");
+    li.append(
+      el("a", {
+        href: `#/objects/${encodeURIComponent(cad)}`,
+        text: `${cad} — ${label}`,
+      }),
+    );
+    ul.append(li);
+  }
+  container.append(el("p", { class: "status", text: `Объектов: ${items.length}` }));
+  container.append(ul);
 }
 
 window.addEventListener("hashchange", () => void route());

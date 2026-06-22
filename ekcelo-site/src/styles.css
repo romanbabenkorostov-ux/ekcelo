@@ -137,6 +137,16 @@ body {
   font-size: 13px; color: var(--fg-muted); cursor: pointer;
 }
 .kmz-drop.dragover { border-color: var(--accent); background: #f0f5ff; }
+/* FE-3.1: список объектов из загруженного .kml/.kmz */
+.kmz-objects { flex-basis: 100%; }
+.kmz-objects .status { font-size: 12px; color: var(--fg-muted); margin: 4px 0; }
+.kmz-objects-list {
+  list-style: none; margin: 0; padding: 0; display: flex;
+  flex-wrap: wrap; gap: 6px 12px; max-height: 180px; overflow-y: auto;
+}
+.kmz-objects-list li { font-size: 13px; }
+.kmz-objects-list a { color: var(--accent); text-decoration: none; }
+.kmz-objects-list a:hover { text-decoration: underline; }
 .badge-source {
   font-size: 11px; padding: 2px 8px; border-radius: 4px;
   background: var(--accent); color: white;
