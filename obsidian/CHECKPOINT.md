@@ -1,3 +1,17 @@
+# CHECKPOINT — 2026-06-21 (auth ✅ · #120 ✅ · FE-1 scaffold done)
+
+> **2026-06-21 (FE-1):** `ekcelo-site/` scaffold готов. Vite + TypeScript +
+> vitest + ESLint в монорепо subdir. api-adapter (C4) + базовый UI (каталог/
+> объект/граф) + login через `/auth/login`. 29 frontend-тестов + 0 typecheck
+> ошибок + 0 lint warnings. Backend regression: 495 passed.
+> См. `obsidian/Architecture/fe-1-ekcelo-site-scaffold.md`.
+>
+> **Применять ПОСЛЕ merge #120** (cycle 14 M2 — уже смержен).
+>
+> Следующий FE-2: интерактивный граф + порт kmz→ViewModel из viewer/.
+>
+> Ниже — запись FE-0 OAuth M2; обновится после merge.
+
 # CHECKPOINT — 2026-06-21 (auth полн. ✅ · FE-0 OAuth M2 done · FRONTEND старт)
 
 > **2026-06-21 (FE-0):** Cycle 14 M2 OAuth browser code-flow done —
