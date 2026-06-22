@@ -181,3 +181,55 @@ describe("ApiClient proxied path (dev/prod)", () => {
     await api.getCatalog();
   });
 });
+
+describe("ApiClient grants (FE-3)", () => {
+  it("getMyGrants парсит список", async () => {
+    const grants = [
+      { grant_id: "g1", subject_sub: "alice", action: "view",
+        resource_type: "object", resource_id: "x", granted_by: "root", revocable: true },
+    ];
+    const api = new ApiClient({
+      baseUrl: "http://test",
+      fetchImpl: mockFetch(() => ({ status: 200, body: grants })),
+    });
+    const got = await api.getMyGrants();
+    expect(got).toHaveLength(1);
+    expect(got[0]?.grant_id).toBe("g1");
+  });
+
+  it("createGrant шлёт POST с JSON body", async () => {
+    const fetchMock = vi.fn(async (url, init: any) => {
+      expect(String(url)).toContain("/grants");
+      expect(init.method).toBe("POST");
+      expect(init.headers["Content-Type"]).toBe("application/json");
+      const body = JSON.parse(init.body);
+      expect(body.subject_sub).toBe("bob");
+      return new Response(JSON.stringify({ grant_id: "new", ...body, granted_by: "me", revocable: true }), { status: 201 });
+    });
+    const api = new ApiClient({ baseUrl: "http://test", fetchImpl: fetchMock as unknown as typeof fetch });
+    const g = await api.createGrant({
+      subject_sub: "bob", action: "view", resource_type: "object", resource_id: "x",
+    });
+    expect(g.grant_id).toBe("new");
+  });
+
+  it("revokeGrant шлёт DELETE, обрабатывает 204", async () => {
+    const fetchMock = vi.fn(async (url, init: any) => {
+      expect(String(url)).toContain("/grants/g1");
+      expect(init.method).toBe("DELETE");
+      return new Response(null, { status: 204 });
+    });
+    const api = new ApiClient({ baseUrl: "http://test", fetchImpl: fetchMock as unknown as typeof fetch });
+    await expect(api.revokeGrant("g1")).resolves.toBeUndefined();
+  });
+
+  it("createGrant 403 → ApiError", async () => {
+    const api = new ApiClient({
+      baseUrl: "http://test",
+      fetchImpl: mockFetch(() => ({ status: 403, body: { detail: "cannot delegate" } })),
+    });
+    await expect(api.createGrant({
+      subject_sub: "x", action: "edit", resource_type: "lot", resource_id: "y",
+    })).rejects.toMatchObject({ status: 403 });
+  });
+});

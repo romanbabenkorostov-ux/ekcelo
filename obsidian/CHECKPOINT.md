@@ -1,3 +1,15 @@
+# CHECKPOINT — 2026-06-22 (FE-3 done — карта + гранты · ФРОНТ ЗАКРЫТ)
+
+> **2026-06-22 (FE-3):** Карта (Leaflet, geo.geometry из KMZ, code-split) +
+> UI грантов (список/выдача/отзыв через /grants, C6). 66 vitest (50 + 16),
+> 0 typecheck/lint, build 26KB+leaflet-chunk. Backend 495 без изменений.
+> **Frontend трек FE-0..FE-3 завершён.** ekcelo-site = каталог + объект
+> (4 характеристики + карта + граф) + 2 адаптера (api/kmz) + OAuth login +
+> гранты C6. Применять ПОСЛЕ merge #122.
+> См. `obsidian/Architecture/fe-3-map-grants.md`.
+>
+> Ниже — запись FE-2; обновится после merge.
+
 # CHECKPOINT — 2026-06-22 (FE-2 done — интерактивный граф + kmz-адаптер)
 
 > **2026-06-22 (FE-2):** Интерактивный SVG-граф + `adapters/kmz.ts` (fflate ZIP +

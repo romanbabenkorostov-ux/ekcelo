@@ -3,11 +3,12 @@
  *
  * Маршрутизация — простая через hash:
  *   #               → каталог (api) + KMZ-drop (offline)
- *   #/objects/{cad} → объект (4 характеристики) + интерактивный граф
+ *   #/objects/{cad} → объект (4 характеристики) + граф + карта
  *   #/lots/{lot_id} → лот (4 характеристики) + members
+ *   #/grants        → управление грантами (C6 RBAC)
  *
- * FE-2: добавлен kmz→ViewModel офлайн-режим. Объект, открытый из KMZ,
- * рисуется тем же UI что и из api (DoD SPEC_frontend).
+ * FE-2: kmz→ViewModel офлайн-режим (объект из KMZ = тот же UI).
+ * FE-3: карта (Leaflet) geo.geometry + UI грантов.
  */
 
 import { ApiClient, redirectToLogin } from "@adapters/api";
@@ -16,9 +17,11 @@ import {
   parseKmzFile,
   type KmzDocument,
 } from "@adapters/kmz";
-import type { CatalogCard, ViewModel } from "@core/viewmodel";
+import type { CatalogCard, GrantCreate, ViewModel } from "@core/viewmodel";
 import { renderCatalog } from "@ui/catalog";
+import { renderGrants } from "@ui/grants";
 import { renderGraphSvg } from "@ui/graph-svg";
+import { renderMap } from "@ui/map";
 import { renderObjectCard } from "@ui/object-card";
 import { clear, el } from "@ui/render-utils";
 
@@ -38,6 +41,8 @@ async function route(): Promise<void> {
   } else if (hash.startsWith("#/lots/")) {
     const lotId = decodeURIComponent(hash.slice("#/lots/".length));
     await showLot(lotId);
+  } else if (hash === "#/grants") {
+    await showGrants();
   } else {
     await showCatalog();
   }
@@ -100,8 +105,9 @@ async function showObject(cad: string): Promise<void> {
   const sourceBadge = el("div", { class: "mode-label" });
   app.append(sourceBadge);
   const card = el("section", { class: "object" });
+  const mapBox = el("section", { class: "map-box" });
   const graphBox = el("section", { class: "graph" });
-  app.append(card, graphBox);
+  app.append(card, mapBox, graphBox);
 
   try {
     let vm: ViewModel;
@@ -120,6 +126,8 @@ async function showObject(cad: string): Promise<void> {
       sourceBadge.append(el("span", { class: "badge-source", text: "источник: API (ViewModel REST)" }));
     }
     renderObjectCard(card, vm);
+    // FE-3: карта geo.geometry (Leaflet). Async — не блокирует остальной рендер.
+    void renderMap(mapBox, vm.geo);
     renderGraphSvg(graphBox, graph ?? { nodes: [], edges: [] }, {
       onNodeClick: (node) => {
         // Клик на object-узел графа → навигация (если cad-подобный id)
@@ -131,6 +139,41 @@ async function showObject(cad: string): Promise<void> {
   } catch (err) {
     card.textContent = `Ошибка: ${(err as Error).message}`;
   }
+}
+
+async function showGrants(): Promise<void> {
+  if (!app) return;
+  clear(app);
+  app.append(headerNav());
+  const box = el("section", { class: "grants" });
+  app.append(box);
+
+  const reload = async (): Promise<void> => {
+    try {
+      const grants = await api.getMyGrants();
+      renderGrants(box, grants, {
+        onCreate: async (body: GrantCreate) => {
+          try {
+            await api.createGrant(body);
+            await reload();
+          } catch (err) {
+            alert(`Не удалось выдать грант: ${(err as Error).message}`);
+          }
+        },
+        onRevoke: async (grantId: string) => {
+          try {
+            await api.revokeGrant(grantId);
+            await reload();
+          } catch (err) {
+            alert(`Не удалось отозвать: ${(err as Error).message}`);
+          }
+        },
+      });
+    } catch (err) {
+      box.textContent = `Ошибка загрузки грантов: ${(err as Error).message}`;
+    }
+  };
+  await reload();
 }
 
 async function showLot(lotId: string): Promise<void> {
@@ -150,6 +193,7 @@ async function showLot(lotId: string): Promise<void> {
 function headerNav(): HTMLElement {
   const nav = el("nav", { class: "nav" });
   nav.append(el("a", { href: "#", text: "← Каталог" }));
+  nav.append(el("a", { href: "#/grants", text: "Гранты" }));
   nav.append(el("a", { href: "/auth/login", text: "Войти" }));
   nav.append(el("a", { href: "/auth/logout", text: "Выйти" }));
   return nav;

@@ -121,3 +121,33 @@ export function isViewModel(value: unknown): value is ViewModel {
     typeof v.temporal === "object"
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Гранты (C6 RBAC) — для UI делегирования/шеринга (FE-3)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type GrantAction =
+  | "input" | "edit" | "view" | "export" | "delegate" | "share";
+
+export type GrantResourceType = "lot" | "object" | "bundle";
+
+/** Грант из GET /grants/me (C6 backend GrantResponse). */
+export interface Grant {
+  grant_id: string;
+  subject_sub: string;
+  action: string;
+  resource_type: string;
+  resource_id: string;
+  granted_by: string;
+  revocable: boolean;
+  expires_at?: string | null;
+}
+
+/** Тело POST /grants. */
+export interface GrantCreate {
+  subject_sub: string;
+  action: GrantAction;
+  resource_type: GrantResourceType;
+  resource_id: string;
+  expires_at?: string | null;
+}
