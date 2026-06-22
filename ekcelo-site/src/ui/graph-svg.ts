@@ -36,16 +36,24 @@ export function renderGraphSvg(
   cb: GraphCallbacks = {},
 ): void {
   clear(container);
-  if (graph.nodes.length === 0) {
-    const p = document.createElement("p");
-    p.className = "empty";
-    p.textContent = "Граф пуст";
-    container.append(p);
-    return;
-  }
 
   const positioned = layout(graph.nodes);
   const byId = new Map(positioned.map((n) => [n.id, n]));
+  const validEdges = graph.edges.filter((e) => byId.has(e.from) && byId.has(e.to));
+
+  // Граф информативен только при наличии связей. Без рёбер (или ≤1 узел) —
+  // это «суп» из изолированных точек (напр. геометрия Yandex-KML без структуры
+  // владения, где все узлы схлопываются в центр). Рисовать нечего — подпись.
+  if (graph.nodes.length <= 1 || validEdges.length === 0) {
+    const p = document.createElement("p");
+    p.className = "empty";
+    p.textContent =
+      graph.nodes.length === 0
+        ? "Граф пуст"
+        : "Связи владения не заданы (источник без структуры собственности).";
+    container.append(p);
+    return;
+  }
 
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.setAttribute("viewBox", `0 0 ${WIDTH} ${HEIGHT}`);

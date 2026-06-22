@@ -53,6 +53,19 @@ describe("renderGraphSvg", () => {
     expect(c.querySelector("svg")).toBeNull();
   });
 
+  it("граф без рёбер → подпись, без svg (геометрия Yandex-KML)", () => {
+    const c = container();
+    renderGraphSvg(c, {
+      nodes: [
+        { id: "a", kind: "doc", label: "A" },
+        { id: "b", kind: "doc", label: "B" },
+      ],
+      edges: [],
+    });
+    expect(c.querySelector(".empty")).toBeTruthy();
+    expect(c.querySelector("svg")).toBeNull();
+  });
+
   it("клик по узлу вызывает onNodeClick", () => {
     const c = container();
     const onNodeClick = vi.fn();
