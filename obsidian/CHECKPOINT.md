@@ -1,3 +1,14 @@
+# CHECKPOINT — 2026-06-22 (FE-2 done — интерактивный граф + kmz-адаптер)
+
+> **2026-06-22 (FE-2):** Интерактивный SVG-граф + `adapters/kmz.ts` (fflate ZIP +
+> DOMParser KML → ViewModel). Офлайн drag-drop KMZ. Объект из api и kmz
+> рисуется одним UI (DoD SPEC). 50 vitest (29 FE-1 + 21 FE-2), 0 typecheck/lint.
+> Backend 495 без изменений. Применять ПОСЛЕ merge #121.
+> Следующий FE-3: карта (Leaflet/Google Earth) + UI грантов.
+> См. `obsidian/Architecture/fe-2-graph-kmz-adapter.md`.
+>
+> Ниже — запись FE-1; обновится после merge.
+
 # CHECKPOINT — 2026-06-21 (auth ✅ · #120 ✅ · FE-1 scaffold done)
 
 > **2026-06-21 (FE-1):** `ekcelo-site/` scaffold готов. Vite + TypeScript +

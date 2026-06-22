@@ -1,16 +1,24 @@
 /**
- * SPA shell. Координирует api-adapter + UI-рендеры.
+ * SPA shell. Координирует два адаптера (api + kmz) → общую ViewModel → UI.
  *
  * Маршрутизация — простая через hash:
- *   #               → каталог
- *   #/objects/{cad} → объект (4 характеристики) + граф
+ *   #               → каталог (api) + KMZ-drop (offline)
+ *   #/objects/{cad} → объект (4 характеристики) + интерактивный граф
  *   #/lots/{lot_id} → лот (4 характеристики) + members
+ *
+ * FE-2: добавлен kmz→ViewModel офлайн-режим. Объект, открытый из KMZ,
+ * рисуется тем же UI что и из api (DoD SPEC_frontend).
  */
 
 import { ApiClient, redirectToLogin } from "@adapters/api";
-import type { CatalogCard } from "@core/viewmodel";
+import {
+  kmzToViewModel,
+  parseKmzFile,
+  type KmzDocument,
+} from "@adapters/kmz";
+import type { CatalogCard, ViewModel } from "@core/viewmodel";
 import { renderCatalog } from "@ui/catalog";
-import { renderGraph } from "@ui/graph";
+import { renderGraphSvg } from "@ui/graph-svg";
 import { renderObjectCard } from "@ui/object-card";
 import { clear, el } from "@ui/render-utils";
 
@@ -18,6 +26,9 @@ const api = new ApiClient({ onUnauthorized: redirectToLogin });
 
 const app = document.querySelector<HTMLElement>("#app");
 if (!app) throw new Error("missing #app root");
+
+// Офлайн-KMZ держим в памяти — при загрузке файла показываем его объекты.
+let offlineKmz: KmzDocument | null = null;
 
 async function route(): Promise<void> {
   const hash = window.location.hash;
@@ -36,6 +47,8 @@ async function showCatalog(): Promise<void> {
   if (!app) return;
   clear(app);
   app.append(headerNav());
+  app.append(modeBar());
+
   const status = el("p", { class: "status", text: "Загрузка…" });
   app.append(status);
   const filters = el("div", { class: "filters" });
@@ -77,16 +90,44 @@ async function showObject(cad: string): Promise<void> {
   if (!app) return;
   clear(app);
   app.append(headerNav());
+
+  // Если объект есть в загруженном KMZ — берём из него (офлайн-режим),
+  // иначе из api. Источник помечается бейджем.
+  const fromKmz = offlineKmz?.placemarks.some(
+    (p) => p.cadNumber === cad && p.objectType !== "photo",
+  );
+
+  const sourceBadge = el("div", { class: "mode-label" });
+  app.append(sourceBadge);
   const card = el("section", { class: "object" });
   const graphBox = el("section", { class: "graph" });
   app.append(card, graphBox);
+
   try {
-    const [vm, graph] = await Promise.all([
-      api.getObject(cad),
-      api.getGraph(cad).catch(() => ({ nodes: [], edges: [] })),
-    ]);
+    let vm: ViewModel;
+    let graph: ViewModel["ownership"]["graph"];
+    if (fromKmz && offlineKmz) {
+      vm = kmzToViewModel(offlineKmz, cad);
+      graph = vm.ownership.graph ?? { nodes: [], edges: [] };
+      sourceBadge.append(el("span", { class: "badge-source kmz", text: "источник: KMZ (офлайн)" }));
+    } else {
+      const [apiVm, apiGraph] = await Promise.all([
+        api.getObject(cad),
+        api.getGraph(cad).catch(() => ({ nodes: [], edges: [] })),
+      ]);
+      vm = apiVm;
+      graph = apiGraph;
+      sourceBadge.append(el("span", { class: "badge-source", text: "источник: API (ViewModel REST)" }));
+    }
     renderObjectCard(card, vm);
-    renderGraph(graphBox, graph);
+    renderGraphSvg(graphBox, graph ?? { nodes: [], edges: [] }, {
+      onNodeClick: (node) => {
+        // Клик на object-узел графа → навигация (если cad-подобный id)
+        if (/^\d+:\d+:\d+:\d+$/.test(node.id)) {
+          window.location.hash = `#/objects/${encodeURIComponent(node.id)}`;
+        }
+      },
+    });
   } catch (err) {
     card.textContent = `Ошибка: ${(err as Error).message}`;
   }
@@ -108,12 +149,56 @@ async function showLot(lotId: string): Promise<void> {
 
 function headerNav(): HTMLElement {
   const nav = el("nav", { class: "nav" });
-  const back = el("a", { href: "#", text: "← Каталог" });
-  nav.append(back);
-  const login = el("a", { href: "/auth/login", text: "Войти" });
-  const logout = el("a", { href: "/auth/logout", text: "Выйти" });
-  nav.append(login, logout);
+  nav.append(el("a", { href: "#", text: "← Каталог" }));
+  nav.append(el("a", { href: "/auth/login", text: "Войти" }));
+  nav.append(el("a", { href: "/auth/logout", text: "Выйти" }));
   return nav;
+}
+
+/** Панель режима: drag-drop KMZ для офлайн-просмотра. */
+function modeBar(): HTMLElement {
+  const bar = el("div", { class: "mode-bar" });
+  bar.append(el("span", { class: "mode-label", text: "Режим: API (онлайн)" }));
+
+  const drop = el("label", {
+    class: "kmz-drop",
+    text: offlineKmz
+      ? `KMZ загружен: ${offlineKmz.placemarks.length} placemark'ов`
+      : "Перетащите .kmz сюда или кликните (офлайн-просмотр)",
+  });
+  const input = el("input") as HTMLInputElement;
+  input.type = "file";
+  input.accept = ".kmz";
+  input.style.display = "none";
+  drop.append(input);
+
+  const loadFile = async (file: File): Promise<void> => {
+    try {
+      offlineKmz = await parseKmzFile(file);
+      drop.firstChild!.textContent = `KMZ загружен: ${offlineKmz.placemarks.length} placemark'ов. Откройте объект по cad.`;
+    } catch (err) {
+      drop.firstChild!.textContent = `Ошибка KMZ: ${(err as Error).message}`;
+    }
+  };
+
+  input.addEventListener("change", () => {
+    const f = input.files?.[0];
+    if (f) void loadFile(f);
+  });
+  drop.addEventListener("dragover", (ev) => {
+    ev.preventDefault();
+    drop.classList.add("dragover");
+  });
+  drop.addEventListener("dragleave", () => drop.classList.remove("dragover"));
+  drop.addEventListener("drop", (ev) => {
+    ev.preventDefault();
+    drop.classList.remove("dragover");
+    const f = ev.dataTransfer?.files?.[0];
+    if (f) void loadFile(f);
+  });
+
+  bar.append(drop);
+  return bar;
 }
 
 window.addEventListener("hashchange", () => void route());
