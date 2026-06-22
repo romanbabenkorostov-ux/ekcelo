@@ -142,3 +142,27 @@ body {
   background: var(--accent); color: white;
 }
 .badge-source.kmz { background: #7f007f; }
+
+/* FE-3: карта */
+.map-box { margin: 16px 0; }
+.leaflet-host { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+
+/* FE-3: гранты */
+.grants { background: var(--bg-card); border: 1px solid var(--border);
+          border-radius: 8px; padding: 20px; }
+.grants-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+.grants-table th { text-align: left; color: var(--fg-muted); font-size: 12px;
+                   border-bottom: 1px solid var(--border); padding: 6px 8px; }
+.grants-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.btn-revoke { background: none; border: 1px solid #c0392b; color: #c0392b;
+              border-radius: 5px; padding: 3px 10px; cursor: pointer; font-size: 12px; }
+.btn-revoke:hover { background: #c0392b; color: white; }
+.grant-form { display: grid; gap: 10px; margin-top: 16px;
+              padding-top: 16px; border-top: 1px solid var(--border); max-width: 420px; }
+.grant-form .field { display: grid; gap: 4px; font-size: 13px; }
+.grant-form .field span { color: var(--fg-muted); }
+.grant-form input, .grant-form select {
+  padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
+.btn-grant { background: var(--accent); color: white; border: none;
+             border-radius: 6px; padding: 9px; cursor: pointer; font-size: 14px; }
+.btn-grant:hover { opacity: 0.9; }

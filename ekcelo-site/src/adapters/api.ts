@@ -16,6 +16,8 @@
 
 import type {
   CatalogCard,
+  Grant,
+  GrantCreate,
   OwnershipGraph,
   ResourceKind,
   ViewModel,
@@ -85,11 +87,36 @@ export class ApiClient {
     return `${this.baseUrl}/bundles/${encodeURIComponent(bundleId)}/download?fmt=${fmt}`;
   }
 
-  private async json<T>(path: string): Promise<T> {
+  // ── Гранты (C6 RBAC, FE-3) ──────────────────────────────────────────────
+
+  /** Список грантов текущего пользователя (GET /grants/me). */
+  async getMyGrants(): Promise<Grant[]> {
+    return this.json<Grant[]>("/grants/me");
+  }
+
+  /** Выдать грант (POST /grants). 201 → созданный грант. */
+  async createGrant(body: GrantCreate): Promise<Grant> {
+    return this.json<Grant>("/grants", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
+
+  /** Отозвать грант (DELETE /grants/{id}). 204. */
+  async revokeGrant(grantId: string): Promise<void> {
+    await this.json<void>(`/grants/${encodeURIComponent(grantId)}`, {
+      method: "DELETE",
+    });
+  }
+
+  private async json<T>(path: string, init: RequestInit = {}): Promise<T> {
     const url = this.baseUrl + this.proxiedPath(path);
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (init.body) headers["Content-Type"] = "application/json";
     const resp = await this.fetchImpl(url, {
       credentials: "include",
-      headers: { Accept: "application/json" },
+      ...init,
+      headers: { ...headers, ...(init.headers as Record<string, string>) },
     });
     if (resp.status === 401) {
       this.onUnauthorized?.();
@@ -98,6 +125,9 @@ export class ApiClient {
     if (!resp.ok) {
       const detail = await this.extractDetail(resp);
       throw new ApiError(resp.status, detail);
+    }
+    if (resp.status === 204) {
+      return undefined as T;
     }
     return (await resp.json()) as T;
   }
