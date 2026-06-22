@@ -108,3 +108,37 @@ body {
 .graph-edges { padding-left: 24px; font-size: 13px; color: var(--fg-muted); }
 
 .empty, .muted { color: var(--fg-muted); font-style: italic; }
+
+/* FE-2: SVG-граф */
+.graph-svg { width: 100%; height: auto; max-height: 460px; }
+.graph-svg .edge { stroke: var(--border); stroke-width: 1.5; }
+.graph-svg .edge-active { stroke: var(--accent); stroke-width: 2.5; }
+.graph-svg .gnode circle {
+  fill: var(--bg-card); stroke: var(--fg-muted); stroke-width: 2; cursor: pointer;
+}
+.graph-svg .gnode-active circle { stroke: var(--accent); stroke-width: 3; }
+.graph-svg .gnode text { font-size: 11px; fill: var(--fg); pointer-events: none; }
+.graph-svg .gnode-right circle { stroke: var(--accent); }
+.graph-svg .gnode-building circle, .graph-svg .gnode-room circle { fill: #f3e8ff; stroke: #7f007f; }
+.graph-svg .gnode-land circle { fill: #e8f5e8; stroke: #007f00; }
+.graph-svg .gnode-beneficiary_legal circle { fill: #fff4e6; stroke: #8b4513; }
+.graph-svg .gnode-beneficiary_person circle { fill: #f0f8e8; stroke: #5a8b13; }
+.graph-svg .gnode:focus { outline: none; }
+.graph-svg .gnode:focus circle { stroke: var(--accent); stroke-width: 3; }
+
+/* FE-2: режим/KMZ панель */
+.mode-bar {
+  display: flex; gap: 12px; align-items: center; padding: 8px 0;
+  border-bottom: 1px solid var(--border); margin-bottom: 12px; flex-wrap: wrap;
+}
+.mode-bar .mode-label { font-size: 12px; color: var(--fg-muted); }
+.kmz-drop {
+  border: 2px dashed var(--border); border-radius: 8px; padding: 10px 16px;
+  font-size: 13px; color: var(--fg-muted); cursor: pointer;
+}
+.kmz-drop.dragover { border-color: var(--accent); background: #f0f5ff; }
+.badge-source {
+  font-size: 11px; padding: 2px 8px; border-radius: 4px;
+  background: var(--accent); color: white;
+}
+.badge-source.kmz { background: #7f007f; }
