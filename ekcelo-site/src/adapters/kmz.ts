@@ -201,10 +201,10 @@ function parsePlacemark(pm: Element): KmzPlacemark {
   };
 }
 
-/** Короткая метка из description: текст до первого «·», без `<br/>`. */
+/** Короткая метка из description: текст до первого «·», без HTML-тегов. */
 function descriptionLabel(desc: string): string {
   return (desc.split("·")[0] ?? "")
-    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<[^>]*>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
