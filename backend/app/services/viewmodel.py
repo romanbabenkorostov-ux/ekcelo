@@ -42,6 +42,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from backend.app.services.geo import primary_geo_for_asset
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Pydantic-зеркало `viewmodel.schema.json`
@@ -286,7 +288,7 @@ def build_object_viewmodel(
             etp=_load_etp_block(conn, cad),
         )
         ownership = _load_ownership(conn, cad, as_of=as_of)
-        geo = Geo()  # stub для C1; геометрию даёт C3
+        geo = _load_geo_from_section7(conn, "object", cad, as_of=as_of)
         temporal = Temporal(
             extract_date=_latest_extract_date(conn, cad),
             as_of_date=as_of,
@@ -301,6 +303,26 @@ def build_object_viewmodel(
         )
     finally:
         conn.close()
+
+
+def _load_geo_from_section7(
+    conn: sqlite3.Connection,
+    asset_type: str,
+    asset_id: str,
+    *,
+    as_of: str | None = None,
+) -> Geo:
+    """ViewModel.geo из §7 (ADR-002). Пустой Geo() если §7 нет или активу
+    ничего не привязано — поведение совместимое с C1-stub."""
+    if not _table_exists(conn, "asset_geo_link"):
+        return Geo()
+    snap = primary_geo_for_asset(conn, asset_type, asset_id, as_of=as_of)
+    if snap is None:
+        return Geo()
+    # Конвенция проекта: center=[lon, lat] (см. MENTAL_CHECK_REPORT.md).
+    # GeoSnapshot.point хранит (lat, lon) — инвертируем.
+    center = [snap.point[1], snap.point[0]] if snap.point else None
+    return Geo(center=center, geometry=snap.contour)
 
 
 def _load_etp_block(conn: sqlite3.Connection, cad: str) -> dict[str, Any] | None:
@@ -475,7 +497,7 @@ def build_lot_viewmodel(
             id=lot_id,
             physical=physical,
             ownership=ownership,
-            geo=Geo(),
+            geo=_load_geo_from_section7(conn, "lot", lot_id, as_of=as_of),
             temporal=temporal,
             members=members,
         )
