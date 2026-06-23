@@ -21,8 +21,9 @@ M3 даёт инструменты + endpoints управления гранта
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime
-from typing import Annotated, Callable
+from typing import Annotated, Any, Callable
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -107,6 +108,36 @@ def require_action(
             )
 
     return _dependency
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Cycle 15 M5 — фильтр каталога по VIEW-грантам
+# ─────────────────────────────────────────────────────────────────────────────
+
+_CARD_KIND_TO_RESOURCE: dict[str, ResourceType] = {
+    "object": ResourceType.OBJECT,
+    "lot": ResourceType.LOT,
+}
+
+
+def filter_catalog_by_grants(
+    cards: Iterable[Any],
+    principal: Principal,
+    store: GrantStore,
+) -> list[Any]:
+    """Оставляет карточки, для которых у `principal` есть VIEW-грант.
+
+    Карточка имеет атрибуты `kind` ("object" | "lot") и `id`. superadmin
+    минует фильтр (см. `can`). Неизвестный `kind` → отбрасываем (явно безопаснее).
+    """
+    out: list[Any] = []
+    for card in cards:
+        rtype = _CARD_KIND_TO_RESOURCE.get(card.kind)
+        if rtype is None:
+            continue
+        if can(principal, Action.VIEW, Resource(rtype, card.id), store):
+            out.append(card)
+    return out
 
 
 # ─────────────────────────────────────────────────────────────────────────────
