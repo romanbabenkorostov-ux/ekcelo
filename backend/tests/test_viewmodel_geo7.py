@@ -121,6 +121,33 @@ def test_geo_bitemporal_as_of_after_valid_from(db_with_section7_filled: Path):
 #  Lot ViewModel
 # ─────────────────────────────────────────────────────────────────────────────
 
+def test_centroid_fallback_when_only_polygon(tmp_path: Path):
+    """Если у geo_entity только polygon (без point) — center = bbox-centroid."""
+    p = tmp_path / "polyonly.sqlite"
+    _make_db(p)
+    _apply_section7(p)
+    conn = sqlite3.connect(p)
+    conn.execute("PRAGMA foreign_keys = ON")
+    uid = register_geo(conn, "поле без точки", source="kmz")
+    add_contour(conn, uid, {"type": "Polygon",
+        "coordinates": [[[37.0, 45.0], [38.0, 45.0], [38.0, 46.0], [37.0, 46.0], [37.0, 45.0]]]},
+        "2026-06-01")
+    link_asset(conn, "object", TEST_CAD, uid, "2026-06-01")
+    conn.commit(); conn.close()
+
+    vm = build_object_viewmodel(p, TEST_CAD)
+    # bbox = [37,45]–[38,46] → центр [37.5, 45.5]
+    assert vm.geo.center == [37.5, 45.5]
+    assert vm.geo.geometry["type"] == "Polygon"
+
+
+def test_point_preferred_over_centroid_when_both_present(db_with_section7_filled: Path):
+    """Если есть и point, и polygon — center из point, не centroid."""
+    vm = build_object_viewmodel(db_with_section7_filled, TEST_CAD)
+    # В фикстуре point=(45.02, 37.75) → [37.75, 45.02], НЕ bbox центр [37.75, 45.025]
+    assert vm.geo.center == [37.75, 45.02]
+
+
 def test_lot_geo_filled_from_section7(tmp_path: Path):
     """Lot тоже получает geo из §7 (asset_type='lot')."""
     p = tmp_path / "lot.sqlite"

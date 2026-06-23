@@ -305,6 +305,31 @@ def build_object_viewmodel(
         conn.close()
 
 
+def _polygon_bbox_center(geometry: dict[str, Any] | None) -> list[float] | None:
+    """Простой bbox-центр первого внешнего кольца Polygon/MultiPolygon.
+
+    Не геодезический centroid (для маленьких полигонов в WGS84 разница <1м),
+    но без зависимостей. Возвращает [lon, lat] или None, если геометрия
+    нечитаема.
+    """
+    if not geometry:
+        return None
+    coords = geometry.get("coordinates")
+    if not coords:
+        return None
+    if geometry.get("type") == "Polygon":
+        ring = coords[0]
+    elif geometry.get("type") == "MultiPolygon":
+        ring = coords[0][0] if coords[0] else None
+    else:
+        return None
+    if not ring:
+        return None
+    lons = [p[0] for p in ring]
+    lats = [p[1] for p in ring]
+    return [(min(lons) + max(lons)) / 2, (min(lats) + max(lats)) / 2]
+
+
 def _load_geo_from_section7(
     conn: sqlite3.Connection,
     asset_type: str,
@@ -313,7 +338,11 @@ def _load_geo_from_section7(
     as_of: str | None = None,
 ) -> Geo:
     """ViewModel.geo из §7 (ADR-002). Пустой Geo() если §7 нет или активу
-    ничего не привязано — поведение совместимое с C1-stub."""
+    ничего не привязано — поведение совместимое с C1-stub.
+
+    Если у geo_entity есть и point, и contour — center из point (приоритет).
+    Если только contour — centroid bbox.
+    """
     if not _table_exists(conn, "asset_geo_link"):
         return Geo()
     snap = primary_geo_for_asset(conn, asset_type, asset_id, as_of=as_of)
@@ -321,7 +350,10 @@ def _load_geo_from_section7(
         return Geo()
     # Конвенция проекта: center=[lon, lat] (см. MENTAL_CHECK_REPORT.md).
     # GeoSnapshot.point хранит (lat, lon) — инвертируем.
-    center = [snap.point[1], snap.point[0]] if snap.point else None
+    if snap.point:
+        center = [snap.point[1], snap.point[0]]
+    else:
+        center = _polygon_bbox_center(snap.contour)
     return Geo(center=center, geometry=snap.contour)
 
 

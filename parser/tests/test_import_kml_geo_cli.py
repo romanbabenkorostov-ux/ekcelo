@@ -188,6 +188,138 @@ def test_cli_no_date_in_filename_requires_flag(tmp_path: Path, capsys):
     assert "не удалось извлечь дату" in capsys.readouterr().err
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+#  F: Project-KMZ (CONTRACT_KMZ.md) — prefix routing + ExtendedData
+# ─────────────────────────────────────────────────────────────────────────────
+
+KML_PROJECT = """<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document>
+
+<Placemark id="cad_zu_23-15-0000000-2267"><name>ЗУ 2267</name>
+  <styleUrl>#cad_zu_default</styleUrl>
+  <ExtendedData>
+    <Data name="cad_number"><value>23:15:0000000:2267</value></Data>
+    <Data name="object_type"><value>земельный участок</value></Data>
+  </ExtendedData>
+  <Polygon><outerBoundaryIs><LinearRing><coordinates>
+    37.7,45.0 37.8,45.0 37.75,45.05 37.7,45.0
+  </coordinates></LinearRing></outerBoundaryIs></Polygon>
+</Placemark>
+
+<Placemark id="cad_oks_23-15-0314001-1594"><name>ОКС склад</name>
+  <styleUrl>#cad_oks_default</styleUrl>
+  <ExtendedData>
+    <Data name="cad_number"><value>23:15:0314001:1594</value></Data>
+    <Data name="parent_cad"><value>23:15:0000000:2267</value></Data>
+  </ExtendedData>
+  <Polygon><outerBoundaryIs><LinearRing><coordinates>
+    37.77,45.07 37.78,45.07 37.775,45.075 37.77,45.07
+  </coordinates></LinearRing></outerBoundaryIs></Polygon>
+</Placemark>
+
+<Placemark id="photoPin_23-15-0000000-2267_1"><name>фото 1</name>
+  <styleUrl>#photoPin_yellow</styleUrl>
+  <ExtendedData>
+    <Data name="cad_number"><value>23:15:0000000:2267</value></Data>
+  </ExtendedData>
+  <Point><coordinates>37.755,45.021</coordinates></Point>
+</Placemark>
+
+<Placemark id="cad_ben_7707083893"><name>Бенефициар</name>
+  <styleUrl>#cad_ben_default</styleUrl>
+  <ExtendedData>
+    <Data name="ben_inn"><value>7707083893</value></Data>
+  </ExtendedData>
+  <Point><coordinates>37.62,55.75</coordinates></Point>
+</Placemark>
+
+</Document></kml>
+"""
+
+
+def test_project_kmz_uses_extended_data_cad(conn):
+    s = import_kml(conn, KML_PROJECT, "2026-06-01")
+    # 4 placemark: 3 с cad_number в ExtendedData, 1 ben (без линка)
+    assert s.geo_created == 4
+    rows = conn.execute(
+        "SELECT asset_type, asset_id, role FROM asset_geo_link ORDER BY asset_id, role"
+    ).fetchall()
+    types = {(r[0], r[1], r[2]) for r in rows}
+    # cad_zu → asset_type=land; cad_oks → oks; photoPin → object с role=photo
+    assert ("land", "23:15:0000000:2267", "primary") in types
+    assert ("oks", "23:15:0314001:1594", "primary") in types
+    assert ("object", "23:15:0000000:2267", "photo") in types
+
+
+def test_project_kmz_ben_skipped_from_links(conn):
+    """cad_ben_* — geo создаётся, но БЕЗ asset_geo_link."""
+    import_kml(conn, KML_PROJECT, "2026-06-01")
+    ben_geo = conn.execute(
+        "SELECT geo_uuid FROM geo_entity WHERE name LIKE 'Бенефициар%'"
+    ).fetchone()
+    assert ben_geo is not None
+    links = conn.execute(
+        "SELECT COUNT(*) FROM asset_geo_link WHERE geo_uuid=?", (ben_geo[0],)
+    ).fetchone()[0]
+    assert links == 0
+
+
+def test_project_kmz_photopin_uses_photo_role(conn):
+    """photoPin_* → asset_geo_link с role='photo', не 'primary'."""
+    import_kml(conn, KML_PROJECT, "2026-06-01")
+    photo_links = conn.execute(
+        "SELECT asset_id, role FROM asset_geo_link WHERE role='photo'"
+    ).fetchall()
+    assert photo_links == [("23:15:0000000:2267", "photo")]
+
+
+def test_extended_data_priority_over_regex(conn):
+    """ExtendedData.cad_number перебивает regex из description."""
+    kml = """<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document><Placemark>
+  <name/>
+  <description><![CDATA[Не тот кадастр: 11:11:1111111:1111]]></description>
+  <ExtendedData><Data name="cad_number"><value>22:22:2222222:2222</value></Data></ExtendedData>
+  <Polygon><outerBoundaryIs><LinearRing><coordinates>
+    37,45 38,45 37.5,46 37,45
+  </coordinates></LinearRing></outerBoundaryIs></Polygon>
+</Placemark></Document></kml>"""
+    import_kml(conn, kml, "2026-06-01")
+    row = conn.execute(
+        "SELECT asset_id FROM asset_geo_link WHERE role='primary'"
+    ).fetchone()
+    assert row[0] == "22:22:2222222:2222"
+
+
+def test_prefix_routing_works_without_extended_data(conn):
+    """Префикс выбирает asset_type даже без ExtendedData."""
+    kml = """<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document><Placemark id="cad_room_99-99-9999999-99">
+  <name/>
+  <description><![CDATA[99:99:9999999:99 комната]]></description>
+  <styleUrl>#cad_room_default</styleUrl>
+  <Polygon><outerBoundaryIs><LinearRing><coordinates>
+    37,45 38,45 37.5,46 37,45
+  </coordinates></LinearRing></outerBoundaryIs></Polygon>
+</Placemark></Document></kml>"""
+    import_kml(conn, kml, "2026-06-01")
+    row = conn.execute(
+        "SELECT asset_type, asset_id FROM asset_geo_link WHERE role='primary'"
+    ).fetchone()
+    assert row == ("room", "99:99:9999999:99")
+
+
+def test_yandex_kml_still_works_without_extended_data(conn):
+    """Регресс: старый Yandex-формат (без ExtendedData, без префиксов) работает."""
+    s = import_kml(conn, KML_SAMPLE, "2026-06-01")
+    assert s.primary_links == 2
+    # asset_type — дефолтный 'object'
+    types = {r[0] for r in conn.execute(
+        "SELECT DISTINCT asset_type FROM asset_geo_link WHERE role='primary'"
+    ).fetchall()}
+    assert types == {"object"}
+
+
 def test_cli_kmz_unpacks_inner_kml(tmp_path: Path):
     kmz_path = tmp_path / "Олимп_15-06-2026.kmz"
     with zipfile.ZipFile(kmz_path, "w") as z:

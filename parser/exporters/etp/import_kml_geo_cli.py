@@ -38,6 +38,23 @@ CAD_RE = re.compile(r"\d+:\d+:\d+:\d+")
 HTML_RE = re.compile(r"<[^>]*>")
 DATE_RE = re.compile(r"(\d{2})-(\d{2})-(\d{4})")
 
+# CONTRACT_KMZ.md §5: префиксы Style id / styleUrl / Placemark@id.
+# Маппинг к asset_type §7 (ASSET_TYPES в backend/app/services/geo.py).
+PREFIX_TO_ASSET_TYPE: dict[str, str] = {
+    "cad_zu_":     "land",
+    "cad_oks_":    "oks",
+    "cad_ons_":    "oks",       # ОНС = объект незавершённого строительства, sub-tип oks
+    "cad_room_":   "room",
+    "cad_str_":    "object",    # сооружения — общий object-тип в §7
+    "cad_bu_":     "bu",
+    "cad_eq_":     "equipment",
+    "photoPin_":   "object",    # геотег фото — линк role='photo'
+}
+# Префиксы, которые НЕ создают asset_geo_link (только geo_entity без привязки).
+# `cad_ben_` — бенефициары, точка на юр.адресе, не «гео-объект».
+# `cad_exp_` — выписки, не гео.
+PREFIX_SKIP_LINK = ("cad_ben_", "cad_exp_")
+
 
 @dataclass
 class ImportStats:
@@ -75,6 +92,41 @@ def read_kml_text(path: Path) -> str:
                     return z.read(name).decode("utf-8")
             raise ValueError(f"{path}: KMZ не содержит .kml внутри")
     return path.read_text(encoding="utf-8")
+
+
+def parse_extended_data(pm) -> dict[str, str]:
+    """Читает <ExtendedData><Data name=K><value>V</value></Data> в dict.
+
+    CONTRACT_KMZ §A.9: машиночитаемый якорь — `cad_number`, `object_type`,
+    `parent_cad`, `z_meters_top`, `bu_id`, `ben_inn`, etc. Возвращает плоский
+    dict; пустой если нет.
+    """
+    out: dict[str, str] = {}
+    for d in pm.findall(f".//{KML_NS}ExtendedData/{KML_NS}Data"):
+        k = d.get("name")
+        v_el = d.find(f"{KML_NS}value")
+        if k and v_el is not None and v_el.text:
+            out[k] = v_el.text.strip()
+    return out
+
+
+def detect_prefix(pm) -> str | None:
+    """Находит CONTRACT_KMZ-префикс в styleUrl или Placemark@id.
+
+    Возвращает префикс (с подчёркиванием, например 'cad_zu_') или None.
+    """
+    style_el = pm.find(f"{KML_NS}styleUrl")
+    candidates: list[str] = []
+    if style_el is not None and style_el.text:
+        candidates.append(style_el.text.lstrip("#"))
+    pid = pm.get("id")
+    if pid:
+        candidates.append(pid)
+    for c in candidates:
+        for prefix in (*PREFIX_TO_ASSET_TYPE, *PREFIX_SKIP_LINK):
+            if c.startswith(prefix):
+                return prefix
+    return None
 
 
 def parse_polygon(pm) -> dict | None:
@@ -130,18 +182,44 @@ def import_kml(
         desc = (desc_el.text or "") if desc_el is not None else ""
         raw_name = (name_el.text or "") if name_el is not None else ""
 
-        cads = list(dict.fromkeys(CAD_RE.findall(desc) + CAD_RE.findall(raw_name)))
-        primary_cad = cads[0] if cads else None
-        secondary_cads = cads[1:]
+        # ExtendedData (CONTRACT_KMZ §A.9) — приоритет над регексами.
+        ext = parse_extended_data(pm)
+        prefix = detect_prefix(pm)
+
+        # asset_type: prefix > CLI-default
+        pm_asset_type = asset_type
+        skip_link = False
+        if prefix:
+            if prefix in PREFIX_SKIP_LINK:
+                skip_link = True
+            else:
+                pm_asset_type = PREFIX_TO_ASSET_TYPE.get(prefix, asset_type)
+
+        # cad: ExtendedData > regex
+        if "cad_number" in ext and CAD_RE.fullmatch(ext["cad_number"]):
+            primary_cad = ext["cad_number"]
+            secondary_cads = [
+                c for c in CAD_RE.findall(desc) + CAD_RE.findall(raw_name)
+                if c != primary_cad
+            ]
+            secondary_cads = list(dict.fromkeys(secondary_cads))
+        else:
+            cads = list(dict.fromkeys(CAD_RE.findall(desc) + CAD_RE.findall(raw_name)))
+            primary_cad = cads[0] if cads else None
+            secondary_cads = cads[1:]
+
         label = raw_name or description_label(desc) or (primary_cad or "Без названия")
         poly = parse_polygon(pm)
         pt = parse_point(pm)
+
+        # photoPin_* — линк role='photo' (а не 'primary'), даже если cad есть.
+        primary_role = "photo" if prefix == "photoPin_" else "primary"
 
         if dry_run:
             s.geo_created += 1
             if poly: s.contours += 1
             if pt: s.points += 1
-            if primary_cad:
+            if primary_cad and not skip_link:
                 s.primary_links += 1
                 s.secondary_links += len(secondary_cads)
             else:
@@ -149,7 +227,9 @@ def import_kml(
             continue
 
         # Идемпотентность на уровне линка (geo_entity всё равно append).
-        if primary_cad and _link_exists(conn, asset_type, primary_cad, "primary", valid_from):
+        if primary_cad and not skip_link and _link_exists(
+            conn, pm_asset_type, primary_cad, primary_role, valid_from
+        ):
             s.skipped_existing += 1
             continue
 
@@ -162,13 +242,13 @@ def import_kml(
             add_point(conn, uid, pt[0], pt[1], valid_from, source="kmz")
             s.points += 1
 
-        if primary_cad:
-            link_asset(conn, asset_type, primary_cad, uid, valid_from,
-                       role="primary", source="kmz")
+        if primary_cad and not skip_link:
+            link_asset(conn, pm_asset_type, primary_cad, uid, valid_from,
+                       role=primary_role, source="kmz")
             s.primary_links += 1
             for sc in secondary_cads:
-                if not _link_exists(conn, asset_type, sc, "reference", valid_from):
-                    link_asset(conn, asset_type, sc, uid, valid_from,
+                if not _link_exists(conn, pm_asset_type, sc, "reference", valid_from):
+                    link_asset(conn, pm_asset_type, sc, uid, valid_from,
                                role="reference", source="kmz")
                     s.secondary_links += 1
         else:
