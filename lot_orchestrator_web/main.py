@@ -114,19 +114,12 @@ def create_app(
     elif persistence is not None:
         configure_store(persistence)
     app.state.enforce_rbac = enforce_rbac
-    # Cycle 16: rate-limiter на auth-провалы (используется auth middleware).
-    from lot_orchestrator_web.ratelimit import RateLimitConfig, RateLimiter
-    app.state.rate_limiter = RateLimiter(RateLimitConfig.from_env())
     app.mount("/static", StaticFiles(directory=_HERE / "static"), name="static")
     _register_routes(app, rbac_enforce=enforce_rbac)
     # Cycle 15 M3: RBAC grant-management endpoints (POST/DELETE /grants,
     # GET /grants/me). Активны всегда; требуют grant_store (иначе 503).
     from lot_orchestrator_web.rbac_api import register_grant_routes
     register_grant_routes(app)
-    # Cycle 14 M2: browser code-flow роуты (/auth/login, /auth/callback).
-    # Регистрируются если EKCELO_OIDC_CLIENT_ID задан (browser-flow сконфигурирован).
-    from lot_orchestrator_web.oauth_browser import register_auth_routes
-    app.state.browser_auth = register_auth_routes(app)
     # Auth middleware последним — оборачивает все routes (включая `/`).
     # Стратегия: OIDC (cycle 14) > Basic (cycle 12-13) > none. См. oauth.py.
     app.state.auth_strategy = maybe_install_auth(
@@ -398,12 +391,18 @@ def _register_routes(app: FastAPI, *, rbac_enforce: bool = False) -> None:
 
     @app.get("/catalog")
     async def catalog_endpoint(
+        request: Request,
         q: str | None = None,
         kind: str | None = None,
     ) -> JSONResponse:
         """Список карточек объектов/лотов (`openapi.yaml::/catalog`).
 
         Источник — `EKCELO_DB` (или `ekcelo_db=` в `create_app`).
+
+        Cycle 15 M5: если включён `enforce_rbac` и сконфигурирован
+        `grant_store` — карточки пост-фильтруются по VIEW-грантам principal'а
+        (superadmin минует; client без грантов получает `[]`). Без enforcement —
+        no-op (backward-compat).
         """
         from backend.app.services.viewmodel import build_catalog
 
@@ -414,6 +413,14 @@ def _register_routes(app: FastAPI, *, rbac_enforce: bool = False) -> None:
                 detail="kind должен быть 'object' либо 'lot'",
             )
         cards = build_catalog(db, q=q, kind=kind)  # type: ignore[arg-type]
+        if getattr(app.state, "enforce_rbac", False):
+            store = getattr(app.state, "grant_store", None)
+            if store is not None:
+                from lot_orchestrator_web.rbac_api import (
+                    filter_catalog_by_grants,
+                    get_principal,
+                )
+                cards = filter_catalog_by_grants(cards, get_principal(request), store)
         return JSONResponse(
             content=[c.model_dump(exclude_none=True) for c in cards]
         )
