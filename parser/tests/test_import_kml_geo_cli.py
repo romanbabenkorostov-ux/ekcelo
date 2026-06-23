@@ -320,6 +320,80 @@ def test_yandex_kml_still_works_without_extended_data(conn):
     assert types == {"object"}
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+#  Stub objects — авто-создание записей в `objects` для cad'ов из KML
+# ─────────────────────────────────────────────────────────────────────────────
+
+@pytest.fixture
+def conn_with_objects(tmp_path: Path) -> sqlite3.Connection:
+    """БД с минимальным §1 (objects) + §7 — как в реальном init_db_cli."""
+    c = sqlite3.connect(tmp_path / "geo_with_objects.sqlite")
+    c.execute("PRAGMA foreign_keys = ON")
+    c.executescript("""
+        CREATE TABLE objects (
+            cad_number TEXT PRIMARY KEY, object_type TEXT NOT NULL,
+            address TEXT, area REAL, category TEXT, permitted_use TEXT,
+            purpose TEXT, floors INTEGER
+        );
+    """)
+    c.executescript(MIGRATION_0003.read_text(encoding="utf-8"))
+    yield c
+    c.close()
+
+
+def test_stub_objects_created_by_default(conn_with_objects):
+    """default create_stub_objects=True → cad'ы из KML появляются в objects."""
+    s = import_kml(conn_with_objects, KML_SAMPLE, "2026-06-01")
+    assert s.stub_objects_created == 3   # :2267 (primary), :623 (primary), :40 (reference)
+    rows = conn_with_objects.execute(
+        "SELECT cad_number, object_type, purpose FROM objects ORDER BY cad_number"
+    ).fetchall()
+    assert ("23:15:0000000:2267", "land", "kmz-stub") in rows
+    assert ("23:15:0314001:40", "land", "kmz-stub") in rows
+    assert ("23:15:0314001:623", "land", "kmz-stub") in rows
+
+
+def test_stub_objects_disabled_by_flag(conn_with_objects):
+    s = import_kml(conn_with_objects, KML_SAMPLE, "2026-06-01",
+                   create_stub_objects=False)
+    assert s.stub_objects_created == 0
+    cnt = conn_with_objects.execute("SELECT COUNT(*) FROM objects").fetchone()[0]
+    assert cnt == 0
+
+
+def test_stub_does_not_overwrite_existing_object(conn_with_objects):
+    """Если в objects уже есть полноценная запись — stub НЕ перезаписывает."""
+    conn_with_objects.execute(
+        "INSERT INTO objects(cad_number, object_type, purpose, area) "
+        "VALUES ('23:15:0000000:2267', 'building', 'настоящий объект', 1234.5)"
+    )
+    s = import_kml(conn_with_objects, KML_SAMPLE, "2026-06-01")
+    # :623 и :40 — stubs (новые), :2267 уже был, не stub
+    assert s.stub_objects_created == 2
+    row = conn_with_objects.execute(
+        "SELECT object_type, purpose, area FROM objects WHERE cad_number='23:15:0000000:2267'"
+    ).fetchone()
+    assert row == ("building", "настоящий объект", 1234.5)
+
+
+def test_stub_object_type_guessed_from_prefix(conn_with_objects):
+    s = import_kml(conn_with_objects, KML_PROJECT, "2026-06-01")
+    rows = dict(conn_with_objects.execute(
+        "SELECT cad_number, object_type FROM objects"
+    ).fetchall())
+    # cad_zu_ → land, cad_oks_ → building
+    assert rows["23:15:0000000:2267"] == "land"
+    assert rows["23:15:0314001:1594"] == "building"
+
+
+def test_no_objects_table_skips_stub_creation_silently(conn):
+    """Sandbox-БД только с §7 (без objects) — stub silently skip."""
+    s = import_kml(conn, KML_SAMPLE, "2026-06-01")
+    assert s.stub_objects_created == 0
+    # geo и линки всё равно созданы
+    assert s.primary_links == 2
+
+
 def test_cli_kmz_unpacks_inner_kml(tmp_path: Path):
     kmz_path = tmp_path / "Олимп_15-06-2026.kmz"
     with zipfile.ZipFile(kmz_path, "w") as z:
