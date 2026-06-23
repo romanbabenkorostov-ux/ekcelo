@@ -66,9 +66,10 @@ def validate_db(
     Возвращает список нарушений (пустой = соответствует).
 
     - Все таблицы §1..§5 контракта обязаны существовать с required-колонками.
-    - Таблицы §6 (restorable=false) проверяются только если `require_section6`
-      ИЛИ если они физически присутствуют в БД (тогда — на корректность колонок).
-      Это отражает ADR-001: §6 может отсутствовать в чистом ЕГРН-слепке.
+    - Таблицы §6 и §7 (restorable=false) проверяются только если их слой
+      присутствует в БД (тогда — на корректность колонок). §6 — кроме того,
+      обязателен при `require_section6=True`. §7 (geo entities, ADR-002) —
+      всегда опционален в ЕГРН-слепке.
     - Тип колонки сверяется по SQLite affinity (TEXT/INTEGER/REAL).
     - Лишние колонки в БД НЕ являются нарушением (схема расширяема вперёд).
     """
@@ -79,11 +80,16 @@ def validate_db(
     conn = sqlite3.connect(db_path)
     try:
         for tname, tdef in tables.items():
-            is_s6 = str(tdef.get("section")) == "6"
+            section = str(tdef.get("section"))
+            is_s6 = section == "6"
+            is_s7 = section == "7"
             present = _table_exists(conn, tname)
             if not present:
+                # §7 — всегда опционален; §6 — опционален при require_section6=False.
+                if is_s7:
+                    continue
                 if is_s6 and not require_section6:
-                    continue  # §6 опционален в ЕГРН-слепке
+                    continue
                 violations.append(f"отсутствует таблица: {tname}")
                 continue
             violations.extend(_validate_columns(conn, tname, tdef))

@@ -31,6 +31,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 MIGRATION_0001 = REPO_ROOT / "schema" / "migrations" / "0001_etp_profile.sql"
+MIGRATION_0003 = REPO_ROOT / "schema" / "migrations" / "0003_geo_entities.sql"
 TEMPLATE_YAML = REPO_ROOT / "parser" / "exporters" / "etp" / "templates" / "osv_template.yaml"
 
 # Минимальная схема ЕГРН-слоя — достаточно для FK из object_etp_profile/lots/lot_items.
@@ -92,6 +93,7 @@ def main(argv: list[str] | None = None) -> int:
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(_MIN_EGRN_SCHEMA)
     conn.executescript(MIGRATION_0001.read_text(encoding="utf-8"))
+    conn.executescript(MIGRATION_0003.read_text(encoding="utf-8"))
 
     for cad, ot, addr, area, purpose, floors in _BASELINE_OBJECTS:
         conn.execute(
