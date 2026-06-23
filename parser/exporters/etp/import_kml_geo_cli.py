@@ -55,6 +55,17 @@ PREFIX_TO_ASSET_TYPE: dict[str, str] = {
 # `cad_exp_` — выписки, не гео.
 PREFIX_SKIP_LINK = ("cad_ben_", "cad_exp_")
 
+# Догадка object_type из префикса для stub-записей в `objects`. Намеренно
+# консервативно — реальный object_type перепишется при парсинге ЕГРН-выписки.
+PREFIX_TO_OBJECT_TYPE: dict[str, str] = {
+    "cad_zu_":   "land",
+    "cad_oks_":  "building",
+    "cad_ons_":  "construction",
+    "cad_room_": "room",
+    "cad_str_":  "construction",
+}
+STUB_PURPOSE_MARKER = "kmz-stub"
+
 
 @dataclass
 class ImportStats:
@@ -66,6 +77,7 @@ class ImportStats:
     secondary_links: int = 0
     unlinked: int = 0
     skipped_existing: int = 0
+    stub_objects_created: int = 0
 
 
 def description_label(desc: str) -> str:
@@ -164,6 +176,35 @@ def _link_exists(conn: sqlite3.Connection, asset_type: str, asset_id: str,
     return row is not None
 
 
+def _objects_table_exists(conn: sqlite3.Connection) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='objects'"
+    ).fetchone()
+    return row is not None
+
+
+def _ensure_object_stub(
+    conn: sqlite3.Connection, cad: str, *, object_type_guess: str
+) -> bool:
+    """Создаёт stub-запись в `objects` для cad, если её нет. Маркирует
+    `purpose='kmz-stub'`, чтобы парсер ЕГРН-выписки потом перетирал.
+
+    Возвращает True, если stub был создан; False, если объект уже был.
+
+    Использует `INSERT OR IGNORE` — если запись уже есть (даже не stub),
+    ничего не меняет. Если таблицы `objects` нет (минимальный test-DB
+    с только §7) — silently skip.
+    """
+    if not _objects_table_exists(conn):
+        return False
+    cur = conn.execute(
+        "INSERT OR IGNORE INTO objects(cad_number, object_type, purpose) "
+        "VALUES (?, ?, ?)",
+        (cad, object_type_guess, STUB_PURPOSE_MARKER),
+    )
+    return cur.rowcount > 0
+
+
 def import_kml(
     conn: sqlite3.Connection,
     kml_text: str,
@@ -171,6 +212,7 @@ def import_kml(
     *,
     asset_type: str = "object",
     dry_run: bool = False,
+    create_stub_objects: bool = True,
 ) -> ImportStats:
     root = ET.fromstring(kml_text)
     pms = root.findall(f".//{KML_NS}Placemark")
@@ -243,6 +285,19 @@ def import_kml(
             s.points += 1
 
         if primary_cad and not skip_link:
+            # Создаём stub в `objects`, чтобы build_object_viewmodel не падал
+            # ObjectNotFound. object_type — догадка по префиксу; ЕГРН-выписка
+            # перетрёт при поступлении. Только для asset_type='object'-семейства
+            # (land/oks/room/...), т.е. там где ссылаемся в `objects`.
+            if (create_stub_objects and pm_asset_type in {"object", "land", "oks",
+                                                          "room"}):
+                ot_guess = PREFIX_TO_OBJECT_TYPE.get(prefix or "", "land")
+                if _ensure_object_stub(conn, primary_cad, object_type_guess=ot_guess):
+                    s.stub_objects_created += 1
+                for sc in secondary_cads:
+                    if _ensure_object_stub(conn, sc, object_type_guess=ot_guess):
+                        s.stub_objects_created += 1
+
             link_asset(conn, pm_asset_type, primary_cad, uid, valid_from,
                        role=primary_role, source="kmz")
             s.primary_links += 1
@@ -269,6 +324,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--asset-type", default="object",
                    choices=["object", "lot", "oks", "room", "land", "bu", "equipment"])
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--no-create-stub-objects", dest="create_stub_objects",
+                   action="store_false", default=True,
+                   help="не создавать stub-записи в `objects` для cad'ов из KML. "
+                        "По умолчанию создаются с purpose='kmz-stub'.")
     args = p.parse_args(argv)
 
     if not args.kml.is_file():
@@ -290,6 +349,7 @@ def main(argv: list[str] | None = None) -> int:
         stats = import_kml(
             conn, read_kml_text(args.kml), valid_from,
             asset_type=args.asset_type, dry_run=args.dry_run,
+            create_stub_objects=args.create_stub_objects,
         )
         if not args.dry_run:
             conn.commit()
@@ -306,6 +366,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  reference:       {stats.secondary_links}")
     print(f"  unlinked:        {stats.unlinked}")
     print(f"  skipped (re-run):{stats.skipped_existing}")
+    print(f"  stub objects:    {stats.stub_objects_created} "
+          f"(в `objects`, purpose='{STUB_PURPOSE_MARKER}')")
     return 0
 
 
