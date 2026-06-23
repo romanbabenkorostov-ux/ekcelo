@@ -113,11 +113,15 @@ def egrn_db(tmp_path: Path) -> Path:
 #  load_contract
 # ─────────────────────────────────────────────────────────────────────────────
 
-def test_load_contract_has_8_tables() -> None:
+def test_load_contract_has_12_tables() -> None:
     tables = contract_tables()
     assert set(tables) == {
-        "objects", "entity_registry", "rights", "extracts",
-        "object_restrictions", "object_etp_profile", "lots", "lot_items",
+        # §1..§5
+        "objects", "entity_registry", "rights", "extracts", "object_restrictions",
+        # §6 ЭТП-профиль (ADR-001)
+        "object_etp_profile", "lots", "lot_items",
+        # §7 Geo entities (ADR-002)
+        "geo_entity", "geo_entity_contour", "geo_entity_point", "asset_geo_link",
     }
 
 
@@ -128,6 +132,13 @@ def test_contract_marks_section6_not_restorable() -> None:
         assert str(tables[t]["section"]) == "6"
     for t in ("objects", "entity_registry", "rights", "extracts", "object_restrictions"):
         assert tables[t]["restorable"] is True
+
+
+def test_contract_marks_section7_not_restorable() -> None:
+    tables = contract_tables()
+    for t in ("geo_entity", "geo_entity_contour", "geo_entity_point", "asset_geo_link"):
+        assert tables[t]["restorable"] is False
+        assert str(tables[t]["section"]) == "7"
 
 
 def test_contract_has_version_and_ddl_source() -> None:

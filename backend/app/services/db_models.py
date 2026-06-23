@@ -5,7 +5,7 @@
     python -m backend.app.services.db_codegen --output backend/app/services/db_models.py
 
 Источник: contracts/bundle-db-slice/schema.json
-Sha256 контракта (на момент генерации): 7f329dc5c30ad5b2269b8fbf0c15ec6aac88c2ede929d89c58cbbc5935a65d4e
+Sha256 контракта (на момент генерации): bf71efea24ac138c492d2b9a1e10d9adce783d349e0a3e7a69795e4b41a5d57a
 
 Каждая модель соответствует одной таблице sidecar-схемы Bundle. Используйте
 для типизированного чтения sqlite-row'ов:
@@ -23,7 +23,22 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 
-CONTRACT_SHA256 = '7f329dc5c30ad5b2269b8fbf0c15ec6aac88c2ede929d89c58cbbc5935a65d4e'
+CONTRACT_SHA256 = 'bf71efea24ac138c492d2b9a1e10d9adce783d349e0a3e7a69795e4b41a5d57a'
+
+class AssetGeoLinkRow(BaseModel):
+    """Row из таблицы `asset_geo_link` (§7, restorable=False)."""
+    model_config = ConfigDict(extra='allow')
+
+    link_id: int
+    asset_type: str
+    asset_id: str
+    geo_uuid: str
+    role: str
+    valid_from: str
+    valid_to: str | None = None
+    recorded_at: str
+    source: str
+
 
 class EntityRegistryRow(BaseModel):
     """Row из таблицы `entity_registry` (§2, restorable=True)."""
@@ -49,6 +64,46 @@ class ExtractsRow(BaseModel):
     raw_json: str | None = None
     parsed_at: str | None = None
     parser_version: str | None = None
+
+
+class GeoEntityRow(BaseModel):
+    """Row из таблицы `geo_entity` (§7, restorable=False)."""
+    model_config = ConfigDict(extra='allow')
+
+    geo_uuid: str
+    name: str
+    created_at: str
+    source: str
+    confidence: float
+
+
+class GeoEntityContourRow(BaseModel):
+    """Row из таблицы `geo_entity_contour` (§7, restorable=False)."""
+    model_config = ConfigDict(extra='allow')
+
+    contour_id: int
+    geo_uuid: str
+    geometry: str
+    valid_from: str
+    valid_to: str | None = None
+    recorded_at: str
+    source: str
+    confidence: float
+
+
+class GeoEntityPointRow(BaseModel):
+    """Row из таблицы `geo_entity_point` (§7, restorable=False)."""
+    model_config = ConfigDict(extra='allow')
+
+    point_id: int
+    geo_uuid: str
+    lat: float
+    lon: float
+    valid_from: str
+    valid_to: str | None = None
+    recorded_at: str
+    source: str
+    confidence: float
 
 
 class LotItemsRow(BaseModel):
@@ -138,8 +193,12 @@ class RightsRow(BaseModel):
 
 
 TABLE_TO_MODEL: dict[str, type[BaseModel]] = {
+    'asset_geo_link': AssetGeoLinkRow,
     'entity_registry': EntityRegistryRow,
     'extracts': ExtractsRow,
+    'geo_entity': GeoEntityRow,
+    'geo_entity_contour': GeoEntityContourRow,
+    'geo_entity_point': GeoEntityPointRow,
     'lot_items': LotItemsRow,
     'lots': LotsRow,
     'object_etp_profile': ObjectEtpProfileRow,

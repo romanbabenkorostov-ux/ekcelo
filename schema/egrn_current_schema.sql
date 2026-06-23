@@ -138,3 +138,69 @@ CREATE TABLE IF NOT EXISTS lot_items (
 CREATE INDEX idx_etp_profile_source ON object_etp_profile(source);
 CREATE INDEX idx_lots_primary ON lots(primary_cad_number);
 CREATE INDEX idx_lot_items_cad ON lot_items(cad_number);
+-- =============================================================================
+-- §7 GEO ENTITIES (не-ЕГРН, ADR-002, mirror migration 0003)
+-- =============================================================================
+-- Геосущность (точка/контур) — отдельная сущность, к которой M:N привязываются
+-- активы. История во времени (bitemporal: valid_from/to + recorded_at). При
+-- пересоздании БД из выписок ЕГРН §7 НЕ восстанавливается (как и §6).
+-- Полные комментарии и rationale — в obsidian/Database/geo-entities-7.md.
+
+CREATE TABLE IF NOT EXISTS geo_entity (
+    geo_uuid     TEXT PRIMARY KEY,
+    name         TEXT NOT NULL,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    source       TEXT NOT NULL DEFAULT 'manual',
+    confidence   REAL NOT NULL DEFAULT 1.0,
+    CHECK (confidence >= 0 AND confidence <= 1)
+);
+
+CREATE TABLE IF NOT EXISTS geo_entity_contour (
+    contour_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    geo_uuid     TEXT NOT NULL REFERENCES geo_entity(geo_uuid) ON DELETE CASCADE,
+    geometry     TEXT NOT NULL,
+    valid_from   TEXT NOT NULL,
+    valid_to     TEXT,
+    recorded_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    source       TEXT NOT NULL DEFAULT 'manual',
+    confidence   REAL NOT NULL DEFAULT 1.0,
+    CHECK (valid_to IS NULL OR valid_to > valid_from),
+    CHECK (confidence >= 0 AND confidence <= 1)
+);
+CREATE INDEX IF NOT EXISTS idx_geo_contour_uuid
+    ON geo_entity_contour(geo_uuid, valid_from);
+
+CREATE TABLE IF NOT EXISTS geo_entity_point (
+    point_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    geo_uuid     TEXT NOT NULL REFERENCES geo_entity(geo_uuid) ON DELETE CASCADE,
+    lat          REAL NOT NULL,
+    lon          REAL NOT NULL,
+    valid_from   TEXT NOT NULL,
+    valid_to     TEXT,
+    recorded_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    source       TEXT NOT NULL DEFAULT 'manual',
+    confidence   REAL NOT NULL DEFAULT 1.0,
+    CHECK (valid_to IS NULL OR valid_to > valid_from),
+    CHECK (lat BETWEEN -90 AND 90),
+    CHECK (lon BETWEEN -180 AND 180),
+    CHECK (confidence >= 0 AND confidence <= 1)
+);
+CREATE INDEX IF NOT EXISTS idx_geo_point_uuid
+    ON geo_entity_point(geo_uuid, valid_from);
+
+CREATE TABLE IF NOT EXISTS asset_geo_link (
+    link_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    asset_type   TEXT NOT NULL,
+    asset_id     TEXT NOT NULL,
+    geo_uuid     TEXT NOT NULL REFERENCES geo_entity(geo_uuid) ON DELETE RESTRICT,
+    role         TEXT NOT NULL DEFAULT 'primary',
+    valid_from   TEXT NOT NULL,
+    valid_to     TEXT,
+    recorded_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    source       TEXT NOT NULL DEFAULT 'manual',
+    CHECK (valid_to IS NULL OR valid_to > valid_from)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_asset_geo_unique
+    ON asset_geo_link(asset_type, asset_id, geo_uuid, role, valid_from);
+CREATE INDEX IF NOT EXISTS idx_asset_geo_lookup
+    ON asset_geo_link(asset_type, asset_id, valid_from);

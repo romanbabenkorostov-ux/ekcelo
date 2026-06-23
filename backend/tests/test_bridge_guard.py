@@ -36,6 +36,21 @@ def _slice_table_names() -> set[str]:
     return set(data["tables"].keys())
 
 
+def _slice_tables_for_bridge() -> set[str]:
+    """Таблицы slice, для которых ожидаем синхрон с parser-team full C2.
+
+    §7 (geo entities, ADR-002) — наш не-ЕГРН локальный слой; parser-team пока
+    про него не знает (post 029-stream ещё не отправлен). До adoption — этот
+    слой исключаем из bridge-проверки. Когда parser-team добавит §7 в full C2,
+    фильтр снять.
+    """
+    data = json.loads(_SLICE.read_text(encoding="utf-8"))
+    return {
+        name for name, tdef in data["tables"].items()
+        if str(tdef.get("section")) != "7"
+    }
+
+
 def _read_any(paths: list[Path]) -> str | None:
     """Возвращает контент первого существующего файла; None если все отсутствуют."""
     for p in paths:
@@ -64,7 +79,7 @@ def test_each_slice_table_appears_in_full_c2() -> None:
             "(свежий клон до их работы) — bridge-guard пропущен"
         )
     missing: list[str] = []
-    for tname in sorted(_slice_table_names()):
+    for tname in sorted(_slice_tables_for_bridge()):
         # ищем "objects" как `objects`, "objects ", "objects(", "objects:" и т.п.
         # без жёсткой привязки к синтаксису — текстовый match достаточен.
         if tname not in content:
