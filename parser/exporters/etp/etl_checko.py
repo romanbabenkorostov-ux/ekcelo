@@ -30,6 +30,8 @@ import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from egrn_parser.etp_merge import merge_profile
+
 
 _DEFAULT_SOURCE = "checko"
 _DEFAULT_CONFIDENCE = 0.9
@@ -134,30 +136,23 @@ def _enrich_one(
         item.skipped_reason = "subject_has_no_actionable_fields"
         return item
 
+    # Skip по факту присутствия owner_checko (семантика checko — не трогаем уже
+    # заполненный блок).
     existing = ek.execute(
-        "SELECT legal_extra, source FROM object_etp_profile WHERE cad_number = ?", (cad,)
+        "SELECT legal_extra FROM object_etp_profile WHERE cad_number = ?", (cad,)
     ).fetchone()
-    if existing:
-        legal_extra = json.loads(existing["legal_extra"]) if existing["legal_extra"] else {}
-        if legal_extra.get("owner_checko"):
+    if existing and existing["legal_extra"]:
+        if json.loads(existing["legal_extra"]).get("owner_checko"):
             item.skipped_reason = "owner_checko_already_present"
             return item
-        legal_extra["owner_checko"] = payload
-        item.legal_extra_filled.append("owner_checko")
-        ek.execute(
-            "UPDATE object_etp_profile SET legal_extra=?, updated_at=datetime('now') "
-            "WHERE cad_number=?",
-            (json.dumps(legal_extra, ensure_ascii=False), cad),
-        )
-    else:
-        legal_extra = {"owner_checko": payload}
-        ek.execute(
-            "INSERT INTO object_etp_profile(cad_number, legal_extra, source, confidence) "
-            "VALUES (?,?,?,?)",
-            (cad, json.dumps(legal_extra, ensure_ascii=False), source, confidence),
-        )
-        item.profile_created = True
-        item.legal_extra_filled.append("owner_checko")
+
+    # Единая точка записи §6 — etp_merge.merge_profile (gap-fill: checko не понижает
+    # ROW-источник). commit=False — транзакцию/rollback (dry-run) контролирует CLI.
+    res = merge_profile(
+        ek, cad, {"legal_extra": {"owner_checko": payload}},
+        source=source, confidence=confidence, strategy="gapfill", commit=False)
+    item.profile_created = res["created"]
+    item.legal_extra_filled.append("owner_checko")
     return item
 
 

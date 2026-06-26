@@ -24,6 +24,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
+from egrn_parser.etp_merge import merge_profile
+
 
 DEFAULT_SOURCE = "nspd"
 DEFAULT_CONFIDENCE = 0.8
@@ -153,49 +155,25 @@ def merge_nspd_into_profile(
         report.skipped_reason = "no_actionable_nspd_fields"
         return report
 
-    existing = conn.execute(
-        "SELECT building_extra, legal_extra, source FROM object_etp_profile WHERE cad_number = ?",
-        (cad_number,),
-    ).fetchone()
-
-    if existing:
-        building_extra = json.loads(existing["building_extra"]) if existing["building_extra"] else {}
-        legal_extra = json.loads(existing["legal_extra"]) if existing["legal_extra"] else {}
-    else:
-        building_extra = {}
-        legal_extra = {}
-
-    if building_type and not building_extra.get("building_type"):
+    # Единая точка записи §6 — etp_merge.merge_profile (gap-fill: NSPD не затирает
+    # ручной ввод osv/manual). report заполняется из changed_keys по колонкам.
+    building_extra: dict[str, Any] = {}
+    if building_type:
         building_extra["building_type"] = building_type
-        report.building_extra_filled.append("building_type")
-    if year_built is not None and not building_extra.get("year_built"):
+    if year_built is not None:
         building_extra["year_built"] = year_built
-        report.building_extra_filled.append("year_built")
-    if permitted_uses and not legal_extra.get("use_type_permitted"):
-        legal_extra["use_type_permitted"] = permitted_uses
-        report.legal_extra_filled.append("use_type_permitted")
+    legal_extra = {"use_type_permitted": permitted_uses} if permitted_uses else {}
 
-    if not report.building_extra_filled and not report.legal_extra_filled:
+    res = merge_profile(
+        conn, cad_number,
+        {"building_extra": building_extra, "legal_extra": legal_extra},
+        source=source, confidence=confidence, strategy="gapfill", commit=False)
+
+    report.building_extra_filled = res["changed_keys"].get("building_extra", [])
+    report.legal_extra_filled = res["changed_keys"].get("legal_extra", [])
+    report.profile_created = res["created"]
+    if not report.changed:
         report.skipped_reason = "all_fields_already_filled"
-        return report
-
-    building_json = json.dumps(building_extra, ensure_ascii=False) if building_extra else None
-    legal_json = json.dumps(legal_extra, ensure_ascii=False) if legal_extra else None
-
-    if existing:
-        conn.execute(
-            "UPDATE object_etp_profile SET building_extra=?, legal_extra=?, "
-            "updated_at=datetime('now') WHERE cad_number=?",
-            (building_json, legal_json, cad_number),
-        )
-    else:
-        conn.execute(
-            "INSERT INTO object_etp_profile(cad_number, building_extra, legal_extra, "
-            "source, confidence) VALUES (?,?,?,?,?)",
-            (cad_number, building_json, legal_json, source, confidence),
-        )
-        report.profile_created = True
-
     return report
 
 

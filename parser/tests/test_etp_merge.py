@@ -83,10 +83,10 @@ def test_empty_incoming_ignored():
 def test_unknown_source_rejected():
     c = _db()
     try:
-        EM.merge_profile(c, CAD, {"extras": {}}, source="checko", confidence=0.5)
+        EM.merge_profile(c, CAD, {"extras": {}}, source="gpt5", confidence=0.5)
         assert False
     except ValueError as e:
-        assert "checko" in str(e)
+        assert "gpt5" in str(e)
 
 
 def test_etp_layer_present():
@@ -127,6 +127,42 @@ def test_append_keys_additive_exif_like():
                      source="exif", confidence=0.7, append_keys={"extras": ["advantages"]})
     ex2 = json.loads(c.execute("SELECT extras FROM object_etp_profile").fetchone()[0])
     assert len(ex2["advantages"]) == 2
+
+
+def test_changed_keys_returned_in_order():
+    """changed_keys по колонкам — для report-объектов писателей (nspd/checko)."""
+    c = _db()
+    r1 = EM.merge_profile(c, CAD,
+        {"building_extra": {"building_type": "кирпичное", "year_built": 1975}},
+        source="nspd", confidence=0.8, strategy="gapfill")
+    assert r1["changed_keys"]["building_extra"] == ["building_type", "year_built"]
+    assert r1["created"] is True
+    # повторный nspd: всё уже есть → changed_keys пуст
+    r2 = EM.merge_profile(c, CAD,
+        {"building_extra": {"building_type": "панельное", "year_built": 1975}},
+        source="nspd", confidence=0.8, strategy="gapfill")
+    assert r2["changed_keys"] == {} and r2["fields_changed"] == 0
+
+
+def test_checko_source_accepted_lowest_priority():
+    c = _db()
+    EM.merge_profile(c, CAD, {"legal_extra": {"use_type_permitted": "офис"}},
+                     source="manual", confidence=0.95)
+    res = EM.merge_profile(c, CAD, {"legal_extra": {"owner_checko": {"x": 1}}},
+                           source="checko", confidence=0.9, strategy="gapfill")
+    assert res["changed_keys"]["legal_extra"] == ["owner_checko"]
+    # checko < manual → ROW source остаётся manual
+    assert c.execute("SELECT source FROM object_etp_profile").fetchone()[0] == "manual"
+
+
+def test_commit_false_allows_rollback():
+    """commit=False — запись не коммитится (dry-run CLI может откатить)."""
+    c = _db()
+    EM.merge_profile(c, CAD, {"extras": {"notes": "x"}}, source="osv",
+                     confidence=0.9, commit=False)
+    assert c.execute("SELECT COUNT(*) FROM object_etp_profile").fetchone()[0] == 1
+    c.rollback()
+    assert c.execute("SELECT COUNT(*) FROM object_etp_profile").fetchone()[0] == 0
 
 
 def test_bad_strategy_rejected():

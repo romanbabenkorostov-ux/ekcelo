@@ -21,9 +21,9 @@ import json
 import sqlite3
 from typing import Any, Optional
 
-# Приоритет источников (выше — авторитетнее). checko — field-level (в legal_extra),
-# не ROW-источник (CHECK object_etp_profile.source = osv|exif|manual|nspd|llm).
-SOURCE_PRIORITY = {"manual": 100, "osv": 90, "nspd": 50, "exif": 40, "llm": 30}
+# Приоритет источников (выше — авторитетнее). checko — низший ROW-источник
+# (создаёт новый профиль; над osv/manual/nspd/exif/llm — только gap-fill).
+SOURCE_PRIORITY = {"manual": 100, "osv": 90, "nspd": 50, "exif": 40, "llm": 30, "checko": 20}
 
 _JSON_COLUMNS = ("location_extra", "building_extra", "layout",
                  "legal_extra", "risks", "extras")
@@ -49,25 +49,26 @@ def _load_json(s: Any) -> dict:
     return {}
 
 
-def deep_merge(existing: dict, incoming: dict, *, overwrite: bool) -> tuple[dict, int]:
-    """Слить incoming в existing. Возвращает (результат, число заполненных/изменённых).
+def deep_merge(existing: dict, incoming: dict, *, overwrite: bool) -> tuple[dict, list[str]]:
+    """Слить incoming в existing. Возвращает (результат, список изменённых верхних ключей).
 
     Пустые входные значения пропускаются. `overwrite=False` — заполнять только
     пустые (gap-fill); `True` — входящий выигрывает конфликты (вложенно)."""
     out = dict(existing)
-    changed = 0
+    changed: list[str] = []
     for k, v in (incoming or {}).items():
         if _is_empty(v):
             continue
         if k not in out or _is_empty(out[k]):
             out[k] = v
-            changed += 1
+            changed.append(k)
         elif isinstance(out[k], dict) and isinstance(v, dict):
             out[k], sub = deep_merge(out[k], v, overwrite=overwrite)
-            changed += sub
+            if sub:
+                changed.append(k)
         elif overwrite and out[k] != v:
             out[k] = v
-            changed += 1
+            changed.append(k)
     return out, changed
 
 
@@ -94,7 +95,8 @@ def _append_merge(existing: Any, incoming: Any) -> Any:
 def merge_profile(conn: sqlite3.Connection, cad_number: str,
                   incoming: dict[str, Any], *, source: str,
                   confidence: float, strategy: str = "priority",
-                  append_keys: Optional[dict[str, list[str]]] = None) -> dict[str, Any]:
+                  append_keys: Optional[dict[str, list[str]]] = None,
+                  commit: bool = True) -> dict[str, Any]:
     """Gap-fill merge входящего профиля в object_etp_profile[cad] (единая точка §6).
 
     `incoming` — подмножество JSON-колонок (location_extra/building_extra/layout/
@@ -106,6 +108,9 @@ def merge_profile(conn: sqlite3.Connection, cad_number: str,
       • 'gapfill' — никогда не перезаписывает существующие значения (чистый gap-fill).
     `append_keys` — {колонка: [ключи]} для аддитивного слияния (exif: advantages/
     notes) — объединение без дублей независимо от стратегии.
+
+    `commit=False` — не коммитить (транзакцию/rollback контролирует вызывающий;
+    нужно для dry-run CLI существующих ETL).
     """
     if source not in SOURCE_PRIORITY:
         raise ValueError(f"неизвестный source '{source}' (ожидается {sorted(SOURCE_PRIORITY)})")
@@ -120,20 +125,25 @@ def merge_profile(conn: sqlite3.Connection, cad_number: str,
     overwrite = (strategy == "priority" and _priority(source) >= _priority(existing_source))
 
     merged: dict[str, Optional[str]] = {}
+    changed_keys: dict[str, list[str]] = {}
     total_changed = 0
     for i, col in enumerate(_JSON_COLUMNS):
         cur = _load_json(row[i]) if row else {}
         inc = _load_json(incoming.get(col))
+        col_changed: list[str] = []
         # аддитивные ключи — объединяем до deep_merge (комбинация, не gap-fill)
         for k in append_keys.get(col, []):
             if not _is_empty(inc.get(k)) or not _is_empty(cur.get(k)):
                 combined = _append_merge(cur.get(k), inc.get(k))
                 if combined != cur.get(k):
                     cur[k] = combined
-                    total_changed += 1
+                    col_changed.append(k)
                 inc.pop(k, None)
-        new, changed = deep_merge(cur, inc, overwrite=overwrite)
-        total_changed += changed
+        new, keys = deep_merge(cur, inc, overwrite=overwrite)
+        col_changed.extend(keys)
+        if col_changed:
+            changed_keys[col] = col_changed
+            total_changed += len(col_changed)
         merged[col] = json.dumps(new, ensure_ascii=False) if new else None
 
     # ROW source/confidence — авторитетнейший из вкладчиков.
@@ -153,10 +163,11 @@ def merge_profile(conn: sqlite3.Connection, cad_number: str,
             f"INSERT INTO object_etp_profile(cad_number, {', '.join(cols)}, source, confidence) "
             f"VALUES(?, {', '.join('?' for _ in cols)}, ?, ?)",
             (cad_number, *[merged[c] for c in cols], new_source, new_conf))
-    conn.commit()
+    if commit:
+        conn.commit()
     return {"cad_number": cad_number, "row_source": new_source,
             "overwrite": overwrite, "fields_changed": total_changed,
-            "created": row is None}
+            "changed_keys": changed_keys, "created": row is None}
 
 
 def etp_layer_present(conn: sqlite3.Connection) -> bool:
