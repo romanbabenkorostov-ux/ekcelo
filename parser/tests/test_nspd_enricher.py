@@ -192,15 +192,15 @@ def test_merge_fk_error_propagates(db):
 def test_enrich_from_directory_processes_files(db, tmp_path):
     nspd_dir = tmp_path / "nspd"
     nspd_dir.mkdir()
-    (nspd_dir / "61:44:0050706:31.json").write_text(json.dumps({
+    (nspd_dir / "61_44_0050706_31.json").write_text(json.dumps({
         "cad_number": "61:44:0050706:31",
         "wall_material": "кирпич",
         "year_built": 1980,
     }), encoding="utf-8")
-    (nspd_dir / "61:44:0050706:42.json").write_text(json.dumps({
+    (nspd_dir / "61_44_0050706_42.json").write_text(json.dumps({
         "wall_material": "панель",
         "year_used": 1995,
-    }), encoding="utf-8")  # cad_number отсутствует → берётся из имени файла
+    }), encoding="utf-8")  # cad_number отсутствует → берётся из имени файла (маска _unmask_cad)
 
     reports = enrich_from_directory(db, nspd_dir)
     assert len(reports) == 2
@@ -255,7 +255,7 @@ def test_enrich_from_directory_skips_invalid_json(db, tmp_path):
 def test_enrich_from_directory_records_fk_errors(db, tmp_path):
     nspd_dir = tmp_path / "nspd"
     nspd_dir.mkdir()
-    (nspd_dir / "99:99:9999999:9.json").write_text(json.dumps({
+    (nspd_dir / "99_99_9999999_9.json").write_text(json.dumps({
         "wall_material": "кирпич",
     }), encoding="utf-8")
     reports = enrich_from_directory(db, nspd_dir)
@@ -287,7 +287,7 @@ def db_file(tmp_path) -> Path:
 def test_cli_writes_changes(db_file, tmp_path, capsys):
     nspd_dir = tmp_path / "nspd"
     nspd_dir.mkdir()
-    (nspd_dir / "61:44:0050706:31.json").write_text(json.dumps({
+    (nspd_dir / "61_44_0050706_31.json").write_text(json.dumps({
         "cad_number": "61:44:0050706:31",
         "wall_material": "кирпич",
     }), encoding="utf-8")
@@ -302,7 +302,7 @@ def test_cli_writes_changes(db_file, tmp_path, capsys):
 def test_cli_dry_run_does_not_persist(db_file, tmp_path):
     nspd_dir = tmp_path / "nspd"
     nspd_dir.mkdir()
-    (nspd_dir / "61:44:0050706:31.json").write_text(json.dumps({
+    (nspd_dir / "61_44_0050706_31.json").write_text(json.dumps({
         "cad_number": "61:44:0050706:31",
         "wall_material": "кирпич",
     }), encoding="utf-8")

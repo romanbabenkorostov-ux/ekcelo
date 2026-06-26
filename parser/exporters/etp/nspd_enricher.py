@@ -19,12 +19,25 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
 from egrn_parser.etp_merge import merge_profile
+
+# Маска per-object имени файла (01b): `23_50_0301004_25` / `23_50_0301004_25-9`.
+_CAD_MASK_RE = re.compile(r"^\d{1,2}_\d{1,2}_\d{1,7}_\d+(?:-\d+)?$")
+
+
+def _unmask_cad(stem: str) -> str:
+    """Имя файла-маска `61_44_0050706_31` → КН `61:44:0050706:31` (если совпадает
+    с маской; иначе без изменений — стемы с `:` уже валидны). Кросс-платформенно:
+    Windows запрещает `:` в именах файлов, поэтому per-object файлы — в маске."""
+    if _CAD_MASK_RE.match(stem):
+        return stem.replace("_", ":", 3).replace("-", "/", 1)
+    return stem
 
 
 DEFAULT_SOURCE = "nspd"
@@ -203,8 +216,9 @@ def enrich_from_directory(
             data = json.loads(path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             continue
-        # Файл может содержать массив объектов или один объект.
-        records = _extract_records(data, fallback_cad=path.stem)
+        # Файл может содержать массив объектов или один объект. fallback-КН — из
+        # имени файла (маска `_`→`:` для кросс-платформенности, см. _unmask_cad).
+        records = _extract_records(data, fallback_cad=_unmask_cad(path.stem))
         for cad, payload in records:
             try:
                 reports.append(
