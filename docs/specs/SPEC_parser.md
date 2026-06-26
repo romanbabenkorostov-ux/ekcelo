@@ -39,15 +39,19 @@
    (`egrn-parser = egrn_parser.cli:main`, v1.10), CLI на 9 команд
    (parse/export/migrate/dict-load/validate/enrich/monitor/serve/folders),
    `MIGRATION.md` (маппинг legacy-скриптов → CLI). Legacy `01_parsing_OS…`/
-   `05_parse_egrn_folder…` — **уже отсутствуют** (мигрированы). Остаётся: сверка
-   `db/schema.sql` пакета с C2 (§1–§5) при ближайшей синхронизации.
+   `05_parse_egrn_folder…` — **уже отсутствуют** (мигрированы). **Сверка
+   `db/schema.sql` ↔ C2 — ✅ задокументирована** (`obsidian/Architecture/
+   schema-pkg-vs-c2-drift.md`): два разных модели (пакет parser-internal 24 табл. vs
+   C2-контракт 8 табл.); реконсиляция — отдельный ADR (export-mapping), не слияние.
 4. **Эмиттер Bundle (главный новый артефакт).** Стадия после 08 собирает каталог
    по `contracts/bundle/BUNDLE_SPEC.md`: `project.kmz` (08), `db.sqlite` (§1–§6),
    `json/{structure,enriched,objects/*}`, `manifest.json` (версии contracts +
    content-хеши + extract_date + состав лота). Опц. `raw/`. Хеши —
    `egrn_parser/merge/content_hash.py`. **Manifest-ядро — ✅** (`bundle_manifest.py`):
-   `sha256_file`/`file_entry` + `build_manifest`(C3, allowed-keys) + `validate_manifest`
-   (required/semver/sha256/lot-блок). Сборку каталога (kmz/db/json) делает golden-path.
+   `sha256_file`/`file_entry` + `build_manifest`(C3, allowed-keys) + `validate_manifest`.
+   **Оркестратор каталога — ✅** (`bundle_assembler.py`): `assemble_bundle` собирает
+   project.kmz/db.sqlite/json/[/raw] + пишет manifest.json (детерминированно по
+   содержимому); `verify_bundle` (целостность sha256). Lot-фрагмент — `lot_assembler`.
 5. **ЭТП-слой §6. ✅** (`etp_merge.py`): единый **gap-fill merge** в
    `object_etp_profile` — приоритет `manual>osv>nspd>exif>llm` (источник ≥ ROW —
    перезаписывает, ниже — заполняет пустоты; глубокий merge по 6 JSON-колонкам,
