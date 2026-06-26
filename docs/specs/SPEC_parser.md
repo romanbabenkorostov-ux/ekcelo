@@ -36,8 +36,8 @@
 
 ### P1
 3. **egrn_parser как ядро. ✅ (в основном).** packaging-delta готов: `pyproject.toml`
-   (`egrn-parser = egrn_parser.cli:main`, v1.10), CLI на 9 команд
-   (parse/export/migrate/dict-load/validate/enrich/monitor/serve/folders),
+   (`egrn-parser = egrn_parser.cli:main`, v1.10), CLI на 10 команд
+   (parse/export/migrate/dict-load/validate/enrich/monitor/serve/folders/**bundle**),
    `MIGRATION.md` (маппинг legacy-скриптов → CLI). Legacy `01_parsing_OS…`/
    `05_parse_egrn_folder…` — **уже отсутствуют** (мигрированы). **Сверка
    `db/schema.sql` ↔ C2 — ✅ задокументирована** (`obsidian/Architecture/
@@ -51,7 +51,9 @@
    `sha256_file`/`file_entry` + `build_manifest`(C3, allowed-keys) + `validate_manifest`.
    **Оркестратор каталога — ✅** (`bundle_assembler.py`): `assemble_bundle` собирает
    project.kmz/db.sqlite/json/[/raw] + пишет manifest.json (детерминированно по
-   содержимому); `verify_bundle` (целостность sha256). Lot-фрагмент — `lot_assembler`.
+   содержимому); `verify_bundle` (целостность sha256); per-object файлы в Windows-safe
+   маске КН. **CLI `egrn-parser bundle` — ✅** (состав лота из БД по `--lot-id`,
+   флаг §6 из `etp_merge`). Lot-фрагмент — `lot_assembler`.
 5. **ЭТП-слой §6. ✅** (`etp_merge.py`): единый **gap-fill merge** в
    `object_etp_profile` — приоритет `manual>osv>nspd>exif>llm` (источник ≥ ROW —
    перезаписывает, ниже — заполняет пустоты; глубокий merge по 6 JSON-колонкам,

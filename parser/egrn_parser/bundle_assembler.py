@@ -29,6 +29,12 @@ def _copy(src: str | Path, dst: Path) -> None:
     shutil.copy2(src, dst)
 
 
+def mask_cad(cad: str) -> str:
+    """КН → Windows-safe имя файла: `61:44:0050706:31` → `61_44_0050706_31`
+    (`:`→`_`, `/`→`-`). Парсер работает на Win10 — `:` в именах запрещён."""
+    return cad.replace(":", "_").replace("/", "-")
+
+
 def assemble_bundle(out_dir: str | Path, *, kmz: str | Path, db: str | Path,
                     json_files: Optional[list[str | Path]] = None,
                     objects_json: Optional[dict[str, str | Path]] = None,
@@ -59,7 +65,7 @@ def assemble_bundle(out_dir: str | Path, *, kmz: str | Path, db: str | Path,
     for p in (json_files or []):
         add(p, f"json/{Path(p).name}")
     for cad, p in (objects_json or {}).items():
-        add(p, f"json/objects/{cad}.json")
+        add(p, f"json/objects/{mask_cad(cad)}.json")   # Windows-safe (КН без `:`)
     for p in (raw_files or []):
         add(p, f"raw/{Path(p).name}")
 

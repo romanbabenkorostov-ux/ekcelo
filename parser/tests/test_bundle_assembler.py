@@ -27,13 +27,13 @@ def test_assemble_object_bundle(tmp_path):
     # структура каталога
     assert (out / "project.kmz").exists() and (out / "db.sqlite").exists()
     assert (out / "json" / "structure_20240501.json").exists()
-    assert (out / "json" / "objects" / "61:44:0050706:31.json").exists()
+    assert (out / "json" / "objects" / "61_44_0050706_31.json").exists()  # Windows-safe маска
     assert (out / "manifest.json").exists()
     # manifest
     paths = {f["path"] for f in m["files"]}
     assert "project.kmz" in paths and "db.sqlite" in paths
     assert "json/structure_20240501.json" in paths
-    assert "json/objects/61:44:0050706:31.json" in paths
+    assert "json/objects/61_44_0050706_31.json" in paths
     assert m["kind"] == "object" and m["etp_layer_present"] is True
     # files[] детерминированно отсортирован
     assert [f["path"] for f in m["files"]] == sorted(f["path"] for f in m["files"])
@@ -80,6 +80,40 @@ def test_verify_detects_tampering(tmp_path):
     (out / "db.sqlite").write_bytes(b"tampered")          # порча файла
     errs = BA.verify_bundle(out)
     assert any("db.sqlite" in e and "sha256" in e for e in errs)
+
+
+def test_cli_bundle_lot_from_db(tmp_path):
+    """CLI `egrn-parser bundle --lot-id`: состав лота из БД + флаг §6 из etp_merge."""
+    import json as _json
+
+    from egrn_parser import cli
+    kmz = tmp_path / "project.kmz"; kmz.write_bytes(b"kmz")
+    db = tmp_path / "db.sqlite"
+    c = sqlite3.connect(db)
+    c.executescript("""
+        CREATE TABLE objects(cad_number TEXT PRIMARY KEY, object_type TEXT, updated_at TEXT);
+        CREATE TABLE lots(lot_id TEXT PRIMARY KEY, name TEXT NOT NULL, primary_cad_number TEXT, created_at TEXT);
+        CREATE TABLE lot_items(lot_id TEXT, cad_number TEXT, role TEXT, ord INTEGER, PRIMARY KEY(lot_id,cad_number));
+        CREATE TABLE object_etp_profile(cad_number TEXT PRIMARY KEY, source TEXT NOT NULL, confidence REAL NOT NULL);""")
+    c.execute("INSERT INTO lots VALUES('lot-1','Л',NULL,NULL)")
+    c.executemany("INSERT INTO lot_items VALUES(?,?,?,?)",
+                  [("lot-1", "61:44:0050706:31", "building", 1),
+                   ("lot-1", "61:44:0050706:10", "land", 2)])
+    c.execute("INSERT INTO object_etp_profile VALUES('61:44:0050706:31','osv',0.9)")
+    c.commit(); c.close()
+    j = tmp_path / "structure.json"; j.write_text('{"s":1}')
+
+    out = tmp_path / "bundle"
+    try:
+        cli.main(["bundle", "--out", str(out), "--kmz", str(kmz), "--db", str(db),
+                  "--lot-id", "lot-1", "--json", str(j), "--extract-date", "2024-12-31"])
+    except SystemExit as e:
+        assert e.code == 0
+    m = _json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    assert m["kind"] == "lot"
+    assert m["lot"]["members"] == ["61:44:0050706:31", "61:44:0050706:10"]
+    assert m["etp_layer_present"] is True
+    assert BA.verify_bundle(out) == []
 
 
 def test_lot_kind_requires_lot_block(tmp_path):

@@ -111,12 +111,6 @@ def cmd_parse(args: argparse.Namespace) -> int:
         else:
             accepted.append(p)
 
-    # Дедуп: один отчёт лежит в PDF и XML → берём XML (машиночитаемый, авторитетный),
-    # PDF того же отчёта отбрасываем. Снимает двойной парсинг и ложные diff'ы.
-    accepted, dropped_dups = _dedup_pdf_xml(accepted)
-    for d in dropped_dups:
-        print_info(f"  Дубль PDF (есть XML того же отчёта), пропуск: {d.name}")
-
     # Вывод статистики сканирования
     _print_scan_summary(accepted)
 
@@ -496,6 +490,54 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_bundle(args: argparse.Namespace) -> int:
+    """Собрать Bundle-каталог (C3): project.kmz + db.sqlite + json/[+raw] + manifest.json.
+
+    Состав лота читается из --db по --lot-id (lot_assembler); флаг §6 — etp_merge.
+    """
+    import datetime as _dt
+    import sqlite3
+
+    from egrn_parser import bundle_assembler as _BA
+    from egrn_parser import etp_merge as _EM
+    from egrn_parser import lot_assembler as _LA
+
+    kind = args.kind
+    objects = list(args.objects or [])
+    lot_fragment = None
+    if getattr(args, "lot_id", None):
+        with sqlite3.connect(args.db) as _c:
+            lot_fragment = _LA.lot_manifest(_c, args.lot_id,
+                                            as_of=getattr(args, "extract_date", None))
+        objects = lot_fragment["members"]
+        kind = "lot"
+
+    with sqlite3.connect(args.db) as _c:
+        etp = _EM.etp_layer_present(_c)
+
+    objects_json = None
+    if getattr(args, "objects_json_dir", None):
+        objects_json = {p.stem: p for p in Path(args.objects_json_dir).glob("*.json")}
+
+    ts = _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0).isoformat()
+    try:
+        manifest = _BA.assemble_bundle(
+            args.out, kmz=args.kmz, db=args.db,
+            json_files=list(args.json or []), objects_json=objects_json,
+            raw_files=list(args.raw or []), kind=kind, objects=objects,
+            primary_cad_number=getattr(args, "primary_cad", None),
+            extract_date=getattr(args, "extract_date", None),
+            etp_layer_present=etp, lot=lot_fragment, generated_at=ts)
+    except (ValueError, OSError) as exc:
+        print(f"[bundle] ошибка: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"[bundle] собран: {args.out}  kind={manifest['kind']}  "
+          f"файлов={len(manifest['files'])}  объектов={len(manifest['objects'])}"
+          f"  etp_layer={manifest.get('etp_layer_present')}")
+    return 0
+
+
 def cmd_folders(args: argparse.Namespace) -> int:
     """Управление папками по кадастровым номерам."""
     subcmd = getattr(args, "folders_cmd", None)
@@ -579,39 +621,6 @@ def _scan_directory(root: Path) -> list[Path]:
     for ext in ("*.pdf", "*.PDF", "*.xml", "*.XML", "*.xlsx", "*.XLSX", "*.docx", "*.DOCX", "*.doc"):
         found.extend(root.rglob(ext))
     return sorted(set(found))
-
-
-def _report_key(p: Path) -> str:
-    """Ключ отчёта по имени файла: без расширения, без суффикса ' ЭП', без хвостов.
-    PDF и XML одного отчёта дают одинаковый ключ."""
-    import re as _re
-    stem = p.stem.lower().strip()
-    stem = _re.sub(r"\s*эп$", "", stem)          # '… [0] ЭП' → '… [0]'
-    stem = _re.sub(r"\s+", " ", stem).strip()
-    return stem
-
-
-def _dedup_pdf_xml(paths: list[Path]) -> tuple[list[Path], list[Path]]:
-    """Если один отчёт есть и в .pdf, и в .xml — оставить .xml, .pdf отбросить.
-    Возвращает (оставленные, отброшенные_pdf). Файлы прочих типов не трогаются."""
-    by_key: dict[str, dict[str, Path]] = {}
-    others: list[Path] = []
-    for p in paths:
-        ext = p.suffix.lower()
-        if ext in (".pdf", ".xml"):
-            by_key.setdefault(_report_key(p), {})[ext] = p
-        else:
-            others.append(p)
-
-    kept: list[Path] = []
-    dropped: list[Path] = []
-    for group in by_key.values():
-        if ".xml" in group and ".pdf" in group:
-            kept.append(group[".xml"])
-            dropped.append(group[".pdf"])
-        else:
-            kept.extend(group.values())
-    return sorted(set(kept + others)), dropped
 
 
 def _print_scan_summary(paths: list[Path]) -> None:
@@ -709,6 +718,21 @@ def build_parser() -> argparse.ArgumentParser:
     fld_val.add_argument("--root", required=True)
 
     sp_fld.set_defaults(func=cmd_folders)
+
+    # bundle: сборка каталога Bundle (C3) поверх bundle_assembler
+    sp_bundle = sub.add_parser("bundle", help="Собрать Bundle-каталог (C3): kmz+db+json → manifest.json")
+    sp_bundle.add_argument("--out", required=True, help="Каталог Bundle (создаётся)")
+    sp_bundle.add_argument("--kmz", required=True, help="project.kmz (выход стадии 08)")
+    sp_bundle.add_argument("--db",  required=True, help="db.sqlite (C2 §1–§6)")
+    sp_bundle.add_argument("--kind", choices=["object", "lot"], default="object")
+    sp_bundle.add_argument("--json", nargs="*", help="parser-internal JSON → json/")
+    sp_bundle.add_argument("--objects-json-dir", help="Каталог per-object JSON → json/objects/")
+    sp_bundle.add_argument("--raw", nargs="*", help="Исходники → raw/ (опционально)")
+    sp_bundle.add_argument("--objects", nargs="*", help="КН объектов (kind=object)")
+    sp_bundle.add_argument("--primary-cad", help="Главный КН")
+    sp_bundle.add_argument("--extract-date", help="Дата выписки YYYY-MM-DD (для лота — as_of)")
+    sp_bundle.add_argument("--lot-id", help="ID лота (состав из --db; kind=lot)")
+    sp_bundle.set_defaults(func=cmd_bundle)
 
     return p
 
