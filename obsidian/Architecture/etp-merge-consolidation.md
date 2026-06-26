@@ -46,5 +46,24 @@ merge_profile(conn, cad, incoming, *, source, confidence,
 4. Прогнать `test_etl_*`, `test_nspd_enricher`, `test_etl_checko` (нужен pymorphy3).
 
 ## Статусы
-- ✅ Примитив `etp_merge` (стратегии + append_keys) — реализован, протестирован.
-- ⏳ In-place рефактор 4 писателей — по этому плану, где исполнимы их тесты.
+- ✅ Примитив `etp_merge` (стратегии + append_keys + `changed_keys` для репортов) —
+  реализован, протестирован (12 тестов).
+- ✅ **`nspd_enricher` → `merge_profile(gapfill, commit=False)`** — подтверждено
+  прогоном `test_nspd_enricher` у заказчика: 40 passed (4 падения — Windows-only
+  `:` в именах файлов, пред-существующие, не связаны с рефактором).
+- ✅ **`etl_checko` → `merge_profile(gapfill, commit=False)`** + presence-guard
+  (skip по факту owner_checko). Smoke: new/fill-over-manual/idempotent-skip.
+- ✅ **`merge_profile(commit=False)`** — транзакцию/rollback (dry-run) контролирует
+  CLI (исходные ETL не коммитили внутри записи).
+- ✅ **`etl_exif` → `merge_profile(gapfill, append_keys={extras:[advantages,notes]},
+  commit=False)`** — smoke: new advantages / preserve-existing / idempotent-skip /
+  notes-union. Семантика EXIF (union без дублей) сохранена.
+- ✅ **`etl_osv` → `merge_profile(strategy="priority", commit=False)`** (решение
+  заказчика) — smoke: insert / update-over-nspd (source→osv, conf→1.0) / **osv НЕ
+  затирает manual** (баг wholesale-перезаписи исправлен). Тесты osv совместимы.
+
+## Итог
+**Все 4 писателя ЭТП-слоя консолидированы на единую точку `etp_merge.merge_profile`.**
+Дублированная read-merge-write логика убрана; приоритет/gap-fill/additive — в одном
+месте, протестированном (24 теста etp_merge/lot/bundle). nspd/checko подтверждены
+прогоном тестов заказчика; exif/osv — smoke (полные `test_etl_*` — на машине с pymorphy3).

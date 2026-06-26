@@ -27,6 +27,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from egrn_parser.etp_merge import merge_profile
+
 try:
     import piexif
     from piexif.helper import UserComment
@@ -211,58 +213,24 @@ def _apply_exif_to_profile(
         if categories else None
     )
 
-    existing = conn.execute(
-        "SELECT extras FROM object_etp_profile WHERE cad_number = ?", (cad,),
-    ).fetchone()
-
-    if existing:
-        extras = json.loads(existing["extras"]) if existing["extras"] else {}
-    else:
-        extras = {}
-
-    changed = False
-
-    # advantages: «Комплексная фотофиксация: …»
+    # Единая точка записи §6 — etp_merge.merge_profile с аддитивным слиянием
+    # extras.advantages/notes (append_keys: union без дублей = семантика EXIF).
+    # commit=False — транзакцию/rollback (dry-run) контролирует CLI.
+    incoming_extras: dict[str, Any] = {}
     if summary:
-        advantages = list(extras.get("advantages") or [])
-        if summary not in advantages:
-            advantages.append(summary)
-            extras["advantages"] = advantages
-            report.extras_filled.append("advantages")
-            changed = True
-
-    # notes (v1.2+): merge per-фото заметок в extras.notes joined «; »
+        incoming_extras["advantages"] = [summary]
     if notes:
-        current_notes = str(extras.get("notes") or "").strip()
-        existing_notes_set = (
-            {n.strip() for n in current_notes.split(";") if n.strip()}
-            if current_notes else set()
-        )
-        new_notes = [n for n in notes if n not in existing_notes_set]
-        if new_notes:
-            joined = "; ".join(([current_notes] if current_notes else []) + new_notes)
-            extras["notes"] = joined
-            report.extras_filled.append("notes")
-            changed = True
-
-    if not changed:
-        if not existing:
-            # categories+notes пусты — это уже отловлено выше; сюда не попадаем.
-            return
-        report.skipped_reason = "photo_summary_and_notes_already_present"
+        incoming_extras["notes"] = "; ".join(notes)
+    if not incoming_extras:
+        # categories+notes пусты — это уже отловлено выше; сюда не попадаем.
         return
 
-    extras_json = json.dumps(extras, ensure_ascii=False)
-    if existing:
-        conn.execute(
-            "UPDATE object_etp_profile SET extras=?, updated_at=datetime('now') "
-            "WHERE cad_number=?",
-            (extras_json, cad),
-        )
-    else:
-        conn.execute(
-            "INSERT INTO object_etp_profile(cad_number, extras, source, confidence) "
-            "VALUES (?, ?, ?, ?)",
-            (cad, extras_json, source, confidence),
-        )
-        report.profile_created = True
+    res = merge_profile(
+        conn, cad, {"extras": incoming_extras},
+        source=source, confidence=confidence, strategy="gapfill",
+        append_keys={"extras": ["advantages", "notes"]}, commit=False)
+
+    report.extras_filled.extend(res["changed_keys"].get("extras", []))
+    report.profile_created = res["created"]
+    if not report.extras_filled and not report.profile_created:
+        report.skipped_reason = "photo_summary_and_notes_already_present"

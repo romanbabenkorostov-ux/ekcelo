@@ -29,6 +29,8 @@ from typing import Any
 
 import yaml
 
+from egrn_parser.etp_merge import merge_profile
+
 
 _VALID_SOURCES = {"osv", "exif", "manual", "nspd", "llm"}
 _VALID_DEAL_TYPES = {"sale", "lease", "other"}
@@ -206,36 +208,21 @@ def _apply_profile(
     default_src: str,
     default_conf: float,
 ) -> bool:
-    """UPSERT профиля. Возвращает True если insert, False если update."""
+    """UPSERT профиля. Возвращает True если insert, False если update.
+
+    Единая точка записи §6 — etp_merge.merge_profile (strategy='priority':
+    osv перекрывает nspd/exif/llm, но НЕ затирает ручной ввод manual — решение
+    заказчика 2026-06-09). commit=False — транзакцию контролирует CLI/apply_osv."""
     cad = p["cad_number"]
     src = p.get("source", default_src)
     conf = float(p.get("confidence", default_conf))
 
-    existing = conn.execute(
-        "SELECT 1 FROM object_etp_profile WHERE cad_number = ?", (cad,)
-    ).fetchone()
-
-    def _j(key: str) -> str | None:
-        val = p.get(key)
-        return json.dumps(val, ensure_ascii=False) if val is not None else None
-
-    if existing:
-        conn.execute(
-            "UPDATE object_etp_profile SET location_extra=?, building_extra=?, layout=?, "
-            "legal_extra=?, risks=?, extras=?, source=?, confidence=?, updated_at=datetime('now') "
-            "WHERE cad_number=?",
-            (_j("location_extra"), _j("building_extra"), _j("layout"),
-             _j("legal_extra"), _j("risks"), _j("extras"), src, conf, cad),
-        )
-        return False
-    else:
-        conn.execute(
-            "INSERT INTO object_etp_profile(cad_number, location_extra, building_extra, layout,"
-            " legal_extra, risks, extras, source, confidence) VALUES (?,?,?,?,?,?,?,?,?)",
-            (cad, _j("location_extra"), _j("building_extra"), _j("layout"),
-             _j("legal_extra"), _j("risks"), _j("extras"), src, conf),
-        )
-        return True
+    incoming = {col: p[col] for col in
+                ("location_extra", "building_extra", "layout", "legal_extra", "risks", "extras")
+                if p.get(col) is not None}
+    res = merge_profile(conn, cad, incoming, source=src, confidence=conf,
+                        strategy="priority", commit=False)
+    return res["created"]
 
 
 def _apply_lot(conn: sqlite3.Connection, lot: dict[str, Any]) -> tuple[bool, int, int]:
