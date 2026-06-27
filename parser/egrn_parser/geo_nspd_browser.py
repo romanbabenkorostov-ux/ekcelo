@@ -146,24 +146,52 @@ def pick_parcel_feature(feats: list[dict], cad: str) -> Optional[dict]:
 
 
 # ── браузерный прогон ────────────────────────────────────────────────────────
+async def _close_modals(page):
+    """Закрыть видимые модальные диалоги (кнопка X, overlay click, ESC)."""
+    try:
+        await page.evaluate("""
+            () => {
+                const close_btns = document.querySelectorAll('[aria-label*="Close"], [aria-label*="close"], button[title*="Close"]');
+                for (const btn of close_btns) {
+                    if (btn.offsetParent !== null) { btn.click(); break; }
+                }
+                const overlays = document.querySelectorAll('[role="dialog"], .modal, .modal-overlay, .dialog');
+                for (const o of overlays) {
+                    if (o.offsetParent !== null) {
+                        const x = o.querySelector('[aria-label="Close"], .close');
+                        if (x && x.offsetParent !== null) { x.click(); }
+                    }
+                }
+            }
+        """)
+    except Exception:
+        pass
+
+
 async def _search_geoportal(page, cad: str) -> list[dict]:
-    """Активный session-aware запрос geoportal-search по КН → список feature."""
+    """Активный session-aware запрос geoportal-search по КН → список feature.
+
+    Пробует несколько раз с закрытием модалей и задержками."""
     q = urllib.parse.quote(cad, safe="")
-    for tpl in _SEARCH_VARIANTS:
-        url = tpl.format(base=GEOPORTAL_SEARCH, q=q)
-        try:
-            resp = await page.request.get(url, headers={
-                "Referer": "https://nspd.gov.ru/map",
-                "Accept": "application/json, */*",
-            }, timeout=20000)
-            if not resp.ok:
+    for attempt in range(3):
+        if attempt > 0:
+            await page.wait_for_timeout(500)
+        await _close_modals(page)
+        for tpl in _SEARCH_VARIANTS:
+            url = tpl.format(base=GEOPORTAL_SEARCH, q=q)
+            try:
+                resp = await page.request.get(url, headers={
+                    "Referer": "https://nspd.gov.ru/map",
+                    "Accept": "application/json, */*",
+                }, timeout=20000)
+                if not resp.ok:
+                    continue
+                data = json.loads(await resp.text())
+                feats = extract_features(data)
+                if feats:
+                    return feats
+            except Exception:
                 continue
-            data = json.loads(await resp.text())
-        except Exception:
-            continue
-        feats = extract_features(data)
-        if feats:
-            return feats
     return []
 
 
@@ -209,8 +237,10 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
                         break
                     except Exception:
                         continue
-                # дать карте/анти-боту прогрузиться, затем активный запрос
-                await page.wait_for_timeout(1500)
+                # дать карте/анти-боту прогрузиться, модалям появиться и закрыться
+                await page.wait_for_timeout(2500)
+                await _close_modals(page)
+                await page.wait_for_timeout(1000)
                 feats = await _search_geoportal(page, cad)
                 if not feats and captured:               # пассивный fallback
                     feats = list(captured)
