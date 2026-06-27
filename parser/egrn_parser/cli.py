@@ -598,9 +598,16 @@ def cmd_kmz(args: argparse.Namespace) -> int:
         # Надёжный путь: NSPD через браузер (анти-бот). Геометрия ЗУ + ОКС в границах.
         from egrn_parser import geo_nspd_browser as _NB
         try:
-            browser_cache = _NB.fetch_parcels(cads, discover=("nspd" in bsrc))
-            print(f"[kmz] NSPD(браузер): получено по {sum(1 for v in browser_cache.values() if v.get('polygon'))}"
-                  f"/{len(cads)} ЗУ; ОКС найдено: {sum(len(v.get('buildings',[])) for v in browser_cache.values())}")
+            browser_cache = _NB.fetch_parcels(cads, discover=("nspd" in bsrc),
+                                              headless=not getattr(args, "nspd_headful", False))
+            got = sum(1 for v in browser_cache.values() if v.get("polygon"))
+            cap = sum(v.get("captured", 0) for v in browser_cache.values())
+            print(f"[kmz] NSPD(браузер): геометрия по {got}/{len(cads)} ЗУ; "
+                  f"ОКС найдено: {sum(len(v.get('buildings',[])) for v in browser_cache.values())}; "
+                  f"перехвачено feature: {cap}")
+            if got == 0:
+                print("    ⚠ карта не отдала геометрию через NetworkCapture. Попробуйте "
+                      "--nspd-headful (видимый браузер) — анти-бот NSPD часто требует его.", file=sys.stderr)
         except Exception as exc:                     # нет playwright/сети — честно сообщаем
             print(f"[kmz] NSPD(браузер) недоступен: {exc}\n"
                   f"    → попробуйте --nspd-http (лёгкий путь, часто блокируется) "
@@ -873,7 +880,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp_kmz.add_argument("--nspd", action="store_true",
                         help="NSPD через браузер (Playwright, обходит анти-бот) — надёжный путь")
     sp_kmz.add_argument("--nspd-http", action="store_true",
-                        help="NSPD лёгким HTTP (urllib) вместо браузера — часто блокируется")
+                        help="NSPD лёгким HTTP (urllib) вместо браузера — часто блокируется (403)")
+    sp_kmz.add_argument("--nspd-headful", action="store_true",
+                        help="Видимый браузер для NSPD (часто нужен против анти-бота)")
     sp_kmz.set_defaults(func=cmd_kmz)
 
     # export-c2: конвертация рабочей БД парсера → C2 (контракт обмена)
