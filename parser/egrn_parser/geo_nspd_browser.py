@@ -1,48 +1,88 @@
 """
-egrn_parser/geo_nspd_browser.py — получение геометрии из NSPD через БРАУЗЕР (Playwright).
+egrn_parser/geo_nspd_browser.py — геометрия из NSPD через БРАУЗЕР (Playwright).
 
-Зачем: NSPD/ПКК блокируют голый HTTP анти-ботом (WFS-эндпоинт отдаёт 403). Надёжный
-путь — открыть карту NSPD в браузере и **пассивно перехватить** geometry из её
-сетевых ответов (`NetworkCapture` из `scripts/01_parsing_nspd_v8.py`): карта сама
-грузит контур своим текущим API. Геометрия выбирается `find_by_cad` (точное>substring)
-и репроецируется 3857→WGS84 (`_maybe_reproject_to_wgs84`). ОКС в границах ЗУ — из тех
-же перехваченных feature, отфильтрованных по centroid-in-polygon.
+ПОЧЕМУ ПЕРЕПИСАНО (2026-06-27)
+------------------------------
+Прошлый путь пассивно слушал сеть через `v8.NetworkCapture` и ловил 0 feature,
+хотя карта **показывала** контур после клика по лупе. Причина найдена по
+сохранённой странице заказчика: современный NSPD отдаёт геометрию объекта
+эндпоинтом поиска `https://nspd.gov.ru/api/geoportal/v2/search/geoportal`
+(именно его дёргает лупа), а `NetworkCapture` **пропускает любой URL c
+`/search/`** (старое правило «search = extent квартала» верно для ПКК, но не
+для нового geoportal). Поэтому реальный ответ с геометрией молча отбрасывался.
 
-Требует: установленный `playwright` + браузер (`playwright install chromium`) и сеть.
-В закрытом контуре/без playwright — `fetch_parcels` бросит понятную ошибку; вызывающий
-(CLI `kmz --nspd`) ловит и сообщает, предлагая `--nspd-http` (лёгкий путь) или
-загрузку контуров заранее.
+КАК СЕЙЧАС
+----------
+1. Открываем карту NSPD в браузере → устанавливается сессия/куки/анти-бот.
+2. **Активно** дёргаем geoportal-search через `page.request.get` (наследует
+   cookies/Referer страницы → проходит анти-бот там, где голый urllib даёт 403).
+   Ответ — FeatureCollection; геометрия в EPSG:3857 → репроекция в WGS84.
+3. Параллельно вешаем **разрешающий** слушатель ответов (в отличие от v8 НЕ
+   режет `/search/geoportal`) — он копит feature карты для обнаружения ОКС в
+   границах ЗУ (centroid-in-polygon) и как пассивный fallback.
 
-Выход: {cad: {"polygon": coords|None, "buildings": [{name, geometry}]}}.
+Выход: {cad: {"polygon": coords|None, "buildings": [{name, geometry}],
+              "captured": int}}. polygon — список колец [[ [lon,lat],… ] ].
+Требует playwright+chromium+сеть; иначе fetch_parcels бросит RuntimeError.
 """
 from __future__ import annotations
 
 import asyncio
-import importlib.util
-import sys
-from pathlib import Path
+import json
+import math
+import urllib.parse
 from typing import Any, Optional
 
 from egrn_parser import geo_nspd as _N
 
+# Современный geoportal-API NSPD (тот, что дёргает строка поиска / лупа).
+GEOPORTAL_SEARCH = "https://nspd.gov.ru/api/geoportal/v2/search/geoportal"
+# Варианты запроса: универсальный + тематический по ЗУ. Пробуем по очереди.
+_SEARCH_VARIANTS = (
+    "{base}?query={q}",
+    "{base}?thematicSearchId=1&query={q}",
+)
+_R_MERC = 20037508.34
+# Поля с КН в properties geoportal-feature (в т.ч. вложенные в options).
+_CAD_KEYS = ("cad_num", "cad_number", "cadastral_number", "kadnum",
+             "cadNumber", "label", "descr")
 
-def _load_v8():
-    """Импортировать scripts/01_parsing_nspd_v8.py (требует playwright)."""
-    path = Path(__file__).resolve().parents[1] / "scripts" / "01_parsing_nspd_v8.py"
-    if not path.exists():
-        raise RuntimeError(f"не найден NSPD-парсер: {path}")
-    spec = importlib.util.spec_from_file_location("nspd_v8_browser", path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules["nspd_v8_browser"] = mod
-    spec.loader.exec_module(mod)                      # упадёт, если нет playwright
-    return mod
+
+# ── чистые помощники (тестируются офлайн) ────────────────────────────────────
+def _reproject(geom: Optional[dict]) -> Optional[dict]:
+    """EPSG:3857→WGS84, если координаты вне градусной сетки. Иначе как есть."""
+    if not geom or "coordinates" not in geom:
+        return geom
+    p = geom["coordinates"]
+    while isinstance(p, list) and p and isinstance(p[0], list):
+        p = p[0]
+    if not (isinstance(p, list) and len(p) >= 2):
+        return geom
+    if abs(p[0]) <= 180 and abs(p[1]) <= 90:
+        return geom
+
+    def pt(c):
+        x, y = float(c[0]), float(c[1])
+        lon = (x / _R_MERC) * 180.0
+        lat = math.degrees(math.atan(math.exp((y / _R_MERC) * math.pi)) * 2 - math.pi / 2)
+        return [round(lon, 7), round(lat, 7)]
+
+    t, c = geom.get("type"), geom["coordinates"]
+    if t == "Polygon":
+        return {"type": t, "coordinates": [[pt(q) for q in ring] for ring in c]}
+    if t == "MultiPolygon":
+        return {"type": t, "coordinates": [[[pt(q) for q in r] for r in poly] for poly in c]}
+    if t == "Point":
+        return {"type": t, "coordinates": pt(c)}
+    return geom
 
 
-def _norm_geom(g: Optional[dict]) -> Optional[list]:
-    """GeoJSON (от v8) → coords полигона (внешние кольца) для geo_kmz/land_contours."""
+def _geom_to_coords(geom: Optional[dict]) -> Optional[list]:
+    """GeoJSON (после репроекции) → coords полигона (внешние кольца) для geo_kmz."""
+    g = _reproject(geom)
     if not g:
         return None
-    t = g.get("type"); c = g.get("coordinates")
+    t, c = g.get("type"), g.get("coordinates")
     if t == "Polygon":
         return c
     if t == "MultiPolygon" and c:
@@ -50,77 +90,168 @@ def _norm_geom(g: Optional[dict]) -> Optional[list]:
     return None
 
 
-def _norm_geom_any(g: Optional[dict], v8) -> Optional[list]:
-    """Репроекция 3857→WGS84 (если надо) + → coords полигона."""
-    if not g:
-        return None
-    return _norm_geom(v8._maybe_reproject_to_wgs84(g))
+def _feature_cad(feat: dict) -> Optional[str]:
+    """Достать КН из feature: properties + вложенный properties.options."""
+    props = (feat or {}).get("properties") or {}
+    pools = [props, props.get("options") or {}]
+    for pool in pools:
+        if not isinstance(pool, dict):
+            continue
+        for k in _CAD_KEYS:
+            v = pool.get(k)
+            if isinstance(v, str) and ":" in v:
+                return v
+    return None
+
+
+def extract_features(payload: Any) -> list[dict]:
+    """Из ответа geoportal вытащить список GeoJSON-feature с геометрией.
+
+    Терпим к обёрткам: {data:{features}}, {features}, FeatureCollection, Feature."""
+    feats: list[dict] = []
+
+    def walk(node, depth=0):
+        if depth > 4 or node is None:
+            return
+        if isinstance(node, list):
+            for x in node:
+                walk(x, depth + 1)
+            return
+        if not isinstance(node, dict):
+            return
+        if node.get("type") == "Feature" and node.get("geometry"):
+            feats.append(node)
+            return
+        if node.get("type") == "FeatureCollection":
+            for f in node.get("features") or []:
+                walk(f, depth + 1)
+            return
+        for k in ("data", "result", "features", "response", "body"):
+            if k in node:
+                walk(node[k], depth + 1)
+
+    walk(payload)
+    return feats
+
+
+def pick_parcel_feature(feats: list[dict], cad: str) -> Optional[dict]:
+    """Выбрать feature нужного ЗУ: точное совпадение КН > первый полигон."""
+    want = cad.replace(" ", "").upper()
+    polys = [f for f in feats if (f.get("geometry") or {}).get("type") in ("Polygon", "MultiPolygon")]
+    for f in polys:
+        fc = (_feature_cad(f) or "").replace(" ", "").upper()
+        if fc == want:
+            return f
+    return polys[0] if polys else None
+
+
+# ── браузерный прогон ────────────────────────────────────────────────────────
+async def _search_geoportal(page, cad: str) -> list[dict]:
+    """Активный session-aware запрос geoportal-search по КН → список feature."""
+    q = urllib.parse.quote(cad, safe="")
+    for tpl in _SEARCH_VARIANTS:
+        url = tpl.format(base=GEOPORTAL_SEARCH, q=q)
+        try:
+            resp = await page.request.get(url, headers={
+                "Referer": "https://nspd.gov.ru/map",
+                "Accept": "application/json, */*",
+            }, timeout=20000)
+            if not resp.ok:
+                continue
+            data = json.loads(await resp.text())
+        except Exception:
+            continue
+        feats = extract_features(data)
+        if feats:
+            return feats
+    return []
 
 
 async def _run(cads: list[str], *, discover: bool, headless: bool,
                timeout_ms: int) -> dict[str, dict[str, Any]]:
     from playwright.async_api import async_playwright
-    v8 = _load_v8()
+
     out: dict[str, dict[str, Any]] = {}
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=headless)
-        ctx = await browser.new_context(ignore_https_errors=True)
+        ctx = await browser.new_context(ignore_https_errors=True,
+                                        user_agent="Mozilla/5.0")
         page = await ctx.new_page()
-        capture = v8.NetworkCapture()
-        capture.attach(page)
+
+        # Разрешающий слушатель: копим geoportal-feature (в т.ч. из /search/),
+        # которые v8.NetworkCapture отбрасывает. Источник ОКС + пассивный fallback.
+        captured: list[dict] = []
+
+        async def _on_resp(resp):
+            try:
+                url = resp.url
+                if "nspd.gov.ru" not in url or "geoportal" not in url:
+                    return
+                ct = (resp.headers or {}).get("content-type", "")
+                if "json" not in ct.lower() and "json" not in url.lower():
+                    return
+                data = json.loads(await resp.text())
+                captured.extend(extract_features(data))
+            except Exception:
+                return
+
+        page.on("response", lambda r: asyncio.create_task(_on_resp(r)))
+
         try:
             for cad in cads:
-                capture.clear()
-                # карта сама грузит геометрию своим текущим API → ловим пассивно
-                # (WFS-эндпоинт теперь отдаёт 403). active_layers=ЗУ+ОКС, чтобы
-                # подгрузились и строения для обнаружения в границах.
-                layers = ",".join(str(x) for x in (v8.NSPD_ZU_IDS + v8.NSPD_OKS_IDS))
-                url = (f"https://nspd.gov.ru/map?query={cad.replace(':', '%3A')}"
+                captured.clear()
+                layers = ",".join(str(x) for x in (_N.NSPD_ZU_LAYERS + _N.NSPD_OKS_LAYERS))
+                url = (f"https://nspd.gov.ru/map?query={urllib.parse.quote(cad, safe='')}"
                        f"&active_layers={layers}")
-                try:
-                    await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
-                except Exception:
+                for wait in ("domcontentloaded", "load"):
                     try:
-                        await page.goto(url, wait_until="load", timeout=timeout_ms)
-                    except Exception:
-                        pass
-                # ждём появления feature нужного КН (poll до timeout)
-                hit = None
-                for _ in range(max(1, timeout_ms // 700)):
-                    await page.wait_for_timeout(700)
-                    hit = capture.find_by_cad(cad)
-                    if hit:
+                        await page.goto(url, wait_until=wait, timeout=timeout_ms)
                         break
-                poly = _norm_geom_any(hit["geom"], v8) if hit else None
+                    except Exception:
+                        continue
+                # дать карте/анти-боту прогрузиться, затем активный запрос
+                await page.wait_for_timeout(1500)
+                feats = await _search_geoportal(page, cad)
+                if not feats and captured:               # пассивный fallback
+                    feats = list(captured)
+
+                parcel = pick_parcel_feature(feats, cad)
+                poly = _geom_to_coords(parcel.get("geometry")) if parcel else None
 
                 buildings: list[dict[str, Any]] = []
                 if discover and poly:
-                    feats = []
-                    for entry in capture.features:    # все захваченные объекты карты
-                        ng = _norm_geom_any(entry["feature"].get("geometry"), v8)
-                        if not ng:
+                    seen_pool = {id(f): f for f in feats}
+                    seen_pool.update({id(f): f for f in captured})
+                    cand = []
+                    for f in seen_pool.values():
+                        if f is parcel:
                             continue
-                        props = entry["feature"].get("properties") or entry["feature"].get("attrs") or {}
-                        bcad = _N._feat_cad(props)
+                        coords = _geom_to_coords(f.get("geometry"))
+                        if not coords:
+                            continue
+                        bcad = _feature_cad(f)
                         if bcad and bcad.replace(" ", "") == cad.replace(" ", ""):
-                            continue                  # это сам ЗУ
-                        feats.append({"cad": bcad, "geometry": {"type": "Polygon", "coords": ng}})
-                    buildings = _N.features_in_polygon(feats, poly)
+                            continue                      # это сам ЗУ
+                        cand.append({"cad": bcad,
+                                     "geometry": {"type": "Polygon", "coords": coords}})
+                    buildings = _N.features_in_polygon(cand, poly)
+
                 out[cad] = {"polygon": poly, "buildings": buildings,
-                            "captured": len(capture.features)}
+                            "captured": len(set(id(f) for f in (feats or [])) |
+                                            set(id(f) for f in captured))}
         finally:
-            capture.detach()
             await browser.close()
     return out
 
 
 def fetch_parcels(cads: list[str], *, discover: bool = True, headless: bool = True,
                   timeout_ms: int = 45000) -> dict[str, dict[str, Any]]:
-    """Синхронно: геометрия ЗУ + ОКС в границах через браузер NSPD (NetworkCapture).
+    """Синхронно: геометрия ЗУ + ОКС в границах через браузер NSPD (geoportal-search).
 
     Бросает RuntimeError если нет playwright/браузера/сети."""
     try:
-        return asyncio.run(_run(cads, discover=discover, headless=headless, timeout_ms=timeout_ms))
+        return asyncio.run(_run(cads, discover=discover, headless=headless,
+                                timeout_ms=timeout_ms))
     except ModuleNotFoundError as e:
         raise RuntimeError(
             "Нужен playwright: `pip install playwright` + `playwright install chromium`. "

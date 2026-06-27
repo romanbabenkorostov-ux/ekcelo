@@ -602,11 +602,11 @@ def cmd_kmz(args: argparse.Namespace) -> int:
                                               headless=not getattr(args, "nspd_headful", False))
             got = sum(1 for v in browser_cache.values() if v.get("polygon"))
             cap = sum(v.get("captured", 0) for v in browser_cache.values())
-            print(f"[kmz] NSPD(браузер): геометрия по {got}/{len(cads)} ЗУ; "
+            print(f"[kmz] NSPD(браузер, geoportal-search): геометрия по {got}/{len(cads)} ЗУ; "
                   f"ОКС найдено: {sum(len(v.get('buildings',[])) for v in browser_cache.values())}; "
-                  f"перехвачено feature: {cap}")
+                  f"feature от geoportal: {cap}")
             if got == 0:
-                print("    ⚠ карта не отдала геометрию через NetworkCapture. Попробуйте "
+                print("    ⚠ geoportal-search не вернул геометрию. Попробуйте "
                       "--nspd-headful (видимый браузер) — анти-бот NSPD часто требует его.", file=sys.stderr)
         except Exception as exc:                     # нет playwright/сети — честно сообщаем
             print(f"[kmz] NSPD(браузер) недоступен: {exc}\n"
