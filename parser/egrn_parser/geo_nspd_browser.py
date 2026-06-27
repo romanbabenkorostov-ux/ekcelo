@@ -248,6 +248,10 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
                 parcel = pick_parcel_feature(feats, cad)
                 poly = _geom_to_coords(parcel.get("geometry")) if parcel else None
 
+                # дать карте время загружать OKS внутри ЗУ (слушатель _on_resp их перехватит)
+                if discover and poly:
+                    await page.wait_for_timeout(3000)
+
                 buildings: list[dict[str, Any]] = []
                 if discover and poly:
                     seen_pool = {id(f): f for f in feats}
