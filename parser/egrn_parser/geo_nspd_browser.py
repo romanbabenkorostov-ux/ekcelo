@@ -245,12 +245,12 @@ async def _search_geoportal(page, cad: str) -> list[dict]:
 
 
 async def _run(cads: list[str], *, discover: bool, headless: bool,
-               timeout_ms: int) -> dict[str, dict[str, Any]]:
+               timeout_ms: int, manual: bool = False) -> dict[str, dict[str, Any]]:
     from playwright.async_api import async_playwright
 
     out: dict[str, dict[str, Any]] = {}
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=headless)
+        browser = await p.chromium.launch(headless=headless and not manual)
         ctx = await browser.new_context(ignore_https_errors=True,
                                         user_agent="Mozilla/5.0")
         page = await ctx.new_page()
@@ -262,7 +262,11 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
         async def _on_resp(resp):
             try:
                 url = resp.url
-                if "nspd.gov.ru" not in url or "geoportal" not in url:
+                # в ручном режиме данные вкладок (ОКС в пределах) идут не только с
+                # /geoportal/ — ловим любой JSON c nspd, extract_features отсеет лишнее.
+                if "nspd.gov.ru" not in url:
+                    return
+                if not manual and "geoportal" not in url:
                     return
                 ct = (resp.headers or {}).get("content-type", "")
                 if "json" not in ct.lower() and "json" not in url.lower():
@@ -297,14 +301,29 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
                 parcel = pick_parcel_feature(feats, cad)
                 poly = _geom_to_coords(parcel.get("geometry")) if parcel else None
 
-                # имитировать клик по лупе → карта грузит контур + ОКС в пределах ЗУ;
-                # пассивный _on_resp перехватит ОКС. Без клика NSPD данные не тянет.
-                if discover and poly:
+                if manual:
+                    # Ручной режим: пользователь сам жмёт лупу и листает вкладки
+                    # (ОКС в пределах ЗУ), а слушатель копит features. Ждём Enter
+                    # БЕЗ блокировки event-loop (иначе перехват остановится).
+                    print(f"\n  ▶ ЗУ {cad}: в открытом браузере нажмите лупу, "
+                          f"пролистайте вкладки (ОКС в пределах ЗУ), затем нажмите "
+                          f"ENTER здесь для парсинга и перехода к следующему…",
+                          flush=True)
+                    loop = asyncio.get_event_loop()
+                    await loop.run_in_executor(None, input)
+                    # пользователь мог открыть нужный объект — перечитываем feats
+                    if captured:
+                        feats = list(captured)
+                        if not poly:
+                            parcel = pick_parcel_feature(feats, cad)
+                            poly = _geom_to_coords(parcel.get("geometry")) if parcel else None
+                elif discover and poly:
+                    # авто-попытка: имитировать клик по лупе → карта грузит ОКС.
                     await _trigger_lupa(page, cad)
                     await page.wait_for_timeout(4000)
 
                 buildings: list[dict[str, Any]] = []
-                if discover and poly:
+                if (discover or manual) and poly:
                     seen_pool = {id(f): f for f in feats}
                     seen_pool.update({id(f): f for f in captured})
                     cand = []
@@ -330,13 +349,15 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
 
 
 def fetch_parcels(cads: list[str], *, discover: bool = True, headless: bool = True,
-                  timeout_ms: int = 45000) -> dict[str, dict[str, Any]]:
+                  timeout_ms: int = 45000, manual: bool = False) -> dict[str, dict[str, Any]]:
     """Синхронно: геометрия ЗУ + ОКС в границах через браузер NSPD (geoportal-search).
 
+    manual=True — пользователь сам жмёт лупу и листает вкладки, скрипт ждёт Enter
+    по каждому КН и парсит перехваченное (видимый браузер принудительно).
     Бросает RuntimeError если нет playwright/браузера/сети."""
     try:
         return asyncio.run(_run(cads, discover=discover, headless=headless,
-                                timeout_ms=timeout_ms))
+                                timeout_ms=timeout_ms, manual=manual))
     except ModuleNotFoundError as e:
         raise RuntimeError(
             "Нужен playwright: `pip install playwright` + `playwright install chromium`. "

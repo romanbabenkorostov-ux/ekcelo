@@ -593,13 +593,15 @@ def cmd_kmz(args: argparse.Namespace) -> int:
     fetcher = discovery = None
     browser_cache: dict = {}
     use_http = getattr(args, "nspd_http", False)
-    use_browser = getattr(args, "nspd", False) and not use_http
+    use_manual = getattr(args, "nspd_manual", False)
+    use_browser = (getattr(args, "nspd", False) or use_manual) and not use_http
     if use_browser:
         # Надёжный путь: NSPD через браузер (анти-бот). Геометрия ЗУ + ОКС в границах.
         from egrn_parser import geo_nspd_browser as _NB
         try:
             browser_cache = _NB.fetch_parcels(cads, discover=("nspd" in bsrc),
-                                              headless=not getattr(args, "nspd_headful", False))
+                                              headless=not getattr(args, "nspd_headful", False),
+                                              manual=use_manual)
             got = sum(1 for v in browser_cache.values() if v.get("polygon"))
             cap = sum(v.get("captured", 0) for v in browser_cache.values())
             print(f"[kmz] NSPD(браузер, geoportal-search): геометрия по {got}/{len(cads)} ЗУ; "
@@ -883,6 +885,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="NSPD лёгким HTTP (urllib) вместо браузера — часто блокируется (403)")
     sp_kmz.add_argument("--nspd-headful", action="store_true",
                         help="Видимый браузер для NSPD (часто нужен против анти-бота)")
+    sp_kmz.add_argument("--nspd-manual", action="store_true",
+                        help="Ручной режим NSPD: по каждому КН откроется браузер — "
+                             "сами жмёте лупу и листаете вкладки (ОКС в пределах ЗУ), "
+                             "затем Enter в консоли; скрипт парсит перехваченное")
     sp_kmz.set_defaults(func=cmd_kmz)
 
     # export-c2: конвертация рабочей БД парсера → C2 (контракт обмена)
