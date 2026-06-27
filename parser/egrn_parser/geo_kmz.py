@@ -171,42 +171,121 @@ def build_kmz(out_path: str | Path, parcels: list[dict[str, Any]]) -> dict[str, 
     return {"path": str(out), "stats": res["stats"]}
 
 
-# ── сборка из БД (best-effort; источник уточняется) ──────────────────────────
-def collect_from_db(conn, cad_numbers: list[str]) -> list[dict[str, Any]]:
-    """Собрать структуру `parcels` из БД: граница ЗУ — из land_contours; объекты
-    внутри — из linked_objects (located_on) / building_objects.parent; геометрия
-    объекта — из его land_contours. Отсутствие геометрии → спираль."""
-    import json as _json
+# Режимы «что считать объектом внутри ЗУ» (выбор пользователя; умолч. — все три):
+#   linked (а) — linked_objects(located_on) + building_objects.parent_cad
+#   agro   (в) — §6-объекты: agro_parcel с land_cad = ЗУ (насаждения/точки оценки)
+#   geo    (г) — любой объект с геометрией, чей центроид внутри полигона ЗУ
+DEFAULT_MODES = ("linked", "agro", "geo")
+_MODE_ALIAS = {"а": "linked", "a": "linked", "в": "agro", "v": "agro", "г": "geo", "g": "geo"}
 
-    def _poly(cad: str) -> Optional[list]:
-        rows = conn.execute("SELECT geom_geojson FROM land_contours WHERE parent_cad=? "
-                            "AND geom_geojson IS NOT NULL ORDER BY contour_no", (cad,)).fetchall()
-        for (gj,) in rows:
-            try:
-                g = _json.loads(gj)
-                if g.get("type") == "Polygon":
-                    return g["coordinates"]
-            except (ValueError, TypeError):
-                continue
-        return None
+
+def _norm_modes(modes) -> set[str]:
+    return {_MODE_ALIAS.get(m.strip().lower(), m.strip().lower()) for m in modes}
+
+
+def collect_from_db(conn, cad_numbers: list[str], *, modes=DEFAULT_MODES,
+                    geometry_fetcher: Optional[Any] = None) -> list[dict[str, Any]]:
+    """Собрать структуру `parcels` из БД.
+
+    Граница ЗУ — из `land_contours`; при отсутствии и наличии `geometry_fetcher`
+    (NSPD) — тянется и кэшируется. Объекты внутри — по `modes` (linked/agro/geo).
+    Геометрия объекта — из его контуров; при отсутствии и наличии fetcher — из NSPD;
+    иначе → точка по спирали.
+    """
+    import json as _json
+    modes = _norm_modes(modes)
 
     def _has(t):
         return conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
                             (t,)).fetchone() is not None
 
+    def _poly(cad: str) -> Optional[list]:
+        if _has("land_contours"):
+            for (gj,) in conn.execute(
+                "SELECT geom_geojson FROM land_contours WHERE parent_cad=? "
+                "AND geom_geojson IS NOT NULL ORDER BY contour_no", (cad,)):
+                try:
+                    g = _json.loads(gj)
+                    if g.get("type") == "Polygon":
+                        return g["coordinates"]
+                except (ValueError, TypeError):
+                    continue
+        return None
+
+    def _fetch(cad: str) -> Optional[list]:
+        """NSPD-фетч геометрии (2в) + кэш в land_contours."""
+        if not geometry_fetcher:
+            return None
+        try:
+            g = geometry_fetcher(cad)
+        except Exception:
+            return None
+        if not g:
+            return None
+        coords = g["coordinates"] if isinstance(g, dict) and "coordinates" in g else g
+        if _has("land_contours"):
+            conn.execute("INSERT OR IGNORE INTO land_contours(parent_cad, contour_no, "
+                         "geom_geojson, geom_source) VALUES(?,?,?,?)",
+                         (cad, 1, _json.dumps({"type": "Polygon", "coordinates": coords},
+                                              ensure_ascii=False), "nspd"))
+            conn.commit()
+        return coords
+
     parcels = []
     for cad in cad_numbers:
+        poly = _poly(cad) or _fetch(cad)
+        names: list[str] = []
+        # (а) linked + building.parent
+        if "linked" in modes:
+            if _has("linked_objects"):
+                names += [r[0] for r in conn.execute(
+                    "SELECT linked_cad_number FROM linked_objects WHERE primary_cad_number=?", (cad,))]
+            if _has("building_objects"):
+                names += [r[0] for r in conn.execute(
+                    "SELECT cad_number FROM building_objects WHERE parent_cad_number=?", (cad,))]
+        # (в) §6-агро: насаждения/точки на этом ЗУ
+        agro_pts = []
+        if "agro" in modes and _has("agro_parcel"):
+            for code, gj in conn.execute(
+                "SELECT parcel_code, geom_geojson FROM agro_parcel WHERE land_cad=?", (cad,)):
+                g = None
+                if gj:
+                    try:
+                        gg = _json.loads(gj); g = {"type": gg.get("type", "Polygon"),
+                                                   "coords": gg.get("coordinates")}
+                    except (ValueError, TypeError):
+                        g = None
+                agro_pts.append({"name": f"агро:{code}", "geometry": g})
+        # (г) геометрический тест: контуры др. объектов внутри полигона ЗУ
+        geo_objs = []
+        if "geo" in modes and poly and _has("land_contours"):
+            ring0 = _ring(poly)
+            for ocad, gj in conn.execute(
+                "SELECT DISTINCT parent_cad, geom_geojson FROM land_contours "
+                "WHERE parent_cad<>? AND geom_geojson IS NOT NULL", (cad,)):
+                try:
+                    gg = _json.loads(gj)
+                    r = _ring(gg.get("coordinates"))
+                    if r and point_in_ring(centroid(r), ring0):
+                        geo_objs.append({"name": ocad,
+                                         "geometry": {"type": "Polygon", "coords": gg["coordinates"]}})
+                        names.append(ocad)
+                except (ValueError, TypeError):
+                    continue
+
         objects = []
-        child_cads: list[str] = []
-        if _has("linked_objects"):
-            child_cads += [r[0] for r in conn.execute(
-                "SELECT linked_cad_number FROM linked_objects WHERE primary_cad_number=?", (cad,))]
-        if _has("building_objects"):
-            child_cads += [r[0] for r in conn.execute(
-                "SELECT cad_number FROM building_objects WHERE parent_cad_number=?", (cad,))]
-        for ch in dict.fromkeys(child_cads):         # уник, порядок сохранён
-            g = _poly(ch)
+        seen = set()
+        for ch in names:                              # linked/building/geo по КН
+            if ch in seen:
+                continue
+            seen.add(ch)
+            # геометрия уже найдена в (г)?
+            pre = next((o for o in geo_objs if o["name"] == ch), None)
+            if pre:
+                objects.append(pre); continue
+            g = _poly(ch) or _fetch(ch)               # своя геометрия / NSPD
             objects.append({"name": ch,
                             "geometry": {"type": "Polygon", "coords": g} if g else None})
-        parcels.append({"cad": cad, "polygon": _poly(cad), "objects": objects})
+        objects += agro_pts                           # агро-точки добавляем как есть
+        parcels.append({"cad": cad, "polygon": poly, "objects": objects})
     return parcels

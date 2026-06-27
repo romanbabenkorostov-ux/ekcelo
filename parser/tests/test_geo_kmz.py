@@ -72,3 +72,37 @@ def test_collect_from_db():
     # у объектов геометрии нет → при сборке KMZ уйдут в спираль
     res = K.build_kml(parcels)
     assert res["stats"]["objects_spiral"] == 2
+
+
+def test_collect_modes_select():
+    """Режимы a/в/г выбирают разные источники объектов."""
+    import json
+    c = sqlite3.connect(":memory:")
+    c.executescript("""
+    CREATE TABLE land_contours(parent_cad TEXT,contour_no INTEGER,geom_geojson TEXT,geom_source TEXT);
+    CREATE TABLE building_objects(cad_number TEXT,parent_cad_number TEXT);
+    CREATE TABLE agro_parcel(parcel_id INTEGER PRIMARY KEY,parcel_code TEXT,land_cad TEXT,
+        geom_geojson TEXT,season_year INT,source TEXT,confidence REAL);
+    """)
+    c.execute("INSERT INTO land_contours VALUES('P',1,?,'nspd')",
+              (json.dumps({"type":"Polygon","coordinates":[_SQ]}),))
+    c.execute("INSERT INTO building_objects VALUES('B1','P')")
+    c.execute("INSERT INTO agro_parcel VALUES(1,'vino','P',NULL,2024,'perechen',0.7)")
+    c.commit()
+    only_linked = K.collect_from_db(c, ["P"], modes=["a"])[0]["objects"]
+    assert [o["name"] for o in only_linked] == ["B1"]
+    only_agro = K.collect_from_db(c, ["P"], modes=["в"])[0]["objects"]
+    assert [o["name"] for o in only_agro] == ["агро:vino"]
+    all3 = {o["name"] for o in K.collect_from_db(c, ["P"])[0]["objects"]}
+    assert {"B1", "агро:vino"} <= all3
+
+
+def test_nspd_fetch_fallback():
+    """2в: у ЗУ нет контура в БД → берётся из geometry_fetcher (NSPD) и кэшируется."""
+    c = sqlite3.connect(":memory:")
+    c.executescript("CREATE TABLE land_contours(parent_cad TEXT,contour_no INTEGER,geom_geojson TEXT,geom_source TEXT);")
+    fetched = K.collect_from_db(c, ["NOGEO"], modes=["a"],
+                                geometry_fetcher=lambda cad: {"type":"Polygon","coordinates":[_SQ]})
+    assert fetched[0]["polygon"] is not None
+    # закэшировано в land_contours
+    assert c.execute("SELECT COUNT(*) FROM land_contours WHERE parent_cad='NOGEO'").fetchone()[0] == 1

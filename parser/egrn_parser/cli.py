@@ -585,9 +585,14 @@ def cmd_kmz(args: argparse.Namespace) -> int:
     if not cads:
         print("[kmz] укажите --parcels «КН1,КН2,…»", file=sys.stderr)
         return 1
+    modes = [m.strip() for m in (args.objects or "").split(",") if m.strip()] or _K.DEFAULT_MODES
+    fetcher = None
+    if getattr(args, "nspd", False):
+        from egrn_parser import geo_nspd as _N
+        fetcher = _N.fetch_geometry                  # ЗУ/объекты по КН из ПКК (сеть)
     conn = sqlite3.connect(args.db)
     try:
-        parcels = _K.collect_from_db(conn, cads)
+        parcels = _K.collect_from_db(conn, cads, modes=modes, geometry_fetcher=fetcher)
     finally:
         conn.close()
     res = _K.build_kmz(args.out, parcels)
@@ -826,6 +831,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp_kmz.add_argument("--parcels", required=True, help="КН участков через запятую: «23:15:..,23:15:..»")
     sp_kmz.add_argument("--db",  required=True, help="Рабочая БД (контуры/объекты)")
     sp_kmz.add_argument("--out", required=True, help="Выходной .kmz")
+    sp_kmz.add_argument("--objects", default="linked,agro,geo",
+                        help="Что считать объектом внутри ЗУ: linked(а),agro(в),geo(г) — через запятую")
+    sp_kmz.add_argument("--nspd", action="store_true",
+                        help="Тянуть недостающую геометрию ЗУ/строений из ПКК/НSPD (нужна сеть)")
     sp_kmz.set_defaults(func=cmd_kmz)
 
     # export-c2: конвертация рабочей БД парсера → C2 (контракт обмена)
