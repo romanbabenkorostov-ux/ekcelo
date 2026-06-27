@@ -549,6 +549,58 @@ def cmd_bundle(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ingest_project(args: argparse.Namespace) -> int:
+    """Загрузить всю папку заполненных шаблонов в БД одним вызовом (идемпотентно)."""
+    import sqlite3
+
+    from egrn_parser import project_ingest as _PI
+    pmap = None
+    if getattr(args, "pledge_map", None):
+        try:
+            pmap = {int(k): v for k, v in
+                    (kv.split("=", 1) for kv in args.pledge_map.split(","))}
+        except ValueError:
+            print("[ingest-project] --pledge-map: формат «66=КН,69=КН»", file=sys.stderr)
+            return 1
+    conn = sqlite3.connect(args.db)
+    try:
+        rep = _PI.ingest_project(conn, args.dir, land_cad_by_pledge=pmap)
+    finally:
+        conn.close()
+    print(f"[ingest-project] папка: {rep['dir']}")
+    for f in rep["files"]:
+        status = f.get("error") or f.get("result")
+        print(f"    {f['file']:<30} {f['type']:<10} {status}")
+    t = rep["totals"]
+    print(f"  итого файлов: {t['files']}  по типам: {t['by_type']}  ошибок: {t['errors']}")
+    return 1 if t["errors"] else 0
+
+
+def cmd_kmz(args: argparse.Namespace) -> int:
+    """Собрать KMZ объектов в пределах ЗУ: контуры если есть, иначе точки по спирали."""
+    import sqlite3
+
+    from egrn_parser import geo_kmz as _K
+    cads = [c.strip() for c in args.parcels.replace(";", ",").split(",") if c.strip()]
+    if not cads:
+        print("[kmz] укажите --parcels «КН1,КН2,…»", file=sys.stderr)
+        return 1
+    conn = sqlite3.connect(args.db)
+    try:
+        parcels = _K.collect_from_db(conn, cads)
+    finally:
+        conn.close()
+    res = _K.build_kmz(args.out, parcels)
+    s = res["stats"]
+    print(f"[kmz] {res['path']}")
+    print(f"    ЗУ: {s['parcels']} (с границей: {s['parcels_with_geom']})  "
+          f"объектов с контуром: {s['objects_with_contour']}  по спирали: {s['objects_spiral']}")
+    if s["parcels_with_geom"] < s["parcels"]:
+        print("    ⚠ у части ЗУ нет геометрии в БД — сначала загрузите контуры "
+              "(ingest-project / 01c). Объекты таких ЗУ без геометрии не размещены.")
+    return 0
+
+
 def cmd_export_c2(args: argparse.Namespace) -> int:
     """Экспорт рабочей БД парсера в C2-формат (`schema/egrn_current_schema.sql`, ADR-007)."""
     from egrn_parser import schema_export as _SE
@@ -760,6 +812,21 @@ def build_parser() -> argparse.ArgumentParser:
     sp_bundle.add_argument("--export-c2", action="store_true",
                            help="Положить в Bundle db.sqlite в C2-формате (ADR-007)")
     sp_bundle.set_defaults(func=cmd_bundle)
+
+    # ingest-project: загрузка папки заполненных шаблонов одним вызовом
+    sp_ip = sub.add_parser("ingest-project",
+                           help="Загрузить папку шаблонов (геометрия/перечень/техкарта/ОСВ/правки) в БД")
+    sp_ip.add_argument("--dir", required=True, help="Папка с заполненными файлами-шаблонами")
+    sp_ip.add_argument("--db",  required=True, help="Рабочая БД (создаётся/дополняется, идемпотентно)")
+    sp_ip.add_argument("--pledge-map", help="Привязка насаждений к КН ЗУ: «66=23:..,69=23:..»")
+    sp_ip.set_defaults(func=cmd_ingest_project)
+
+    # kmz: объекты в пределах ЗУ → KMZ (контуры / спираль)
+    sp_kmz = sub.add_parser("kmz", help="KMZ объектов в пределах ЗУ (контуры / точки по спирали)")
+    sp_kmz.add_argument("--parcels", required=True, help="КН участков через запятую: «23:15:..,23:15:..»")
+    sp_kmz.add_argument("--db",  required=True, help="Рабочая БД (контуры/объекты)")
+    sp_kmz.add_argument("--out", required=True, help="Выходной .kmz")
+    sp_kmz.set_defaults(func=cmd_kmz)
 
     # export-c2: конвертация рабочей БД парсера → C2 (контракт обмена)
     sp_c2 = sub.add_parser("export-c2", help="Экспорт БД парсера → C2-формат (ADR-007)")
