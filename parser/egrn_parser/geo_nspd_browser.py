@@ -168,6 +168,55 @@ async def _close_modals(page):
         pass
 
 
+async def _trigger_lupa(page, cad: str) -> dict:
+    """Имитировать клик по лупе: NSPD грузит контур И «остальные данные» (ОКС
+    в пределах ЗУ) только после фактического запуска поиска через UI.
+
+    Компоненты NSPD — web-components с OPEN shadow root, поэтому ищем поле ввода
+    и кнопку поиска рекурсивно по всем shadow-деревьям, заполняем КН, шлём Enter
+    и кликаем лупу. Перехват ОКС — пассивным слушателем _on_resp."""
+    try:
+        return await page.evaluate("""
+            (cad) => {
+                const findDeep = (root, pred) => {
+                    const stack = [root];
+                    while (stack.length) {
+                        const node = stack.pop();
+                        const kids = (node.querySelectorAll ? node.querySelectorAll('*') : []);
+                        for (const el of kids) {
+                            if (pred(el)) return el;
+                            if (el.shadowRoot) stack.push(el.shadowRoot);
+                        }
+                    }
+                    return null;
+                };
+                const input = findDeep(document, el =>
+                    el.tagName === 'INPUT' &&
+                    (el.type === 'text' || el.type === 'search' || !el.type) &&
+                    el.offsetParent !== null);
+                if (input) {
+                    input.focus();
+                    input.value = cad;
+                    input.dispatchEvent(new Event('input', {bubbles: true}));
+                    for (const t of ['keydown', 'keyup']) {
+                        input.dispatchEvent(new KeyboardEvent(t,
+                            {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
+                    }
+                }
+                const btn = findDeep(document, el =>
+                    (el.tagName === 'BUTTON' ||
+                     (el.getAttribute && el.getAttribute('role') === 'button')) &&
+                    el.offsetParent !== null &&
+                    (((el.getAttribute('aria-label') || '').toLowerCase().match(/поиск|search/)) ||
+                     (el.querySelector && el.querySelector('[class*="search"],[class*="loupe"],[class*="magnif"]'))));
+                if (btn) btn.click();
+                return {input: !!input, button: !!btn};
+            }
+        """, cad)
+    except Exception:
+        return {"input": False, "button": False}
+
+
 async def _search_geoportal(page, cad: str) -> list[dict]:
     """Активный session-aware запрос geoportal-search по КН → список feature.
 
@@ -248,9 +297,11 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
                 parcel = pick_parcel_feature(feats, cad)
                 poly = _geom_to_coords(parcel.get("geometry")) if parcel else None
 
-                # дать карте время загружать OKS внутри ЗУ (слушатель _on_resp их перехватит)
+                # имитировать клик по лупе → карта грузит контур + ОКС в пределах ЗУ;
+                # пассивный _on_resp перехватит ОКС. Без клика NSPD данные не тянет.
                 if discover and poly:
-                    await page.wait_for_timeout(3000)
+                    await _trigger_lupa(page, cad)
+                    await page.wait_for_timeout(4000)
 
                 buildings: list[dict[str, Any]] = []
                 if discover and poly:
