@@ -40,9 +40,9 @@
    (parse/export/migrate/dict-load/validate/enrich/monitor/serve/folders/**bundle**),
    `MIGRATION.md` (маппинг legacy-скриптов → CLI). Legacy `01_parsing_OS…`/
    `05_parse_egrn_folder…` — **уже отсутствуют** (мигрированы). **Сверка
-   `db/schema.sql` ↔ C2 — ✅ задокументирована** (`obsidian/Architecture/
-   schema-pkg-vs-c2-drift.md`): два разных модели (пакет parser-internal 24 табл. vs
-   C2-контракт 8 табл.); реконсиляция — отдельный ADR (export-mapping), не слияние.
+   `db/schema.sql` ↔ C2 — ✅** сверка + **слой экспорта** (ADR-007,
+   `schema_export.export_to_c2`, CLI `export-c2`): pkg-БД (24 табл.) → C2-контракт
+   (8 табл.); правила перевода в ADR-007. Bundle несёт C2-БД (`bundle --export-c2`).
 4. **Эмиттер Bundle (главный новый артефакт).** Стадия после 08 собирает каталог
    по `contracts/bundle/BUNDLE_SPEC.md`: `project.kmz` (08), `db.sqlite` (§1–§6),
    `json/{structure,enriched,objects/*}`, `manifest.json` (версии contracts +

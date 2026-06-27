@@ -515,6 +515,17 @@ def cmd_bundle(args: argparse.Namespace) -> int:
     with sqlite3.connect(args.db) as _c:
         etp = _EM.etp_layer_present(_c)
 
+    # В Bundle кладём C2-совместимую БД (ADR-007): если --export-c2 — конвертируем
+    # рабочую БД парсера в C2-формат и пакуем её; иначе — БД как есть.
+    db_for_bundle = args.db
+    if getattr(args, "export_c2", False):
+        import tempfile as _tmp
+
+        from egrn_parser import schema_export as _SE
+        db_for_bundle = Path(_tmp.mkdtemp(prefix="ekcelo_c2_")) / "db.sqlite"
+        _SE.export_to_c2(args.db, db_for_bundle)
+        print(f"[bundle] db.sqlite экспортирована в C2-формат: {db_for_bundle}")
+
     objects_json = None
     if getattr(args, "objects_json_dir", None):
         objects_json = {p.stem: p for p in Path(args.objects_json_dir).glob("*.json")}
@@ -522,7 +533,7 @@ def cmd_bundle(args: argparse.Namespace) -> int:
     ts = _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0).isoformat()
     try:
         manifest = _BA.assemble_bundle(
-            args.out, kmz=args.kmz, db=args.db,
+            args.out, kmz=args.kmz, db=db_for_bundle,
             json_files=list(args.json or []), objects_json=objects_json,
             raw_files=list(args.raw or []), kind=kind, objects=objects,
             primary_cad_number=getattr(args, "primary_cad", None),
@@ -535,6 +546,20 @@ def cmd_bundle(args: argparse.Namespace) -> int:
     print(f"[bundle] собран: {args.out}  kind={manifest['kind']}  "
           f"файлов={len(manifest['files'])}  объектов={len(manifest['objects'])}"
           f"  etp_layer={manifest.get('etp_layer_present')}")
+    return 0
+
+
+def cmd_export_c2(args: argparse.Namespace) -> int:
+    """Экспорт рабочей БД парсера в C2-формат (`schema/egrn_current_schema.sql`, ADR-007)."""
+    from egrn_parser import schema_export as _SE
+    try:
+        counts = _SE.export_to_c2(args.db, args.out)
+    except (OSError, ValueError) as exc:
+        print(f"[export-c2] ошибка: {exc}", file=sys.stderr)
+        return 1
+    print(f"[export-c2] C2-БД: {args.out}")
+    for t, n in counts.items():
+        print(f"    {t:<22} {n}")
     return 0
 
 
@@ -732,7 +757,15 @@ def build_parser() -> argparse.ArgumentParser:
     sp_bundle.add_argument("--primary-cad", help="Главный КН")
     sp_bundle.add_argument("--extract-date", help="Дата выписки YYYY-MM-DD (для лота — as_of)")
     sp_bundle.add_argument("--lot-id", help="ID лота (состав из --db; kind=lot)")
+    sp_bundle.add_argument("--export-c2", action="store_true",
+                           help="Положить в Bundle db.sqlite в C2-формате (ADR-007)")
     sp_bundle.set_defaults(func=cmd_bundle)
+
+    # export-c2: конвертация рабочей БД парсера → C2 (контракт обмена)
+    sp_c2 = sub.add_parser("export-c2", help="Экспорт БД парсера → C2-формат (ADR-007)")
+    sp_c2.add_argument("--db",  required=True, help="Рабочая БД парсера")
+    sp_c2.add_argument("--out", required=True, help="C2-БД (создаётся/перезаписывается)")
+    sp_c2.set_defaults(func=cmd_export_c2)
 
     return p
 
