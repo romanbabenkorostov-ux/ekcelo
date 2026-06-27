@@ -586,13 +586,20 @@ def cmd_kmz(args: argparse.Namespace) -> int:
         print("[kmz] укажите --parcels «КН1,КН2,…»", file=sys.stderr)
         return 1
     modes = [m.strip() for m in (args.objects or "").split(",") if m.strip()] or _K.DEFAULT_MODES
-    fetcher = None
+    bsrc = [s.strip() for s in (getattr(args, "buildings", "") or "").split(",")
+            if s.strip()] or _K.DEFAULT_BUILDING_SOURCES
+    extra = [c.strip() for c in (getattr(args, "building_cads", "") or "").replace(";", ",").split(",")
+             if c.strip()] or None
+    fetcher = discovery = None
     if getattr(args, "nspd", False):
         from egrn_parser import geo_nspd as _N
-        fetcher = _N.fetch_geometry                  # ЗУ/объекты по КН из ПКК (сеть)
+        fetcher = _N.fetch_geometry                  # геометрия ЗУ/строений по КН (сеть)
+        discovery = _N.discover_buildings            # обнаружение ОКС в границах ЗУ (источник 2)
     conn = sqlite3.connect(args.db)
     try:
-        parcels = _K.collect_from_db(conn, cads, modes=modes, geometry_fetcher=fetcher)
+        parcels = _K.collect_from_db(conn, cads, modes=modes, geometry_fetcher=fetcher,
+                                     building_sources=bsrc, building_discovery=discovery,
+                                     extra_building_cads=extra)
     finally:
         conn.close()
     res = _K.build_kmz(args.out, parcels)
@@ -833,8 +840,12 @@ def build_parser() -> argparse.ArgumentParser:
     sp_kmz.add_argument("--out", required=True, help="Выходной .kmz")
     sp_kmz.add_argument("--objects", default="linked,agro,geo",
                         help="Что считать объектом внутри ЗУ: linked(а),agro(в),geo(г) — через запятую")
+    sp_kmz.add_argument("--buildings", default="nspd,db,cads",
+                        help="Источник строений (порядок): nspd(2,обнаружение в границах ЗУ),"
+                             "db(1,из БД),cads(3,список --building-cads)")
+    sp_kmz.add_argument("--building-cads", help="КН строений (источник 3): «КН1,КН2,…»")
     sp_kmz.add_argument("--nspd", action="store_true",
-                        help="Тянуть недостающую геометрию ЗУ/строений из ПКК/НSPD (нужна сеть)")
+                        help="Тянуть геометрию/обнаруживать ОКС из ПКК/НSPD (нужна сеть)")
     sp_kmz.set_defaults(func=cmd_kmz)
 
     # export-c2: конвертация рабочей БД парсера → C2 (контракт обмена)

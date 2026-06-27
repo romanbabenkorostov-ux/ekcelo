@@ -32,3 +32,25 @@ def test_parse_pkk_multipolygon_takes_first():
 def test_parse_empty():
     assert N.parse_pkk_feature({}) is None
     assert N.parse_pkk_feature({"feature": {"geometry": {}}}) is None
+
+
+def test_parse_wfs_features():
+    body = {"features": [
+        {"geometry": {"type": "Polygon", "coordinates": [[[38.9, 45.0], [38.92, 45.0], [38.92, 45.02]]]},
+         "properties": {"cad_num": "23:15:0000000:1"}},
+        {"geometry": None, "properties": {}}]}
+    feats = N.parse_wfs_features(body)
+    assert len(feats) == 1 and feats[0]["cad"] == "23:15:0000000:1"
+    assert feats[0]["geometry"]["type"] == "Polygon"
+
+
+def test_discover_buildings_filters_outside(monkeypatch):
+    sq = [[38.9, 45.0], [38.92, 45.0], [38.92, 45.02], [38.9, 45.02]]
+    body = {"features": [
+        {"geometry": {"type": "Polygon", "coordinates": [[[38.905, 45.005], [38.908, 45.005], [38.908, 45.008]]]},
+         "properties": {"cad_num": "IN"}},
+        {"geometry": {"type": "Polygon", "coordinates": [[[39.5, 46.0], [39.51, 46.0], [39.51, 46.01]]]},
+         "properties": {"cad_num": "OUT"}}]}
+    monkeypatch.setattr(N, "_wfs_get", lambda *a, **k: body)
+    disc = N.discover_buildings([sq])
+    assert [o["name"] for o in disc] == ["IN"]       # OUT (центр вне ЗУ) отфильтрован

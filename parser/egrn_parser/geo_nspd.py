@@ -75,3 +75,89 @@ def fetch_geometry(cad: str, *, layer: int = LAYER_PARCEL) -> Optional[dict]:
 def building_fetcher():
     """Фетчер геометрии ОКС/зданий (layer=5) для geometry_fetcher объектов."""
     return lambda cad: fetch_geometry(cad, layer=LAYER_BUILDING)
+
+
+# ── NSPD WFS: геометрия по КН + обнаружение ОКС в границах ЗУ ─────────────────
+# WFS отдаёт GeoJSON сразу в EPSG:4326 (репроекция не нужна). Слои — из v8-парсера.
+WFS_URL = "https://nspd.gov.ru/api/aeggis/v3/{id}/wfs"
+NSPD_ZU_LAYERS = [36048]
+NSPD_OKS_LAYERS = [36329, 36328, 36049]
+CAD_FIELDS = ["cad_num", "KAD_NUM", "CAD_NUM", "kadnum", "cadnum"]
+
+
+def _wfs_get(layer_id: int, *, cql: Optional[str] = None,
+             bbox: Optional[tuple] = None, count: int = 50,
+             timeout: int = 20) -> Optional[dict]:
+    """GetFeature по слою (CQL или BBOX). Возвращает GeoJSON body или None (сеть)."""
+    params = (f"SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=ms:layer_{layer_id}"
+              f"&outputFormat=application/json&SRSNAME=EPSG:4326&count={count}")
+    if cql:
+        params += "&CQL_FILTER=" + urllib.parse.quote(cql, safe="")
+    if bbox:
+        params += f"&BBOX={bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]},EPSG:4326"
+    url = WFS_URL.format(id=layer_id) + "?" + params
+    req = urllib.request.Request(url, headers={
+        "Referer": "https://nspd.gov.ru/map", "Origin": "https://nspd.gov.ru",
+        "Accept": "application/json, */*", "User-Agent": "Mozilla/5.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:   # noqa: S310
+            return json.loads(resp.read().decode("utf-8"))
+    except Exception:
+        return None
+
+
+def _geojson_to_kmz_geom(g: dict) -> Optional[dict]:
+    """GeoJSON (4326) → формат geo_kmz {type, coords}."""
+    if not isinstance(g, dict) or not g.get("coordinates"):
+        return None
+    t = g.get("type")
+    if t == "Point":
+        return {"type": "Point", "coords": [g["coordinates"]]}
+    if t == "Polygon":
+        return {"type": "Polygon", "coords": g["coordinates"]}
+    if t == "MultiPolygon":
+        return {"type": "Polygon", "coords": g["coordinates"][0]}
+    return None
+
+
+def _feat_cad(props: dict) -> Optional[str]:
+    for f in CAD_FIELDS:
+        v = (props or {}).get(f)
+        if v:
+            return str(v)
+    return None
+
+
+def parse_wfs_features(body: dict) -> list[dict[str, Any]]:
+    """WFS GeoJSON → [{cad, geometry{type,coords}}] (геометрия в 4326)."""
+    out = []
+    for ft in (body or {}).get("features") or []:
+        g = _geojson_to_kmz_geom(ft.get("geometry") or {})
+        if g:
+            out.append({"cad": _feat_cad(ft.get("properties") or {}), "geometry": g})
+    return out
+
+
+def discover_buildings(parcel_polygon: Any) -> list[dict[str, Any]]:
+    """Найти ОКС в границах ЗУ через NSPD-WFS (BBOX по габариту + точный фильтр
+    centroid-in-polygon). Возвращает [{name(cad), geometry}]. Требует сети."""
+    from egrn_parser.geo_kmz import _ring, bbox as _bbox, centroid, point_in_ring
+    ring = _ring(parcel_polygon)
+    if len(ring) < 3:
+        return []
+    minx, miny, maxx, maxy = _bbox(ring)
+    seen, result = set(), []
+    for lid in NSPD_OKS_LAYERS:
+        body = _wfs_get(lid, bbox=(minx, miny, maxx, maxy))
+        if not body:
+            continue
+        for f in parse_wfs_features(body):
+            r = _ring(f["geometry"]["coords"])
+            if not r or not point_in_ring(centroid(r), ring):
+                continue                              # центр ОКС вне ЗУ
+            key = f.get("cad") or str(r[0])
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append({"name": f.get("cad") or "ОКС", "geometry": f["geometry"]})
+    return result

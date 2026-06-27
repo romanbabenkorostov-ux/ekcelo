@@ -106,3 +106,19 @@ def test_nspd_fetch_fallback():
     assert fetched[0]["polygon"] is not None
     # закэшировано в land_contours
     assert c.execute("SELECT COUNT(*) FROM land_contours WHERE parent_cad='NOGEO'").fetchone()[0] == 1
+
+
+def test_building_sources_order_and_cads():
+    """Источники строений: nspd(2)+db(1)+cads(3) комбинируются, дедуп по КН."""
+    import json
+    c = sqlite3.connect(":memory:")
+    c.execute("CREATE TABLE land_contours(parent_cad TEXT,contour_no INTEGER,geom_geojson TEXT,geom_source TEXT)")
+    c.execute("INSERT INTO land_contours VALUES('P',1,?,'nspd')",
+              (json.dumps({"type": "Polygon", "coordinates": [_SQ]}),))
+    c.commit()
+    parcels = K.collect_from_db(
+        c, ["P"], building_sources=("nspd", "db", "cads"),
+        building_discovery=lambda poly: [{"name": "DISC", "geometry": {"type": "Polygon", "coords": [_SQ]}}],
+        extra_building_cads=["LIST1"])
+    names = [o["name"] for o in parcels[0]["objects"]]
+    assert "DISC" in names and "LIST1" in names       # обнаружение + список

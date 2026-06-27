@@ -183,8 +183,18 @@ def _norm_modes(modes) -> set[str]:
     return {_MODE_ALIAS.get(m.strip().lower(), m.strip().lower()) for m in modes}
 
 
+# Источники СТРОЕНИЙ (выбор пользователя; умолч. порядок 2→1→3):
+#   nspd (2) — обнаружение ОКС в границах ЗУ через NSPD-WFS (geo_nspd.discover_buildings)
+#   db   (1) — из БД по режимам modes (linked/agro/geo)
+#   cads (3) — переданный список КН строений (геометрия по КН из NSPD/БД)
+DEFAULT_BUILDING_SOURCES = ("nspd", "db", "cads")
+
+
 def collect_from_db(conn, cad_numbers: list[str], *, modes=DEFAULT_MODES,
-                    geometry_fetcher: Optional[Any] = None) -> list[dict[str, Any]]:
+                    geometry_fetcher: Optional[Any] = None,
+                    building_sources=DEFAULT_BUILDING_SOURCES,
+                    building_discovery: Optional[Any] = None,
+                    extra_building_cads: Optional[list[str]] = None) -> list[dict[str, Any]]:
     """Собрать структуру `parcels` из БД.
 
     Граница ЗУ — из `land_contours`; при отсутствии и наличии `geometry_fetcher`
@@ -231,11 +241,10 @@ def collect_from_db(conn, cad_numbers: list[str], *, modes=DEFAULT_MODES,
             conn.commit()
         return coords
 
-    parcels = []
-    for cad in cad_numbers:
-        poly = _poly(cad) or _fetch(cad)
+    def _from_db(cad: str, poly) -> list[dict[str, Any]]:
+        """Строения/объекты из БД по режимам modes (источник 1: linked/agro/geo)."""
         names: list[str] = []
-        # (а) linked + building.parent
+        geo_objs: list[dict[str, Any]] = []
         if "linked" in modes:
             if _has("linked_objects"):
                 names += [r[0] for r in conn.execute(
@@ -243,7 +252,6 @@ def collect_from_db(conn, cad_numbers: list[str], *, modes=DEFAULT_MODES,
             if _has("building_objects"):
                 names += [r[0] for r in conn.execute(
                     "SELECT cad_number FROM building_objects WHERE parent_cad_number=?", (cad,))]
-        # (в) §6-агро: насаждения/точки на этом ЗУ
         agro_pts = []
         if "agro" in modes and _has("agro_parcel"):
             for code, gj in conn.execute(
@@ -256,8 +264,6 @@ def collect_from_db(conn, cad_numbers: list[str], *, modes=DEFAULT_MODES,
                     except (ValueError, TypeError):
                         g = None
                 agro_pts.append({"name": f"агро:{code}", "geometry": g})
-        # (г) геометрический тест: контуры др. объектов внутри полигона ЗУ
-        geo_objs = []
         if "geo" in modes and poly and _has("land_contours"):
             ring0 = _ring(poly)
             for ocad, gj in conn.execute(
@@ -272,20 +278,35 @@ def collect_from_db(conn, cad_numbers: list[str], *, modes=DEFAULT_MODES,
                         names.append(ocad)
                 except (ValueError, TypeError):
                     continue
-
-        objects = []
-        seen = set()
-        for ch in names:                              # linked/building/geo по КН
-            if ch in seen:
-                continue
-            seen.add(ch)
-            # геометрия уже найдена в (г)?
+        objs = []
+        for ch in dict.fromkeys(names):
             pre = next((o for o in geo_objs if o["name"] == ch), None)
             if pre:
-                objects.append(pre); continue
-            g = _poly(ch) or _fetch(ch)               # своя геометрия / NSPD
-            objects.append({"name": ch,
-                            "geometry": {"type": "Polygon", "coords": g} if g else None})
-        objects += agro_pts                           # агро-точки добавляем как есть
+                objs.append(pre); continue
+            g = _poly(ch) or _fetch(ch)
+            objs.append({"name": ch, "geometry": {"type": "Polygon", "coords": g} if g else None})
+        return objs + agro_pts
+
+    parcels = []
+    for cad in cad_numbers:
+        poly = _poly(cad) or _fetch(cad)
+        objects, seen = [], set()
+
+        def _add(o):
+            if o["name"] in seen:
+                return
+            seen.add(o["name"]); objects.append(o)
+
+        for src in building_sources:                  # порядок выбора (умолч. 2→1→3)
+            if src == "nspd" and building_discovery and poly:
+                for o in building_discovery(poly):    # обнаружение ОКС в границах ЗУ
+                    _add(o)
+            elif src == "db":
+                for o in _from_db(cad, poly):
+                    _add(o)
+            elif src == "cads" and extra_building_cads:
+                for ch in extra_building_cads:
+                    g = _poly(ch) or _fetch(ch)
+                    _add({"name": ch, "geometry": {"type": "Polygon", "coords": g} if g else None})
         parcels.append({"cad": cad, "polygon": poly, "objects": objects})
     return parcels
