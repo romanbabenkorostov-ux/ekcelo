@@ -49,6 +49,20 @@ def test_feature_cad_from_nested_options():
     assert B._feature_cad(_feat("23:15:0303000:1130", OKS)) == "23:15:0303000:1130"
 
 
+def test_collect_cads_from_attribute_table():
+    # вкладка «ОКС в пределах» — таблица КН без геометрии
+    payload = {"data": {"rows": [
+        {"cad_num": "23:15:0303000:1130", "area": 5},
+        {"options": {"cadastral_number": "23:15:0303000:9999"}}],
+        "descr": "смежный 23:15:0000000:2267"}}
+    assert B.collect_cads(payload) == {
+        "23:15:0303000:1130", "23:15:0303000:9999", "23:15:0000000:2267"}
+
+
+def test_collect_cads_empty_on_no_cads():
+    assert B.collect_cads({"foo": "bar", "n": 42, "list": [1, 2, 3]}) == set()
+
+
 def test_buildings_discovered_in_polygon():
     parcel = _feat("23:15:0000000:2267", PARCEL)
     oks = _feat("23:15:0000000:9999", OKS)

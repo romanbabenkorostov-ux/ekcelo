@@ -30,10 +30,35 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+import re
 import urllib.parse
 from typing import Any, Optional
 
 from egrn_parser import geo_nspd as _N
+
+# КН РФ: 2:2:6-7:N (квартал/участок). Ловим в любом тексте ответа NSPD.
+_CAD_RE = re.compile(r"\b\d{2}:\d{1,2}:\d{5,7}:\d+\b")
+
+
+def collect_cads(payload: Any) -> set[str]:
+    """Рекурсивно собрать ВСЕ кадастровые номера из JSON-ответа (включая
+    атрибутивные таблицы вкладки «ОКС в пределах ЗУ», где геометрии нет)."""
+    found: set[str] = set()
+
+    def walk(node, depth=0):
+        if depth > 8 or node is None:
+            return
+        if isinstance(node, str):
+            found.update(_CAD_RE.findall(node))
+        elif isinstance(node, dict):
+            for v in node.values():
+                walk(v, depth + 1)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v, depth + 1)
+
+    walk(payload)
+    return found
 
 # Современный geoportal-API NSPD (тот, что дёргает строка поиска / лупа).
 GEOPORTAL_SEARCH = "https://nspd.gov.ru/api/geoportal/v2/search/geoportal"
@@ -258,6 +283,8 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
         # Разрешающий слушатель: копим geoportal-feature (в т.ч. из /search/),
         # которые v8.NetworkCapture отбрасывает. Источник ОКС + пассивный fallback.
         captured: list[dict] = []
+        seen_cads: set[str] = set()          # все КН из ответов (ручной режим)
+        diag: list[tuple] = []               # (url, keys, n_feats, n_cads) — диагностика
 
         async def _on_resp(resp):
             try:
@@ -272,7 +299,13 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
                 if "json" not in ct.lower() and "json" not in url.lower():
                     return
                 data = json.loads(await resp.text())
-                captured.extend(extract_features(data))
+                feats = extract_features(data)
+                captured.extend(feats)
+                if manual:
+                    cads = collect_cads(data)
+                    seen_cads.update(cads)
+                    keys = list(data.keys())[:6] if isinstance(data, dict) else type(data).__name__
+                    diag.append((url.split("nspd.gov.ru")[-1][:90], keys, len(feats), len(cads)))
             except Exception:
                 return
 
@@ -281,6 +314,8 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
         try:
             for cad in cads:
                 captured.clear()
+                seen_cads.clear()
+                diag.clear()
                 layers = ",".join(str(x) for x in (_N.NSPD_ZU_LAYERS + _N.NSPD_OKS_LAYERS))
                 url = (f"https://nspd.gov.ru/map?query={urllib.parse.quote(cad, safe='')}"
                        f"&active_layers={layers}")
@@ -311,12 +346,31 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
                           flush=True)
                     loop = asyncio.get_event_loop()
                     await loop.run_in_executor(None, input)
-                    # пользователь мог открыть нужный объект — перечитываем feats
                     if captured:
                         feats = list(captured)
                         if not poly:
                             parcel = pick_parcel_feature(feats, cad)
                             poly = _geom_to_coords(parcel.get("geometry")) if parcel else None
+                    # Диагностика: что реально отдал NSPD на ваши клики
+                    print(f"    [диаг] JSON-ответов: {len(diag)}; КН в ответах: "
+                          f"{len(seen_cads)}; feature с геометрией: {len(captured)}")
+                    for u, keys, nf, nc in diag[-12:]:
+                        print(f"      {u}  keys={keys} feats={nf} cads={nc}")
+                    # ОКС-кандидаты = КН из вкладок минус сам ЗУ; геометрию каждого
+                    # резолвим проверенным geoportal-search (он работает для ЗУ).
+                    if poly:
+                        oks_cads = {c for c in seen_cads
+                                    if c.replace(" ", "") != cad.replace(" ", "")}
+                        if oks_cads:
+                            print(f"    резолвлю геометрию {len(oks_cads)} ОКС-кандидатов "
+                                  f"через geoportal-search…", flush=True)
+                        for oc in sorted(oks_cads):
+                            of = await _search_geoportal(page, oc)
+                            ofp = pick_parcel_feature(of, oc)
+                            og = _geom_to_coords(ofp.get("geometry")) if ofp else None
+                            if og:
+                                feats.append({"type": "Feature", "geometry": ofp["geometry"],
+                                              "properties": {"cad_num": oc}})
                 elif discover and poly:
                     # авто-попытка: имитировать клик по лупе → карта грузит ОКС.
                     await _trigger_lupa(page, cad)
