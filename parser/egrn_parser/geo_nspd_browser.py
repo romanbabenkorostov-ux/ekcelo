@@ -62,10 +62,11 @@ def collect_cads(payload: Any) -> set[str]:
 
 # Современный geoportal-API NSPD (тот, что дёргает строка поиска / лупа).
 GEOPORTAL_SEARCH = "https://nspd.gov.ru/api/geoportal/v2/search/geoportal"
-# Варианты запроса: универсальный + тематический по ЗУ. Пробуем по очереди.
+# Варианты запроса: универсальный + тематические (1=ЗУ, 2=ОКС). По очереди.
 _SEARCH_VARIANTS = (
     "{base}?query={q}",
     "{base}?thematicSearchId=1&query={q}",
+    "{base}?thematicSearchId=2&query={q}",
 )
 _R_MERC = 20037508.34
 # Поля с КН в properties geoportal-feature (в т.ч. вложенные в options).
@@ -259,11 +260,33 @@ async def _fetch_objects_list(page, geom_id, cat_id) -> set[str]:
         return set()
 
 
-async def _resolve_geom(page, cad: str) -> Optional[list]:
-    """КН ОКС → coords полигона через geoportal-search (или None, если без контура)."""
+async def _resolve_geom(page, cad: str) -> Optional[dict]:
+    """КН ОКС → геометрия {type, coords} через geoportal-search.
+
+    Возвращает контур (Polygon) если есть; иначе реальную точку (Point) из NSPD;
+    None — если объект вообще не нашёлся (тогда вызывающий ставит точку по спирали).
+    Точку NSPD предпочитаем спирали — она настоящая, а не синтетическая."""
     feats = await _geoportal_get(page, cad)
-    f = pick_parcel_feature(feats, cad)
-    return _geom_to_coords(f.get("geometry")) if f else None
+    if not feats:
+        return None
+    want = cad.replace(" ", "").upper()
+    chosen = None
+    for f in feats:
+        if (_feature_cad(f) or "").replace(" ", "").upper() == want:
+            chosen = f
+            break
+    chosen = chosen or feats[0]
+    g = _reproject(chosen.get("geometry"))
+    if not g or not g.get("coordinates"):
+        return None
+    t = g.get("type")
+    if t == "Polygon":
+        return {"type": "Polygon", "coords": g["coordinates"]}
+    if t == "MultiPolygon":
+        return {"type": "Polygon", "coords": g["coordinates"][0]}
+    if t == "Point":
+        return {"type": "Point", "coords": [g["coordinates"]]}
+    return None
 
 
 async def _run(cads: list[str], *, discover: bool, headless: bool,
@@ -363,13 +386,22 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
                     if oks:
                         print(f"      ОКС в пределах: {len(oks)} — резолвлю геометрию…",
                               flush=True)
-                    # 3) геометрия каждого ОКС; без контура → точка по спирали (None).
+                    # 3) геометрия каждого ОКС: контур (Polygon) > реальная точка
+                    #    (Point) > спираль (None). Точка NSPD точнее синтетической спирали.
+                    n_cont = n_pt = n_spi = 0
                     for j, oc in enumerate(sorted(oks), 1):
-                        og = await _resolve_geom(page, oc)
-                        buildings.append({"name": oc,
-                                          "geometry": {"type": "Polygon", "coords": og} if og else None})
-                        mark = "контур" if og else "спираль"
+                        g = await _resolve_geom(page, oc)
+                        buildings.append({"name": oc, "geometry": g})
+                        if g and g["type"] == "Polygon":
+                            mark = "контур"; n_cont += 1
+                        elif g and g["type"] == "Point":
+                            mark = "точка"; n_pt += 1
+                        else:
+                            mark = "спираль"; n_spi += 1
                         print(f"        {j}/{len(oks)} {oc}: {mark}", flush=True)
+                    if oks:
+                        print(f"      → контур: {n_cont}, точка: {n_pt}, спираль: {n_spi}",
+                              flush=True)
 
                 out[cad] = {"polygon": poly, "buildings": buildings,
                             "captured": len(captured)}

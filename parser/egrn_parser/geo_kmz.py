@@ -60,23 +60,26 @@ def point_in_ring(pt: Coord, ring: list[Coord]) -> bool:
     return inside
 
 
-def spiral_points(ring: list[Coord], count: int, *, turns: float = 3.0,
-                  margin: float = 0.85) -> list[Coord]:
-    """`count` точек по архимедовой спирали внутри полигона `ring`.
+_GOLDEN_ANGLE = 2.39996322972865332                  # ≈137.5° — узор филлотаксиса
 
-    Центр — центроид; радиус растёт ∝ sqrt(i) (равномерно по площади). Точки вне
-    полигона подтягиваются к центру до попадания внутрь (margin — доля габарита)."""
+def spiral_points(ring: list[Coord], count: int, *, margin: float = 0.45) -> list[Coord]:
+    """`count` точек кучным узором (филлотаксис/«подсолнух») внутри полигона.
+
+    Центр — центроид; радиус ∝ sqrt(i) (равномерно по площади), угол = i·золотой
+    угол → нет резонанса с числом точек (архимедова спираль с целым числом
+    оборотов вырождалась в линию). margin (доля габарита) задаёт кучность:
+    0.45 — компактно у центра ЗУ. Точки вне полигона подтягиваются к центру."""
     if count <= 0 or len(ring) < 3:
         return []
-    cx, cy = centroid(ring)
+    core = ring[:-1] if len(ring) > 2 and ring[0] == ring[-1] else ring
+    cx, cy = centroid(core)
     minx, miny, maxx, maxy = bbox(ring)
     rx = (maxx - minx) / 2.0 * margin
     ry = (maxy - miny) / 2.0 * margin
     out: list[Coord] = []
     for i in range(count):
-        t = (i + 0.5) / count                       # 0..1
-        theta = turns * 2.0 * math.pi * t
-        rad = math.sqrt(t)                          # равномерно по площади
+        rad = math.sqrt((i + 0.5) / count)          # равномерно по площади
+        theta = i * _GOLDEN_ANGLE
         dx, dy = rad * math.cos(theta), rad * math.sin(theta)
         # подтягиваем внутрь полигона (до 6 шагов уменьшения радиуса)
         s = 1.0
