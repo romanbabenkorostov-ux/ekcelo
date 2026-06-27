@@ -138,26 +138,42 @@ def parse_wfs_features(body: dict) -> list[dict[str, Any]]:
     return out
 
 
+def wfs_bbox_url(layer_id: int, bbox: tuple, *, count: int = 50) -> str:
+    """URL WFS GetFeature по BBOX (для page.request браузерного пути или urllib)."""
+    return (WFS_URL.format(id=layer_id) +
+            f"?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=ms:layer_{layer_id}"
+            f"&outputFormat=application/json&SRSNAME=EPSG:4326&count={count}"
+            f"&BBOX={bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]},EPSG:4326")
+
+
+def features_in_polygon(features: list[dict[str, Any]],
+                        parcel_polygon: Any) -> list[dict[str, Any]]:
+    """Отфильтровать WFS-объекты: оставить те, чей центроид внутри полигона ЗУ."""
+    from egrn_parser.geo_kmz import _ring, centroid, point_in_ring
+    ring = _ring(parcel_polygon)
+    seen, out = set(), []
+    for f in features:
+        r = _ring(f["geometry"]["coords"])
+        if not r or not point_in_ring(centroid(r), ring):
+            continue
+        key = f.get("cad") or str(r[0])
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"name": f.get("cad") or "ОКС", "geometry": f["geometry"]})
+    return out
+
+
 def discover_buildings(parcel_polygon: Any) -> list[dict[str, Any]]:
-    """Найти ОКС в границах ЗУ через NSPD-WFS (BBOX по габариту + точный фильтр
-    centroid-in-polygon). Возвращает [{name(cad), geometry}]. Требует сети."""
-    from egrn_parser.geo_kmz import _ring, bbox as _bbox, centroid, point_in_ring
+    """ОКС в границах ЗУ через NSPD-WFS (urllib BBOX + фильтр). Часто блокируется
+    анти-ботом NSPD (голый HTTP) — надёжный путь см. geo_nspd_browser."""
+    from egrn_parser.geo_kmz import _ring, bbox as _bbox
     ring = _ring(parcel_polygon)
     if len(ring) < 3:
         return []
-    minx, miny, maxx, maxy = _bbox(ring)
-    seen, result = set(), []
+    feats = []
     for lid in NSPD_OKS_LAYERS:
-        body = _wfs_get(lid, bbox=(minx, miny, maxx, maxy))
-        if not body:
-            continue
-        for f in parse_wfs_features(body):
-            r = _ring(f["geometry"]["coords"])
-            if not r or not point_in_ring(centroid(r), ring):
-                continue                              # центр ОКС вне ЗУ
-            key = f.get("cad") or str(r[0])
-            if key in seen:
-                continue
-            seen.add(key)
-            result.append({"name": f.get("cad") or "ОКС", "geometry": f["geometry"]})
-    return result
+        body = _wfs_get(lid, bbox=_bbox(ring))
+        if body:
+            feats += parse_wfs_features(body)
+    return features_in_polygon(feats, parcel_polygon)

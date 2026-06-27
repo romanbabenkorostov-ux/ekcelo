@@ -591,15 +591,40 @@ def cmd_kmz(args: argparse.Namespace) -> int:
     extra = [c.strip() for c in (getattr(args, "building_cads", "") or "").replace(";", ",").split(",")
              if c.strip()] or None
     fetcher = discovery = None
-    if getattr(args, "nspd", False):
+    browser_cache: dict = {}
+    use_http = getattr(args, "nspd_http", False)
+    use_browser = getattr(args, "nspd", False) and not use_http
+    if use_browser:
+        # Надёжный путь: NSPD через браузер (анти-бот). Геометрия ЗУ + ОКС в границах.
+        from egrn_parser import geo_nspd_browser as _NB
+        try:
+            browser_cache = _NB.fetch_parcels(cads, discover=("nspd" in bsrc))
+            print(f"[kmz] NSPD(браузер): получено по {sum(1 for v in browser_cache.values() if v.get('polygon'))}"
+                  f"/{len(cads)} ЗУ; ОКС найдено: {sum(len(v.get('buildings',[])) for v in browser_cache.values())}")
+        except Exception as exc:                     # нет playwright/сети — честно сообщаем
+            print(f"[kmz] NSPD(браузер) недоступен: {exc}\n"
+                  f"    → попробуйте --nspd-http (лёгкий путь, часто блокируется) "
+                  f"или загрузите контуры заранее (ingest-project/01c).", file=sys.stderr)
+            browser_cache = {}
+        fetcher = lambda cad: (browser_cache.get(cad) or {}).get("polygon")  # noqa: E731
+    elif use_http:
         from egrn_parser import geo_nspd as _N
-        fetcher = _N.fetch_geometry                  # геометрия ЗУ/строений по КН (сеть)
-        discovery = _N.discover_buildings            # обнаружение ОКС в границах ЗУ (источник 2)
+        fetcher = _N.fetch_geometry                  # лёгкий HTTP (urllib) — анти-бот
+        if "nspd" in bsrc:
+            discovery = _N.discover_buildings
     conn = sqlite3.connect(args.db)
     try:
+        # nspd-обнаружение из браузера интегрируем после (не через building_discovery)
+        db_sources = [s for s in bsrc if not (s == "nspd" and use_browser)]
         parcels = _K.collect_from_db(conn, cads, modes=modes, geometry_fetcher=fetcher,
-                                     building_sources=bsrc, building_discovery=discovery,
+                                     building_sources=db_sources, building_discovery=discovery,
                                      extra_building_cads=extra)
+        if use_browser and "nspd" in bsrc:           # добавить ОКС, найденные браузером
+            by = {p["cad"]: p for p in parcels}
+            for cad in cads:
+                got = (browser_cache.get(cad) or {}).get("buildings", [])
+                exist = {o["name"] for o in by[cad]["objects"]}
+                by[cad]["objects"] = [b for b in got if b["name"] not in exist] + by[cad]["objects"]
     finally:
         conn.close()
     res = _K.build_kmz(args.out, parcels)
@@ -608,8 +633,9 @@ def cmd_kmz(args: argparse.Namespace) -> int:
     print(f"    ЗУ: {s['parcels']} (с границей: {s['parcels_with_geom']})  "
           f"объектов с контуром: {s['objects_with_contour']}  по спирали: {s['objects_spiral']}")
     if s["parcels_with_geom"] < s["parcels"]:
-        print("    ⚠ у части ЗУ нет геометрии в БД — сначала загрузите контуры "
-              "(ingest-project / 01c). Объекты таких ЗУ без геометрии не размещены.")
+        hint = ("--nspd (браузер NSPD)" if not getattr(args, "nspd", False)
+                else "проверьте playwright/сеть или загрузите контуры (ingest-project/01c)")
+        print(f"    ⚠ у части ЗУ нет геометрии — {hint}.")
     return 0
 
 
@@ -845,7 +871,9 @@ def build_parser() -> argparse.ArgumentParser:
                              "db(1,из БД),cads(3,список --building-cads)")
     sp_kmz.add_argument("--building-cads", help="КН строений (источник 3): «КН1,КН2,…»")
     sp_kmz.add_argument("--nspd", action="store_true",
-                        help="Тянуть геометрию/обнаруживать ОКС из ПКК/НSPD (нужна сеть)")
+                        help="NSPD через браузер (Playwright, обходит анти-бот) — надёжный путь")
+    sp_kmz.add_argument("--nspd-http", action="store_true",
+                        help="NSPD лёгким HTTP (urllib) вместо браузера — часто блокируется")
     sp_kmz.set_defaults(func=cmd_kmz)
 
     # export-c2: конвертация рабочей БД парсера → C2 (контракт обмена)

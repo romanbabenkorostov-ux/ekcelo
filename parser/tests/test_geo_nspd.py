@@ -54,3 +54,18 @@ def test_discover_buildings_filters_outside(monkeypatch):
     monkeypatch.setattr(N, "_wfs_get", lambda *a, **k: body)
     disc = N.discover_buildings([sq])
     assert [o["name"] for o in disc] == ["IN"]       # OUT (центр вне ЗУ) отфильтрован
+
+
+def test_wfs_bbox_url():
+    url = N.wfs_bbox_url(36329, (38.9, 45.0, 38.92, 45.02))
+    assert "layer_36329" in url and "BBOX=38.9,45.0,38.92,45.02,EPSG:4326" in url
+    assert url.startswith("https://nspd.gov.ru/api/aeggis/v3/36329/wfs")
+
+
+def test_features_in_polygon():
+    sq = [[38.9, 45.0], [38.92, 45.0], [38.92, 45.02], [38.9, 45.02]]
+    feats = [
+        {"cad": "IN", "geometry": {"type": "Polygon", "coords": [[[38.905, 45.005], [38.908, 45.005], [38.908, 45.008]]]}},
+        {"cad": "OUT", "geometry": {"type": "Polygon", "coords": [[[39.5, 46.0], [39.51, 46.0], [39.51, 46.01]]]}}]
+    res = N.features_in_polygon(feats, [sq])
+    assert [o["name"] for o in res] == ["IN"]
