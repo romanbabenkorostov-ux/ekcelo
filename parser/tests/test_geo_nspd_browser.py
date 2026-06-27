@@ -63,6 +63,21 @@ def test_collect_cads_empty_on_no_cads():
     assert B.collect_cads({"foo": "bar", "n": 42, "list": [1, 2, 3]}) == set()
 
 
+def test_parcel_ids_from_feature():
+    f = {"id": 34382281, "properties": {"category": 36368,
+                                        "options": {"cad_num": "23:15:0000000:2267"}}}
+    assert B._parcel_ids(f) == (34382281, 36368)
+
+
+def test_parcel_ids_fallback_keys():
+    f = {"properties": {"geomId": 50771174, "categoryId": 36368}}
+    assert B._parcel_ids(f) == (50771174, 36368)
+
+
+def test_parcel_ids_none_on_empty():
+    assert B._parcel_ids(None) == (None, None)
+
+
 def test_buildings_discovered_in_polygon():
     parcel = _feat("23:15:0000000:2267", PARCEL)
     oks = _feat("23:15:0000000:9999", OKS)

@@ -193,80 +193,77 @@ async def _close_modals(page):
         pass
 
 
-async def _trigger_lupa(page, cad: str) -> dict:
-    """Имитировать клик по лупе: NSPD грузит контур И «остальные данные» (ОКС
-    в пределах ЗУ) только после фактического запуска поиска через UI.
-
-    Компоненты NSPD — web-components с OPEN shadow root, поэтому ищем поле ввода
-    и кнопку поиска рекурсивно по всем shadow-деревьям, заполняем КН, шлём Enter
-    и кликаем лупу. Перехват ОКС — пассивным слушателем _on_resp."""
-    try:
-        return await page.evaluate("""
-            (cad) => {
-                const findDeep = (root, pred) => {
-                    const stack = [root];
-                    while (stack.length) {
-                        const node = stack.pop();
-                        const kids = (node.querySelectorAll ? node.querySelectorAll('*') : []);
-                        for (const el of kids) {
-                            if (pred(el)) return el;
-                            if (el.shadowRoot) stack.push(el.shadowRoot);
-                        }
-                    }
-                    return null;
-                };
-                const input = findDeep(document, el =>
-                    el.tagName === 'INPUT' &&
-                    (el.type === 'text' || el.type === 'search' || !el.type) &&
-                    el.offsetParent !== null);
-                if (input) {
-                    input.focus();
-                    input.value = cad;
-                    input.dispatchEvent(new Event('input', {bubbles: true}));
-                    for (const t of ['keydown', 'keyup']) {
-                        input.dispatchEvent(new KeyboardEvent(t,
-                            {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
-                    }
-                }
-                const btn = findDeep(document, el =>
-                    (el.tagName === 'BUTTON' ||
-                     (el.getAttribute && el.getAttribute('role') === 'button')) &&
-                    el.offsetParent !== null &&
-                    (((el.getAttribute('aria-label') || '').toLowerCase().match(/поиск|search/)) ||
-                     (el.querySelector && el.querySelector('[class*="search"],[class*="loupe"],[class*="magnif"]'))));
-                if (btn) btn.click();
-                return {input: !!input, button: !!btn};
-            }
-        """, cad)
-    except Exception:
-        return {"input": False, "button": False}
+async def _geoportal_get(page, cad: str) -> list[dict]:
+    """Один проход geoportal-search по вариантам запроса (без ретраев/модалей)."""
+    q = urllib.parse.quote(cad, safe="")
+    for tpl in _SEARCH_VARIANTS:
+        url = tpl.format(base=GEOPORTAL_SEARCH, q=q)
+        try:
+            resp = await page.request.get(url, headers={
+                "Referer": "https://nspd.gov.ru/map",
+                "Accept": "application/json, */*",
+            }, timeout=20000)
+            if not resp.ok:
+                continue
+            feats = extract_features(json.loads(await resp.text()))
+            if feats:
+                return feats
+        except Exception:
+            continue
+    return []
 
 
 async def _search_geoportal(page, cad: str) -> list[dict]:
-    """Активный session-aware запрос geoportal-search по КН → список feature.
-
-    Пробует несколько раз с закрытием модалей и задержками."""
-    q = urllib.parse.quote(cad, safe="")
+    """geoportal-search по КН с ретраями и закрытием модалей (для геометрии ЗУ)."""
     for attempt in range(3):
         if attempt > 0:
             await page.wait_for_timeout(500)
         await _close_modals(page)
-        for tpl in _SEARCH_VARIANTS:
-            url = tpl.format(base=GEOPORTAL_SEARCH, q=q)
-            try:
-                resp = await page.request.get(url, headers={
-                    "Referer": "https://nspd.gov.ru/map",
-                    "Accept": "application/json, */*",
-                }, timeout=20000)
-                if not resp.ok:
-                    continue
-                data = json.loads(await resp.text())
-                feats = extract_features(data)
-                if feats:
-                    return feats
-            except Exception:
-                continue
+        feats = await _geoportal_get(page, cad)
+        if feats:
+            return feats
     return []
+
+
+# Эндпоинт списка ОКС в пределах ЗУ (выявлен по диагностике сетевых запросов NSPD).
+OBJECTS_LIST = ("https://nspd.gov.ru/api/geoportal/v1/tab-group-data"
+                "?tabClass=objectsList&categoryId={cat}&geomId={gid}")
+
+
+def _parcel_ids(feature: Optional[dict]) -> tuple:
+    """Достать (geomId, categoryId) из geoportal-feature ЗУ для запроса списка ОКС."""
+    if not feature:
+        return (None, None)
+    props = feature.get("properties") or {}
+    gid = (feature.get("id") or props.get("geomId") or props.get("geom_id")
+           or props.get("interactionId"))
+    cat = (props.get("category") or props.get("categoryId")
+           or props.get("category_id"))
+    return (gid, cat)
+
+
+async def _fetch_objects_list(page, geom_id, cat_id) -> set[str]:
+    """GET список ОКС в пределах ЗУ (tab-group-data objectsList) → множество КН."""
+    if not geom_id or not cat_id:
+        return set()
+    url = OBJECTS_LIST.format(cat=cat_id, gid=geom_id)
+    try:
+        resp = await page.request.get(url, headers={
+            "Referer": "https://nspd.gov.ru/map",
+            "Accept": "application/json, */*",
+        }, timeout=20000)
+        if not resp.ok:
+            return set()
+        return collect_cads(json.loads(await resp.text()))
+    except Exception:
+        return set()
+
+
+async def _resolve_geom(page, cad: str) -> Optional[list]:
+    """КН ОКС → coords полигона через geoportal-search (или None, если без контура)."""
+    feats = await _geoportal_get(page, cad)
+    f = pick_parcel_feature(feats, cad)
+    return _geom_to_coords(f.get("geometry")) if f else None
 
 
 async def _run(cads: list[str], *, discover: bool, headless: bool,
@@ -336,67 +333,46 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
                 parcel = pick_parcel_feature(feats, cad)
                 poly = _geom_to_coords(parcel.get("geometry")) if parcel else None
 
+                idx = cads.index(cad) + 1
+                print(f"  [{idx}/{len(cads)}] ЗУ {cad}: "
+                      f"{'контур ✓' if poly else 'контур ✗'}", flush=True)
+
                 if manual:
-                    # Ручной режим: пользователь сам жмёт лупу и листает вкладки
-                    # (ОКС в пределах ЗУ), а слушатель копит features. Ждём Enter
-                    # БЕЗ блокировки event-loop (иначе перехват остановится).
-                    print(f"\n  ▶ ЗУ {cad}: в открытом браузере нажмите лупу, "
-                          f"пролистайте вкладки (ОКС в пределах ЗУ), затем нажмите "
-                          f"ENTER здесь для парсинга и перехода к следующему…",
-                          flush=True)
+                    # Ручной режим: пользователь сам жмёт лупу и листает вкладки;
+                    # ждём Enter БЕЗ блокировки event-loop (иначе перехват встанет).
+                    print(f"      ▶ нажмите лупу + откройте вкладку «Объекты в "
+                          f"пределах», затем ENTER здесь…", flush=True)
                     loop = asyncio.get_event_loop()
                     await loop.run_in_executor(None, input)
-                    if captured:
-                        feats = list(captured)
-                        if not poly:
-                            parcel = pick_parcel_feature(feats, cad)
-                            poly = _geom_to_coords(parcel.get("geometry")) if parcel else None
-                    # Диагностика: что реально отдал NSPD на ваши клики
-                    print(f"    [диаг] JSON-ответов: {len(diag)}; КН в ответах: "
-                          f"{len(seen_cads)}; feature с геометрией: {len(captured)}")
-                    for u, keys, nf, nc in diag[-12:]:
-                        print(f"      {u}  keys={keys} feats={nf} cads={nc}")
-                    # ОКС-кандидаты = КН из вкладок минус сам ЗУ; геометрию каждого
-                    # резолвим проверенным geoportal-search (он работает для ЗУ).
-                    if poly:
-                        oks_cads = {c for c in seen_cads
-                                    if c.replace(" ", "") != cad.replace(" ", "")}
-                        if oks_cads:
-                            print(f"    резолвлю геометрию {len(oks_cads)} ОКС-кандидатов "
-                                  f"через geoportal-search…", flush=True)
-                        for oc in sorted(oks_cads):
-                            of = await _search_geoportal(page, oc)
-                            ofp = pick_parcel_feature(of, oc)
-                            og = _geom_to_coords(ofp.get("geometry")) if ofp else None
-                            if og:
-                                feats.append({"type": "Feature", "geometry": ofp["geometry"],
-                                              "properties": {"cad_num": oc}})
-                elif discover and poly:
-                    # авто-попытка: имитировать клик по лупе → карта грузит ОКС.
-                    await _trigger_lupa(page, cad)
-                    await page.wait_for_timeout(4000)
+                    if captured and not poly:
+                        parcel = pick_parcel_feature(list(captured), cad)
+                        poly = _geom_to_coords(parcel.get("geometry")) if parcel else None
+                    print(f"      [диаг] JSON-ответов: {len(diag)}; КН в ответах: "
+                          f"{len(seen_cads)}; feature: {len(captured)}", flush=True)
 
                 buildings: list[dict[str, Any]] = []
                 if (discover or manual) and poly:
-                    seen_pool = {id(f): f for f in feats}
-                    seen_pool.update({id(f): f for f in captured})
-                    cand = []
-                    for f in seen_pool.values():
-                        if f is parcel:
-                            continue
-                        coords = _geom_to_coords(f.get("geometry"))
-                        if not coords:
-                            continue
-                        bcad = _feature_cad(f)
-                        if bcad and bcad.replace(" ", "") == cad.replace(" ", ""):
-                            continue                      # это сам ЗУ
-                        cand.append({"cad": bcad,
-                                     "geometry": {"type": "Polygon", "coords": coords}})
-                    buildings = _N.features_in_polygon(cand, poly)
+                    # 1) список ОКС в пределах ЗУ — прямой запрос objectsList по
+                    #    geomId/categoryId самого ЗУ (надёжнее ручного листания).
+                    geom_id, cat_id = _parcel_ids(parcel)
+                    oks = await _fetch_objects_list(page, geom_id, cat_id)
+                    # 2) добор из перехваченного (ручные клики по вкладкам) — на случай,
+                    #    если прямой запрос пуст.
+                    oks |= {c for c in seen_cads}
+                    oks = {c for c in oks if c.replace(" ", "") != cad.replace(" ", "")}
+                    if oks:
+                        print(f"      ОКС в пределах: {len(oks)} — резолвлю геометрию…",
+                              flush=True)
+                    # 3) геометрия каждого ОКС; без контура → точка по спирали (None).
+                    for j, oc in enumerate(sorted(oks), 1):
+                        og = await _resolve_geom(page, oc)
+                        buildings.append({"name": oc,
+                                          "geometry": {"type": "Polygon", "coords": og} if og else None})
+                        mark = "контур" if og else "спираль"
+                        print(f"        {j}/{len(oks)} {oc}: {mark}", flush=True)
 
                 out[cad] = {"polygon": poly, "buildings": buildings,
-                            "captured": len(set(id(f) for f in (feats or [])) |
-                                            set(id(f) for f in captured))}
+                            "captured": len(captured)}
         finally:
             await browser.close()
     return out

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 import warnings
 from pathlib import Path
@@ -638,7 +639,8 @@ def cmd_kmz(args: argparse.Namespace) -> int:
         conn.close()
     res = _K.build_kmz(args.out, parcels)
     s = res["stats"]
-    print(f"[kmz] {res['path']}")
+    abspath = os.path.abspath(res["path"])
+    print(f"[kmz] ✅ KMZ сохранён: {abspath}")
     print(f"    ЗУ: {s['parcels']} (с границей: {s['parcels_with_geom']})  "
           f"объектов с контуром: {s['objects_with_contour']}  по спирали: {s['objects_spiral']}")
     if s["parcels_with_geom"] < s["parcels"]:
