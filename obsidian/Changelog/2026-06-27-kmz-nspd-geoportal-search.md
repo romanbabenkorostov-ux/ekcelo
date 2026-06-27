@@ -116,6 +116,12 @@ python -m egrn_parser kmz --parcels 23:15:0000000:2267,23:15:0303000:1562,23:15:
 ```
 `--nspd-manual` остаётся как страховка (ручное листание вкладок добирается из перехвата).
 
+## Версия 8: фикс — `--nspd-headful` без `--nspd` не открывал браузер
+Прогон `--nspd-headful` (без `--nspd`) дал «с границей: 0» — браузер не
+запускался: `--nspd-headful` был лишь модификатором. Теперь `--nspd-headful` и
+`--nspd-manual` **подразумевают** браузерный режим (без явного `--nspd`).
+Запуск можно просто: `… --out objects.kmz --nspd-headful`.
+
 ## Файлы
 - `parser/egrn_parser/geo_nspd_browser.py` (переписан),
   `parser/egrn_parser/cli.py` (диагностика),

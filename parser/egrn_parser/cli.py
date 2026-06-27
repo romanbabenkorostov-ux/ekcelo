@@ -595,7 +595,9 @@ def cmd_kmz(args: argparse.Namespace) -> int:
     browser_cache: dict = {}
     use_http = getattr(args, "nspd_http", False)
     use_manual = getattr(args, "nspd_manual", False)
-    use_browser = (getattr(args, "nspd", False) or use_manual) and not use_http
+    # --nspd-headful/--nspd-manual подразумевают браузерный режим NSPD (без явного --nspd)
+    use_browser = (getattr(args, "nspd", False) or use_manual
+                   or getattr(args, "nspd_headful", False)) and not use_http
     if use_browser:
         # Надёжный путь: NSPD через браузер (анти-бот). Геометрия ЗУ + ОКС в границах.
         from egrn_parser import geo_nspd_browser as _NB
@@ -644,7 +646,7 @@ def cmd_kmz(args: argparse.Namespace) -> int:
     print(f"    ЗУ: {s['parcels']} (с границей: {s['parcels_with_geom']})  "
           f"объектов с контуром: {s['objects_with_contour']}  по спирали: {s['objects_spiral']}")
     if s["parcels_with_geom"] < s["parcels"]:
-        hint = ("--nspd (браузер NSPD)" if not getattr(args, "nspd", False)
+        hint = ("добавьте --nspd (браузер NSPD)" if not use_browser
                 else "проверьте playwright/сеть или загрузите контуры (ingest-project/01c)")
         print(f"    ⚠ у части ЗУ нет геометрии — {hint}.")
     return 0
