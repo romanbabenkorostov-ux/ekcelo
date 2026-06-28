@@ -498,6 +498,69 @@ async def _resolve_geom(page, cad: str, theme_ids=()) -> Optional[dict]:
     return None
 
 
+async def _oks_geom_via_navigation(page, cad: str, captured: list,
+                                   parcel_ring, timeout_ms: int) -> Optional[dict]:
+    """Геометрия ОКС через НАВИГАЦИЮ карты к нему (как для ЗУ): NSPD грузит контур
+    ОКС только при переходе на объект — ловим его пассивным слушателем `captured`.
+    Текстовый search ОКС не находит, поэтому это основной путь для строений."""
+    before = len(captured)
+    layers = ",".join(str(x) for x in (_N.NSPD_ZU_LAYERS + _N.NSPD_OKS_LAYERS))
+    url = (f"https://nspd.gov.ru/map?query={urllib.parse.quote(cad, safe='')}"
+           f"&active_layers={layers}")
+    for wait in ("domcontentloaded", "load"):
+        try:
+            await page.goto(url, wait_until=wait, timeout=timeout_ms)
+            break
+        except Exception:
+            continue
+    await page.wait_for_timeout(2500)
+    await _close_modals(page)
+    await page.wait_for_timeout(1500)
+    # среди перехваченного после навигации — feature нужного КН (точное) > внутри ЗУ
+    want = cad.replace(" ", "").upper()
+    parcel_area = _bbox_area(parcel_ring) if parcel_ring else 0.0
+    fallback = None
+    for f in captured[before:]:
+        if not f.get("geometry"):
+            continue
+        g = _geom_from_feature(f)
+        if not g:
+            continue
+        if (_feature_cad(f) or "").replace(" ", "").upper() == want:
+            return g
+        # запасной: небольшой контур внутри границы ЗУ (если КН в properties не
+        # пришёл). Size-guard < 30% площади ЗУ — чтобы не принять сам ЗУ за ОКС.
+        if fallback is None and parcel_ring and g["type"] == "Polygon":
+            r = _ring_local(g["coords"])
+            if (r and _pt_in(_centroid_local(r), parcel_ring)
+                    and 0 < _bbox_area(r) < 0.3 * parcel_area):
+                fallback = g
+    return fallback
+
+
+def _bbox_area(ring) -> float:
+    from egrn_parser.geo_kmz import bbox
+    if not ring:
+        return 0.0
+    minx, miny, maxx, maxy = bbox(ring)
+    return abs((maxx - minx) * (maxy - miny))
+
+
+def _ring_local(polygon):
+    from egrn_parser.geo_kmz import _ring
+    return _ring(polygon)
+
+
+def _centroid_local(ring):
+    from egrn_parser.geo_kmz import centroid
+    return centroid(ring)
+
+
+def _pt_in(pt, ring):
+    from egrn_parser.geo_kmz import point_in_ring
+    return point_in_ring(pt, ring)
+
+
 async def _run(cads: list[str], *, discover: bool, headless: bool,
                timeout_ms: int, manual: bool = False) -> dict[str, dict[str, Any]]:
     from playwright.async_api import async_playwright
@@ -518,11 +581,9 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
         async def _on_resp(resp):
             try:
                 url = resp.url
-                # в ручном режиме данные вкладок (ОКС в пределах) идут не только с
-                # /geoportal/ — ловим любой JSON c nspd, extract_features отсеет лишнее.
+                # Ловим ЛЮБОЙ JSON c nspd: геометрия ОКС грузится навигацией карты
+                # не только с /geoportal/. extract_features отсеет не-feature.
                 if "nspd.gov.ru" not in url:
-                    return
-                if not manual and "geoportal" not in url:
                     return
                 ct = (resp.headers or {}).get("content-type", "")
                 if "json" not in ct.lower() and "json" not in url.lower():
@@ -602,35 +663,19 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
                             recs.append({"cad": c, "geomId": None, "categoryId": None})
                     recs = [r for r in recs
                             if r["cad"].replace(" ", "") != cad.replace(" ", "")]
-                    # диагностика структуры objectsList (нужна, пока ищем geomId-поля)
-                    if data is not None and not any(r.get("geomId") for r in recs):
-                        print("      [objectsList raw] " +
-                              json.dumps(data, ensure_ascii=False)[:1600], flush=True)
                     if recs:
-                        print(f"      ОКС в пределах: {len(recs)} — резолвлю геометрию…",
-                              flush=True)
-                    # ── ДИАГНОСТИКА (один раз): что отдаёт geoportal-search по ОКС.
-                    #    objectsList без geomId → geomId берём из feature.id поиска.
-                    if recs:
-                        oc0 = recs[0]["cad"]
-                        f0, raw0 = await _oks_search(page, oc0, theme_ids)
-                        gid0, cat0 = _feature_ids(f0) if f0 else (None, None)
-                        has_geom = bool(f0 and (f0.get("geometry")))
-                        print(f"      [поиск ОКС {oc0}] feature={'да' if f0 else 'нет'} "
-                              f"geometry={'да' if has_geom else 'нет'} geomId={gid0} cat={cat0}",
-                              flush=True)
-                        if raw0 is not None:
-                            print("      [search raw] " +
-                                  json.dumps(raw0, ensure_ascii=False)[:1200], flush=True)
-                        if gid0:
-                            for u, st, n in await _probe_geom_by_id(
-                                    page, {"geomId": gid0, "categoryId": cat0}):
-                                print(f"        {u}  status={st} features={n}", flush=True)
-                    # 2) геометрия каждого ОКС: search(feature/geomId) > спираль.
+                        print(f"      ОКС в пределах: {len(recs)} — резолвлю геометрию "
+                              f"(навигация к каждому ОКС)…", flush=True)
+                    # геометрия каждого ОКС: НАВИГАЦИЯ карты к нему (NSPD грузит контур
+                    # ОКС только при переходе) > текст-поиск > спираль.
+                    parcel_ring = _ring_local(poly)
                     n_cont = n_pt = n_spi = 0
                     for j, r in enumerate(sorted(recs, key=lambda r: r["cad"]), 1):
                         oc = r["cad"]
-                        g = await _resolve_geom(page, oc, theme_ids)
+                        g = await _oks_geom_via_navigation(page, oc, captured,
+                                                           parcel_ring, timeout_ms)
+                        if not g:
+                            g = await _resolve_geom(page, oc, theme_ids)
                         buildings.append({"name": oc, "geometry": g})
                         if g and g["type"] == "Polygon":
                             mark = "контур"; n_cont += 1

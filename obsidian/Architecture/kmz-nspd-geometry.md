@@ -33,17 +33,24 @@ KMZ с 3 ЗУ и объектами (ОКС) в их пределах: есть 
      "value":["23:15:…", …]}]}`. Поэтому geomId берём НЕ из objectsList, а из
      `feature.id` ответа geoportal-search по КН ОКС.
 
-## Проблема геометрии ОКС
-Текстовый `search/geoportal?query={КН_ОКС}` для геометрии ОКС в `extract_features`
-(strict) давал 0 — feature ОКС часто приходит **без geometry** (контур грузится
-лениво по geomId). Решение:
-1. `_oks_search` берёт feature ОКС даже без геометрии (`require_geometry=False`)
-   → из него `feature.id`=geomId, `properties.category`=categoryId.
-2. Если у feature есть геометрия — используем сразу.
-3. Иначе геометрию грузим **по geomId/categoryId**: `_resolve_geom_by_id` перебирает
-   кандидатные эндпоинты (`geoportal/v1|v2/geom/{gid}` и `/{cat}/{gid}`,
-   `…?categoryId&geomId`, `…/card/{cat}/{gid}`, WFS featureID); первый с
-   feature-геометрией = рабочий. `_probe_geom_by_id` печатает статусы для фиксации.
+## Геометрия ОКС — через НАВИГАЦИЮ карты (основной путь)
+Диагностика: `search/geoportal?query={КН_ОКС}` для этих ОКС возвращает **вообще
+пусто** (feature=нет) — ни геометрии, ни geomId. Но на карте контур ОКС
+**появляется при переходе на объект** (наблюдение заказчика). Поэтому геометрию
+ОКС берём так же, как для ЗУ — **навигацией**:
+- `_oks_geom_via_navigation(page, КН, captured, parcel_ring)`:
+  `goto map?query={КН_ОКС}&active_layers=…` → NSPD сам грузит контур ОКС →
+  ловим его **пассивным слушателем** (`captured`, ловит любой JSON c nspd).
+  Выбор: feature с точным КН (properties) > небольшой полигон внутри границы ЗУ
+  (size-guard <30% площади ЗУ, чтобы не принять сам ЗУ).
+- Фолбэк: текст-поиск `_resolve_geom` (feature/geomId), затем спираль.
+- Слушатель `_on_resp` теперь ловит ЛЮБОЙ nspd-JSON (не только /geoportal/).
+
+Резерв (если найдётся geomId): `_resolve_geom_by_id` перебирает кандидатные
+эндпоинты `geoportal/v1|v2/geom/{gid|cat/gid}`, `…/card/{cat}/{gid}`, WFS featureID.
+
+> Цена: по 1 навигации (~4 c) на каждый ОКС. Для ЗУ с 22 ОКС ≈ 1.5 мин — приемлемо
+> для разовой задачи экономиста.
 
 ## Алгоритм (per ЗУ)
 1. `goto map?query={КН}&active_layers=…`, закрыть модали.
