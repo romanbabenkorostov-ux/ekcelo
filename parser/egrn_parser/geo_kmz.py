@@ -140,72 +140,214 @@ _STYLES = """
 """.strip()
 
 
-def build_kml(parcels: list[dict[str, Any]]) -> dict[str, Any]:
-    """Собрать KML по списку участков. Возвращает {kml, stats}."""
-    folders = []
-    n_contour = n_spiral = n_parcels_geo = 0
+def _render_parcels(parcels: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Единый промежуточный слой для KML/KMZ/JSON: координаты спиральных точек
+    вычисляются ОДИН раз → KML и JSON согласованы. Поддерживает ЗУ и одиночные
+    ОКС (kind='oks'): у ОКС геометрия — собственный контур (polygon) либо точка
+    (point, «без координат границ»)."""
+    out = []
     for p in parcels:
         cad = str(p.get("cad", "?"))
+        kind = p.get("kind") or "zu"
         ring = _ring(p.get("polygon"))
-        body = []
+        ppt = p.get("point")
         if ring:
-            body.append(_placemark_polygon(f"ЗУ {cad}", ring, "parcel",
-                                           _description(p.get("info"))))
-            n_parcels_geo += 1
-        objs = p.get("objects") or []
-        no_geom = []
-        for o in objs:
+            pgeom = {"kind": "polygon", "ring": ring}
+        elif ppt:
+            pgeom = {"kind": "point", "pt": (float(ppt[0]), float(ppt[1]))}
+        else:
+            pgeom = {"kind": "none"}
+        objs_out, no_geom = [], []
+        for o in (p.get("objects") or []):
             g = o.get("geometry")
             nm = str(o.get("name", "объект"))
             if g and g.get("coords"):
-                desc = _description(o.get("info"))
                 if g.get("type") == "Point":
                     c = g["coords"][0]
-                    body.append(_placemark_point(nm, (float(c[0]), float(c[1])), "objpoint", desc))
+                    geom = {"kind": "point", "pt": (float(c[0]), float(c[1]))}
                 else:
-                    body.append(_placemark_polygon(nm, _ring(g["coords"]), "objpoly", desc))
-                n_contour += 1
+                    geom = {"kind": "polygon", "ring": _ring(g["coords"])}
+                objs_out.append({"name": nm, "info": o.get("info"),
+                                 "geometry": geom, "no_coords": False})
             else:
                 no_geom.append((nm, o.get("info")))
         # объекты без геометрии → точки по спирали внутри ЗУ («без координат границ»)
         if no_geom and ring:
             for (nm, info), pt in zip(no_geom, spiral_points(ring, len(no_geom))):
-                body.append(_placemark_point(nm, pt, "spiral",
-                                             _description(info, no_coords=True)))
-                n_spiral += 1
-        elif no_geom:
-            # нет границы ЗУ → спираль ставить негде (нужна геометрия участка)
-            for nm, _info in no_geom:
-                body.append(f"<!-- объект без геометрии и без границы ЗУ: {_xml.escape(nm)} -->")
-        folders.append(f"<Folder><name>ЗУ {_xml.escape(cad)}</name>{''.join(body)}</Folder>")
+                objs_out.append({"name": nm, "info": info,
+                                 "geometry": {"kind": "point", "pt": pt}, "no_coords": True})
+        else:
+            for nm, info in no_geom:
+                objs_out.append({"name": nm, "info": info,
+                                 "geometry": {"kind": "none"}, "no_coords": True})
+        out.append({"cad": cad, "kind": kind, "info": p.get("info"),
+                    "geometry": pgeom,
+                    "no_coords": (pgeom["kind"] == "point" and kind == "oks"),
+                    "objects": objs_out})
+    return out
 
-    kml = ('<?xml version="1.0" encoding="UTF-8"?>'
-           '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>'
-           f'{_STYLES}{"".join(folders)}</Document></kml>')
-    return {"kml": kml, "stats": {"parcels": len(parcels), "parcels_with_geom": n_parcels_geo,
-                                  "objects_with_contour": n_contour, "objects_spiral": n_spiral}}
+
+def _stats(rendered: list[dict[str, Any]]) -> dict[str, int]:
+    n_pg = sum(1 for r in rendered if r["geometry"]["kind"] == "polygon")
+    n_c = sum(1 for r in rendered for o in r["objects"]
+              if o["geometry"]["kind"] == "polygon")
+    n_s = sum(1 for r in rendered for o in r["objects"]
+              if o["geometry"]["kind"] == "point" and o["no_coords"])
+    return {"parcels": len(rendered), "parcels_with_geom": n_pg,
+            "objects_with_contour": n_c, "objects_spiral": n_s}
+
+
+def _kml_from_rendered(rendered: list[dict[str, Any]]) -> str:
+    folders = []
+    for r in rendered:
+        cad = r["cad"]
+        head = "ОКС" if r["kind"] == "oks" else "ЗУ"
+        body = []
+        gk = r["geometry"]["kind"]
+        if gk == "polygon":
+            style = "objpoly" if r["kind"] == "oks" else "parcel"
+            body.append(_placemark_polygon(f"{head} {cad}", r["geometry"]["ring"], style,
+                                           _description(r.get("info"))))
+        elif gk == "point":
+            body.append(_placemark_point(f"{head} {cad}", r["geometry"]["pt"], "spiral",
+                                         _description(r.get("info"), no_coords=r["no_coords"])))
+        for o in r["objects"]:
+            ok = o["geometry"]["kind"]
+            desc = _description(o.get("info"), no_coords=o["no_coords"])
+            if ok == "polygon":
+                body.append(_placemark_polygon(o["name"], o["geometry"]["ring"], "objpoly", desc))
+            elif ok == "point":
+                style = "spiral" if o["no_coords"] else "objpoint"
+                body.append(_placemark_point(o["name"], o["geometry"]["pt"], style, desc))
+        folders.append(f"<Folder><name>{_xml.escape(head)} {_xml.escape(cad)}</name>"
+                       f"{''.join(body)}</Folder>")
+    return ('<?xml version="1.0" encoding="UTF-8"?>'
+            '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>'
+            f'{_STYLES}{"".join(folders)}</Document></kml>')
+
+
+def _yandex_geom(geom: dict) -> Optional[dict]:
+    """Внутр. геометрия → Яндекс.Карты (порядок координат [lat, lon])."""
+    k = geom.get("kind")
+    if k == "polygon":
+        ring = geom["ring"]
+        coords = [[round(lat, 7), round(lon, 7)] for lon, lat in ring]
+        if coords and coords[0] != coords[-1]:
+            coords.append(coords[0])
+        return {"type": "Polygon", "coordinates": [coords]}
+    if k == "point":
+        lon, lat = geom["pt"]
+        return {"type": "Point", "coordinates": [round(lat, 7), round(lon, 7)]}
+    return None
+
+
+_NO_COORDS_NOTE = "Без координат границ по Росреестру"
+
+
+def _json_from_rendered(rendered: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Полный JSON: все объекты; полигон → полигон; нет координат в Росреестре →
+    точка + пометка. Геометрия в формате Яндекс.Карт ([lat, lon])."""
+    def obj(name, kind, info, geom, no_coords):
+        d = {"cad": name, "kind": kind, "info": info or {},
+             "geometry": _yandex_geom(geom)}
+        if no_coords:
+            d["note"] = _NO_COORDS_NOTE
+        return d
+    out = []
+    for r in rendered:
+        entry = obj(r["cad"], r["kind"], r["info"], r["geometry"], r["no_coords"])
+        entry["objects"] = [obj(o["name"], "oks", o["info"], o["geometry"], o["no_coords"])
+                            for o in r["objects"]]
+        out.append(entry)
+    return out
+
+
+def build_kml(parcels: list[dict[str, Any]]) -> dict[str, Any]:
+    """Собрать KML по списку участков/ОКС. Возвращает {kml, stats}."""
+    rendered = _render_parcels(parcels)
+    return {"kml": _kml_from_rendered(rendered), "stats": _stats(rendered)}
+
+
+def build_outputs(base_path: str | Path, parcels: list[dict[str, Any]]) -> dict[str, Any]:
+    """Записать KMZ + KML + JSON (Яндекс-геометрия) с общим телом имени `base_path`
+    (без расширения). Возвращает {kmz, kml, json, stats}."""
+    import json as _json
+    rendered = _render_parcels(parcels)
+    kml = _kml_from_rendered(rendered)
+    base = Path(base_path)
+    base.parent.mkdir(parents=True, exist_ok=True)
+    kmz_p = base.with_suffix(".kmz")
+    kml_p = base.with_suffix(".kml")
+    json_p = base.with_suffix(".json")
+    with zipfile.ZipFile(kmz_p, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("doc.kml", kml)
+    kml_p.write_text(kml, encoding="utf-8")
+    json_p.write_text(_json.dumps(_json_from_rendered(rendered), ensure_ascii=False, indent=2),
+                      encoding="utf-8")
+    return {"kmz": str(kmz_p), "kml": str(kml_p), "json": str(json_p),
+            "stats": _stats(rendered)}
 
 
 def build_kmz(out_path: str | Path, parcels: list[dict[str, Any]]) -> dict[str, Any]:
-    """Собрать KMZ-файл (+ JSON-сайдкар с «Информацией»). Возвращает {path, stats}."""
+    """Совместимость: KMZ + JSON-сайдкар. Возвращает {path, stats, info_json}."""
     import json as _json
-    res = build_kml(parcels)
+    rendered = _render_parcels(parcels)
+    res = {"kml": _kml_from_rendered(rendered), "stats": _stats(rendered)}
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("doc.kml", res["kml"])
-    # JSON-сайдкар: вся «Информация» по ЗУ/объектам (для бэкенда/проверки).
     sidecar = out.with_suffix(".info.json")
-    payload = [{
-        "cad": p.get("cad"),
-        "info": p.get("info") or {},
-        "objects": [{"name": o.get("name"),
-                     "geometry_type": (o.get("geometry") or {}).get("type") or "spiral",
-                     "info": o.get("info") or {}}
-                    for o in (p.get("objects") or [])],
-    } for p in parcels]
-    sidecar.write_text(_json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    sidecar.write_text(_json.dumps(_json_from_rendered(rendered), ensure_ascii=False, indent=2),
+                       encoding="utf-8")
     return {"path": str(out), "stats": res["stats"], "info_json": str(sidecar)}
+
+
+def merge_previous(parcels: list[dict[str, Any]],
+                   prev_json_path: str | Path) -> list[dict[str, Any]]:
+    """Идемпотентное обновление: подмешать контуры из ранее записанного JSON.
+    Правило — **контур побеждает**: если в прошлом файле у объекта был полигон,
+    а сейчас его нет (спираль/точка), берём старый контур; новый контур всегда
+    перезаписывает. Привязка по КН (cad/name)."""
+    import json as _json
+    try:
+        prev = _json.loads(Path(prev_json_path).read_text(encoding="utf-8"))
+    except Exception:
+        return parcels
+    # карта КН → полигон-coords (внутренний [lon,lat]) из прошлого JSON (Яндекс [lat,lon])
+    prev_poly: dict[str, list] = {}
+
+    def _take(entry):
+        g = entry.get("geometry") or {}
+        if g.get("type") == "Polygon" and g.get("coordinates"):
+            ring = [[lon, lat] for lat, lon in g["coordinates"][0]]
+            prev_poly[str(entry.get("cad"))] = [ring]
+    for e in (prev or []):
+        _take(e)
+        for o in e.get("objects") or []:
+            _take(o)
+
+    def _has_contour(geom):
+        return bool(geom and geom.get("type") in ("Polygon", "MultiPolygon")
+                    and geom.get("coords"))
+    for p in parcels:
+        if not _has_contour(p.get("polygon") and {"type": "Polygon", "coords": p.get("polygon")}):
+            if str(p.get("cad")) in prev_poly:
+                p["polygon"] = prev_poly[str(p["cad"])]
+        for o in (p.get("objects") or []):
+            if not _has_contour(o.get("geometry")) and str(o.get("name")) in prev_poly:
+                o["geometry"] = {"type": "Polygon", "coords": prev_poly[str(o["name"])]}
+    return parcels
+
+
+def output_basename(cads: list[str], when=None) -> str:
+    """Тело имени файлов: <первый КН с ':'→'_'>[_и_далее]_<YYYYMMDD_HHMMSS>."""
+    from datetime import datetime
+    head = (cads[0] if cads else "objects").replace(":", "_").replace(" ", "")
+    if len(cads) > 1:
+        head += "_и_далее"
+    ts = (when or datetime.now()).strftime("%Y%m%d_%H%M%S")
+    return f"{head}_{ts}"
 
 
 # Режимы «что считать объектом внутри ЗУ» (выбор пользователя; умолч. — все три):

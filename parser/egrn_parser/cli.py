@@ -581,10 +581,13 @@ def cmd_kmz(args: argparse.Namespace) -> int:
     """Собрать KMZ объектов в пределах ЗУ: контуры если есть, иначе точки по спирали."""
     import sqlite3
 
+    import re as _re
     from egrn_parser import geo_kmz as _K
-    cads = [c.strip() for c in args.parcels.replace(";", ",").split(",") if c.strip()]
+    # КН через пробел / запятую / точку-с-запятой (любой разделитель). Авторазбор
+    # ЗУ vs ОКС делает браузерный слой (search → ЗУ, навигация → ОКС).
+    cads = [c.strip() for c in _re.split(r"[,;\s]+", args.parcels or "") if c.strip()]
     if not cads:
-        print("[kmz] укажите --parcels «КН1,КН2,…»", file=sys.stderr)
+        print("[kmz] укажите --parcels «КН1 КН2 …» (через пробел/запятую/;)", file=sys.stderr)
         return 1
     modes = [m.strip() for m in (args.objects or "").split(",") if m.strip()] or _K.DEFAULT_MODES
     bsrc = [s.strip() for s in (getattr(args, "buildings", "") or "").split(",")
@@ -631,29 +634,45 @@ def cmd_kmz(args: argparse.Namespace) -> int:
         parcels = _K.collect_from_db(conn, cads, modes=modes, geometry_fetcher=fetcher,
                                      building_sources=db_sources, building_discovery=discovery,
                                      extra_building_cads=extra)
-        if use_browser and "nspd" in bsrc:           # добавить ОКС, найденные браузером
+        if use_browser and "nspd" in bsrc:           # добавить ОКС + ЗУ/ОКС-инфо из браузера
             by = {p["cad"]: p for p in parcels}
             for cad in cads:
                 entry = browser_cache.get(cad) or {}
                 got = entry.get("buildings", [])
                 exist = {o["name"] for o in by[cad]["objects"]}
                 by[cad]["objects"] = [b for b in got if b["name"] not in exist] + by[cad]["objects"]
-                if entry.get("info"):                # «Информация» по ЗУ → в KMZ-описание
+                if entry.get("info"):
                     by[cad]["info"] = entry["info"]
+                if entry.get("kind"):                # ЗУ или одиночный ОКС
+                    by[cad]["kind"] = entry["kind"]
+                if entry.get("point") and not by[cad].get("polygon"):
+                    by[cad]["point"] = entry["point"]   # ОКС «без координат границ»
     finally:
         conn.close()
-    res = _K.build_kmz(args.out, parcels)
+    # Идемпотентное обновление: подмешать контуры из ранее записанного JSON
+    # (контур всегда побеждает — если появился новый, он перезаписывает).
+    prev = getattr(args, "update", None)
+    if prev:
+        parcels = _K.merge_previous(parcels, prev)
+        print(f"[kmz] идемпотентно обновляю поверх: {os.path.abspath(prev)}")
+    # Имя файлов: <первый КН с ':'→'_'>[_и_далее]_<дата_время>, в папке --out.
+    if getattr(args, "out", None):
+        op = Path(args.out)
+        out_dir = op if (op.is_dir() or not op.suffix) else op.parent
+    else:
+        out_dir = Path(".")
+    base = out_dir / _K.output_basename(cads)
+    res = _K.build_outputs(base, parcels)
     s = res["stats"]
-    abspath = os.path.abspath(res["path"])
-    print(f"[kmz] ✅ KMZ сохранён: {abspath}")
-    if res.get("info_json"):
-        print(f"    ℹ Информация (JSON): {os.path.abspath(res['info_json'])}")
-    print(f"    ЗУ: {s['parcels']} (с границей: {s['parcels_with_geom']})  "
-          f"объектов с контуром: {s['objects_with_contour']}  по спирали: {s['objects_spiral']}")
+    print(f"[kmz] ✅ KMZ: {os.path.abspath(res['kmz'])}")
+    print(f"      KML: {os.path.abspath(res['kml'])}")
+    print(f"     JSON: {os.path.abspath(res['json'])}")
+    print(f"    объектов: {s['parcels']} (с контуром: {s['parcels_with_geom']})  "
+          f"ОКС с контуром: {s['objects_with_contour']}  по спирали: {s['objects_spiral']}")
     if s["parcels_with_geom"] < s["parcels"]:
         hint = ("добавьте --nspd (браузер NSPD)" if not use_browser
                 else "проверьте playwright/сеть или загрузите контуры (ingest-project/01c)")
-        print(f"    ⚠ у части ЗУ нет геометрии — {hint}.")
+        print(f"    ⚠ у части объектов нет геометрии — {hint}.")
     return 0
 
 
@@ -877,11 +896,16 @@ def build_parser() -> argparse.ArgumentParser:
     sp_ip.add_argument("--pledge-map", help="Привязка насаждений к КН ЗУ: «66=23:..,69=23:..»")
     sp_ip.set_defaults(func=cmd_ingest_project)
 
-    # kmz: объекты в пределах ЗУ → KMZ (контуры / спираль)
-    sp_kmz = sub.add_parser("kmz", help="KMZ объектов в пределах ЗУ (контуры / точки по спирали)")
-    sp_kmz.add_argument("--parcels", required=True, help="КН участков через запятую: «23:15:..,23:15:..»")
+    # kmz: объекты ЗУ/ОКС → KMZ + KML + JSON (контуры / спираль)
+    sp_kmz = sub.add_parser("kmz", help="KMZ+KML+JSON по ЗУ/ОКС (контуры / точки по спирали)")
+    sp_kmz.add_argument("--parcels", required=True,
+                        help="КН ЗУ или ОКС через пробел/запятую/; (тип определяется авто): "
+                             "«23:15:0000000:2267 23:15:0000000:3189»")
     sp_kmz.add_argument("--db",  required=True, help="Рабочая БД (контуры/объекты)")
-    sp_kmz.add_argument("--out", required=True, help="Выходной .kmz")
+    sp_kmz.add_argument("--out", help="Папка вывода (имя файлов — авто: <КН>_<дата_время>). "
+                                      "По умолчанию — текущая папка")
+    sp_kmz.add_argument("--update", help="Ранее записанный .json — идемпотентно обновить "
+                                         "поверх (контур всегда побеждает)")
     sp_kmz.add_argument("--objects", default="linked,agro,geo",
                         help="Что считать объектом внутри ЗУ: linked(а),agro(в),geo(г) — через запятую")
     sp_kmz.add_argument("--buildings", default="nspd,db,cads",

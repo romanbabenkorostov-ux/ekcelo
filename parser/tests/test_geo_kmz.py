@@ -45,6 +45,65 @@ def test_build_kmz_is_valid_zip(tmp_path):
     assert res["stats"]["objects_spiral"] == 1
 
 
+def test_yandex_json_latlon_order_and_note():
+    parcels = [{"cad": "23:15:0000000:2267", "kind": "zu", "polygon": [_SQ],
+                "objects": [{"name": "ОКС-с", "geometry": None}]}]
+    js = K._json_from_rendered(K._render_parcels(parcels))
+    # ЗУ: полигон в порядке Яндекса [lat, lon]
+    lat, lon = js[0]["geometry"]["coordinates"][0][0]
+    assert 44 < lat < 46 and 38 < lon < 39
+    # объект без координат → точка + пометка
+    assert js[0]["objects"][0]["geometry"]["type"] == "Point"
+    assert js[0]["objects"][0]["note"] == K._NO_COORDS_NOTE
+
+
+def test_oks_as_input_polygon():
+    # одиночный ОКС (kind='oks') со своим контуром — без объектов внутри
+    parcels = [{"cad": "23:15:0000000:3189", "kind": "oks", "polygon": [_SQ],
+                "info": {"Наименование": "Ликерный цех"}, "objects": []}]
+    res = K.build_kml(parcels)
+    assert "ОКС 23:15:0000000:3189" in res["kml"]
+    assert res["stats"]["parcels_with_geom"] == 1
+
+
+def test_oks_as_input_point_no_coords():
+    parcels = [{"cad": "23:15:0000000:3189", "kind": "oks", "polygon": None,
+                "point": [38.91, 45.01], "info": {}, "objects": []}]
+    js = K._json_from_rendered(K._render_parcels(parcels))
+    assert js[0]["geometry"]["type"] == "Point"
+    assert js[0]["note"] == K._NO_COORDS_NOTE
+
+
+def test_merge_previous_keeps_contour(tmp_path):
+    # прошлый JSON: у объекта был контур
+    prev = [{"cad": "ЗУ", "geometry": None, "objects": [
+        {"cad": "ОКС1", "geometry": {"type": "Polygon",
+            "coordinates": [[[45.0, 38.9], [45.0, 38.91], [45.01, 38.91], [45.0, 38.9]]]}}]}]
+    pj = tmp_path / "prev.json"
+    import json
+    pj.write_text(json.dumps(prev, ensure_ascii=False), encoding="utf-8")
+    # сейчас ОКС1 без контура → должен подхватить старый
+    parcels = [{"cad": "ЗУ", "polygon": [_SQ],
+                "objects": [{"name": "ОКС1", "geometry": None}]}]
+    merged = K.merge_previous(parcels, pj)
+    assert merged[0]["objects"][0]["geometry"]["type"] == "Polygon"
+
+
+def test_output_basename():
+    from datetime import datetime
+    when = datetime(2026, 6, 28, 15, 30, 0)
+    assert K.output_basename(["23:15:0000000:2267"], when) == "23_15_0000000_2267_20260628_153000"
+    assert K.output_basename(["23:15:0000000:2267", "23:15:0314001:911"], when) == \
+        "23_15_0000000_2267_и_далее_20260628_153000"
+
+
+def test_build_outputs_three_files(tmp_path):
+    res = K.build_outputs(tmp_path / "base", [{"cad": "x", "polygon": [_SQ],
+                                               "objects": [{"name": "o", "geometry": None}]}])
+    assert Path(res["kmz"]).exists() and Path(res["kml"]).exists() and Path(res["json"]).exists()
+    assert Path(res["kml"]).read_text(encoding="utf-8").startswith("<?xml")
+
+
 def test_description_info_table_and_no_coords():
     parcels = [{
         "cad": "23:15:0000000:2267", "polygon": [_SQ],
@@ -71,7 +130,9 @@ def test_build_kmz_writes_info_sidecar(tmp_path):
     data = json.loads(Path(res["info_json"]).read_text(encoding="utf-8"))
     assert data[0]["cad"] == "23:15:0000000:2267"
     assert data[0]["info"]["Кадастровый номер"] == "23:15:0000000:2267"
-    assert data[0]["objects"][0]["geometry_type"] == "spiral"
+    # объект без контура → точка по спирали + пометка «без координат»
+    o = data[0]["objects"][0]
+    assert o["geometry"]["type"] == "Point" and o["note"] == K._NO_COORDS_NOTE
 
 
 def test_parcel_without_geometry_no_spiral():

@@ -704,10 +704,29 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
 
                 parcel = pick_parcel_feature(feats, cad)
                 poly = _geom_to_coords(parcel.get("geometry")) if parcel else None
+                kind = "zu" if poly else "oks"
+                point = None
 
                 idx = cads.index(cad) + 1
-                print(f"  [{idx}/{len(cads)}] ЗУ {cad}: "
-                      f"{'контур ✓' if poly else 'контур ✗'}", flush=True)
+                # Если geoportal-search не дал контур — это, вероятно, ОКС (а не ЗУ):
+                # достаём его собственную геометрию навигацией (как для строений).
+                if not poly and not manual:
+                    g, ofeat = await _oks_geom_via_navigation(page, cad, captured,
+                                                              None, timeout_ms)
+                    if ofeat:
+                        parcel = ofeat                # для feature_info
+                    if g:
+                        poly = g["coords"]
+                    elif ofeat:
+                        gg = _geom_from_feature(ofeat)
+                        if gg and gg["type"] == "Point":
+                            point = gg["coords"][0]   # «без координат границ» — точка NSPD
+                    print(f"  [{idx}/{len(cads)}] ОКС {cad}: "
+                          f"{'контур ✓' if poly else ('точка' if point else 'нет геометрии')}",
+                          flush=True)
+                else:
+                    print(f"  [{idx}/{len(cads)}] ЗУ {cad}: "
+                          f"{'контур ✓' if poly else 'контур ✗'}", flush=True)
 
                 if manual:
                     # Ручной режим: пользователь сам жмёт лупу и листает вкладки;
@@ -760,8 +779,9 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
                     if recs:
                         print(f"      → контур: {n_cont}, спираль: {n_spi}", flush=True)
 
-                out[cad] = {"polygon": poly, "buildings": buildings,
-                            "info": feature_info(parcel), "captured": len(captured)}
+                out[cad] = {"kind": kind, "polygon": poly, "point": point,
+                            "buildings": buildings, "info": feature_info(parcel),
+                            "captured": len(captured)}
         finally:
             await browser.close()
     return out
