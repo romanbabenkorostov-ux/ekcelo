@@ -62,12 +62,6 @@ def collect_cads(payload: Any) -> set[str]:
 
 # Современный geoportal-API NSPD (тот, что дёргает строка поиска / лупа).
 GEOPORTAL_SEARCH = "https://nspd.gov.ru/api/geoportal/v2/search/geoportal"
-# Варианты запроса: универсальный + тематические (1=ЗУ, 2=ОКС). По очереди.
-_SEARCH_VARIANTS = (
-    "{base}?query={q}",
-    "{base}?thematicSearchId=1&query={q}",
-    "{base}?thematicSearchId=2&query={q}",
-)
 _R_MERC = 20037508.34
 # Поля с КН в properties geoportal-feature (в т.ч. вложенные в options).
 _CAD_KEYS = ("cad_num", "cad_number", "cadastral_number", "kadnum",
@@ -194,11 +188,16 @@ async def _close_modals(page):
         pass
 
 
-async def _geoportal_get(page, cad: str) -> list[dict]:
-    """Один проход geoportal-search по вариантам запроса (без ретраев/модалей)."""
+async def _geoportal_get(page, cad: str, theme_ids=()) -> list[dict]:
+    """Один проход geoportal-search по вариантам запроса (без ретраев/модалей).
+
+    theme_ids — id поисковых тем NSPD (ЗУ в дефолтной теме, ОКС — в другой;
+    перебор по темам находит объект независимо от того, где он индексируется)."""
     q = urllib.parse.quote(cad, safe="")
-    for tpl in _SEARCH_VARIANTS:
-        url = tpl.format(base=GEOPORTAL_SEARCH, q=q)
+    urls = [f"{GEOPORTAL_SEARCH}?query={q}"]
+    for tid in (theme_ids or ()):
+        urls.append(f"{GEOPORTAL_SEARCH}?thematicSearchId={tid}&query={q}")
+    for url in urls:
         try:
             resp = await page.request.get(url, headers={
                 "Referer": "https://nspd.gov.ru/map",
@@ -214,16 +213,59 @@ async def _geoportal_get(page, cad: str) -> list[dict]:
     return []
 
 
-async def _search_geoportal(page, cad: str) -> list[dict]:
+async def _search_geoportal(page, cad: str, theme_ids=()) -> list[dict]:
     """geoportal-search по КН с ретраями и закрытием модалей (для геометрии ЗУ)."""
     for attempt in range(3):
         if attempt > 0:
             await page.wait_for_timeout(500)
         await _close_modals(page)
-        feats = await _geoportal_get(page, cad)
+        feats = await _geoportal_get(page, cad, theme_ids)
         if feats:
             return feats
     return []
+
+
+SEARCH_THEMES = "https://nspd.gov.ru/api/geoportal/v1/search-theme?pageCode=geoportal"
+
+
+async def _fetch_search_themes(page) -> list[tuple]:
+    """Список поисковых тем NSPD → [(id, name)]. Темы ЗУ/ОКС/границ и т.д.;
+    нужны, чтобы искать ОКС в их теме (в дефолтной индексируются только ЗУ)."""
+    try:
+        resp = await page.request.get(SEARCH_THEMES, headers={
+            "Referer": "https://nspd.gov.ru/map",
+            "Accept": "application/json, */*",
+        }, timeout=20000)
+        if not resp.ok:
+            return []
+        data = json.loads(await resp.text())
+    except Exception:
+        return []
+    items = data.get("data") if isinstance(data, dict) else data
+    out: list[tuple] = []
+
+    def walk(node, depth=0):
+        if depth > 5 or node is None:
+            return
+        if isinstance(node, list):
+            for x in node:
+                walk(x, depth + 1)
+        elif isinstance(node, dict):
+            tid = node.get("id") or node.get("thematicSearchId") or node.get("themeId")
+            name = node.get("title") or node.get("name") or node.get("label")
+            if tid is not None and name:
+                out.append((tid, str(name)))
+            for v in node.values():
+                walk(v, depth + 1)
+
+    walk(items)
+    # уникальные по id, сохраняя порядок
+    seen, uniq = set(), []
+    for tid, name in out:
+        if tid not in seen:
+            seen.add(tid)
+            uniq.append((tid, name))
+    return uniq
 
 
 # Эндпоинт списка ОКС в пределах ЗУ (выявлен по диагностике сетевых запросов NSPD).
@@ -260,13 +302,13 @@ async def _fetch_objects_list(page, geom_id, cat_id) -> set[str]:
         return set()
 
 
-async def _resolve_geom(page, cad: str) -> Optional[dict]:
+async def _resolve_geom(page, cad: str, theme_ids=()) -> Optional[dict]:
     """КН ОКС → геометрия {type, coords} через geoportal-search.
 
     Возвращает контур (Polygon) если есть; иначе реальную точку (Point) из NSPD;
     None — если объект вообще не нашёлся (тогда вызывающий ставит точку по спирали).
     Точку NSPD предпочитаем спирали — она настоящая, а не синтетическая."""
-    feats = await _geoportal_get(page, cad)
+    feats = await _geoportal_get(page, cad, theme_ids)
     if not feats:
         return None
     want = cad.replace(" ", "").upper()
@@ -331,6 +373,7 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
 
         page.on("response", lambda r: asyncio.create_task(_on_resp(r)))
 
+        theme_ids: list = []
         try:
             for cad in cads:
                 captured.clear()
@@ -349,7 +392,13 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
                 await page.wait_for_timeout(2500)
                 await _close_modals(page)
                 await page.wait_for_timeout(1000)
-                feats = await _search_geoportal(page, cad)
+                if not theme_ids:                         # один раз: темы поиска NSPD
+                    themes = await _fetch_search_themes(page)
+                    theme_ids = [t[0] for t in themes]
+                    if themes:
+                        print("  [темы поиска NSPD] " +
+                              "; ".join(f"{i}={n}" for i, n in themes), flush=True)
+                feats = await _search_geoportal(page, cad, theme_ids)
                 if not feats and captured:               # пассивный fallback
                     feats = list(captured)
 
@@ -390,7 +439,7 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
                     #    (Point) > спираль (None). Точка NSPD точнее синтетической спирали.
                     n_cont = n_pt = n_spi = 0
                     for j, oc in enumerate(sorted(oks), 1):
-                        g = await _resolve_geom(page, oc)
+                        g = await _resolve_geom(page, oc, theme_ids)
                         buildings.append({"name": oc, "geometry": g})
                         if g and g["type"] == "Polygon":
                             mark = "контур"; n_cont += 1
