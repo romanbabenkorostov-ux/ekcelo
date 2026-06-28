@@ -285,10 +285,10 @@ def _parcel_ids(feature: Optional[dict]) -> tuple:
     return (gid, cat)
 
 
-async def _fetch_objects_list(page, geom_id, cat_id) -> set[str]:
-    """GET список ОКС в пределах ЗУ (tab-group-data objectsList) → множество КН."""
+async def _fetch_objects_list(page, geom_id, cat_id) -> Optional[dict]:
+    """GET список ОКС в пределах ЗУ (tab-group-data objectsList) → сырой JSON."""
     if not geom_id or not cat_id:
-        return set()
+        return None
     url = OBJECTS_LIST.format(cat=cat_id, gid=geom_id)
     try:
         resp = await page.request.get(url, headers={
@@ -296,10 +296,83 @@ async def _fetch_objects_list(page, geom_id, cat_id) -> set[str]:
             "Accept": "application/json, */*",
         }, timeout=20000)
         if not resp.ok:
-            return set()
-        return collect_cads(json.loads(await resp.text()))
+            return None
+        return json.loads(await resp.text())
     except Exception:
-        return set()
+        return None
+
+
+def oks_records(data: Any) -> list[dict]:
+    """Из objectsList вытащить записи ОКС: {cad, geomId, categoryId}.
+
+    Каждый объект списка несёт свой geomId/categoryId — по ним грузим геометрию,
+    т.к. текстовый geoportal-search эти ОКС не находит."""
+    recs: list[dict] = []
+    seen: set = set()
+
+    def walk(n, depth=0):
+        if depth > 9 or n is None:
+            return
+        if isinstance(n, list):
+            for x in n:
+                walk(x, depth + 1)
+        elif isinstance(n, dict):
+            cad = None
+            for v in n.values():
+                if isinstance(v, str):
+                    m = _CAD_RE.search(v)
+                    if m:
+                        cad = m.group(0)
+                        break
+            gid = (n.get("geomId") or n.get("geom_id") or n.get("interactionId")
+                   or n.get("id"))
+            cat = (n.get("categoryId") or n.get("category") or n.get("category_id"))
+            if cad and cad not in seen:
+                seen.add(cad)
+                recs.append({"cad": cad, "geomId": gid, "categoryId": cat})
+            for v in n.values():
+                walk(v, depth + 1)
+
+    walk(data)
+    return recs
+
+
+# Кандидаты эндпоинта геометрии ОКС по geomId/categoryId (probe определит рабочий).
+_GEOM_BY_ID_PROBES = (
+    "https://nspd.gov.ru/api/geoportal/v1/geom/{cat}/{gid}",
+    "https://nspd.gov.ru/api/geoportal/v2/geom/{cat}/{gid}",
+    "https://nspd.gov.ru/api/geoportal/v1/object-geometry/{cat}/{gid}",
+    "https://nspd.gov.ru/api/geoportal/v2/search/geoportal?categoryId={cat}&geomId={gid}",
+    "https://nspd.gov.ru/api/aeggis/v3/{cat}/wfs?SERVICE=WFS&VERSION=2.0.0"
+    "&REQUEST=GetFeature&TYPENAMES=ms:layer_{cat}&outputFormat=application/json"
+    "&featureID=layer_{cat}.{gid}",
+)
+
+
+async def _probe_geom_by_id(page, rec: dict) -> list[tuple]:
+    """Пробуем кандидатные эндпоинты геометрии по geomId/categoryId одного ОКС.
+    Возвращает [(url, status, n_features)] для диагностики/выбора рабочего."""
+    gid, cat = rec.get("geomId"), rec.get("categoryId")
+    res: list[tuple] = []
+    if not gid or not cat:
+        return res
+    for tpl in _GEOM_BY_ID_PROBES:
+        url = tpl.format(cat=cat, gid=gid)
+        try:
+            resp = await page.request.get(url, headers={
+                "Referer": "https://nspd.gov.ru/map",
+                "Accept": "application/json, */*",
+            }, timeout=20000)
+            n = 0
+            if resp.ok:
+                try:
+                    n = len(extract_features(json.loads(await resp.text())))
+                except Exception:
+                    n = -1                                # ответ не JSON
+            res.append((tpl.split("nspd.gov.ru")[-1][:60], resp.status, n))
+        except Exception as e:
+            res.append((tpl.split("nspd.gov.ru")[-1][:60], "ERR", str(e)[:30]))
+    return res
 
 
 async def _resolve_geom(page, cad: str, theme_ids=()) -> Optional[dict]:
@@ -424,21 +497,32 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
 
                 buildings: list[dict[str, Any]] = []
                 if (discover or manual) and poly:
-                    # 1) список ОКС в пределах ЗУ — прямой запрос objectsList по
-                    #    geomId/categoryId самого ЗУ (надёжнее ручного листания).
+                    # 1) список ОКС в пределах ЗУ — objectsList по geomId/categoryId ЗУ.
                     geom_id, cat_id = _parcel_ids(parcel)
-                    oks = await _fetch_objects_list(page, geom_id, cat_id)
-                    # 2) добор из перехваченного (ручные клики по вкладкам) — на случай,
-                    #    если прямой запрос пуст.
-                    oks |= {c for c in seen_cads}
-                    oks = {c for c in oks if c.replace(" ", "") != cad.replace(" ", "")}
-                    if oks:
-                        print(f"      ОКС в пределах: {len(oks)} — резолвлю геометрию…",
+                    data = await _fetch_objects_list(page, geom_id, cat_id)
+                    recs = oks_records(data)
+                    # добор из перехваченного (ручные клики) — если прямой запрос пуст.
+                    have = {r["cad"] for r in recs}
+                    for c in seen_cads:
+                        if c not in have:
+                            recs.append({"cad": c, "geomId": None, "categoryId": None})
+                    recs = [r for r in recs
+                            if r["cad"].replace(" ", "") != cad.replace(" ", "")]
+                    if recs:
+                        print(f"      ОКС в пределах: {len(recs)} — резолвлю геометрию…",
                               flush=True)
-                    # 3) геометрия каждого ОКС: контур (Polygon) > реальная точка
-                    #    (Point) > спираль (None). Точка NSPD точнее синтетической спирали.
+                    # ── ПРОБА эндпоинта геометрии по geomId (один раз, для диагностики):
+                    #    текстовый поиск ОКС не находит, geomId есть в objectsList.
+                    probe_rec = next((r for r in recs if r.get("geomId") and r.get("categoryId")), None)
+                    if probe_rec:
+                        print(f"      [проба геометрии по geomId={probe_rec['geomId']} "
+                              f"cat={probe_rec['categoryId']} для {probe_rec['cad']}]", flush=True)
+                        for u, st, n in await _probe_geom_by_id(page, probe_rec):
+                            print(f"        {u}  status={st} features={n}", flush=True)
+                    # 2) геометрия каждого ОКС: geomId-эндпоинт > текст-поиск > спираль.
                     n_cont = n_pt = n_spi = 0
-                    for j, oc in enumerate(sorted(oks), 1):
+                    for j, r in enumerate(sorted(recs, key=lambda r: r["cad"]), 1):
+                        oc = r["cad"]
                         g = await _resolve_geom(page, oc, theme_ids)
                         buildings.append({"name": oc, "geometry": g})
                         if g and g["type"] == "Polygon":
@@ -447,8 +531,8 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
                             mark = "точка"; n_pt += 1
                         else:
                             mark = "спираль"; n_spi += 1
-                        print(f"        {j}/{len(oks)} {oc}: {mark}", flush=True)
-                    if oks:
+                        print(f"        {j}/{len(recs)} {oc}: {mark}", flush=True)
+                    if recs:
                         print(f"      → контур: {n_cont}, точка: {n_pt}, спираль: {n_spi}",
                               flush=True)
 

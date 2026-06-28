@@ -78,6 +78,21 @@ def test_parcel_ids_none_on_empty():
     assert B._parcel_ids(None) == (None, None)
 
 
+def test_oks_records_extracts_cad_geomid_category():
+    data = {"title": "ОКС", "object": [
+        {"descr": "Здание 23:15:0314001:925", "geomId": 12345, "categoryId": 36369},
+        {"value": "23:15:0314001:924", "interactionId": 12346, "category": 36369}]}
+    recs = B.oks_records(data)
+    assert recs[0] == {"cad": "23:15:0314001:925", "geomId": 12345, "categoryId": 36369}
+    assert recs[1]["cad"] == "23:15:0314001:924" and recs[1]["geomId"] == 12346
+
+
+def test_oks_records_dedup_by_cad():
+    data = [{"v": "23:15:0314001:925", "geomId": 1},
+            {"v": "23:15:0314001:925", "geomId": 2}]
+    assert len(B.oks_records(data)) == 1
+
+
 def test_buildings_discovered_in_polygon():
     parcel = _feat("23:15:0000000:2267", PARCEL)
     oks = _feat("23:15:0000000:9999", OKS)
