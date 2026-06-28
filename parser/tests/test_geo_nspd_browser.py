@@ -100,6 +100,31 @@ def test_extract_features_require_geometry_flag():
     assert len(B.extract_features(payload, require_geometry=False)) == 1
 
 
+def test_feature_info_dedup_date_and_vid_first():
+    f = {"properties": {"category": 36048, "options": {
+        "land_record_type": "Земельный участок", "land_record_subtype": "Землепользование",
+        "subtype": "Землепользование", "registration_date": "2022-10-21T00:00:00Z",
+        "cad_num": "23:15:0000000:2267", "name": "X", "building_name": "X"}}}
+    info = B.feature_info(f)
+    keys = list(info.keys())
+    assert keys[0] == "Вид объекта недвижимости"          # Вид — первой строкой
+    assert info["Дата присвоения"] == "2022-10-21"        # дата усечена
+    assert "Subtype" not in info and "Building name" not in info  # англ-дубли убраны
+    assert info["Вид земельного участка"] == "Землепользование"
+
+
+def test_kind_from_feature():
+    assert B._kind_from_feature({"properties": {"category": 36048}}) == "zu"
+    assert B._kind_from_feature({"properties": {"category": 36368}}) == "zu"
+    assert B._kind_from_feature({"properties": {"category": 36369}}) == "oks"
+    assert B._kind_from_feature({"properties": {"category": 36383}}) == "oks"
+    assert B._kind_from_feature({"properties": {"options": {
+        "land_record_type": "Земельный участок"}}}) == "zu"
+    assert B._kind_from_feature({"properties": {"options": {
+        "build_record_type": "Здание"}}}) == "oks"
+    assert B._kind_from_feature(None) is None
+
+
 def test_feature_info_labels_and_humanize():
     f = {"properties": {"options": {
         "cad_num": "23:15:0000000:2267", "specified_area": 42359,

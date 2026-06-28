@@ -102,17 +102,16 @@ def _coords_str(ring: list[Coord]) -> str:
 
 def _description(info: Optional[dict], *, no_coords: bool = False) -> str:
     """KML <description> с таблицей «Информация» (всплывает при клике в Google Earth).
-    no_coords=True добавляет пометку «Без координат границ по Росреестру» (объект
-    поставлен по спирали, реальной границы в ЕГРН нет)."""
+    no_coords=True ставит пометку «Без координат границ по Росреестру» ПЕРВОЙ строкой."""
     rows = []
+    if no_coords:                                       # пометка — вверху таблички
+        rows.append("<tr><td colspan=\"2\"><i>Без координат границ по Росреестру</i>"
+                    "</td></tr>")
     for k, v in (info or {}).items():
         if v in (None, "", []):
             continue
         rows.append(f"<tr><td><b>{_xml.escape(str(k))}</b></td>"
                     f"<td>{_xml.escape(str(v))}</td></tr>")
-    if no_coords:
-        rows.append("<tr><td colspan=\"2\"><i>Без координат границ по Росреестру</i>"
-                    "</td></tr>")
     if not rows:
         return ""
     html = "<table border=\"0\" cellpadding=\"2\">" + "".join(rows) + "</table>"
@@ -130,11 +129,14 @@ def _placemark_point(name: str, pt: Coord, style: str, desc: str = "") -> str:
             f"<Point><coordinates>{pt[0]},{pt[1]},0</coordinates></Point></Placemark>")
 
 
+# Цвета KML — aabbggrr (alpha,blue,green,red). Заливка 0x33 = ~80% прозрачности.
+# ЗУ — зелёный (граница ff00ff00, заливка 3300ff00, бордер 2);
+# ОКС — красный (граница ff0000ff, заливка 330000ff, бордер 2).
 _STYLES = """
-<Style id="parcel"><LineStyle><color>ff0000ff</color><width>2</width></LineStyle>
-<PolyStyle><fill>0</fill></PolyStyle></Style>
-<Style id="objpoly"><LineStyle><color>ff00aa00</color><width>2</width></LineStyle>
-<PolyStyle><color>5500aa00</color></PolyStyle></Style>
+<Style id="parcel"><LineStyle><color>ff00ff00</color><width>2</width></LineStyle>
+<PolyStyle><color>3300ff00</color><fill>1</fill></PolyStyle></Style>
+<Style id="objpoly"><LineStyle><color>ff0000ff</color><width>2</width></LineStyle>
+<PolyStyle><color>330000ff</color><fill>1</fill></PolyStyle></Style>
 <Style id="objpoint"><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle></Style>
 <Style id="spiral"><IconStyle><color>ff00ffff</color><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle></Style>
 """.strip()
@@ -198,32 +200,39 @@ def _stats(rendered: list[dict[str, Any]]) -> dict[str, int]:
 
 
 def _kml_from_rendered(rendered: list[dict[str, Any]]) -> str:
-    folders = []
+    """Порядок слоёв (важно для Яндекс.Конструктора — клик берёт верхний слой):
+    ЗУ (зелёные, ниже всех) → ОКС-полигоны (красные) → точки (выше всех)."""
+    zu_pl, oks_pl, pt_pl = [], [], []
     for r in rendered:
         cad = r["cad"]
         head = "ОКС" if r["kind"] == "oks" else "ЗУ"
-        body = []
         gk = r["geometry"]["kind"]
+        pdesc = _description(r.get("info"), no_coords=r["no_coords"])
         if gk == "polygon":
-            style = "objpoly" if r["kind"] == "oks" else "parcel"
-            body.append(_placemark_polygon(f"{head} {cad}", r["geometry"]["ring"], style,
-                                           _description(r.get("info"))))
+            if r["kind"] == "oks":
+                oks_pl.append(_placemark_polygon(f"ОКС {cad}", r["geometry"]["ring"], "objpoly", pdesc))
+            else:
+                zu_pl.append(_placemark_polygon(f"ЗУ {cad}", r["geometry"]["ring"], "parcel", pdesc))
         elif gk == "point":
-            body.append(_placemark_point(f"{head} {cad}", r["geometry"]["pt"], "spiral",
-                                         _description(r.get("info"), no_coords=r["no_coords"])))
+            pt_pl.append(_placemark_point(f"{head} {cad}", r["geometry"]["pt"], "spiral", pdesc))
         for o in r["objects"]:
             ok = o["geometry"]["kind"]
             desc = _description(o.get("info"), no_coords=o["no_coords"])
             if ok == "polygon":
-                body.append(_placemark_polygon(o["name"], o["geometry"]["ring"], "objpoly", desc))
+                oks_pl.append(_placemark_polygon(o["name"], o["geometry"]["ring"], "objpoly", desc))
             elif ok == "point":
                 style = "spiral" if o["no_coords"] else "objpoint"
-                body.append(_placemark_point(o["name"], o["geometry"]["pt"], style, desc))
-        folders.append(f"<Folder><name>{_xml.escape(head)} {_xml.escape(cad)}</name>"
-                       f"{''.join(body)}</Folder>")
+                pt_pl.append(_placemark_point(o["name"], o["geometry"]["pt"], style, desc))
+
+    def _folder(name, pls):
+        return (f"<Folder><name>{_xml.escape(name)}</name>{''.join(pls)}</Folder>"
+                if pls else "")
+    body = (_folder("Земельные участки", zu_pl)
+            + _folder("Строения (контуры)", oks_pl)
+            + _folder("Точки", pt_pl))
     return ('<?xml version="1.0" encoding="UTF-8"?>'
             '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>'
-            f'{_STYLES}{"".join(folders)}</Document></kml>')
+            f'{_STYLES}{body}</Document></kml>')
 
 
 def _yandex_geom(geom: dict) -> Optional[dict]:

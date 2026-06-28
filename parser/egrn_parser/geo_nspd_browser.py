@@ -109,25 +109,93 @@ _INFO_LABELS = {
 }
 
 
+_VID = "Вид объекта недвижимости"
+_DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})T[\d:]+")
+
+
+def _fmt_value(v):
+    """ISO-дату `2013-09-25T00:00:00Z` приводим к `2013-09-25`; прочее как есть."""
+    if isinstance(v, str):
+        m = _DATE_RE.match(v)
+        if m:
+            return m.group(1)
+    return v
+
+
 def feature_info(feature: Optional[dict]) -> dict:
     """Из geoportal-feature собрать словарь «Информация» {подпись: значение}.
 
-    Источник — `properties.options` (то, что NSPD показывает во вкладке
-    «Информация»). Известные ключи переводим по `_INFO_LABELS`, прочие — с
-    человекочитаемым ключом, чтобы ничего не терять."""
+    Источник — `properties.options`. Известные ключи переводим по `_INFO_LABELS`,
+    прочие — гуманизированным ключом. Дедуп по значению (известная русская подпись
+    побеждает английский дубль, напр. «Наименование» vs «Building name»). Даты →
+    YYYY-MM-DD. «Вид объекта недвижимости» — первой строкой."""
     props = (feature or {}).get("properties") or {}
     opts = props.get("options")
     if not isinstance(opts, dict):
         opts = props if isinstance(props, dict) else {}
-    info: dict = {}
+    mapped, extra = {}, {}
+    seen = set()
+    # проход 1: известные (русские) подписи
     for k, v in opts.items():
-        if v in (None, "", [], {}):
+        if v in (None, "", [], {}) or isinstance(v, (dict, list)):
             continue
-        if isinstance(v, (dict, list)):
+        if k in _INFO_LABELS:
+            val = _fmt_value(v)
+            mapped[_INFO_LABELS[k]] = val
+            seen.add(str(val))
+    # проход 2: прочие ключи — пропускаем дубли по значению
+    for k, v in opts.items():
+        if v in (None, "", [], {}) or isinstance(v, (dict, list)):
             continue
-        label = _INFO_LABELS.get(k) or k.replace("_", " ").strip().capitalize()
-        info[label] = v
+        if k in _INFO_LABELS:
+            continue
+        val = _fmt_value(v)
+        if str(val) in seen:
+            continue
+        label = k.replace("_", " ").strip().capitalize()
+        if label in mapped or label in extra:
+            continue
+        extra[label] = val
+        seen.add(str(val))
+    info = {**mapped, **extra}
+    if _VID in info:                                    # «Вид объекта…» — первой строкой
+        info = {_VID: info[_VID], **{k: v for k, v in info.items() if k != _VID}}
     return info
+
+
+# Категории карточек NSPD: ЗУ vs ОКС (для надёжного определения типа объекта).
+_ZU_CATS = {36048, 36368}
+_OKS_CATS = {36369, 36383, 36049, 36328, 36329}
+
+
+def _kind_from_feature(feature: Optional[dict]) -> Optional[str]:
+    """Определить тип объекта (zu/oks) по feature: категория > текст типа. None —
+    если не ясно (тогда вызывающий решает по факту наличия контура из поиска)."""
+    if not feature:
+        return None
+    props = feature.get("properties") or {}
+    opts = props.get("options") or {}
+    cat = props.get("category") or props.get("categoryId") or props.get("category_id")
+    try:
+        cat = int(cat) if cat is not None else None
+    except (TypeError, ValueError):
+        cat = None
+    if cat in _ZU_CATS:
+        return "zu"
+    if cat in _OKS_CATS:
+        return "oks"
+    blob = " ".join(str(v) for v in list(opts.values())
+                    + [props.get("categoryName"), props.get("category_name")]
+                    if isinstance(v, str)).lower()
+    if "земельный участок" in blob:
+        return "zu"
+    if any(w in blob for w in ("здание", "сооружен", "помещен", "объект незавершен")):
+        return "oks"
+    if opts.get("land_record_type") or opts.get("land_record_category_type"):
+        return "zu"
+    if opts.get("build_record_type") or opts.get("purpose") or opts.get("floors"):
+        return "oks"
+    return None
 
 
 # ── чистые помощники (тестируются офлайн) ────────────────────────────────────
@@ -704,29 +772,31 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
 
                 parcel = pick_parcel_feature(feats, cad)
                 poly = _geom_to_coords(parcel.get("geometry")) if parcel else None
-                kind = "zu" if poly else "oks"
+                kind = _kind_from_feature(parcel)        # по категории/типу, надёжно
                 point = None
 
                 idx = cads.index(cad) + 1
-                # Если geoportal-search не дал контур — это, вероятно, ОКС (а не ЗУ):
-                # достаём его собственную геометрию навигацией (как для строений).
+                # Контур не пришёл текст-поиском — навигация (работает и для ЗУ, что
+                # search-ом не нашлись, и для ОКС). Тип определяем по самому feature.
                 if not poly and not manual:
                     g, ofeat = await _oks_geom_via_navigation(page, cad, captured,
                                                               None, timeout_ms)
                     if ofeat:
-                        parcel = ofeat                # для feature_info
+                        parcel = ofeat                # для feature_info / типа
+                        kind = kind or _kind_from_feature(ofeat)
                     if g:
                         poly = g["coords"]
                     elif ofeat:
                         gg = _geom_from_feature(ofeat)
                         if gg and gg["type"] == "Point":
                             point = gg["coords"][0]   # «без координат границ» — точка NSPD
-                    print(f"  [{idx}/{len(cads)}] ОКС {cad}: "
-                          f"{'контур ✓' if poly else ('точка' if point else 'нет геометрии')}",
-                          flush=True)
-                else:
-                    print(f"  [{idx}/{len(cads)}] ЗУ {cad}: "
-                          f"{'контур ✓' if poly else 'контур ✗'}", flush=True)
+                # дефолт типа: контур из поиска → ЗУ, иначе ОКС (но категория важнее)
+                if kind is None:
+                    kind = "zu" if (poly and feats) else "oks"
+                head = "ЗУ" if kind == "zu" else "ОКС"
+                print(f"  [{idx}/{len(cads)}] {head} {cad}: "
+                      f"{'контур ✓' if poly else ('точка' if point else 'нет геометрии/контур ✗')}",
+                      flush=True)
 
                 if manual:
                     # Ручной режим: пользователь сам жмёт лупу и листает вкладки;
@@ -742,7 +812,8 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
                           f"{len(seen_cads)}; feature: {len(captured)}", flush=True)
 
                 buildings: list[dict[str, Any]] = []
-                if (discover or manual) and poly:
+                # ОКС в пределах ищем ТОЛЬКО для ЗУ (у одиночного ОКС вложений нет).
+                if kind == "zu" and (discover or manual) and poly:
                     # 1) список ОКС в пределах ЗУ — objectsList по geomId/categoryId ЗУ.
                     geom_id, cat_id = _parcel_ids(parcel)
                     data = await _fetch_objects_list(page, geom_id, cat_id)

@@ -45,6 +45,33 @@ def test_build_kmz_is_valid_zip(tmp_path):
     assert res["stats"]["objects_spiral"] == 1
 
 
+def test_layer_order_and_styles():
+    parcels = [{"cad": "ЗУ1", "kind": "zu", "polygon": [_SQ],
+                "objects": [
+                    {"name": "ОКС-к", "geometry": {"type": "Polygon",
+                        "coords": [[[38.905, 45.005], [38.906, 45.005], [38.906, 45.006], [38.905, 45.005]]]}},
+                    {"name": "ОКС-с", "geometry": None}]}]
+    kml = K.build_kml(parcels)["kml"]
+    # порядок слоёв: ЗУ → строения → точки
+    i_zu = kml.index("Земельные участки")
+    i_oks = kml.index("Строения (контуры)")
+    i_pt = kml.index("Точки")
+    assert i_zu < i_oks < i_pt
+    # стили: ЗУ зелёный (ff00ff00), ОКС красный (ff0000ff), бордер 2
+    assert "ff00ff00" in kml and "3300ff00" in kml      # зелёный + заливка ~80%
+    assert "ff0000ff" in kml and "330000ff" in kml      # красный + заливка ~80%
+    assert "<width>2</width>" in kml
+
+
+def test_description_note_on_top():
+    kml = K.build_kml([{"cad": "ЗУ", "polygon": [_SQ],
+                        "objects": [{"name": "o", "geometry": None,
+                                     "info": {"Наименование": "Склад"}}]}])["kml"]
+    note = "Без координат границ по Росреестру"
+    # пометка идёт ВЫШЕ атрибутов в табличке
+    assert kml.index(note) < kml.index("Наименование")
+
+
 def test_yandex_json_latlon_order_and_note():
     parcels = [{"cad": "23:15:0000000:2267", "kind": "zu", "polygon": [_SQ],
                 "objects": [{"name": "ОКС-с", "geometry": None}]}]
