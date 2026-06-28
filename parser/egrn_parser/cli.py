@@ -634,15 +634,20 @@ def cmd_kmz(args: argparse.Namespace) -> int:
         if use_browser and "nspd" in bsrc:           # добавить ОКС, найденные браузером
             by = {p["cad"]: p for p in parcels}
             for cad in cads:
-                got = (browser_cache.get(cad) or {}).get("buildings", [])
+                entry = browser_cache.get(cad) or {}
+                got = entry.get("buildings", [])
                 exist = {o["name"] for o in by[cad]["objects"]}
                 by[cad]["objects"] = [b for b in got if b["name"] not in exist] + by[cad]["objects"]
+                if entry.get("info"):                # «Информация» по ЗУ → в KMZ-описание
+                    by[cad]["info"] = entry["info"]
     finally:
         conn.close()
     res = _K.build_kmz(args.out, parcels)
     s = res["stats"]
     abspath = os.path.abspath(res["path"])
     print(f"[kmz] ✅ KMZ сохранён: {abspath}")
+    if res.get("info_json"):
+        print(f"    ℹ Информация (JSON): {os.path.abspath(res['info_json'])}")
     print(f"    ЗУ: {s['parcels']} (с границей: {s['parcels_with_geom']})  "
           f"объектов с контуром: {s['objects_with_contour']}  по спирали: {s['objects_spiral']}")
     if s["parcels_with_geom"] < s["parcels"]:

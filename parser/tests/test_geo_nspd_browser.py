@@ -100,6 +100,20 @@ def test_extract_features_require_geometry_flag():
     assert len(B.extract_features(payload, require_geometry=False)) == 1
 
 
+def test_feature_info_labels_and_humanize():
+    f = {"properties": {"options": {
+        "cad_num": "23:15:0000000:2267", "specified_area": 42359,
+        "land_record_category_type": "Земли населённых пунктов",
+        "cost_value": 3620000.14, "weird_key": "x",
+        "empty": "", "nested": {"a": 1}}}}
+    info = B.feature_info(f)
+    assert info["Кадастровый номер"] == "23:15:0000000:2267"
+    assert info["Площадь уточнённая, кв. м"] == 42359
+    assert info["Категория земель"] == "Земли населённых пунктов"
+    assert info["Weird key"] == "x"            # неизвестный ключ — гуманизируется
+    assert "empty" not in str(info) and "nested" not in info  # пустые/вложенные — мимо
+
+
 def test_feature_ids_geomid_category():
     f = {"id": 1003499779, "properties": {"category": 36369}}
     assert B._feature_ids(f) == (1003499779, 36369)

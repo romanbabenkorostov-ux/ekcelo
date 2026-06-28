@@ -100,14 +100,33 @@ def _coords_str(ring: list[Coord]) -> str:
     return " ".join(f"{lon},{lat},0" for lon, lat in pts)
 
 
-def _placemark_polygon(name: str, ring: list[Coord], style: str) -> str:
-    return (f"<Placemark><name>{_xml.escape(name)}</name><styleUrl>#{style}</styleUrl>"
+def _description(info: Optional[dict], *, no_coords: bool = False) -> str:
+    """KML <description> с таблицей «Информация» (всплывает при клике в Google Earth).
+    no_coords=True добавляет пометку «Без координат границ по Росреестру» (объект
+    поставлен по спирали, реальной границы в ЕГРН нет)."""
+    rows = []
+    for k, v in (info or {}).items():
+        if v in (None, "", []):
+            continue
+        rows.append(f"<tr><td><b>{_xml.escape(str(k))}</b></td>"
+                    f"<td>{_xml.escape(str(v))}</td></tr>")
+    if no_coords:
+        rows.append("<tr><td colspan=\"2\"><i>Без координат границ по Росреестру</i>"
+                    "</td></tr>")
+    if not rows:
+        return ""
+    html = "<table border=\"0\" cellpadding=\"2\">" + "".join(rows) + "</table>"
+    return f"<description><![CDATA[{html}]]></description>"
+
+
+def _placemark_polygon(name: str, ring: list[Coord], style: str, desc: str = "") -> str:
+    return (f"<Placemark><name>{_xml.escape(name)}</name>{desc}<styleUrl>#{style}</styleUrl>"
             f"<Polygon><outerBoundaryIs><LinearRing><coordinates>{_coords_str(ring)}"
             f"</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>")
 
 
-def _placemark_point(name: str, pt: Coord, style: str) -> str:
-    return (f"<Placemark><name>{_xml.escape(name)}</name><styleUrl>#{style}</styleUrl>"
+def _placemark_point(name: str, pt: Coord, style: str, desc: str = "") -> str:
+    return (f"<Placemark><name>{_xml.escape(name)}</name>{desc}<styleUrl>#{style}</styleUrl>"
             f"<Point><coordinates>{pt[0]},{pt[1]},0</coordinates></Point></Placemark>")
 
 
@@ -130,7 +149,8 @@ def build_kml(parcels: list[dict[str, Any]]) -> dict[str, Any]:
         ring = _ring(p.get("polygon"))
         body = []
         if ring:
-            body.append(_placemark_polygon(f"ЗУ {cad}", ring, "parcel"))
+            body.append(_placemark_polygon(f"ЗУ {cad}", ring, "parcel",
+                                           _description(p.get("info"))))
             n_parcels_geo += 1
         objs = p.get("objects") or []
         no_geom = []
@@ -138,22 +158,24 @@ def build_kml(parcels: list[dict[str, Any]]) -> dict[str, Any]:
             g = o.get("geometry")
             nm = str(o.get("name", "объект"))
             if g and g.get("coords"):
+                desc = _description(o.get("info"))
                 if g.get("type") == "Point":
                     c = g["coords"][0]
-                    body.append(_placemark_point(nm, (float(c[0]), float(c[1])), "objpoint"))
+                    body.append(_placemark_point(nm, (float(c[0]), float(c[1])), "objpoint", desc))
                 else:
-                    body.append(_placemark_polygon(nm, _ring(g["coords"]), "objpoly"))
+                    body.append(_placemark_polygon(nm, _ring(g["coords"]), "objpoly", desc))
                 n_contour += 1
             else:
-                no_geom.append(nm)
-        # объекты без геометрии → точки по спирали внутри ЗУ
+                no_geom.append((nm, o.get("info")))
+        # объекты без геометрии → точки по спирали внутри ЗУ («без координат границ»)
         if no_geom and ring:
-            for nm, pt in zip(no_geom, spiral_points(ring, len(no_geom))):
-                body.append(_placemark_point(nm, pt, "spiral"))
+            for (nm, info), pt in zip(no_geom, spiral_points(ring, len(no_geom))):
+                body.append(_placemark_point(nm, pt, "spiral",
+                                             _description(info, no_coords=True)))
                 n_spiral += 1
         elif no_geom:
             # нет границы ЗУ → спираль ставить негде (нужна геометрия участка)
-            for nm in no_geom:
+            for nm, _info in no_geom:
                 body.append(f"<!-- объект без геометрии и без границы ЗУ: {_xml.escape(nm)} -->")
         folders.append(f"<Folder><name>ЗУ {_xml.escape(cad)}</name>{''.join(body)}</Folder>")
 
@@ -165,13 +187,25 @@ def build_kml(parcels: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def build_kmz(out_path: str | Path, parcels: list[dict[str, Any]]) -> dict[str, Any]:
-    """Собрать KMZ-файл. Возвращает {path, stats}."""
+    """Собрать KMZ-файл (+ JSON-сайдкар с «Информацией»). Возвращает {path, stats}."""
+    import json as _json
     res = build_kml(parcels)
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("doc.kml", res["kml"])
-    return {"path": str(out), "stats": res["stats"]}
+    # JSON-сайдкар: вся «Информация» по ЗУ/объектам (для бэкенда/проверки).
+    sidecar = out.with_suffix(".info.json")
+    payload = [{
+        "cad": p.get("cad"),
+        "info": p.get("info") or {},
+        "objects": [{"name": o.get("name"),
+                     "geometry_type": (o.get("geometry") or {}).get("type") or "spiral",
+                     "info": o.get("info") or {}}
+                    for o in (p.get("objects") or [])],
+    } for p in parcels]
+    sidecar.write_text(_json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"path": str(out), "stats": res["stats"], "info_json": str(sidecar)}
 
 
 # Режимы «что считать объектом внутри ЗУ» (выбор пользователя; умолч. — все три):

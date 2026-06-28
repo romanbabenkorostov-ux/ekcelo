@@ -69,6 +69,66 @@ _R_MERC = 20037508.34
 _CAD_KEYS = ("cad_num", "cad_number", "cadastral_number", "kadnum",
              "cadNumber", "label", "descr")
 
+# Карта option-ключей geoportal-feature → русские подписи вкладки «Информация».
+# Известные ключи — с подписями; прочие пройдут с гуманизированным ключом.
+_INFO_LABELS = {
+    "land_record_type": "Вид объекта недвижимости",
+    "land_record_subtype": "Вид земельного участка",
+    "build_record_type": "Вид объекта недвижимости",
+    "construction_record_type": "Вид объекта недвижимости",
+    "registration_date": "Дата присвоения",
+    "land_record_reg_date": "Дата присвоения",
+    "cad_num": "Кадастровый номер",
+    "cad_number": "Кадастровый номер",
+    "quarter_cad_number": "Кадастровый квартал",
+    "readable_address": "Адрес",
+    "address": "Адрес",
+    "specified_area": "Площадь уточнённая, кв. м",
+    "declared_area": "Площадь декларированная, кв. м",
+    "area": "Площадь общая, кв. м",
+    "area_value": "Площадь, кв. м",
+    "status": "Статус",
+    "land_record_category_type": "Категория земель",
+    "category_type": "Категория земель",
+    "permitted_use_established_by_document": "Вид разрешённого использования",
+    "util_by_doc": "Вид разрешённого использования",
+    "ownership_type": "Форма собственности",
+    "cost_value": "Кадастровая стоимость, руб.",
+    "cost_index": "Удельный показатель кадастровой стоимости, руб./кв. м",
+    "specific_cost_index": "Удельный показатель кадастровой стоимости, руб./кв. м",
+    "name": "Наименование",
+    "purpose": "Назначение",
+    "floors": "Количество этажей",
+    "underground_floors": "Количество подземных этажей",
+    "wall_material": "Материал стен",
+    "materials": "Материал стен",
+    "year_built": "Завершение строительства",
+    "build_record_year_built": "Завершение строительства",
+    "year_used": "Ввод в эксплуатацию",
+    "commissioning_year": "Ввод в эксплуатацию",
+}
+
+
+def feature_info(feature: Optional[dict]) -> dict:
+    """Из geoportal-feature собрать словарь «Информация» {подпись: значение}.
+
+    Источник — `properties.options` (то, что NSPD показывает во вкладке
+    «Информация»). Известные ключи переводим по `_INFO_LABELS`, прочие — с
+    человекочитаемым ключом, чтобы ничего не терять."""
+    props = (feature or {}).get("properties") or {}
+    opts = props.get("options")
+    if not isinstance(opts, dict):
+        opts = props if isinstance(props, dict) else {}
+    info: dict = {}
+    for k, v in opts.items():
+        if v in (None, "", [], {}):
+            continue
+        if isinstance(v, (dict, list)):
+            continue
+        label = _INFO_LABELS.get(k) or k.replace("_", " ").strip().capitalize()
+        info[label] = v
+    return info
+
 
 # ── чистые помощники (тестируются офлайн) ────────────────────────────────────
 def _reproject(geom: Optional[dict]) -> Optional[dict]:
@@ -517,36 +577,37 @@ async def _oks_geom_via_navigation(page, cad: str, captured: list,
             break
         except Exception:
             continue
-    await page.wait_for_timeout(1200)
+    await page.wait_for_timeout(1500)
     await _close_modals(page)
     want = cad.replace(" ", "").upper()
     parcel_area = _bbox_area(parcel_ring) if parcel_ring else 0.0
 
     def _scan():
-        fallback = None
+        fallback = (None, None)
         for f in captured[before:]:
             g = _geom_from_feature(f)
-            if not g or g["type"] != "Polygon":   # точки/без-координат → пропускаем
-                continue
+            # точное совпадение КН — берём feature для «Информации»; контур только
+            # если геометрия полигон (Point = «без координат границ» → спираль).
             if (_feature_cad(f) or "").replace(" ", "").upper() == want:
-                return g, True                    # точный КН — контур ОКС
+                poly = g if (g and g["type"] == "Polygon") else None
+                return poly, f, True
             # запасной: небольшой контур внутри ЗУ (если КН в properties не пришёл).
             # Size-guard < 30% площади ЗУ — чтобы не принять сам ЗУ за ОКС.
-            if fallback is None and parcel_ring:
+            if (fallback[0] is None and parcel_ring and g and g["type"] == "Polygon"):
                 r = _ring_local(g["coords"])
                 if (r and _pt_in(_centroid_local(r), parcel_ring)
                         and 0 < _bbox_area(r) < 0.3 * parcel_area):
-                    fallback = g
-        return fallback, False
+                    fallback = (g, f)
+        return fallback[0], fallback[1], False
 
-    # поллинг до ~8 c: ждём, пока загрузится контур нужного КН
-    for _ in range(11):
-        geom, exact = _scan()
+    # поллинг до ~15 c: ждём, пока загрузится feature нужного КН (анти-rate-limit).
+    for _ in range(18):
+        geom, feat, exact = _scan()
         if exact:
-            return geom
-        await page.wait_for_timeout(700)
-    geom, _ = _scan()
-    return geom                                   # точный контур или запасной (или None)
+            return geom, feat
+        await page.wait_for_timeout(800)
+    geom, feat, _ = _scan()
+    return geom, feat                             # (контур|None, feature|None)
 
 
 def _bbox_area(ring) -> float:
@@ -683,13 +744,14 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
                     n_cont = n_spi = 0
                     for j, r in enumerate(sorted(recs, key=lambda r: r["cad"]), 1):
                         oc = r["cad"]
-                        g = await _oks_geom_via_navigation(page, oc, captured,
-                                                           parcel_ring, timeout_ms)
-                        # ОКС: только полигон-контур. Точка NSPD = «без координат
-                        # границ» (произвольная) → отбрасываем, объект ляжет по спирали.
-                        if g and g["type"] != "Polygon":
-                            g = None
-                        buildings.append({"name": oc, "geometry": g})
+                        if j > 1:
+                            await page.wait_for_timeout(600)   # анти-rate-limit между ОКС
+                        g, feat = await _oks_geom_via_navigation(page, oc, captured,
+                                                                 parcel_ring, timeout_ms)
+                        # geom — только полигон-контур; info — из feature (даже если
+                        # «без координат границ»: атрибуты есть, геометрии нет → спираль).
+                        info = feature_info(feat) if feat else {}
+                        buildings.append({"name": oc, "geometry": g, "info": info})
                         if g:
                             mark = "контур"; n_cont += 1
                         else:
@@ -699,7 +761,7 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
                         print(f"      → контур: {n_cont}, спираль: {n_spi}", flush=True)
 
                 out[cad] = {"polygon": poly, "buildings": buildings,
-                            "captured": len(captured)}
+                            "info": feature_info(parcel), "captured": len(captured)}
         finally:
             await browser.close()
     return out

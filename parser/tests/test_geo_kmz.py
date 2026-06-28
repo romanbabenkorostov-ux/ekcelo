@@ -1,6 +1,7 @@
 """Тесты экспорта объектов в KMZ: контуры + спираль внутри ЗУ (geo_kmz)."""
 import sqlite3
 import zipfile
+from pathlib import Path
 
 from egrn_parser import geo_kmz as K
 
@@ -42,6 +43,35 @@ def test_build_kmz_is_valid_zip(tmp_path):
         assert "doc.kml" in z.namelist()
         assert z.read("doc.kml").decode("utf-8").startswith("<?xml")
     assert res["stats"]["objects_spiral"] == 1
+
+
+def test_description_info_table_and_no_coords():
+    parcels = [{
+        "cad": "23:15:0000000:2267", "polygon": [_SQ],
+        "info": {"Кадастровый номер": "23:15:0000000:2267", "Площадь уточнённая, кв. м": 42359},
+        "objects": [
+            {"name": "ОКС-к", "geometry": {"type": "Polygon",
+                "coords": [[[38.905, 45.005], [38.91, 45.005], [38.91, 45.01], [38.905, 45.005]]]},
+             "info": {"Наименование": "Ликерный цех"}},
+            {"name": "ОКС-с", "geometry": None, "info": {"Наименование": "Склад"}}]}]
+    kml = K.build_kml(parcels)["kml"]
+    assert "Площадь уточнённая, кв. м" in kml and "42359" in kml      # ЗУ info
+    assert "Ликерный цех" in kml                                     # контур info
+    assert "Склад" in kml                                            # спираль info
+    assert "Без координат границ по Росреестру" in kml               # пометка спирали
+    assert "<description>" in kml and "CDATA" in kml
+
+
+def test_build_kmz_writes_info_sidecar(tmp_path):
+    out = tmp_path / "objects.kmz"
+    res = K.build_kmz(out, [{"cad": "23:15:0000000:2267", "polygon": [_SQ],
+                             "info": {"Кадастровый номер": "23:15:0000000:2267"},
+                             "objects": [{"name": "o", "geometry": None, "info": {"a": "b"}}]}])
+    import json
+    data = json.loads(Path(res["info_json"]).read_text(encoding="utf-8"))
+    assert data[0]["cad"] == "23:15:0000000:2267"
+    assert data[0]["info"]["Кадастровый номер"] == "23:15:0000000:2267"
+    assert data[0]["objects"][0]["geometry_type"] == "spiral"
 
 
 def test_parcel_without_geometry_no_spiral():
