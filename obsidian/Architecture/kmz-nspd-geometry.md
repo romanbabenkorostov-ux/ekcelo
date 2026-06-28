@@ -23,17 +23,27 @@ KMZ с 3 ЗУ и объектами (ОКС) в их пределах: есть 
    `GET /api/geoportal/v1/tab-group-data?tabClass=objectsList&categoryId={cat}&geomId={gid}`
    (cat/gid — от feature ЗУ). Возвращает таблицу КН ОКС (для 23:15:0000000:2267 — 22 шт).
 4. **Карточка объекта** кодируется в URL карты как
-   `selectedCard={geomId},{categoryId},{КН}` (напр. `1003499779,36369,23:15:0000000:3189`).
-   **categoryId ОКС = 36369.** Отсюда берём geomId каждого ОКС.
+   `selectedCard={geomId},{categoryId},{КН}`.
+   - Здание: `1003499779,36369,23:15:0000000:3189` → **categoryId 36369 = здание**,
+     map-layer 36048(ЗУ)/36049/36329.
+   - Сооружение: `415708564,36383,90:25:020103:9298` → **categoryId 36383 = сооружение**,
+     map-layer **36328**.
+   - objectsList на деле — **плоский список КН без geomId**:
+     `{"title":"Список объектов","object":[{"title":"Объект недвижимости: ",
+     "value":["23:15:…", …]}]}`. Поэтому geomId берём НЕ из objectsList, а из
+     `feature.id` ответа geoportal-search по КН ОКС.
 
 ## Проблема геометрии ОКС
-Текстовый `search/geoportal?query={КН_ОКС}` для этих ОКС возвращает **0** (ранее
-учтённые, не индексируются по КН — даже в теме «Объекты недвижимости»). Поэтому
-геометрию ОКС берём **по geomId/categoryId** из `selectedCard`/objectsList.
-Рабочий geomId-эндпоинт подбирается пробой `_probe_geom_by_id` (кандидаты:
-`geoportal/v1|v2/geom/{gid}`, `…/geom/{cat}/{gid}`, `…?categoryId&geomId`,
-`…/card/{cat}/{gid}`, WFS featureID). Первый, отдавший feature с геометрией,
-становится рабочим (`_resolve_geom_by_id`).
+Текстовый `search/geoportal?query={КН_ОКС}` для геометрии ОКС в `extract_features`
+(strict) давал 0 — feature ОКС часто приходит **без geometry** (контур грузится
+лениво по geomId). Решение:
+1. `_oks_search` берёт feature ОКС даже без геометрии (`require_geometry=False`)
+   → из него `feature.id`=geomId, `properties.category`=categoryId.
+2. Если у feature есть геометрия — используем сразу.
+3. Иначе геометрию грузим **по geomId/categoryId**: `_resolve_geom_by_id` перебирает
+   кандидатные эндпоинты (`geoportal/v1|v2/geom/{gid}` и `/{cat}/{gid}`,
+   `…?categoryId&geomId`, `…/card/{cat}/{gid}`, WFS featureID); первый с
+   feature-геометрией = рабочий. `_probe_geom_by_id` печатает статусы для фиксации.
 
 ## Алгоритм (per ЗУ)
 1. `goto map?query={КН}&active_layers=…`, закрыть модали.

@@ -178,6 +178,23 @@ python -m egrn_parser kmz --parcels 23:15:0000000:2267,23:15:0303000:1562,23:15:
 - Создан **SPEC** `Architecture/kmz-nspd-geometry.md` (API NSPD + правила рендера).
 - Тесты +1 (card-тройка): geo browser **15 passed** (24 в geo-наборе).
 
+## Версия 13: objectsList = плоский список КН (без geomId) → geomId из feature.id
+Сырой objectsList оказался плоским списком КН без geomId:
+`{"object":[{"title":"Объект недвижимости: ","value":["23:15:…", …]}]}`. А вторая
+загруженная карточка дала тип сооружения: `selectedCard=415708564,36383,90:25:020103:9298`
+→ **categoryId 36383 = сооружение** (36369 = здание).
+Доработки:
+- `extract_features(require_geometry=False)` — берём feature ОКС даже без
+  геометрии (контур грузится лениво по geomId).
+- `_oks_search` → feature ОКС (любая геометрия) + raw; `_feature_ids` → geomId
+  (`feature.id`) + categoryId (`properties.category`).
+- `_resolve_geom` переписан: search→feature; есть геометрия — берём; иначе
+  geomId→`_resolve_geom_by_id` (перебор кандидатных эндпоинтов).
+- Диагностика по первому ОКС: `[поиск ОКС …] feature/geometry/geomId/cat` +
+  `[search raw]` + проба эндпоинтов по найденному geomId.
+- SPEC обновлён (типы ОКС, плоский objectsList, geomId из feature.id).
+- Тесты +2 (require_geometry, _feature_ids): geo browser **17 passed**.
+
 ## Файлы
 - `parser/egrn_parser/geo_nspd_browser.py` (переписан),
   `parser/egrn_parser/cli.py` (диагностика),

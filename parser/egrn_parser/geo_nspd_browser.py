@@ -126,10 +126,13 @@ def _feature_cad(feat: dict) -> Optional[str]:
     return None
 
 
-def extract_features(payload: Any) -> list[dict]:
-    """Из ответа geoportal вытащить список GeoJSON-feature с геометрией.
+def extract_features(payload: Any, *, require_geometry: bool = True) -> list[dict]:
+    """Из ответа geoportal вытащить список GeoJSON-feature.
 
-    Терпим к обёрткам: {data:{features}}, {features}, FeatureCollection, Feature."""
+    Терпим к обёрткам: {data:{features}}, {features}, FeatureCollection, Feature.
+    require_geometry=False — берём feature и без геометрии (нужно, чтобы достать
+    geomId/category ОКС: текст-поиск ОКС часто отдаёт карточку без контура,
+    геометрия грузится отдельно по geomId)."""
     feats: list[dict] = []
 
     def walk(node, depth=0):
@@ -141,7 +144,7 @@ def extract_features(payload: Any) -> list[dict]:
             return
         if not isinstance(node, dict):
             return
-        if node.get("type") == "Feature" and node.get("geometry"):
+        if node.get("type") == "Feature" and (node.get("geometry") or not require_geometry):
             feats.append(node)
             return
         if node.get("type") == "FeatureCollection":
@@ -154,6 +157,16 @@ def extract_features(payload: Any) -> list[dict]:
 
     walk(payload)
     return feats
+
+
+def _feature_ids(feat: dict) -> tuple:
+    """(geomId, categoryId) из geoportal-feature (feature.id, properties.category).
+    36369=здание, 36383=сооружение — categoryId определяет тип/слой ОКС."""
+    props = (feat or {}).get("properties") or {}
+    gid = (feat.get("id") or props.get("geomId") or props.get("geom_id")
+           or props.get("interactionId"))
+    cat = (props.get("category") or props.get("categoryId") or props.get("category_id"))
+    return (gid, cat)
 
 
 def pick_parcel_feature(feats: list[dict], cad: str) -> Optional[dict]:
@@ -424,23 +437,9 @@ async def _resolve_geom_by_id(page, rec: dict) -> Optional[dict]:
     return None
 
 
-async def _resolve_geom(page, cad: str, theme_ids=()) -> Optional[dict]:
-    """КН ОКС → геометрия {type, coords} через geoportal-search.
-
-    Возвращает контур (Polygon) если есть; иначе реальную точку (Point) из NSPD;
-    None — если объект вообще не нашёлся (тогда вызывающий ставит точку по спирали).
-    Точку NSPD предпочитаем спирали — она настоящая, а не синтетическая."""
-    feats = await _geoportal_get(page, cad, theme_ids)
-    if not feats:
-        return None
-    want = cad.replace(" ", "").upper()
-    chosen = None
-    for f in feats:
-        if (_feature_cad(f) or "").replace(" ", "").upper() == want:
-            chosen = f
-            break
-    chosen = chosen or feats[0]
-    g = _reproject(chosen.get("geometry"))
+def _geom_from_feature(feat: dict) -> Optional[dict]:
+    """feature.geometry → {type, coords} в WGS84 (Polygon/Point) или None."""
+    g = _reproject((feat or {}).get("geometry"))
     if not g or not g.get("coordinates"):
         return None
     t = g.get("type")
@@ -450,6 +449,52 @@ async def _resolve_geom(page, cad: str, theme_ids=()) -> Optional[dict]:
         return {"type": "Polygon", "coords": g["coordinates"][0]}
     if t == "Point":
         return {"type": "Point", "coords": [g["coordinates"]]}
+    return None
+
+
+async def _oks_search(page, cad: str, theme_ids=()) -> tuple:
+    """geoportal-search ОКС → (feature|None, raw|None). Feature берём даже БЕЗ
+    геометрии (нужен его id/category — геометрия ОКС грузится отдельно по geomId)."""
+    q = urllib.parse.quote(cad, safe="")
+    urls = [f"{GEOPORTAL_SEARCH}?query={q}"]
+    for tid in (theme_ids or ()):
+        urls.append(f"{GEOPORTAL_SEARCH}?thematicSearchId={tid}&query={q}")
+    want = cad.replace(" ", "").upper()
+    for url in urls:
+        try:
+            resp = await page.request.get(url, headers={
+                "Referer": "https://nspd.gov.ru/map",
+                "Accept": "application/json, */*",
+            }, timeout=20000)
+            if not resp.ok:
+                continue
+            data = json.loads(await resp.text())
+        except Exception:
+            continue
+        feats = extract_features(data, require_geometry=False)
+        for f in feats:
+            if (_feature_cad(f) or "").replace(" ", "").upper() == want:
+                return f, data
+        if feats:
+            return feats[0], data
+    return None, None
+
+
+async def _resolve_geom(page, cad: str, theme_ids=()) -> Optional[dict]:
+    """КН ОКС → геометрия {type, coords}.
+
+    1) geoportal-search: если feature с геометрией — берём (Polygon/Point);
+    2) иначе достаём geomId/category из feature и грузим геометрию по id;
+    None — если не нашли (вызывающий ставит точку по спирали)."""
+    feat, _ = await _oks_search(page, cad, theme_ids)
+    if not feat:
+        return None
+    g = _geom_from_feature(feat)
+    if g:
+        return g
+    gid, cat = _feature_ids(feat)
+    if gid:
+        return await _resolve_geom_by_id(page, {"geomId": gid, "categoryId": cat})
     return None
 
 
@@ -561,24 +606,31 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
                     if data is not None and not any(r.get("geomId") for r in recs):
                         print("      [objectsList raw] " +
                               json.dumps(data, ensure_ascii=False)[:1600], flush=True)
-                    n_with_id = sum(1 for r in recs if r.get("geomId"))
                     if recs:
-                        print(f"      ОКС в пределах: {len(recs)} (с geomId: {n_with_id}) "
-                              f"— резолвлю геометрию…", flush=True)
-                    # ── ПРОБА эндпоинта геометрии по geomId (один раз, для диагностики).
-                    probe_rec = next((r for r in recs if r.get("geomId")), None)
-                    if probe_rec:
-                        print(f"      [проба геометрии geomId={probe_rec['geomId']} "
-                              f"cat={probe_rec.get('categoryId')} для {probe_rec['cad']}]", flush=True)
-                        for u, st, n in await _probe_geom_by_id(page, probe_rec):
-                            print(f"        {u}  status={st} features={n}", flush=True)
-                    # 2) геометрия каждого ОКС: geomId-эндпоинт > текст-поиск > спираль.
+                        print(f"      ОКС в пределах: {len(recs)} — резолвлю геометрию…",
+                              flush=True)
+                    # ── ДИАГНОСТИКА (один раз): что отдаёт geoportal-search по ОКС.
+                    #    objectsList без geomId → geomId берём из feature.id поиска.
+                    if recs:
+                        oc0 = recs[0]["cad"]
+                        f0, raw0 = await _oks_search(page, oc0, theme_ids)
+                        gid0, cat0 = _feature_ids(f0) if f0 else (None, None)
+                        has_geom = bool(f0 and (f0.get("geometry")))
+                        print(f"      [поиск ОКС {oc0}] feature={'да' if f0 else 'нет'} "
+                              f"geometry={'да' if has_geom else 'нет'} geomId={gid0} cat={cat0}",
+                              flush=True)
+                        if raw0 is not None:
+                            print("      [search raw] " +
+                                  json.dumps(raw0, ensure_ascii=False)[:1200], flush=True)
+                        if gid0:
+                            for u, st, n in await _probe_geom_by_id(
+                                    page, {"geomId": gid0, "categoryId": cat0}):
+                                print(f"        {u}  status={st} features={n}", flush=True)
+                    # 2) геометрия каждого ОКС: search(feature/geomId) > спираль.
                     n_cont = n_pt = n_spi = 0
                     for j, r in enumerate(sorted(recs, key=lambda r: r["cad"]), 1):
                         oc = r["cad"]
-                        g = await _resolve_geom_by_id(page, r) if r.get("geomId") else None
-                        if not g:
-                            g = await _resolve_geom(page, oc, theme_ids)
+                        g = await _resolve_geom(page, oc, theme_ids)
                         buildings.append({"name": oc, "geometry": g})
                         if g and g["type"] == "Polygon":
                             mark = "контур"; n_cont += 1

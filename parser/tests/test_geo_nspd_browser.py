@@ -92,6 +92,22 @@ def test_oks_records_dedup_by_cad():
     assert len(B.oks_records(data)) == 1
 
 
+def test_extract_features_require_geometry_flag():
+    f = {"type": "Feature", "geometry": None, "id": 1003499779,
+         "properties": {"category": 36369, "options": {"cad_num": "23:15:0000000:3189"}}}
+    payload = {"data": {"features": [f]}}
+    assert len(B.extract_features(payload)) == 0                       # strict: drop
+    assert len(B.extract_features(payload, require_geometry=False)) == 1
+
+
+def test_feature_ids_geomid_category():
+    f = {"id": 1003499779, "properties": {"category": 36369}}
+    assert B._feature_ids(f) == (1003499779, 36369)
+    # сооружение
+    f2 = {"id": 415708564, "properties": {"category": 36383}}
+    assert B._feature_ids(f2) == (415708564, 36383)
+
+
 def test_oks_records_card_triple_in_string():
     # selectedCard=geomId,categoryId,cad — встречается строкой в objectsList
     data = {"object": [
