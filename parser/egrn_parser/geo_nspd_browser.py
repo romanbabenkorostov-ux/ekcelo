@@ -502,7 +502,11 @@ async def _oks_geom_via_navigation(page, cad: str, captured: list,
                                    parcel_ring, timeout_ms: int) -> Optional[dict]:
     """Геометрия ОКС через НАВИГАЦИЮ карты к нему (как для ЗУ): NSPD грузит контур
     ОКС только при переходе на объект — ловим его пассивным слушателем `captured`.
-    Текстовый search ОКС не находит, поэтому это основной путь для строений."""
+
+    ВАЖНО: возвращаем ТОЛЬКО полигон-контур. Если у объекта «Без координат границ»,
+    NSPD ставит ПРОИЗВОЛЬНУЮ точку (Point) в пределах ЗУ — её игнорируем (None →
+    объект ляжет по спирали детерминированно). Поллинг — чтобы успеть поймать
+    контур (карта грузит не мгновенно)."""
     before = len(captured)
     layers = ",".join(str(x) for x in (_N.NSPD_ZU_LAYERS + _N.NSPD_OKS_LAYERS))
     url = (f"https://nspd.gov.ru/map?query={urllib.parse.quote(cad, safe='')}"
@@ -513,29 +517,36 @@ async def _oks_geom_via_navigation(page, cad: str, captured: list,
             break
         except Exception:
             continue
-    await page.wait_for_timeout(2500)
+    await page.wait_for_timeout(1200)
     await _close_modals(page)
-    await page.wait_for_timeout(1500)
-    # среди перехваченного после навигации — feature нужного КН (точное) > внутри ЗУ
     want = cad.replace(" ", "").upper()
     parcel_area = _bbox_area(parcel_ring) if parcel_ring else 0.0
-    fallback = None
-    for f in captured[before:]:
-        if not f.get("geometry"):
-            continue
-        g = _geom_from_feature(f)
-        if not g:
-            continue
-        if (_feature_cad(f) or "").replace(" ", "").upper() == want:
-            return g
-        # запасной: небольшой контур внутри границы ЗУ (если КН в properties не
-        # пришёл). Size-guard < 30% площади ЗУ — чтобы не принять сам ЗУ за ОКС.
-        if fallback is None and parcel_ring and g["type"] == "Polygon":
-            r = _ring_local(g["coords"])
-            if (r and _pt_in(_centroid_local(r), parcel_ring)
-                    and 0 < _bbox_area(r) < 0.3 * parcel_area):
-                fallback = g
-    return fallback
+
+    def _scan():
+        fallback = None
+        for f in captured[before:]:
+            g = _geom_from_feature(f)
+            if not g or g["type"] != "Polygon":   # точки/без-координат → пропускаем
+                continue
+            if (_feature_cad(f) or "").replace(" ", "").upper() == want:
+                return g, True                    # точный КН — контур ОКС
+            # запасной: небольшой контур внутри ЗУ (если КН в properties не пришёл).
+            # Size-guard < 30% площади ЗУ — чтобы не принять сам ЗУ за ОКС.
+            if fallback is None and parcel_ring:
+                r = _ring_local(g["coords"])
+                if (r and _pt_in(_centroid_local(r), parcel_ring)
+                        and 0 < _bbox_area(r) < 0.3 * parcel_area):
+                    fallback = g
+        return fallback, False
+
+    # поллинг до ~8 c: ждём, пока загрузится контур нужного КН
+    for _ in range(11):
+        geom, exact = _scan()
+        if exact:
+            return geom
+        await page.wait_for_timeout(700)
+    geom, _ = _scan()
+    return geom                                   # точный контур или запасной (или None)
 
 
 def _bbox_area(ring) -> float:
@@ -669,24 +680,23 @@ async def _run(cads: list[str], *, discover: bool, headless: bool,
                     # геометрия каждого ОКС: НАВИГАЦИЯ карты к нему (NSPD грузит контур
                     # ОКС только при переходе) > текст-поиск > спираль.
                     parcel_ring = _ring_local(poly)
-                    n_cont = n_pt = n_spi = 0
+                    n_cont = n_spi = 0
                     for j, r in enumerate(sorted(recs, key=lambda r: r["cad"]), 1):
                         oc = r["cad"]
                         g = await _oks_geom_via_navigation(page, oc, captured,
                                                            parcel_ring, timeout_ms)
-                        if not g:
-                            g = await _resolve_geom(page, oc, theme_ids)
+                        # ОКС: только полигон-контур. Точка NSPD = «без координат
+                        # границ» (произвольная) → отбрасываем, объект ляжет по спирали.
+                        if g and g["type"] != "Polygon":
+                            g = None
                         buildings.append({"name": oc, "geometry": g})
-                        if g and g["type"] == "Polygon":
+                        if g:
                             mark = "контур"; n_cont += 1
-                        elif g and g["type"] == "Point":
-                            mark = "точка"; n_pt += 1
                         else:
                             mark = "спираль"; n_spi += 1
                         print(f"        {j}/{len(recs)} {oc}: {mark}", flush=True)
                     if recs:
-                        print(f"      → контур: {n_cont}, точка: {n_pt}, спираль: {n_spi}",
-                              flush=True)
+                        print(f"      → контур: {n_cont}, спираль: {n_spi}", flush=True)
 
                 out[cad] = {"polygon": poly, "buildings": buildings,
                             "captured": len(captured)}
