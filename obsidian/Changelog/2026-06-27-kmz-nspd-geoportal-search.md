@@ -163,6 +163,21 @@ python -m egrn_parser kmz --parcels 23:15:0000000:2267,23:15:0303000:1562,23:15:
 Спираль остаётся фолбэком, пока не зафиксируем рабочий geomId-эндпоинт.
 - Тесты +2 (`oks_records`): geo browser **15 passed**.
 
+## Версия 12: selectedCard=geomId,categoryId,cad — ключ к геометрии ОКС
+По загруженной странице ОКС 23:15:0000000:3189 найден формат карточки в URL:
+`selectedCard=1003499779,36369,23:15:0000000:3189` = **geomId,categoryId,cad**
+(**categoryId ОКС = 36369**). Доработки:
+- `_CARD_RE` + `oks_records` переписан: card-тройка из строк (надёжный geomId) +
+  per-object поля + `collect_cads` (вернул потерянные 22 КН — прошлый парсер
+  objectsList давал 0).
+- `_resolve_geom_by_id` — резолв геометрии ОКС перебором кандидатных эндпоинтов
+  по geomId/cat; первый с feature-геометрией = рабочий (Polygon→контур,
+  Point→точка). Текст-поиск — фолбэк, спираль — последний.
+- Печать сырого `objectsList` (если geomId не извлёкся) + проба эндпоинтов —
+  диагностика для фиксации рабочего geomId-URL.
+- Создан **SPEC** `Architecture/kmz-nspd-geometry.md` (API NSPD + правила рендера).
+- Тесты +1 (card-тройка): geo browser **15 passed** (24 в geo-наборе).
+
 ## Файлы
 - `parser/egrn_parser/geo_nspd_browser.py` (переписан),
   `parser/egrn_parser/cli.py` (диагностика),

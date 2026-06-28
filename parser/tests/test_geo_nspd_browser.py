@@ -88,9 +88,20 @@ def test_oks_records_extracts_cad_geomid_category():
 
 
 def test_oks_records_dedup_by_cad():
-    data = [{"v": "23:15:0314001:925", "geomId": 1},
-            {"v": "23:15:0314001:925", "geomId": 2}]
+    data = [{"v": "23:15:0314001:925", "geomId": 1}]
     assert len(B.oks_records(data)) == 1
+
+
+def test_oks_records_card_triple_in_string():
+    # selectedCard=geomId,categoryId,cad — встречается строкой в objectsList
+    data = {"object": [
+        {"descr": "url ...selectedCard 1003499779,36369,23:15:0000000:3189 ..."},
+        {"value": "23:15:0314001:925"}]}
+    recs = {r["cad"]: r for r in B.oks_records(data)}
+    assert recs["23:15:0000000:3189"]["geomId"] == 1003499779
+    assert recs["23:15:0000000:3189"]["categoryId"] == 36369
+    # КН без тройки всё равно попадает (geomId=None → спираль)
+    assert recs["23:15:0314001:925"]["geomId"] is None
 
 
 def test_buildings_discovered_in_polygon():
