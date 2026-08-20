@@ -9,6 +9,7 @@
 | 1 | [`01_parsing_nspd_v8.py`](01_parsing_nspd_v8.py) | Интерактивно собирает контуры объектов с НСПД (WFS → PKK → OL-state → screenshot+CV fallback) по списку кадастровых номеров | **Только локально**, реальный браузер |
 | 2 | [`01b_ingest_contours.py`](01b_ingest_contours.py) | Консолидирует вывод шага 1 в единый `_data/contours.json` | Где угодно |
 | 3 | [`kml_apply_nspd_contours.py`](kml_apply_nspd_contours.py) | Берёт готовый KML (например, ручную разметку из Yandex Map Constructor) + `contours.json`, заменяет полигоны у Placemark'ов, для которых нашёлся кадастровый номер | Где угодно |
+| — | [`kml_extract_cadastre_numbers.py`](kml_extract_cadastre_numbers.py) | Интерактивный помощник перед шагом 1: спрашивает путь к KML в консоли (флаги не нужны), извлекает уникальные КН и пишет их построчно в `<имя>+.kml` рядом с исходным | Где угодно |
 
 Схема `contours.json` и полная архитектура — ADR
 [`obsidian/Decisions/2026-05-25-contour-sidecar-architecture.md`](../../obsidian/Decisions/2026-05-25-contour-sidecar-architecture.md).
@@ -30,6 +31,9 @@ python parser\scripts\kml_apply_nspd_contours.py `
     --list-cadastre-numbers
 
 # Скопируйте выведенный список (по одному КН на строку — подходит как есть).
+# Альтернатива без флагов — интерактивно спросит путь и сохранит список
+# в файл рядом с исходным (Олимп_....kml -> Олимп_...+.kml):
+python parser\scripts\kml_extract_cadastre_numbers.py
 
 # 2. Собрать контуры с НСПД — запустится браузер, вставьте список из
 #    шага 1, затем пустую строку — начнётся обработка.
