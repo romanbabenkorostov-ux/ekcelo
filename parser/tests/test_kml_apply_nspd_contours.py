@@ -167,3 +167,28 @@ def test_multipolygon_geojson(kml_path):
     pm = _placemark_by_name(tree.getroot(), "Поле A")
     assert pm.find("k:MultiGeometry", NS) is not None
     assert len(pm.findall(".//k:Polygon", NS)) == 2
+
+
+def test_list_cadastre_numbers_unique_sorted(kml_path):
+    cns = mod.list_cadastre_numbers(kml_path)
+    # 4 полигона с КН в фикстуре, один КН дублируется (ЕЗ) → 3 уникальных.
+    assert cns == sorted(set(cns))
+    assert cns == ["23:15:0000000:2267", "23:15:0303000:1130", "23:15:9999999:1"]
+
+
+def test_main_missing_contours_json_gives_actionable_error(kml_path, tmp_path, capsys):
+    missing = tmp_path / "_data" / "contours.json"
+    rc = mod.main(["--kml", str(kml_path), "--contours", str(missing),
+                   "--out", str(tmp_path / "out.kml")])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "01_parsing_nspd_v8.py" in err
+    assert "01b_ingest_contours.py" in err
+    assert "--list-cadastre-numbers" in err
+
+
+def test_main_list_cadastre_numbers_mode_needs_no_contours_arg(kml_path, capsys):
+    rc = mod.main(["--kml", str(kml_path), "--list-cadastre-numbers"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "23:15:0000000:2267" in out

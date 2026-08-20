@@ -28,9 +28,16 @@ kml_apply_nspd_contours.py — заменяет полигоны в сущест
        с заменёнными полигонами.
 
 Usage:
+    # Узнать, какие КН вообще есть в KML (список для шага 1):
+    python parser/scripts/kml_apply_nspd_contours.py \\
+        --kml исходный.kml --list-cadastre-numbers
+
     python parser/scripts/kml_apply_nspd_contours.py \\
         --kml исходный.kml --contours _data/contours.json --out результат.kml
     python parser/scripts/kml_apply_nspd_contours.py ... --dry-run
+
+Подробный пошаговый гайд (Windows PowerShell + bash, разбор типичных
+ошибок) — parser/scripts/README_NSPD_CONTOURS.md.
 """
 from __future__ import annotations
 
@@ -61,6 +68,24 @@ def _cadastre_in_description(placemark: ET.Element) -> str | None:
         return None
     m = CN_RE.search(desc_el.text)
     return m.group(0) if m else None
+
+
+def list_cadastre_numbers(kml_path: Path) -> list[str]:
+    """Уникальные КН из всех Placemark с Polygon/MultiGeometry — готовый
+    список для вставки в интерактивный ввод `01_parsing_nspd_v8.py`
+    (`read_cn_batch()` принимает разделители ';', ',', пробел, перевод
+    строки — один КН на строку подходит без изменений)."""
+    root = ET.parse(kml_path).getroot()
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for placemark in root.iter(_q("Placemark")):
+        if placemark.find(_q("Polygon")) is None and placemark.find(_q("MultiGeometry")) is None:
+            continue
+        cn = _cadastre_in_description(placemark)
+        if cn and cn not in seen:
+            seen.add(cn)
+            ordered.append(cn)
+    return sorted(ordered)
 
 
 def _ring_coords_text(ring: list) -> str:
@@ -139,16 +164,46 @@ def main(argv: list[str] | None = None) -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument("--kml", required=True, type=Path)
-    ap.add_argument("--contours", required=True, type=Path, help="_data/contours.json")
-    ap.add_argument("--out", required=True, type=Path)
+    ap.add_argument("--contours", type=Path, help="_data/contours.json")
+    ap.add_argument("--out", type=Path)
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument(
+        "--list-cadastre-numbers", action="store_true",
+        help="Не заменять ничего — только напечатать уникальные КН из KML "
+             "(готовый список для вставки в 01_parsing_nspd_v8.py) и выйти. "
+             "--contours/--out не нужны.",
+    )
     args = ap.parse_args(argv)
 
     if not args.kml.exists():
         print(f"error: kml не найден: {args.kml}", file=sys.stderr)
         return 2
+
+    if args.list_cadastre_numbers:
+        cns = list_cadastre_numbers(args.kml)
+        print(f"[i] найдено уникальных КН в полигонах: {len(cns)}\n")
+        for cn in cns:
+            print(cn)
+        return 0
+
+    if not args.contours or not args.out:
+        print("error: нужны --contours и --out (или используйте "
+              "--list-cadastre-numbers без них)", file=sys.stderr)
+        return 2
+
     if not args.contours.exists():
-        print(f"error: contours.json не найден: {args.contours}", file=sys.stderr)
+        print(
+            f"error: contours.json не найден: {args.contours}\n\n"
+            "Этот файл не создаётся сам — сначала нужно собрать контуры с "
+            "НСПД (шаги 1-2 конвейера, см. parser/scripts/README_NSPD_CONTOURS.md):\n"
+            f"  1) python parser/scripts/01_parsing_nspd_v8.py\n"
+            f"     (интерактивно, нужен браузер и доступ к nspd.gov.ru;\n"
+            f"     список КН для вставки: python {Path(__file__).name} "
+            f"--kml {args.kml} --list-cadastre-numbers)\n"
+            f"  2) python parser/scripts/01b_ingest_contours.py --project <папка с _data>\n"
+            f"     (создаст {args.contours})\n",
+            file=sys.stderr,
+        )
         return 2
 
     contours = json.loads(args.contours.read_text(encoding="utf-8"))
