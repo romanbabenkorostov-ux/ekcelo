@@ -25,10 +25,11 @@ from __future__ import annotations
 
 import json
 import sqlite3
-import uuid as _uuid
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, Iterable
+
+from backend.app.core.uuid7 import gen_uuid7
 
 
 # Какие asset_type считаем валидными. Не CHECK на уровне БД — расширяемо без
@@ -59,8 +60,17 @@ def register_geo(
     source: str = "manual",
     confidence: float = 1.0,
 ) -> str:
-    """Создаёт geo_entity; возвращает uuid."""
-    uid = geo_uuid or str(_uuid.uuid4())
+    """Создаёт geo_entity; возвращает uuid.
+
+    Новые записи получают uuid7 (та же генерация, что assets/sites/якорь
+    VineInvent — см. contracts/format/BRWF_REGISTRY.md, «Известные
+    несоответствия идентичности»), а не uuid4, как было раньше. УЖЕ
+    существующие geo_uuid остаются как есть, не переписываются задним
+    числом — та же политика, что уже принята в семье для uuid_alias/
+    retire (sql/37 в VineInvent): переписать выданный идентификатор
+    значит сломать ссылки, ушедшие наружу (KMZ у контрагента и т.п.).
+    """
+    uid = geo_uuid or gen_uuid7()
     conn.execute(
         "INSERT INTO geo_entity(geo_uuid, name, source, confidence) "
         "VALUES (?,?,?,?)",

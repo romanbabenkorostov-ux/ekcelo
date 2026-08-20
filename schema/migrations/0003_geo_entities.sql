@@ -28,7 +28,7 @@ PRAGMA foreign_keys = ON;
 -- §7.1 Реестр гео-сущностей
 -- =============================================
 CREATE TABLE IF NOT EXISTS geo_entity (
-    geo_uuid     TEXT PRIMARY KEY,          -- UUIDv4 строкой ("550e8400-...")
+    geo_uuid     TEXT PRIMARY KEY,          -- uuid7 строкой (до 2026-08-20 минтился как uuid4 — см. backend/app/core/uuid7.py, старые значения не переписаны)
     name         TEXT NOT NULL,             -- "Поле №3", "Корпус А"
     created_at   TEXT NOT NULL DEFAULT (datetime('now')),
     source       TEXT NOT NULL DEFAULT 'manual',  -- manual|kmz|nspd|llm|exif
