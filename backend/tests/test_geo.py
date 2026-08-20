@@ -68,6 +68,16 @@ def test_register_geo_custom_uuid(conn):
     assert uid == "my-id"
 
 
+def test_register_geo_generates_uuid7_not_uuid4(conn):
+    """До этого geo_uuid минтился как uuid4 — расходилось с остальной
+    семьёй (assets/sites/якорь VineInvent), см. BRWF_REGISTRY.md."""
+    import uuid as _uuid
+
+    uid = register_geo(conn, "Поле №3")
+    parsed = _uuid.UUID(uid)
+    assert parsed.version == 7
+
+
 def test_add_contour_and_point(conn):
     uid = register_geo(conn, "Поле №3", source="kmz")
     cid = add_contour(conn, uid, POLY_TAMAN, "2024-01-01", source="kmz")
