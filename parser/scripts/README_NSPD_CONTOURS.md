@@ -1,0 +1,120 @@
+# НСПД-контуры: заменить полигоны в существующем KML на реальную геометрию
+
+Конвейер из трёх шагов, которые запускаются по очереди. Первый шаг —
+только локально (нужен видимый браузер и доступ к nspd.gov.ru), два
+остальных — где угодно, включая CI/удалённые среды без графики.
+
+| Шаг | Скрипт | Что делает | Где запускать |
+|---|---|---|---|
+| 1 | [`01_parsing_nspd_v8.py`](01_parsing_nspd_v8.py) | Интерактивно собирает контуры объектов с НСПД (WFS → PKK → OL-state → screenshot+CV fallback) по списку кадастровых номеров | **Только локально**, реальный браузер |
+| 2 | [`01b_ingest_contours.py`](01b_ingest_contours.py) | Консолидирует вывод шага 1 в единый `_data/contours.json` | Где угодно |
+| 3 | [`kml_apply_nspd_contours.py`](kml_apply_nspd_contours.py) | Берёт готовый KML (например, ручную разметку из Yandex Map Constructor) + `contours.json`, заменяет полигоны у Placemark'ов, для которых нашёлся кадастровый номер | Где угодно |
+
+Схема `contours.json` и полная архитектура — ADR
+[`obsidian/Decisions/2026-05-25-contour-sidecar-architecture.md`](../../obsidian/Decisions/2026-05-25-contour-sidecar-architecture.md).
+
+## Быстрый старт (Windows PowerShell, venv уже активирован)
+
+Пример — тот же путь, что в реальном использовании (`E:\Code\ekcelo\...`),
+подставьте свои пути к KML и рабочей папке.
+
+```powershell
+# 0. Установка (один раз): playwright для шага 1, опционально CV-fallback
+pip install playwright
+playwright install chromium
+pip install numpy opencv-python Pillow   # опционально — CV-fallback, если WFS/PKK недоступны
+
+# 1. Узнать, какие кадастровые номера вообще есть в вашем KML
+python parser\scripts\kml_apply_nspd_contours.py `
+    --kml "E:\!удалить\Олимп_20-08-2026_11-16-09.kml" `
+    --list-cadastre-numbers
+
+# Скопируйте выведенный список (по одному КН на строку — подходит как есть).
+
+# 2. Собрать контуры с НСПД — запустится браузер, вставьте список из
+#    шага 1, затем пустую строку — начнётся обработка.
+python parser\scripts\01_parsing_nspd_v8.py
+
+# 3. Консолидировать результат шага 2 в _data/contours.json.
+#    --project — папка, где 07_init_project создал(а бы) _data/; если
+#    такой папки нет — создайте её и подпапку _data вручную, скрипт сам
+#    заведёт пустой contours.json при первом запуске.
+python parser\scripts\01b_ingest_contours.py --project .
+
+# 4. Заменить полигоны в KML на собранные контуры.
+python parser\scripts\kml_apply_nspd_contours.py `
+    --kml "E:\!удалить\Олимп_20-08-2026_11-16-09.kml" `
+    --contours _data\contours.json `
+    --out результат.kml
+```
+
+## Та же последовательность (bash/Linux/macOS)
+
+```bash
+pip install playwright
+playwright install chromium
+
+python parser/scripts/kml_apply_nspd_contours.py --kml исходный.kml --list-cadastre-numbers
+python parser/scripts/01_parsing_nspd_v8.py
+python parser/scripts/01b_ingest_contours.py --project .
+python parser/scripts/kml_apply_nspd_contours.py \
+    --kml исходный.kml --contours _data/contours.json --out результат.kml
+```
+
+## `kml_apply_nspd_contours.py` — флаги
+
+| Флаг | Обязателен | Описание |
+|---|---|---|
+| `--kml` | да | Исходный KML (полигоны — от руки/приблизительные) |
+| `--list-cadastre-numbers` | нет | Только напечатать уникальные КН из полигонов и выйти — `--contours`/`--out` не нужны. Готовый список для шага 1 |
+| `--contours` | да (если не `--list-cadastre-numbers`) | `_data/contours.json` из шага 2 |
+| `--out` | да (если не `--list-cadastre-numbers`) | Куда записать результат |
+| `--dry-run` | нет | Показать, что было бы заменено, файл не писать |
+
+Заменяется **только** геометрия Placemark'ов, у которых:
+1. В `<description>` нашёлся кадастровый номер (`\d{1,2}:\d{1,2}:\d{1,7}:\d+`);
+2. Для этого номера есть запись в `contours.json` с источником
+   `wfs`/`pkk`/`ol_state`/`network_capture`/`manual` **и** непустым `geojson`.
+
+Всё остальное (`name`, `description`, `styleUrl`, Point-плейсмарки,
+полигоны без распознанного КН) не трогается. Один КН на нескольких
+Placemark (единое землепользование — несколько контуров под одним
+кадастровым номером) — заменяются **все** совпадения.
+
+## Частые проблемы
+
+**`error: contours.json не найден`** — шаги 1-2 ещё не выполнены (или
+выполнены не в ту папку). Сообщение скрипта подсказывает точные команды —
+скопируйте их. Если `_data/` вообще не существует — создайте папку
+вручную или запустите `01b_ingest_contours.py --project .`, он заведёт
+пустой скелет.
+
+**Некоторые КН остались незаменёнными после шага 4** — три возможные
+причины, скрипт печатает какая именно:
+- *«КН без записи в contours.json»* — этого номера нет в результатах
+  шага 1/2. Проверьте, был ли он в списке, который вы вставляли в
+  `01_parsing_nspd_v8.py`, и не упал ли он там на всех пяти источниках
+  (в конце лога печатается явный список URL, если так).
+- *«геометрия непригодна (screenshot_cv без геореференса)»* — контур
+  нашёлся только через CV-fallback по скриншоту карты, без привязки к
+  реальным координатам (WGS84). Такой контур не заменяет полигон в KML —
+  нужен успех WFS/PKK/OL-state для этого КН, либо ручная геопривязка.
+- *«Placemark без распознанного КН»* — в `<description>` нет строки
+  формата `NN:NN:NNNNNNN:N`. Это не ошибка, а фильтр — не все полигоны
+  в исходном KML обязаны быть кадастровыми участками.
+
+**Playwright не открывает браузер / падает на SSL** — `01_parsing_nspd_v8.py`
+уже учитывает типичные проблемы (`ignore_https_errors=True` для
+самоподписанных сертификатов НСПД/PKK) — см. комментарии в шапке файла
+для истории версий и что чем чинилось. Если браузер не установлен вовсе —
+`playwright install chromium`.
+
+## Идемпотентность
+
+Шаг 2 (`01b_ingest_contours.py`) безопасно перезапускать сколько угодно
+раз — при повторном ingest контур с более качественным источником
+(`wfs` > `pkk` > `network_capture` > `ol_state` > `screenshot_cv`) не
+затирается худшим при повторном прогоне парсера без доступа к WFS.
+Шаг 4 (`kml_apply_nspd_contours.py`) детерминирован — те же входные
+файлы дают тот же результат, старый `--out` можно перезаписывать без
+последствий.
