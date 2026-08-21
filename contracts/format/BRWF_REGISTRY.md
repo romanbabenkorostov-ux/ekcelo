@@ -35,7 +35,7 @@
 
 | brwf | Где встречается | Комментарий |
 |---|---|---|
-| `brwf:4.1.0` | `ekcelofotomobile`: `manifest.json` в ZIP, `ExtendedData` в KMZ, EXIF `EKCELO_ASSET` | Первая версия — добавочное поле, ничего не заменяет в ZIP/KMZ-контейнерах |
+| `brwf:4.4.0` | `ekcelofotomobile`: `manifest.json` в ZIP, `ExtendedData` в KMZ, EXIF `EKCELO_ASSET` | Текущая версия. 4.1.0 — первая (добавочное поле); 4.2.0 — `task_label`/`accounting_scope`/`slang_tags`; 4.3.0 — `group_id`/`unbound_groups[]` (серии свободной съёмки, §14); 4.4.0 — `accuracy_m` на файл (§19, сквозной аудит консистентности точности GPS-фикса для фото/точечных активов). Все шаги добавочные, см. `ekcelofotomobile/app/.../util/Brwf.kt` для построчного changelog. |
 
 ## Известные несоответствия идентичности (uuid7) в семье
 
