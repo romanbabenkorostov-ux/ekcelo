@@ -331,6 +331,23 @@ def _parse_building_params(root: ET.Element) -> dict:
 
         year_e = _find(params, "year_built")
         result["year_built"] = int(_text(year_e)) if _text(year_e).isdigit() else None
+        # Год ввода в эксплуатацию. В схеме Росреестра тег написан с опечаткой
+        # («commisioning», одна «s»); встречается и правильное написание.
+        # Он же — нижняя граница существования ОКС, когда года постройки нет.
+        # ВНИМАНИЕ: `elem or other` здесь писать нельзя. Элемент без детей в
+        # ElementTree ЛОЖЕН, и цепочка `or` пролистывает найденный тег с
+        # текстом внутри — год молча становится None. Отсюда явный перебор.
+        used_e = None
+        for tag in ("year_commisioning",   # так написано в схеме Росреестра
+                    "year_commissioning",  # и так — встречается в выгрузках
+                    "year_used"):
+            found = _find(params, tag)
+            if found is not None:
+                used_e = found
+                break
+        result["year_used"] = (int(_text(used_e))
+                               if used_e is not None and _text(used_e).isdigit()
+                               else None)
 
     # ЗУ-носители
     result["land_cad_numbers"] = _collect_land_cad_numbers(root)
@@ -423,6 +440,23 @@ def _parse_structure_params(root: ET.Element) -> dict:
 
         year_e = _find(params, "year_built")
         result["year_built"] = int(_text(year_e)) if _text(year_e).isdigit() else None
+        # Год ввода в эксплуатацию. В схеме Росреестра тег написан с опечаткой
+        # («commisioning», одна «s»); встречается и правильное написание.
+        # Он же — нижняя граница существования ОКС, когда года постройки нет.
+        # ВНИМАНИЕ: `elem or other` здесь писать нельзя. Элемент без детей в
+        # ElementTree ЛОЖЕН, и цепочка `or` пролистывает найденный тег с
+        # текстом внутри — год молча становится None. Отсюда явный перебор.
+        used_e = None
+        for tag in ("year_commisioning",   # так написано в схеме Росреестра
+                    "year_commissioning",  # и так — встречается в выгрузках
+                    "year_used"):
+            found = _find(params, tag)
+            if found is not None:
+                used_e = found
+                break
+        result["year_used"] = (int(_text(used_e))
+                               if used_e is not None and _text(used_e).isdigit()
+                               else None)
 
     # ЗУ-носители
     result["land_cad_numbers"] = _collect_land_cad_numbers(root)
@@ -624,6 +658,42 @@ def _parse_xml_right_record(
     return filter_personal_data(rec)
 
 
+def mask_snils(snils: Optional[str]) -> Optional[str]:
+    """СНИЛС → вид для показа человеку: второй и предпоследний знак — «*».
+
+    Показывать СНИЛС целиком нельзя, не показывать ничего — тоже: у двух
+    совладельцев-физлиц в выписке нет другого различителя, и отчёт с двумя
+    строками «Физическое лицо» читается как одна ошибка. Маскируются знаки
+    внутри строки как она напечатана, разделители сохраняются: так строка
+    остаётся узнаваемой владельцу и бесполезной постороннему.
+    """
+    if not snils:
+        return None
+    text = str(snils).strip()
+    if len(text) < 4:
+        return None
+    chars = list(text)
+    chars[1] = "*"
+    chars[-2] = "*"
+    return "".join(chars)
+
+
+def hash_snils(snils: Optional[str]) -> Optional[str]:
+    """СНИЛС → устойчивый ключ субъекта.
+
+    Хеш от одних цифр: одно и то же лицо в разных выписках даёт один ключ,
+    разные лица — разные. Сам СНИЛС в базу не попадает. Это ключ склейки, а не
+    «анонимная» публикация: одиннадцать цифр перебираются, и хеш наружу, в
+    отчёт, не выводится.
+    """
+    if not snils:
+        return None
+    digits = re.sub(r"\D", "", str(snils))
+    if len(digits) < 9:
+        return None
+    return hashlib.sha256(digits.encode()).hexdigest()[:16]
+
+
 def _parse_xml_holder(holder_elem: ET.Element) -> Optional[dict]:
     """Разобрать правообладателя из XML, игнорируя персональные данные."""
     result: dict[str, Any] = {}
@@ -665,13 +735,17 @@ def _parse_xml_holder(holder_elem: ET.Element) -> Optional[dict]:
         result["name"] = clean_value(name_text)
         return result
 
-    # Физлицо — сохраняем только если есть ИНН (без ФИО)
+    # Физлицо: ФИО не сохраняется; различителем служит производная СНИЛС.
     phys_e = _find(holder_elem, "individual") or _find(holder_elem, "person")
     if phys_e is not None:
         inn_e = _find(phys_e, "inn") or _find_recursive(phys_e, "inn")
+        snils_e = _find(phys_e, "snils") or _find_recursive(phys_e, "snils")
+        snils = _text(snils_e) if snils_e is not None else None
         result["holder_type"] = "individual"
         result["inn"]  = _text(inn_e) if inn_e is not None else None
         result["name"] = None  # ФИО физлица не сохраняется
+        result["snils_masked"] = mask_snils(snils)
+        result["snils_hash"] = hash_snils(snils)
         return result
 
     return None if not result else result

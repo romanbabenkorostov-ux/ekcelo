@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from egrn_parser.db.connection import get_connection
+from egrn_parser.db.connection import ensure_columns, get_connection
 from egrn_parser.merge.differ import diff_objects
 from egrn_parser.merge.content_hash import compute_content_hash, build_rights_summary
 
@@ -412,21 +412,37 @@ def upsert_right_holder(conn: sqlite3.Connection, right_id: int, holder: dict) -
                 (name, inn),
             )
 
-    # Fix 40f: UUID для физлиц (у которых нет ИНН)
+    # UUID субъекта для физлиц (у которых нет ИНН).
+    #
+    # БЫЛО: seed = имя, а имя физлица парсер не сохраняет — значит seed у ВСЕХ
+    # физлиц был один и тот же («unknown_individual»), и любые два физлица
+    # склеивались в одного субъекта. Две сестры с долями по 1/2 показывались
+    # как один собственник — ошибка, которую в отчёте не видно, потому что
+    # выглядит она правдоподобно.
+    #
+    # СТАЛО: seed — хеш СНИЛС (сам СНИЛС в базу не пишется). Нет СНИЛС —
+    # субъект привязывается к номеру записи о праве: это НЕ склеит двух
+    # разных людей, максимум разведёт одного человека на две записи, что
+    # видно и чинится, в отличие от обратного.
     import uuid as _uuid
     subject_uuid = None
+    snils_hash = holder.get("snils_hash")
     if holder_type == "individual" and not inn:
-        # Использовать имя как seed для стабильного UUID
-        subject_uuid = str(_uuid.uuid5(_uuid.NAMESPACE_OID, name or "unknown_individual"))
+        if snils_hash:
+            seed = f"snils:{snils_hash}"
+        else:
+            seed = f"right:{right_id}:{holder.get('name') or ''}"
+        subject_uuid = str(_uuid.uuid5(_uuid.NAMESPACE_OID, seed))
 
     conn.execute(
         """INSERT INTO right_holders
            (right_id, holder_type, name, inn, ogrn, email, mailing_address,
-            subject_uuid, first_seen_file)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            subject_uuid, first_seen_file, snils_masked, snils_hash)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (right_id, holder_type, name, inn, ogrn,
          holder.get("email"), holder.get("mailing_address"),
-         subject_uuid, holder.get("source_file") or holder.get("first_seen_file")),
+         subject_uuid, holder.get("source_file") or holder.get("first_seen_file"),
+         holder.get("snils_masked"), snils_hash),
     )
 
 
@@ -575,6 +591,9 @@ def save_parsed_result(
         return stats
 
     with get_connection(db_path) as conn:
+        # База могла быть создана прошлой версией парсера — догнать колонки
+        # (миграция 0009), иначе запись правообладателя падает на чужой базе.
+        ensure_columns(conn)
         conn.execute("BEGIN")
         try:
             # 1. Выписка

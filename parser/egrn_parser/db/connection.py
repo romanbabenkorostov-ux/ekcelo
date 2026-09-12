@@ -72,8 +72,34 @@ def init_db(db_path: Path | str, schema_sql_path: Path | str | None = None) -> N
     with get_connection(db_path) as conn:
         # Выполняем блоки, разделяя по «;» но внимательно — схема содержит INSERT
         conn.executescript(sql)
+        ensure_columns(conn)
 
     return db_path
+
+
+def ensure_columns(conn) -> None:
+    """Догнать схему базы, созданной прошлой версией парсера.
+
+    `schema.sql` весь на `CREATE TABLE IF NOT EXISTS`, поэтому новая КОЛОНКА в
+    уже существующей базе не появляется: таблица есть — и файл ничего не
+    делает. Раньше это было безобидно, потому что новые колонки приходили
+    вместе с новыми таблицами; `snils_masked`/`snils_hash` (миграция 0009)
+    добавлены в существующую `right_holders`, и без этого вызова запись
+    правообладателя падала бы на чужой базе.
+    """
+    wanted = {
+        "right_holders": (("snils_masked", "TEXT"), ("snils_hash", "TEXT")),
+    }
+    for table, columns in wanted.items():
+        try:
+            have = {row[1] for row in conn.execute(f'PRAGMA table_info("{table}")')}
+        except Exception:                                      # noqa: BLE001
+            continue
+        if not have:
+            continue
+        for name, kind in columns:
+            if name not in have:
+                conn.execute(f'ALTER TABLE "{table}" ADD COLUMN {name} {kind}')
 
 
 def check_db(db_path: Path | str) -> bool:
