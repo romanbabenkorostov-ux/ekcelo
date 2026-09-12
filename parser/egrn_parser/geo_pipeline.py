@@ -27,6 +27,7 @@ from datetime import date
 from pathlib import Path
 from typing import Callable, Optional
 
+from egrn_parser.parsers import manual_contours as _manual
 from egrn_parser.parsers import xml_geometry_db as _geo_db
 from egrn_parser.parsers.xml_geometry import extract_geometry
 
@@ -73,6 +74,9 @@ class PipelineResult:
     kml_path: Optional[Path] = None
     essays: list[Path] = field(default_factory=list)
     schema_doc: Optional[Path] = None
+    # Объекты, у которых ручная обводка встретилась с контуром из выписки.
+    # Проход их НЕ решает: он обязан их показать (ADR-008).
+    conflicts: list[dict] = field(default_factory=list)
 
     @property
     def written(self) -> int:
@@ -83,10 +87,13 @@ class PipelineResult:
         return sum(1 for f in self.files if f.error)
 
     def summary(self) -> str:
-        return (f"файлов: {len(self.files)}; с геометрией: {self.written}; "
+        text = (f"файлов: {len(self.files)}; с геометрией: {self.written}; "
                 f"ошибок: {self.failed}; контуров: "
                 f"{sum(f.contours for f in self.files)}; ЧЗУ: "
                 f"{sum(f.parts for f in self.files)}")
+        if self.conflicts:
+            text += f"; КОНФЛИКТОВ КОНТУРА: {len(self.conflicts)}"
+        return text
 
 
 def collect_xml(target: Path | str) -> list[Path]:
@@ -205,6 +212,17 @@ def run_pipeline(source: Path | str, db_path: Path | str, *,
         say(item.describe())
 
     with sqlite3.connect(db_path) as conn:
+        # Встреча ручной обводки с контуром из выписки — событие, о котором
+        # человек обязан узнать до того, как посмотрит на выгрузку: в KML и
+        # эссе пойдёт ТЕКУЩИЙ контур, а какой он — решает не проход.
+        result.conflicts = _manual.detect_conflicts(conn)
+        for conflict in result.conflicts:
+            say(f"⚠ {conflict['message']}")
+        pending = _manual.open_conflicts(conn)
+        if pending:
+            say(f"Ждут решения человека: {len(pending)} "
+                "(оставить исходный / заменить на уточнённый)")
+
         # Схема §8 создаётся до выгрузок, а не только при первой записи
         # контура. Иначе папка из одних выписок на ОКС (геометрии в них нет
         # вовсе) роняет экспорт на «no such table: egrn_contour» — при том что

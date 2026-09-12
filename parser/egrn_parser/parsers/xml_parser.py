@@ -48,6 +48,28 @@ from egrn_parser.dictionaries import (
 
 log = logging.getLogger(__name__)
 
+# Предел длины текста ограничения. Был 200 символов — ровно столько, чтобы
+# фраза «…утверждённых постановлением Правит» попала в отчёт и в эссе
+# оборванной на середине слова. Юридический смысл ограничения живёт как раз в
+# хвосте: запреты, исключения, отсылки к статьям. Отрезав его, база начинает
+# уверенно врать о содержании обременения.
+#
+# Новый предел — не «побольше на всякий случай», а граница разумного: самое
+# длинное ограничение в наблюдавшихся выписках (ст. 65 Водного кодекса с
+# полным перечнем запретов) укладывается примерно в 2 500 символов. 4 000
+# оставляет запас и всё ещё защищает от выписки, где в это поле попал весь
+# текст постановления.
+RESTRICTION_TEXT_LIMIT = 4000
+
+# Особые отметки — свободный текст, там бывает и перечень обособленных
+# участков ЕЗП, и описание доступа к смежным участкам. Предел тот же.
+SPECIAL_NOTES_LIMIT = 4000
+
+# Ключ дедупликации ограничений: берётся НАЧАЛО описания, а не весь текст.
+# Два ограничения из разных выписок отличаются в первых же словах, а сравнение
+# целиком делало бы дедуп чувствительным к любой правке формулировки.
+_DEDUP_KEY_LEN = 50
+
 # Теги персональных данных для пропуска при обходе XML
 _PERSONAL_DATA_TAGS = frozenset({
     "personal_data_consent",
@@ -768,10 +790,11 @@ def _parse_xml_object_restrictions(root: ET.Element, extract_number: Optional[st
         enc_type_e = _find_recursive(enc, "encumbrance_type")
         enc_val_e  = _find(enc_type_e, "value") if enc_type_e is not None else None
         type_name  = _text(enc_val_e) if enc_val_e is not None else ""
-        desc       = _text(content_e)[:200] if content_e is not None else type_name
+        desc       = (_text(content_e)[:RESTRICTION_TEXT_LIMIT]
+                      if content_e is not None else type_name)
 
         # Дедупликация
-        key = reg_num or desc[:50]
+        key = reg_num or desc[:_DEDUP_KEY_LEN]
         if key in seen_reg_nums:
             continue
         seen_reg_nums.add(key)
@@ -805,7 +828,7 @@ def _parse_xml_object_restrictions(root: ET.Element, extract_number: Optional[st
         if not any(fp in sn_text.lower() for fp in _FP):
             restrictions.append({
                 "type":           "other",
-                "description":    sn_text[:300],
+                "description":    sn_text[:SPECIAL_NOTES_LIMIT],
                 "registry_number":None,
                 "basis_doc":      None,
                 "source_extract": extract_number,

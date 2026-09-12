@@ -49,6 +49,7 @@ from PySide6.QtWidgets import (
 )
 
 from egrn_parser.geo_pipeline import PipelineResult, collect_xml, run_pipeline
+from egrn_parser.parsers import manual_contours as manual
 
 APP_TITLE = "Ekcelo — выписки ЕГРН: контуры, KML, эссе"
 
@@ -401,6 +402,184 @@ class ResultTab(QWidget):
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
 
+class ContourTab(QWidget):
+    """Вкладка «3. Контуры» — ручные обводки и решение по уточнённым контурам.
+
+    Здесь человек делает то единственное, чего за него не может сделать
+    программа: решает, оставить согласованную ручную обводку или принять
+    контур, появившийся в выписке. Обе кнопки намеренно равноправны по весу —
+    «заменить» не является правильным ответом по умолчанию (ADR-008).
+    """
+
+    changed = Signal()
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._db_path: Path | None = None
+        self._build()
+
+    def _build(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.addWidget(_title("Ручные контуры и уточнения"))
+        layout.addWidget(QLabel(
+            "У объекта может не быть контура — кадастровые инженеры до него ещё "
+            "не дошли. Обведите участок примерно в Google Earth или "
+            "Яндекс.Конструкторе, впишите кадастровый номер в подпись метки и "
+            "загрузите файл сюда."))
+
+        load = QGroupBox("Загрузка обводок")
+        load_layout = QVBoxLayout(load)
+        row = QWidget()
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        self.ed_author = QLineEdit()
+        self.ed_author.setPlaceholderText("Кто обвёл")
+        self.ed_note = QLineEdit()
+        self.ed_note.setPlaceholderText("Пометка: «по забору», «со слов арендатора»")
+        row_layout.addWidget(QLabel("Автор"))
+        row_layout.addWidget(self.ed_author, 1)
+        row_layout.addWidget(QLabel("Пометка"))
+        row_layout.addWidget(self.ed_note, 2)
+        load_layout.addWidget(row)
+        btn_load = _button("Загрузить KML / GeoJSON с обводками", GREEN_CSS)
+        btn_load.clicked.connect(self._load)
+        load_layout.addWidget(btn_load)
+        layout.addWidget(load)
+
+        self.lbl_conflicts = QLabel("Открытых вопросов нет.")
+        self.lbl_conflicts.setStyleSheet(f"font-weight:bold;color:{COLOR_MUTED};")
+        layout.addWidget(self.lbl_conflicts)
+
+        self.table = QTableWidget(0, 6)
+        self.table.setHorizontalHeaderLabels([
+            "Кадастровый номер", "Ручная обводка, кв.м", "Из выписки, кв.м",
+            "Расхождение", "Кто обвёл", "Пометка"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        layout.addWidget(self.table, 1)
+
+        buttons = QWidget()
+        buttons_layout = QHBoxLayout(buttons)
+        buttons_layout.setContentsMargins(0, 0, 0, 0)
+        self.btn_keep = _button("Оставить исходный")
+        self.btn_keep.clicked.connect(lambda: self._resolve("keep_manual"))
+        self.btn_use = _button("Заменить на уточнённый")
+        self.btn_use.clicked.connect(lambda: self._resolve("use_egrn"))
+        self.btn_refresh = _button("Обновить")
+        self.btn_refresh.clicked.connect(self.reload)
+        for button in (self.btn_keep, self.btn_use, self.btn_refresh):
+            buttons_layout.addWidget(button)
+        buttons_layout.addStretch(1)
+        layout.addWidget(buttons)
+
+        self.lbl_current = QLabel("")
+        self.lbl_current.setStyleSheet(f"font-size:11px;color:{COLOR_MUTED};")
+        layout.addWidget(self.lbl_current)
+
+    def set_db(self, db_path: Path) -> None:
+        self._db_path = Path(db_path)
+        self.reload()
+
+    def _require_db(self) -> bool:
+        if self._db_path and Path(self._db_path).exists():
+            return True
+        QMessageBox.information(
+            self, "База не выбрана",
+            "Сначала разберите выписки на первой вкладке — или укажите базу там.")
+        return False
+
+    def _load(self) -> None:
+        if not self._require_db():
+            return
+        chosen, _ = QFileDialog.getOpenFileName(
+            self, "Файл с обводками", "", "Контуры (*.kml *.geojson *.json)")
+        if not chosen:
+            return
+        try:
+            contours = manual.load_contours(
+                Path(chosen),
+                author=self.ed_author.text().strip() or None,
+                note=self.ed_note.text().strip() or None)
+        except Exception as exc:                                   # noqa: BLE001
+            QMessageBox.critical(self, "Файл не прочитан", str(exc))
+            return
+        if not contours:
+            QMessageBox.warning(
+                self, "Контуров не найдено",
+                "В файле нет полигонов с кадастровым номером в подписи метки.")
+            return
+        with sqlite3.connect(self._db_path) as conn:
+            report = manual.import_manual_contours(conn, contours)
+        QMessageBox.information(self, "Обводки загружены", report.summary())
+        self.reload()
+        self.changed.emit()
+
+    def _selected_cad(self) -> str | None:
+        row = self.table.currentRow()
+        if row < 0:
+            return None
+        item = self.table.item(row, 0)
+        return item.text() if item else None
+
+    def _resolve(self, choice: str) -> None:
+        if not self._require_db():
+            return
+        cad = self._selected_cad()
+        if not cad:
+            QMessageBox.information(self, "Объект не выбран",
+                                    "Выберите строку в таблице.")
+            return
+        with sqlite3.connect(self._db_path) as conn:
+            result = manual.resolve_conflict(
+                conn, cad, choice,
+                resolved_by=self.ed_author.text().strip() or None)
+        if not result["resolved"]:
+            QMessageBox.information(self, "Нечего решать", result["reason"])
+        self.reload()
+        self.changed.emit()
+
+    def reload(self) -> None:
+        if not self._db_path or not Path(self._db_path).exists():
+            return
+        with sqlite3.connect(self._db_path) as conn:
+            conflicts = manual.open_conflicts(conn)
+            current = manual.current_contours(conn)
+
+        self.table.setRowCount(len(conflicts))
+        for index, item in enumerate(conflicts):
+            manual_area = item["manual_area_sqm"] or 0
+            egrn_area = item["egrn_area_sqm"] or 0
+            values = [item["cad_number"], f"{manual_area:.0f}", f"{egrn_area:.0f}",
+                      f"{egrn_area - manual_area:+.0f}",
+                      item.get("author") or "—", item.get("note") or "—"]
+            for column, value in enumerate(values):
+                cell = QTableWidgetItem(value)
+                if 1 <= column <= 3:
+                    cell.setTextAlignment(Qt.AlignCenter)
+                self.table.setItem(index, column, cell)
+            self.table.item(index, 3).setForeground(QColor(COLOR_WARN))
+
+        has_conflicts = bool(conflicts)
+        self.btn_keep.setEnabled(has_conflicts)
+        self.btn_use.setEnabled(has_conflicts)
+        if has_conflicts:
+            self.lbl_conflicts.setText(
+                f"В выписках появились уточнённые контуры: {len(conflicts)}. "
+                "Пока решения нет, текущим остаётся ручная обводка.")
+            self.lbl_conflicts.setStyleSheet(f"font-weight:bold;color:{COLOR_WARN};")
+        else:
+            self.lbl_conflicts.setText("Открытых вопросов нет.")
+            self.lbl_conflicts.setStyleSheet(f"font-weight:bold;color:{COLOR_MUTED};")
+
+        by_source: dict[str, int] = {}
+        for row in current:
+            by_source[row["contour_source"]] = by_source.get(row["contour_source"], 0) + 1
+        self.lbl_current.setText(
+            f"Текущих контуров: из выписок {by_source.get('egrn', 0)}, "
+            f"ручных {by_source.get('manual', 0)}.")
+
+
 class MainWindow(QWidget):
     """Сборка вкладок и связь между ними — только сигналами, как в дизайн-коде."""
 
@@ -411,15 +590,32 @@ class MainWindow(QWidget):
 
         self.run_tab = RunTab()
         self.result_tab = ResultTab()
+        self.contour_tab = ContourTab()
         self.run_tab.finished.connect(self.result_tab.on_result)
+        self.run_tab.finished.connect(
+            lambda result: self.contour_tab.set_db(result.db_path))
+        # Решение по контуру меняет то, что считается текущим, — таблица
+        # объектов обязана это увидеть, не дожидаясь повторного разбора.
+        self.contour_tab.changed.connect(self.result_tab.reload)
 
         self.tabs = QTabWidget()
         self.tabs.addTab(self.run_tab, "1. Разбор выписок")
         self.tabs.addTab(self.result_tab, "2. Объекты")
-        self.run_tab.finished.connect(lambda _r: self.tabs.setCurrentIndex(1))
+        self.tabs.addTab(self.contour_tab, "3. Контуры")
+        self.run_tab.finished.connect(self._after_run)
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.tabs)
+
+    @Slot(object)
+    def _after_run(self, result) -> None:
+        """Куда смотреть после разбора.
+
+        Обычно — на результат. Но если в выписке появился уточнённый контур
+        поверх ручной обводки, человека надо вести туда, где это решается:
+        молча оставить вопрос висеть значит показать в KML не тот контур.
+        """
+        self.tabs.setCurrentIndex(2 if result.conflicts else 1)
 
 
 def main() -> int:
