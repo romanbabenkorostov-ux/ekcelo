@@ -259,3 +259,74 @@ def test_layout_is_recorded_for_simple_parcel(conn, tmp_path):
     _add_egrn_contour(conn, tmp_path)
     assert conn.execute(
         "SELECT DISTINCT land_layout FROM egrn_contour").fetchone()[0] == "ЗУ"
+
+
+# --- источник контура: обводка или кадастровая карта НСПД (миграция 0008) ---
+
+def test_source_label_reaches_current_contours(conn, tmp_path):
+    """Контур НСПД не должен выглядеть в отчёте обводкой «на глаз».
+
+    Точность у них различается на два порядка: обводка по снимку — десятки
+    метров, контур с кадастровой карты — дециметры. Человек, решающий спор с
+    выпиской, обязан видеть, ЧТО он сравнивает.
+    """
+    path = _write(tmp_path, _kml(), "нспд.kml")
+    M.import_manual_contours(conn, M.load_contours(path, source="nspd",
+                                                   confidence=0.9))
+    rows = M.current_contours(conn, CAD)
+    assert rows and rows[0]["contour_source"] == "manual"
+    assert rows[0]["manual_source"] == "nspd"
+
+
+def test_default_source_stays_kml(conn, tmp_path):
+    path = _write(tmp_path, _kml(), "ручные.kml")
+    M.import_manual_contours(conn, M.load_contours(path))
+    assert M.current_contours(conn, CAD)[0]["manual_source"] == "kml"
+
+
+def test_egrn_contour_reports_itself_as_source(conn, tmp_path):
+    _add_egrn_contour(conn, tmp_path)
+    row = M.current_contours(conn, CAD)[0]
+    assert row["contour_source"] == "egrn" and row["manual_source"] == "egrn"
+
+
+def test_migration_0008_applies_to_an_existing_base(conn, tmp_path):
+    """Вьюха пересоздаётся, а не «создаётся, если нет».
+
+    База, собранная до 0008, уже содержит `v_object_contour_current` — и
+    `CREATE VIEW IF NOT EXISTS` на ней молча ничего бы не сделал. Тест
+    воспроизводит именно этот случай: старая вьюха, затем ensure_schema.
+    """
+    W.ensure_schema(conn)
+    conn.execute("DROP VIEW v_object_contour_current")
+    conn.execute("CREATE VIEW v_object_contour_current AS "
+                 "SELECT cad_number, 'egrn' AS contour_source, contour_no, "
+                 "       geom_geojson, area_computed_sqm, accuracy_m, "
+                 "       NULL AS confidence, land_layout, "
+                 "       source_extract_number, extract_date "
+                 "  FROM egrn_contour WHERE kind = 'parcel'")
+    conn.commit()
+    W.ensure_schema(conn)
+    columns = [row[1] for row in conn.execute(
+        'PRAGMA table_info("v_object_contour_current")')]
+    assert "manual_source" in columns
+
+
+# --- площадь контура считается по эллипсоиду, а не по сфере -----------------
+
+def test_contour_area_matches_the_extract():
+    """Площадь контура НСПД обязана сойтись с заявленной в выписке.
+
+    Сфера радиусом 6371 км, стоявшая в формуле раньше, давала минус 0.22 %:
+    на участке 4416 м² это 10 м², и сверка с выпиской упиралась в ошибку
+    формулы, а не в расхождение источников.
+    """
+    # 26:29:130106:334 с кадастровой карты НСПД; заявлено 4416 м².
+    ring = [(43.05538384, 43.98661399), (43.05535730, 43.98701227),
+            (43.05521445, 43.98720038), (43.05455339, 43.98750006),
+            (43.05438011, 43.98724914), (43.05500063, 43.98684526),
+            (43.05489823, 43.98675166), (43.05482468, 43.98674566),
+            (43.05470218, 43.98673536), (43.05450456, 43.98657391)]
+    contour = M.ManualContour(cad_number="26:29:130106:334", rings=[ring],
+                              source="nspd")
+    assert contour.area_sqm() == pytest.approx(4416.0, abs=3.0)

@@ -16,6 +16,10 @@ Usage:
   # загрузить обводки
   python 01f_manual_contours.py --db egrn.db --load ручные.kml --author Бабенко
 
+  # принять контуры с кадастровой карты НСПД (точность дециметры, не обводка)
+  python 01f_manual_contours.py --db egrn.db --load нспд.kml --source nspd \
+      --confidence 0.9 --author "НСПД"
+
   # посмотреть, что ждёт решения
   python 01f_manual_contours.py --db egrn.db --list-conflicts
 
@@ -61,6 +65,9 @@ def main() -> int:
     ap.add_argument("--note", help="Пометка: «по забору», «со слов арендатора»")
     ap.add_argument("--confidence", type=float, default=0.5,
                     help="Уверенность обводки 0..1 (0.3 — пальцем по карте)")
+    ap.add_argument("--source", default="kml",
+                    help="Чем снят контур: kml (обводка по спутнику), "
+                         "nspd (кадастровая карта), geojson")
     ap.add_argument("--list-conflicts", action="store_true",
                     help="Показать, что ждёт решения человека")
     ap.add_argument("--current", action="store_true",
@@ -82,7 +89,7 @@ def main() -> int:
                 return 1
             contours = M.load_contours(
                 path, author=args.author, note=args.note,
-                confidence=args.confidence)
+                confidence=args.confidence, source=args.source)
             if not contours:
                 print(f"[!] в {path.name} нет полигонов с кадастровым номером "
                       "в подписи метки")
@@ -121,9 +128,11 @@ def main() -> int:
             rows = M.current_contours(conn)
             if not rows:
                 print("Контуров в базе нет")
+            labels = {"egrn": "выписка ЕГРН", "nspd": "кадастровая карта НСПД",
+                      "kml": "ручная обводка", "geojson": "ручная обводка"}
             for row in rows:
-                mark = ("выписка ЕГРН" if row["contour_source"] == "egrn"
-                        else "ручная обводка")
+                mark = labels.get(row["manual_source"] or row["contour_source"],
+                                  "ручная обводка")
                 extra = (f", {row['land_layout']}" if row["land_layout"] else "")
                 print(f"  {row['cad_number']}: {mark}, "
                       f"{row['area_computed_sqm']:.0f} кв.м{extra}")
