@@ -204,3 +204,80 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_asset_geo_unique
     ON asset_geo_link(asset_type, asset_id, geo_uuid, role, valid_from);
 CREATE INDEX IF NOT EXISTS idx_asset_geo_lookup
     ON asset_geo_link(asset_type, asset_id, valid_from);
+
+-- =============================================================================
+-- §8 ГЕОМЕТРИЯ ИЗ ВЫПИСОК ЕГРН (ADR-007, mirror migration 0006)
+-- =============================================================================
+-- В отличие от §6 и §7, этот слой — ЧАСТЬ СЛЕПКА ЕГРН: каждая строка выведена
+-- из XML-выписки, подписанной ЭП Роскадастра, и при пересоздании БД из тех же
+-- выписок воспроизводится. Поэтому здесь нет `confidence`: у документа
+-- Росреестра есть заявленная погрешность съёмки (`accuracy_m`) — это другая
+-- величина, чем наша уверенность в собственной обводке.
+-- Полные комментарии и rationale — schema/migrations/0006_egrn_geometry.sql
+-- и obsidian/Database/egrn-geometry-8.md.
+--
+-- ГЛАВНОЕ ПРАВИЛО ЧТЕНИЯ: контуры участка (`kind='parcel'`) и контуры его
+-- частей — ЧЗУ (`kind='part'`) — лежат в одной таблице, но их площади НЕЛЬЗЯ
+-- складывать: ЧЗУ находится ВНУТРИ участка. Любая агрегация идёт через
+-- `v_egrn_parcel_contour`.
+
+CREATE TABLE IF NOT EXISTS egrn_contour (
+    contour_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    cad_number        TEXT NOT NULL,
+    kind              TEXT NOT NULL CHECK (kind IN ('parcel', 'part')),
+    contour_no        INTEGER NOT NULL,
+    contour_cad       TEXT,                    -- заполнен только у ЕЗП
+    part_number       TEXT,
+    part_mnemonic     TEXT,                    -- «26:29-6.395-ЧЗУ1»
+    geom_geojson      TEXT NOT NULL,           -- GeoJSON Polygon, lon/lat
+    crs               TEXT NOT NULL DEFAULT 'EPSG:4326',
+    area_computed_sqm REAL,                    -- по координатам, в метрах МСК
+    area_declared_sqm REAL,                    -- из той же выписки
+    accuracy_m        REAL,                    -- delta_geopoint выписки
+    sk_id             TEXT,                    -- «МСК-26 от СК-95, зона 1»
+    msk_zone          TEXT,                    -- ключ msk.MSK_ZONES
+    centroid_lon      REAL,
+    centroid_lat      REAL,
+    source            TEXT NOT NULL DEFAULT 'egrn_xml',
+    source_extract_number TEXT,                -- КУВИ-001/...
+    source_file       TEXT,
+    extract_date      TEXT,
+    captured_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Ключ идемпотентности вынесен в выражение-индекс: у контуров участка
+-- `part_number` равен NULL, а в SQLite NULL <> NULL, и табличный UNIQUE
+-- плодил бы дубли при каждой повторной загрузке той же выписки.
+CREATE UNIQUE INDEX IF NOT EXISTS ux_egrn_contour_key
+    ON egrn_contour(cad_number, kind, COALESCE(part_number, ''), contour_no);
+CREATE INDEX IF NOT EXISTS idx_egrn_contour_cad
+    ON egrn_contour(cad_number, kind);
+CREATE INDEX IF NOT EXISTS idx_egrn_contour_part
+    ON egrn_contour(part_mnemonic) WHERE part_mnemonic IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_egrn_contour_child
+    ON egrn_contour(contour_cad) WHERE contour_cad IS NOT NULL;
+
+CREATE VIEW IF NOT EXISTS v_egrn_parcel_contour AS
+    SELECT contour_id, cad_number, contour_no, contour_cad, geom_geojson,
+           area_computed_sqm, area_declared_sqm, accuracy_m, sk_id, msk_zone,
+           centroid_lon, centroid_lat, source, source_extract_number,
+           source_file, extract_date, captured_at
+      FROM egrn_contour
+     WHERE kind = 'parcel';
+
+CREATE VIEW IF NOT EXISTS v_egrn_geometry_summary AS
+    SELECT cad_number,
+           COUNT(*)                          AS contours,
+           SUM(area_computed_sqm)            AS area_computed_sqm,
+           MAX(area_declared_sqm)            AS area_declared_sqm,
+           MAX(accuracy_m)                   AS accuracy_m,
+           MAX(msk_zone)                     AS msk_zone,
+           MAX(source_extract_number)        AS source_extract_number,
+           MAX(extract_date)                 AS extract_date,
+           CASE WHEN MAX(area_declared_sqm) IS NULL THEN NULL
+                WHEN ABS(SUM(area_computed_sqm) - MAX(area_declared_sqm))
+                     <= MAX(1.0, MAX(area_declared_sqm) * 0.01) THEN 1
+                ELSE 0 END                   AS area_check_ok
+      FROM egrn_contour
+     WHERE kind = 'parcel'
+     GROUP BY cad_number;
