@@ -24,6 +24,10 @@ dependencies = [
 
 [project.optional-dependencies]
 api = ["fastapi>=0.111", "uvicorn[standard]>=0.29"]
+# Графическая оболочка разбора выписок (parser/gui/). Вынесена в extras, а не
+# в основные зависимости: консольный парсер и тесты обязаны работать там, где
+# Qt не установлен — на сервере, в CI и в контейнере.
+gui = ["PySide6>=6.5"]
 
 [project.scripts]
 egrn-parser = "egrn_parser.cli:main"

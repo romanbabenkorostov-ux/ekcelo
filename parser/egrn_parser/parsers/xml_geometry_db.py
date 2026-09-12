@@ -89,11 +89,18 @@ def _rows_for(geometry: ExtractGeometry, *, extract_number: Optional[str],
     def add(contour: Contour, kind: str, contour_no: int) -> None:
         centroid = contour.centroid_wgs84(zone)
         outer = contour.outer
+        # `contour_cad` заполняется ТОЛЬКО у ЕЗП, где контур сам является
+        # объектом учёта. У обычного участка Росреестр дублирует в контуре его
+        # же кадастровый номер — записанный как «обособленный участок», он
+        # превращает одиночный ЗУ в мнимое единое землепользование.
+        child_cad = (contour.cad_number
+                     if kind == "parcel" and contour.cad_number != geometry.cad_number
+                     else None)
         rows.append((
             geometry.cad_number,
             kind,
             contour_no,
-            contour.cad_number if kind == "parcel" else None,
+            child_cad,
             contour.part_number,
             contour.part_mnemonic,
             json.dumps(contour.to_geojson(zone), ensure_ascii=False,
