@@ -333,12 +333,29 @@ def _parse_building_params(root: ET.Element) -> dict:
         result["year_built"] = int(_text(year_e)) if _text(year_e).isdigit() else None
 
     # ЗУ-носители
-    land_cad_elems = _find_all_recursive(root, "land_cad_number")
-    land_cads = [_text(_find_recursive(e, "cad_number")) for e in land_cad_elems]
-    land_cads = [c for c in land_cads if c]
-    result["land_cad_numbers"] = "; ".join(land_cads) if land_cads else None
+    result["land_cad_numbers"] = _collect_land_cad_numbers(root)
 
     return result
+
+
+def _collect_land_cad_numbers(root: ET.Element) -> Optional[str]:
+    """КН земельных участков, на которых стоит ОКС.
+
+    Росреестр кладёт в ОДИН тег `land_cad_number` несколько номеров через
+    запятую, когда здание стоит на двух участках: «26:29:130106:73,
+    26:29:130321:13». Сохранённая как есть, такая строка теряет связь со вторым
+    участком на первом же join'е по кадастровому номеру — а именно эта связь
+    делает из улучшения и земли один объект недвижимости.
+
+    Разделитель на выходе — «; », как во всех остальных списковых полях парсера.
+    """
+    numbers: list[str] = []
+    for elem in _find_all_recursive(root, "land_cad_number"):
+        raw = _text(_find_recursive(elem, "cad_number")) or _text(elem)
+        for found in extract_all_cad_numbers(raw or ""):
+            if found not in numbers:
+                numbers.append(found)
+    return "; ".join(numbers) if numbers else None
 
 
 def _parse_room_params(root: ET.Element) -> dict:
@@ -408,10 +425,7 @@ def _parse_structure_params(root: ET.Element) -> dict:
         result["year_built"] = int(_text(year_e)) if _text(year_e).isdigit() else None
 
     # ЗУ-носители
-    land_cad_elems = _find_all_recursive(root, "land_cad_number")
-    land_cads = [_text(_find_recursive(e, "cad_number")) for e in land_cad_elems]
-    land_cads = [c for c in land_cads if c]
-    result["land_cad_numbers"] = "; ".join(land_cads) if land_cads else None
+    result["land_cad_numbers"] = _collect_land_cad_numbers(root)
 
     return result
 
