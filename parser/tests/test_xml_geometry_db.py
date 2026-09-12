@@ -253,3 +253,56 @@ def test_canonical_schema_mirrors_migration():
     finally:
         canonical.close()
         migrated.close()
+
+
+# --- случай из выписки КУВИ-001/2026-120869334 (26:29:130106:73) -----------
+# Участок 15 120 кв.м с СЕМЬЮ частями. Он вскрыл две ошибки, которых не было
+# видно на участках с одной-двумя частями, поэтому вынесен в отдельные тесты.
+
+def _many_parts_xml(count: int = 7, area: str = "1986") -> str:
+    """Выписка с несколькими ЧЗУ; геометрия участка и частей — как в land_xml.
+
+    Площадь оставлена согласованной с координатами намеренно: эти тесты про
+    нумерацию и суммирование частей, и гейт по площади (проверенный отдельно)
+    не должен их гасить.
+    """
+    from tests.test_xml_geometry import PART_POINTS, _spatial
+    parts = "".join(
+        f"<object_part><part_number>{n}</part_number>"
+        f"<area><value>{59 + n}</value></area>"
+        f"<contours><contour><number_pp>1</number_pp>"
+        f"{_spatial(PART_POINTS + [PART_POINTS[0]], sk_id=None)}"
+        f"</contour></contours></object_part>"
+        for n in range(1, count + 1))
+    return land_xml(area=area, with_part=False).replace(
+        "</land_record>", f"<object_parts>{parts}</object_parts></land_record>")
+
+
+def test_many_parts_each_get_own_row(conn, tmp_path):
+    W.write_geometry(conn, _geometry(tmp_path, _many_parts_xml()))
+    numbers = [r[0] for r in _rows(
+        conn, "SELECT part_number FROM egrn_contour WHERE kind='part' "
+              "ORDER BY CAST(part_number AS INTEGER)")]
+    assert numbers == [str(n) for n in range(1, 8)]
+
+
+def test_many_parts_do_not_inflate_parcel_area(conn, tmp_path):
+    """Семь частей внутри участка не должны увеличить его площадь."""
+    W.write_geometry(conn, _geometry(tmp_path, _many_parts_xml()))
+    parcel = _rows(conn, "SELECT SUM(area_computed_sqm) FROM v_egrn_parcel_contour")[0][0]
+    everything = _rows(conn, "SELECT SUM(area_computed_sqm) FROM egrn_contour")[0][0]
+    assert parcel == pytest.approx(1985.6, abs=0.5)
+    assert everything > parcel * 1.1, "проверка бессмысленна, если части пустые"
+
+
+def test_parcel_contour_cad_is_not_the_parcel_itself(conn, tmp_path):
+    """Росреестр дублирует КН участка внутри его же контура.
+
+    Записанный как «обособленный участок», он превращает обычный ЗУ в мнимое
+    единое землепользование — и участок начинает выглядеть как ЕЗП в каждом
+    отчёте.
+    """
+    W.write_geometry(conn, _geometry(tmp_path, land_xml()))
+    contour_cad = _rows(conn, "SELECT contour_cad FROM egrn_contour "
+                              "WHERE kind='parcel'")[0][0]
+    assert contour_cad is None
