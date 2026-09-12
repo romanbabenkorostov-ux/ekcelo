@@ -352,9 +352,13 @@ CREATE TABLE IF NOT EXISTS right_holders (
     mailing_address  TEXT,
     entity_id        INTEGER REFERENCES entity_registry(entity_id),
     subject_uuid     TEXT,                   -- Fix 40f: UUID субъекта (для физлиц без ИНН)
-    first_seen_file  TEXT                    -- Fix 40f: файл первого обнаружения субъекта
+    first_seen_file  TEXT,                   -- Fix 40f: файл первого обнаружения субъекта
+    -- Различитель физлица без хранения ФИО (миграция 0009):
+    snils_masked     TEXT,                   -- «2*3-591-004 *9» — для человека
+    snils_hash       TEXT                    -- sha256(цифры)[:16] — для склейки
 );
 CREATE INDEX IF NOT EXISTS idx_right_holders_right ON right_holders(right_id);
+CREATE INDEX IF NOT EXISTS idx_right_holders_snils_hash ON right_holders(snils_hash);
 CREATE INDEX IF NOT EXISTS idx_rights_holder        ON right_holders(inn);
 
 -- ─────────────────────────────────────────────────────────────────────────────
