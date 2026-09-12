@@ -78,7 +78,7 @@ def test_geometry_is_valid_geojson_polygon(conn, tmp_path):
     ring = geom["coordinates"][0]
     assert ring[0] == ring[-1], "GeoJSON требует замкнутого кольца"
     lon, lat = ring[0]
-    assert 42.7 < lon < 42.9 and 43.9 < lat < 44.1
+    assert 43.0 < lon < 43.1 and 43.9 < lat < 44.1
 
 
 def test_requisites_taken_from_extract(conn, tmp_path):

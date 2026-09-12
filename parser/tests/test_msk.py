@@ -87,11 +87,17 @@ def test_area_ignores_closing_point():
 
 
 def test_point_lands_in_predgorny():
-    """Центроид обязан попасть в район из адреса выписки, а не «куда-то в РФ»."""
+    """Центроид обязан попасть в район из адреса выписки, а не «куда-то в РФ».
+
+    Эталон обновлён после калибровки начал отсчёта по НСПД (ADR-010): прежние
+    43.97156 / 42.81086 были ответом со справочными `x_0`, `y_0`, то есть на
+    1.8 км южнее и 20 км западнее правды. Саму калибровку сторожит
+    `test_msk_nspd.py` — там контроль внешний.
+    """
     zone = msk.zone_for_sk_id("МСК-26 от СК-95, зона 1")
     lat, lon = msk.to_wgs84(north=360534.40, east=1405306.46, zone=zone)
-    assert lat == pytest.approx(43.97156, abs=1e-4)
-    assert lon == pytest.approx(42.81086, abs=1e-4)
+    assert lat == pytest.approx(43.98805, abs=1e-4)
+    assert lon == pytest.approx(43.06129, abs=1e-4)
 
 
 def test_axes_are_not_interchangeable():
@@ -112,7 +118,7 @@ def test_ring_to_wgs84_returns_lon_lat_order():
     pts = msk.ring_to_wgs84(RING_382, zone)
     assert len(pts) == len(RING_382)
     for lon, lat in pts:
-        assert 42.7 < lon < 42.9
+        assert 43.0 < lon < 43.1
         assert 43.9 < lat < 44.1
 
 

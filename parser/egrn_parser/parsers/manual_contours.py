@@ -57,11 +57,14 @@ __all__ = [
 CAD_RE = re.compile(r"\b\d{1,2}:\d{1,2}:\d{1,8}:\d{1,8}\b")
 KML_NS = "{http://www.opengis.net/kml/2.2}"
 
-# Радиус сферы для площади ручного контура. Обводка делается по карте, её
-# точность — десятки метров, и сферическая формула здесь честнее, чем
-# видимость строгости от проекции: цифра нужна, чтобы сравнить порядок величины
-# с выпиской, а не чтобы её подписать.
-_EARTH_R = 6371008.8
+# Эллипсоид WGS-84 для площади контура. Сфера радиусом 6371 км, стоявшая здесь
+# раньше, давала систематический минус 0.22 % — на участке 4416 м² это 10 м².
+# Для обводки по спутнику такая погрешность незаметна, но контур с кадастровой
+# карты НСПД точен до дециметров, и сверка его площади с выпиской (это и есть
+# признак конфликта) упиралась в ошибку формулы, а не источника. С радиусами
+# кривизны на широте участка расхождение падает до 1 м².
+_WGS_A = 6378137.0
+_WGS_E2 = 0.00669437999014
 
 
 @dataclass
@@ -87,11 +90,11 @@ class ManualContour:
         return {"type": "Polygon", "coordinates": rings}
 
     def area_sqm(self) -> float:
-        """Площадь внешнего кольца минус дырки, на сфере."""
+        """Площадь внешнего кольца минус дырки."""
         if not self.rings:
             return 0.0
-        return (_spherical_area(self.rings[0])
-                - sum(_spherical_area(r) for r in self.rings[1:]))
+        return (_ring_area_sqm(self.rings[0])
+                - sum(_ring_area_sqm(r) for r in self.rings[1:]))
 
     def centroid(self) -> Optional[tuple[float, float]]:
         if not self.rings or not self.rings[0]:
@@ -105,16 +108,26 @@ class ManualContour:
                 round(sum(p[1] for p in ring) / len(ring), 7))
 
 
-def _spherical_area(ring: list[tuple[float, float]]) -> float:
-    """Площадь кольца [(lon, lat), ...] в м² (формула шнурования на сфере)."""
+def _ring_area_sqm(ring: list[tuple[float, float]]) -> float:
+    """Площадь кольца [(lon, lat), ...] в м².
+
+    Локальная развёртка по радиусам кривизны эллипсоида на широте кольца, затем
+    шнурование. Строгая площадь на эллипсоиде здесь не нужна: кольца — участки
+    в сотни метров, и разница с ней на таком размере уходит в сантиметры, а вот
+    зависимость от геодезической библиотеки была бы вполне реальной.
+    """
     points = list(ring)
     if len(points) >= 2 and points[0] == points[-1]:
         points = points[:-1]
     if len(points) < 3:
         return 0.0
     lat0 = math.radians(sum(p[1] for p in points) / len(points))
-    m_per_deg_lat = _EARTH_R * math.pi / 180.0
-    m_per_deg_lon = m_per_deg_lat * math.cos(lat0)
+    sin2 = math.sin(lat0) ** 2
+    # N — радиус кривизны первого вертикала, M — меридианного сечения.
+    radius_n = _WGS_A / math.sqrt(1.0 - _WGS_E2 * sin2)
+    radius_m = _WGS_A * (1.0 - _WGS_E2) / (1.0 - _WGS_E2 * sin2) ** 1.5
+    m_per_deg_lat = radius_m * math.pi / 180.0
+    m_per_deg_lon = radius_n * math.pi / 180.0 * math.cos(lat0)
     flat = [(lon * m_per_deg_lon, lat * m_per_deg_lat) for lon, lat in points]
     total = 0.0
     for i, (x1, y1) in enumerate(flat):
@@ -181,6 +194,11 @@ def _rings_from_kml_polygon(polygon: ET.Element) -> list[list[tuple[float, float
 def parse_kml_contours(path: Path | str, **defaults) -> list[ManualContour]:
     """KML → ручные контуры. Placemark без КН в подписи пропускается.
 
+    `source` перекрывается через `defaults`: обводка по спутнику («kml») и
+    контур, снятый с кадастровой карты НСПД («nspd»), различаются точностью на
+    два порядка, и при споре с выпиской человек решает по этой подписи. Одно
+    слово «kml» на оба случая делало бы решение угадыванием.
+
     Пропуск намеренно молчаливый в возвращаемом значении и громкий в логе:
     в файле человека почти всегда есть посторонние метки (точки съёмки,
     подписи), и ронять загрузку из-за них незачем.
@@ -200,7 +218,9 @@ def parse_kml_contours(path: Path | str, **defaults) -> list[ManualContour]:
             bucket = by_cad.setdefault(cad, [])
             bucket.append(ManualContour(
                 cad_number=cad, rings=rings, contour_no=len(bucket) + 1,
-                source="kml", source_file=path.name, **defaults))
+                source=defaults.get("source", "kml"),
+                source_file=path.name,
+                **{k: v for k, v in defaults.items() if k != "source"}))
     return [c for bucket in by_cad.values() for c in bucket]
 
 
@@ -237,7 +257,9 @@ def parse_geojson_contours(path: Path | str, **defaults) -> list[ManualContour]:
             bucket = by_cad.setdefault(cad, [])
             bucket.append(ManualContour(
                 cad_number=cad, rings=rings, contour_no=len(bucket) + 1,
-                source="geojson", source_file=path.name, **defaults))
+                source=defaults.get("source", "geojson"),
+                source_file=path.name,
+                **{k: v for k, v in defaults.items() if k != "source"}))
     return [c for bucket in by_cad.values() for c in bucket]
 
 
@@ -435,9 +457,12 @@ def current_contours(conn: sqlite3.Connection,
                      cad_number: Optional[str] = None) -> list[dict]:
     """Какой контур считается текущим по каждому объекту (§9.4)."""
     _geo_db.ensure_schema(conn)
-    columns = ("cad_number", "contour_source", "contour_no", "geom_geojson",
-               "area_computed_sqm", "accuracy_m", "confidence", "land_layout",
-               "source_extract_number", "extract_date")
+    # `manual_source` (миграция 0008) говорит, ЧЕМ снят неегрэновский контур:
+    # обводка по спутнику и контур с кадастровой карты НСПД различаются
+    # точностью на два порядка, и в отчёте это разные строки.
+    columns = ("cad_number", "contour_source", "manual_source", "contour_no",
+               "geom_geojson", "area_computed_sqm", "accuracy_m", "confidence",
+               "land_layout", "source_extract_number", "extract_date")
     sql = ("SELECT " + ", ".join(columns) + " FROM v_object_contour_current"
            + (" WHERE cad_number = ?" if cad_number else "")
            + " ORDER BY cad_number, contour_no")

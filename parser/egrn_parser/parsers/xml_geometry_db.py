@@ -53,6 +53,10 @@ MIGRATION_PATH = _MIGRATIONS_DIR / "0006_egrn_geometry.sql"
 # Геометрия из выписки без неё писаться может, поэтому применяется отдельно и
 # мягко — см. `_apply_migration`.
 MIGRATION_0007_PATH = _MIGRATIONS_DIR / "0007_manual_contours_and_layout.sql"
+# 0008 доводит до потребителя, ЧЕМ снят текущий контур (обводка или НСПД).
+# Пересоздаёт вьюху, поэтому применяется по отсутствию новой колонки, а не
+# по отсутствию самой вьюхи — иначе на уже созданной базе не сработает.
+MIGRATION_0008_PATH = _MIGRATIONS_DIR / "0008_contour_source_label.sql"
 
 
 def _has_table(conn: sqlite3.Connection, name: str) -> bool:
@@ -65,6 +69,14 @@ def _has_table(conn: sqlite3.Connection, name: str) -> bool:
 def _has_column(conn: sqlite3.Connection, table: str, column: str) -> bool:
     return any(row[1] == column
                for row in conn.execute(f'PRAGMA table_info("{table}")'))
+
+
+def _has_view_column(conn: sqlite3.Connection, view: str, column: str) -> bool:
+    """Есть ли колонка во вьюхе. `PRAGMA table_info` работает и для вьюх."""
+    if not _has_table(conn, view):
+        return False
+    return any(row[1] == column
+               for row in conn.execute(f'PRAGMA table_info("{view}")'))
 
 
 def _apply_migration(conn: sqlite3.Connection, path: Path) -> None:
@@ -103,6 +115,8 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
     if not _has_table(conn, "manual_contour") or \
             not _has_column(conn, "egrn_contour", "land_layout"):
         _apply_migration(conn, MIGRATION_0007_PATH)
+    if not _has_view_column(conn, "v_object_contour_current", "manual_source"):
+        _apply_migration(conn, MIGRATION_0008_PATH)
 
 
 def _rows_for(geometry: ExtractGeometry, *, extract_number: Optional[str],

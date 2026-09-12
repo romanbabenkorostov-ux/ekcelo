@@ -166,7 +166,7 @@ def test_zone_resolved_and_wgs84_produced(tmp_path):
     assert geometry.zone_error is None
     rings = geometry.contours[0].to_wgs84_rings(geometry.zone)
     lon, lat = rings[0][0]
-    assert 42.7 < lon < 42.9 and 43.9 < lat < 44.1
+    assert 43.0 < lon < 43.1 and 43.9 < lat < 44.1
 
 
 def test_unknown_zone_keeps_msk_coordinates(tmp_path):
