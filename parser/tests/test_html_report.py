@@ -252,3 +252,121 @@ def test_empty_db_gives_valid_page():
     assert "<!doctype html>" in html
     assert "нет объектов" in html
     connection.close()
+
+
+# --- зоны схлопнуты в общие узлы ------------------------------------------
+
+def _second_object_under_same_zone(conn, tmp_path, cad: str = "26:29:130106:999"):
+    """Второй участок под той же охранной зоной, что и первый."""
+    zone = json.dumps([{"registry_number": "26:29-6.395",
+                        "description": "Охранная зона ЛЭП"}], ensure_ascii=False)
+    conn.execute(
+        "INSERT INTO land_objects VALUES (?, 'Соседний участок', 500.0, "
+        "'Земли населенных пунктов', NULL, NULL, 'актуальные', "
+        "'2020-01-01', ?)", (cad, zone))
+    conn.commit()
+    return cad
+
+
+def test_one_zone_is_one_node_for_many_objects(conn, tmp_path):
+    """Охранная зона накрывает десяток участков — узел у неё один.
+
+    Продублированная по объектам, она превращает граф в веер одинаковых ромбов,
+    из которого не видно главного: какие участки попали под одно ограничение.
+    """
+    second = _second_object_under_same_zone(conn, tmp_path)
+    data = R.build_report_data(conn)
+    zones = [n for n in data["graph"]["nodes"] if n["type"] == "Ограничение (ЗОУИТ)"]
+    assert len(zones) == 1
+    zone = zones[0]
+    assert zone["attrs"]["Объектов под ограничением"] == 2
+    assert CAD in zone["attrs"]["Объекты"] and second in zone["attrs"]["Объекты"]
+
+
+def test_zone_keeps_edge_to_every_object(conn, tmp_path):
+    second = _second_object_under_same_zone(conn, tmp_path)
+    data = R.build_report_data(conn)
+    zone_edges = [e for e in data["graph"]["edges"] if e["kind"] == "restriction"]
+    assert {e["from"] for e in zone_edges} == {f"obj::{CAD}", f"obj::{second}"}
+    assert len({e["to"] for e in zone_edges}) == 1
+
+
+def test_zone_node_grows_with_coverage(conn, tmp_path):
+    """Размер узла несёт смысл «насколько широко ограничение»."""
+    alone = next(n for n in R.build_report_data(conn)["graph"]["nodes"]
+                 if n["type"] == "Ограничение (ЗОУИТ)")
+    _second_object_under_same_zone(conn, tmp_path)
+    shared = next(n for n in R.build_report_data(conn)["graph"]["nodes"]
+                  if n["type"] == "Ограничение (ЗОУИТ)")
+    assert shared["size"] > alone["size"]
+
+
+def test_zone_keeps_the_fullest_description(conn, tmp_path):
+    """Одна зона в разных выписках описана по-разному — берём полное."""
+    conn.execute(
+        "INSERT INTO land_objects VALUES ('26:29:130106:998', NULL, NULL, NULL, "
+        "NULL, NULL, NULL, NULL, ?)",
+        (json.dumps([{"registry_number": "26:29-6.395",
+                      "description": "Охранная зона ЛЭП: запрещается размещение "
+                                     "свалок, посадка деревьев, проезд машин "
+                                     "высотой более 4,5 м"}], ensure_ascii=False),))
+    conn.commit()
+    zone = next(n for n in R.build_report_data(conn)["graph"]["nodes"]
+                if n["type"] == "Ограничение (ЗОУИТ)")
+    assert "проезд машин" in zone["attrs"]["Содержание"]
+
+
+def test_zone_without_registry_number_is_grouped_by_text(conn):
+    """Особые отметки без номера: одинаковый текст — один узел."""
+    text = "Доступ обеспечен посредством смежного участка"
+    for cad in ("26:29:130106:997", "26:29:130106:996"):
+        conn.execute(
+            "INSERT INTO land_objects VALUES (?, NULL, NULL, NULL, NULL, NULL, "
+            "NULL, NULL, ?)",
+            (cad, json.dumps([{"registry_number": None, "description": text}],
+                             ensure_ascii=False)))
+    conn.commit()
+    zones = [n for n in R.build_report_data(conn)["graph"]["nodes"]
+             if n["type"] == "Ограничение (ЗОУИТ)"]
+    grouped = [z for z in zones if z["label"] == "Ограничение"]
+    assert len(grouped) == 1
+    assert grouped[0]["attrs"]["Объектов под ограничением"] == 2
+
+
+# --- улучшение стоит на земле ---------------------------------------------
+
+def test_improvement_is_linked_to_its_land(conn):
+    """Здание и участок — две природы одного объекта недвижимости, не «часть»."""
+    conn.executescript(
+        "CREATE TABLE building_objects (cad_number TEXT PRIMARY KEY, address TEXT,"
+        " area REAL, cadastral_value REAL, lifecycle_status_text TEXT,"
+        " registration_date TEXT, name TEXT, purpose TEXT, object_type TEXT,"
+        " old_numbers TEXT, land_cad_numbers TEXT);")
+    conn.execute(
+        "INSERT INTO building_objects VALUES ('26:29:110104:106', NULL, 1765.9, "
+        "NULL, 'актуальные', '2013-12-20', 'свинарник', 'Нежилое', 'building', "
+        "NULL, ?)", (f"{CAD}; 26:29:130321:13",))
+    conn.commit()
+    data = R.build_report_data(conn)
+    links = [e for e in data["graph"]["edges"] if e["kind"] == "on_land"]
+    assert len(links) == 1, "участок 26:29:130321:13 в отчёт не попал — ребра нет"
+    assert links[0]["from"] == "obj::26:29:110104:106"
+    assert links[0]["to"] == f"obj::{CAD}"
+
+
+def test_link_to_absent_land_is_not_drawn(conn):
+    """Ребро на отсутствующий узел обещает данные, которых нет."""
+    conn.executescript(
+        "CREATE TABLE building_objects (cad_number TEXT PRIMARY KEY, address TEXT,"
+        " area REAL, cadastral_value REAL, lifecycle_status_text TEXT,"
+        " registration_date TEXT, name TEXT, purpose TEXT, object_type TEXT,"
+        " old_numbers TEXT, land_cad_numbers TEXT);")
+    conn.execute(
+        "INSERT INTO building_objects VALUES ('26:29:110104:107', NULL, 100.0, "
+        "NULL, NULL, NULL, NULL, NULL, 'building', NULL, '26:29:999999:1')")
+    conn.commit()
+    data = R.build_report_data(conn)
+    assert not [e for e in data["graph"]["edges"] if e["kind"] == "on_land"]
+    ids = {n["id"] for n in data["graph"]["nodes"]}
+    for edge in data["graph"]["edges"]:
+        assert edge["from"] in ids and edge["to"] in ids

@@ -83,6 +83,8 @@ EDGE_COLORS = {
     "restriction": {"color": "#54278f", "dashes": True},
     "holder": {"color": "#a83a3a", "dashes": False},
     "part": {"color": "#969696", "dashes": True},
+    # Улучшение ↔ земля: не «часть», а две природы одного объекта недвижимости.
+    "on_land": {"color": "#4a8a4a", "dashes": False},
 }
 
 OBJECT_TYPE_RU = {
@@ -197,6 +199,7 @@ def _build_graph(conn: sqlite3.Connection, objects: list[dict]) -> dict:
     edges: list[dict] = []
     seen: set[str] = set()
     categories: dict[str, list[str]] = {}
+    zones: dict[str, dict] = {}
 
     def add_node(node_id: str, label: str, kind: str, type_name: str,
                  tooltip: str, attrs: dict, shape: str = "box",
@@ -285,14 +288,22 @@ def _build_graph(conn: sqlite3.Connection, objects: list[dict]) -> dict:
                     in_category("Правообладатели", holder_id)
                     add_edge(node_id, holder_id, "holder")
 
-        # ЗОУИТ и прочие ограничения объекта
+        # ЗОУИТ и прочие ограничения объекта. Узел — ОДИН НА ЗОНУ, а не на пару
+        # (объект, зона): охранная зона ЛЭП 26:29-6.395 накрывает десяток
+        # участков, и продублированная по объектам она превращает граф в веер
+        # одинаковых ромбов, из которого не видно главного — какие участки
+        # попали под одно и то же ограничение. Ключ узла — реестровый номер
+        # зоны; он и есть её идентификатор в ЕГРН.
         for registry, description in _restriction_items(conn, cad):
-            node_id = f"zone::{registry or description[:30]}"
-            add_node(node_id, registry or "Ограничение", "restriction",
-                     "Ограничение (ЗОУИТ)", description[:400],
-                     {"Реестровый номер": registry, "Содержание": description},
-                     shape="diamond", size=16)
-            in_category("Ограничения (ЗОУИТ)", node_id)
+            key = registry or _zone_fallback_key(description)
+            node_id = f"zone::{key}"
+            zones.setdefault(key, {
+                "registry": registry, "description": description, "objects": []})
+            zones[key]["objects"].append(cad)
+            # Описание одной и той же зоны в разных выписках бывает разной
+            # длины; оставляем самое полное — оно и есть содержание ограничения.
+            if len(description) > len(zones[key]["description"]):
+                zones[key]["description"] = description
             add_edge(f"obj::{cad}", node_id, "restriction")
 
         # части участка (ЧЗУ)
@@ -310,6 +321,35 @@ def _build_graph(conn: sqlite3.Connection, objects: list[dict]) -> dict:
             in_category("Части объекта", node_id)
             add_edge(f"obj::{cad}", node_id, "part")
 
+    # Узлы зон создаются после обхода объектов: только теперь известно, сколько
+    # объектов накрывает каждая и какое описание полнее.
+    for key, zone in zones.items():
+        node_id = f"zone::{key}"
+        label = zone["registry"] or "Ограничение"
+        count = len(zone["objects"])
+        add_node(node_id, label, "restriction", "Ограничение (ЗОУИТ)",
+                 f"{label}\nОбъектов под ограничением: {count}\n"
+                 + zone["description"][:300],
+                 {"Реестровый номер": zone["registry"],
+                  "Объектов под ограничением": count,
+                  "Объекты": ", ".join(sorted(set(zone["objects"]))),
+                  "Содержание": zone["description"]},
+                 # Зона, накрывающая несколько объектов, крупнее: размер здесь
+                 # несёт смысл «насколько широко ограничение», а не украшение.
+                 shape="diamond", size=14 + min(count, 8) * 2)
+        in_category("Ограничения (ЗОУИТ)", node_id)
+
+    # Улучшение стоит на земле — это не «часть», а вторая природа одного
+    # объекта недвижимости (см. obsidian/Decisions/ADR-009). Ребро рисуется
+    # только если участок тоже есть в отчёте: связь на отсутствующий узел
+    # обещает данные, которых нет.
+    known = {item["cad_number"] for item in objects}
+    for item in objects:
+        for land_cad in _land_links(conn, item["cad_number"]):
+            if land_cad in known and land_cad != item["cad_number"]:
+                add_edge(f"obj::{item['cad_number']}", f"obj::{land_cad}",
+                         "on_land", "на участке")
+
     # категории — шапки групп, как в 04_nspd_graph
     for category, members in categories.items():
         node_id = f"cat::{category}"
@@ -324,6 +364,26 @@ def _build_graph(conn: sqlite3.Connection, objects: list[dict]) -> dict:
             add_edge(node_id, member, "category")
 
     return {"nodes": nodes, "edges": edges}
+
+
+def _zone_fallback_key(description: str) -> str:
+    """Ключ зоны без реестрового номера.
+
+    Такие записи в выписках есть — например, «Особые отметки» с текстом
+    ограничения. Ключом становится начало текста: одинаковые формулировки из
+    разных выписок схлопнутся, разные останутся раздельными. Это хуже, чем
+    реестровый номер, но лучше, чем узел на каждую выписку.
+    """
+    return " ".join(description.split())[:60] or "без номера"
+
+
+def _land_links(conn: sqlite3.Connection, cad: str) -> list[str]:
+    """КН участков, на которых стоит улучшение."""
+    rows = _rows(conn, "SELECT land_cad_numbers FROM building_objects "
+                       " WHERE cad_number = ?", cad)
+    if not rows or not rows[0][0]:
+        return []
+    return [c.strip() for c in re.split(r"[;,]", rows[0][0]) if c.strip()]
 
 
 def _restriction_items(conn: sqlite3.Connection, cad: str) -> list[tuple[str, str]]:
