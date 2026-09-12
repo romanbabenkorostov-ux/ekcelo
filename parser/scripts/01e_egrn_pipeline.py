@@ -32,6 +32,8 @@ def main() -> int:
     ap.add_argument("--no-essays", action="store_true", help="Не создавать эссе")
     ap.add_argument("--no-schema-doc", action="store_true",
                     help="Не обновлять описание схемы БД")
+    ap.add_argument("--no-html", action="store_true",
+                    help="Не собирать HTML-отчёт (граф, хронология, эссе)")
     ap.add_argument("--no-parts", action="store_true",
                     help="Не выводить в KML части участка (ЧЗУ)")
     ap.add_argument("--skip-card", action="store_true",
@@ -52,6 +54,7 @@ def main() -> int:
         make_kml=not args.no_kml,
         make_essays=not args.no_essays,
         make_schema_doc=not args.no_schema_doc,
+        make_html=not args.no_html,
         with_parts=not args.no_parts,
         force=args.force,
         skip_card=args.skip_card,

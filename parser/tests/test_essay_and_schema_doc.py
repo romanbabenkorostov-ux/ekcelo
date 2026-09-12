@@ -107,7 +107,10 @@ def test_essay_survives_without_card(tmp_path):
     """База из одной геометрии — валидный случай, эссе не должно падать."""
     text = E.build_essay(_with_geometry(tmp_path), CAD)
     assert text.startswith(f"# Земельный участок {CAD}")
-    assert "Категория земель | —" in text
+    assert "## Границы" in text
+    # Строк без значения в таблице нет вовсе: прочерк заставляет читателя
+    # проверять, не потерялись ли данные.
+    assert "| —" not in text
 
 
 def test_essay_area_is_not_mangled_by_trailing_zero_strip(tmp_path):

@@ -222,12 +222,14 @@ def test_summary_flags_forced_mismatch(conn, tmp_path):
 # --- канон и миграция не должны разъезжаться ------------------------------
 
 def test_canonical_schema_mirrors_migration():
-    """§8 в `schema/egrn_current_schema.sql` обязан совпадать с миграцией 0006.
+    """§8 и §9 в каноне обязаны совпадать с миграциями 0006 и 0007.
 
     Канон объявлен «единым источником правды для Python + Frontend», а DDL
-    физически написан дважды — в миграции и в каноне (так же устроен §7).
+    физически написан дважды — в миграциях и в каноне (так же устроен §7).
     Расхождение обнаружится не здесь, а на фронте через полгода, поэтому оно
-    ловится тестом.
+    ловится тестом. Сравниваются обе миграции разом: 0007 добавляет к §8
+    колонку `land_layout`, и проверка только против 0006 теперь давала бы
+    ложное расхождение.
     """
     repo = Path(__file__).resolve().parents[2]
     canonical = sqlite3.connect(":memory:")
@@ -235,18 +237,21 @@ def test_canonical_schema_mirrors_migration():
     try:
         canonical.executescript(
             (repo / "schema" / "egrn_current_schema.sql").read_text(encoding="utf-8"))
-        migrated.executescript(W.MIGRATION_PATH.read_text(encoding="utf-8"))
+        W.ensure_schema(migrated)
 
-        def columns(connection):
+        def columns_of(connection, table):
             return [(r[1], r[2], r[3], r[5])
-                    for r in connection.execute("PRAGMA table_info(egrn_contour)")]
-
-        assert columns(canonical) == columns(migrated)
+                    for r in connection.execute(f'PRAGMA table_info("{table}")')]
 
         def objects(connection, kind):
             return sorted(r[0] for r in connection.execute(
                 "SELECT name FROM sqlite_master WHERE type=? "
-                "AND (name LIKE '%egrn_contour%' OR name LIKE 'v_egrn%')", (kind,)))
+                "AND (name LIKE '%egrn_contour%' OR name LIKE 'v_egrn%' "
+                "     OR name LIKE '%manual_contour%' OR name LIKE '%contour_conflict%' "
+                "     OR name = 'v_object_contour_current')", (kind,)))
+
+        for table in ("egrn_contour", "manual_contour", "contour_conflict"):
+            assert columns_of(canonical, table) == columns_of(migrated, table), table
 
         assert objects(canonical, "view") == objects(migrated, "view")
         assert objects(canonical, "index") == objects(migrated, "index")

@@ -47,8 +47,12 @@ __all__ = ["ensure_schema", "write_geometry", "MIGRATION_PATH"]
 # Миграция лежит в schema/migrations и является источником правды для DDL.
 # Дублировать её текст здесь нельзя: два определения таблицы расходятся на
 # первой же правке. Путь вычисляется от файла модуля вверх до корня репозитория.
-MIGRATION_PATH = (Path(__file__).resolve().parents[3]
-                  / "schema" / "migrations" / "0006_egrn_geometry.sql")
+_MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "schema" / "migrations"
+MIGRATION_PATH = _MIGRATIONS_DIR / "0006_egrn_geometry.sql"
+# 0007 добавляет ручные контуры, журнал конфликтов и колонку land_layout.
+# Геометрия из выписки без неё писаться может, поэтому применяется отдельно и
+# мягко — см. `_apply_migration`.
+MIGRATION_0007_PATH = _MIGRATIONS_DIR / "0007_manual_contours_and_layout.sql"
 
 
 def _has_table(conn: sqlite3.Connection, name: str) -> bool:
@@ -58,20 +62,47 @@ def _has_table(conn: sqlite3.Connection, name: str) -> bool:
     ).fetchone() is not None
 
 
-def ensure_schema(conn: sqlite3.Connection) -> None:
-    """Применить миграцию 0006, если таблицы §8 ещё нет.
+def _has_column(conn: sqlite3.Connection, table: str, column: str) -> bool:
+    return any(row[1] == column
+               for row in conn.execute(f'PRAGMA table_info("{table}")'))
 
-    DDL читается из файла миграции, а не повторяется строкой в коде: второе
+
+def _apply_migration(conn: sqlite3.Connection, path: Path) -> None:
+    """Применить файл миграции, терпя уже добавленные колонки.
+
+    Миграции проекта написаны на `CREATE ... IF NOT EXISTS` и потому
+    перезапускаемы, но `ALTER TABLE ADD COLUMN` такой формы в SQLite не имеет и
+    на второй прогон падает с «duplicate column name». Разбирать SQL и
+    вычислять, что уже применено, — это писать свой мигратор; здесь достаточно
+    выполнять инструкции по одной и пропускать ровно эту ошибку, а все прочие
+    поднимать как есть.
+    """
+    if not path.exists():
+        raise FileNotFoundError(
+            f"не найдена миграция {path} — проверь, что парсер запущен из "
+            "дерева репозитория")
+    for statement in path.read_text(encoding="utf-8").split(";\n"):
+        if not statement.strip():
+            continue
+        try:
+            conn.execute(statement)
+        except sqlite3.OperationalError as exc:
+            if "duplicate column name" not in str(exc).lower():
+                raise
+    conn.commit()
+
+
+def ensure_schema(conn: sqlite3.Connection) -> None:
+    """Создать схему §8 и §9, если её ещё нет.
+
+    DDL читается из файлов миграций, а не повторяется строкой в коде: второе
     определение той же таблицы разъезжается с первым на ближайшей правке.
     """
-    if _has_table(conn, "egrn_contour"):
-        return
-    if not MIGRATION_PATH.exists():
-        raise FileNotFoundError(
-            f"не найдена миграция {MIGRATION_PATH} — без неё таблицу egrn_contour "
-            "создать нечем; проверь, что парсер запущен из дерева репозитория")
-    conn.executescript(MIGRATION_PATH.read_text(encoding="utf-8"))
-    conn.commit()
+    if not _has_table(conn, "egrn_contour"):
+        _apply_migration(conn, MIGRATION_PATH)
+    if not _has_table(conn, "manual_contour") or \
+            not _has_column(conn, "egrn_contour", "land_layout"):
+        _apply_migration(conn, MIGRATION_0007_PATH)
 
 
 def _rows_for(geometry: ExtractGeometry, *, extract_number: Optional[str],
@@ -84,6 +115,7 @@ def _rows_for(geometry: ExtractGeometry, *, extract_number: Optional[str],
     """
     assert geometry.zone is not None       # проверено вызывающим
     zone = geometry.zone
+    layout = geometry.layout
     rows: list[tuple] = []
 
     def add(contour: Contour, kind: str, contour_no: int) -> None:
@@ -116,6 +148,7 @@ def _rows_for(geometry: ExtractGeometry, *, extract_number: Optional[str],
             extract_number,
             geometry.source_file,
             extract_date,
+            layout,
         ))
 
     for i, contour in enumerate(geometry.contours, 1):
@@ -135,8 +168,8 @@ INSERT INTO egrn_contour
     (cad_number, kind, contour_no, contour_cad, part_number, part_mnemonic,
      geom_geojson, area_computed_sqm, area_declared_sqm, accuracy_m,
      sk_id, msk_zone, centroid_lon, centroid_lat,
-     source, source_extract_number, source_file, extract_date)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     source, source_extract_number, source_file, extract_date, land_layout)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (cad_number, kind, COALESCE(part_number, ''), contour_no)
 DO UPDATE SET
     contour_cad           = excluded.contour_cad,
@@ -156,6 +189,7 @@ DO UPDATE SET
                                      egrn_contour.source_extract_number),
     source_file           = COALESCE(excluded.source_file, egrn_contour.source_file),
     extract_date          = COALESCE(excluded.extract_date, egrn_contour.extract_date),
+    land_layout           = excluded.land_layout,
     captured_at           = datetime('now')
 """
 

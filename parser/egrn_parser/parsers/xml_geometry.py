@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Iterator, Optional
 from xml.etree import ElementTree as ET
 
+from egrn_parser.parsers import land_layout as _land_layout
 from egrn_parser.utils.msk import (
     MSKZone,
     UnknownZoneError,
@@ -233,6 +234,39 @@ class ExtractGeometry:
             computed_sqm=sum(c.area_sqm() for c in self.contours),
             inaccuracy_sqm=self.area_inaccuracy_sqm,
         )
+
+    @property
+    def layout(self) -> str:
+        """Раскладка участка: 'ЗУ' | 'МКУ' | 'ЕЗП'.
+
+        Один кадастровый номер — не обязательно один контур, и различие не
+        косметическое:
+
+          ЗУ  — обычный участок, один контур;
+          МКУ — многоконтурный: контуров несколько, все под одним КН,
+                и они неотделимы друг от друга;
+          ЕЗП — единое землепользование: каждый контур САМ объект учёта и несёт
+                свой кадастровый номер обособленного участка, который можно
+                продать отдельно.
+
+        Признак ЕЗП здесь — собственный КН у контура (`contour_cad`), а не
+        число контуров: многоконтурный ЕЗП и МКУ по числу контуров неотличимы.
+        Тот же приоритет заложен в `land_layout.detect_land_layout`
+        (ADR-005), и расходиться с ним нельзя — иначе два места в системе
+        будут по-разному называть один и тот же участок.
+        """
+        children = [c.cad_number for c in self.contours
+                    if c.cad_number and c.cad_number != self.cad_number]
+        return _land_layout.detect_land_layout(
+            cad_number=self.cad_number,
+            contours_count=len(self.contours) or None,
+            child_cads=children or None)
+
+    @property
+    def child_cad_numbers(self) -> list[str]:
+        """КН обособленных участков ЕЗП. У ЗУ и МКУ — пустой список."""
+        return [c.cad_number for c in self.contours
+                if c.cad_number and c.cad_number != self.cad_number]
 
     def to_geojson(self) -> Optional[dict]:
         """Все контуры участка → GeoJSON MultiPolygon (без ЧЗУ).
