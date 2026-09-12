@@ -136,6 +136,40 @@ class Contour:
         """Кольца → [(lon, lat), ...] для KML/GeoJSON."""
         return [ring_to_wgs84(r.points, zone) for r in self.rings]
 
+    def to_geojson(self, zone: MSKZone) -> dict:
+        """Контур → GeoJSON Geometry (Polygon), кольца замкнуты.
+
+        Замыкание делается здесь, а не при разборе: в выписке замыкающая точка
+        бывает, а бывает нет, и GeoJSON со своей стороны требует её всегда.
+        Портить исходные данные ради формата вывода не нужно.
+        """
+        rings: list[list[list[float]]] = []
+        for ring in self.to_wgs84_rings(zone):
+            pts = [[lon, lat] for lon, lat in ring]
+            if pts and pts[0] != pts[-1]:
+                pts.append(pts[0])
+            rings.append(pts)
+        return {"type": "Polygon", "coordinates": rings}
+
+    def centroid_wgs84(self, zone: MSKZone) -> Optional[tuple[float, float]]:
+        """Центроид внешнего кольца, (lon, lat).
+
+        Среднее вершин, а не центр масс полигона: у кадастрового контура
+        вершины распределены по границе достаточно ровно, а разница между
+        двумя определениями заведомо меньше заявленной погрешности съёмки
+        (0.1-2.5 м). Точка нужна для подписи на карте, а не для геодезии.
+        """
+        outer = self.outer
+        if outer is None:
+            return None
+        pts = self.to_wgs84_rings(zone)[0]
+        if len(pts) >= 2 and pts[0] == pts[-1]:
+            pts = pts[:-1]
+        if not pts:
+            return None
+        return (round(sum(p[0] for p in pts) / len(pts), 7),
+                round(sum(p[1] for p in pts) / len(pts), 7))
+
 
 @dataclass(frozen=True)
 class AreaCheck:
@@ -182,6 +216,12 @@ class ExtractGeometry:
     declared_area_sqm: Optional[float] = None
     area_inaccuracy_sqm: Optional[float] = None
     source_file: Optional[str] = None
+    # Реквизиты документа лежат в том же XML (`details_statement`), и читать их
+    # здесь дешевле, чем заставлять каждого вызывающего разбирать файл второй
+    # раз ради номера выписки. Без них у контура в базе нет ответа на вопрос
+    # «откуда эта граница».
+    extract_number: Optional[str] = None
+    extract_date: Optional[str] = None
 
     @property
     def has_geometry(self) -> bool:
@@ -193,6 +233,18 @@ class ExtractGeometry:
             computed_sqm=sum(c.area_sqm() for c in self.contours),
             inaccuracy_sqm=self.area_inaccuracy_sqm,
         )
+
+    def to_geojson(self) -> Optional[dict]:
+        """Все контуры участка → GeoJSON MultiPolygon (без ЧЗУ).
+
+        Части участка сюда НЕ попадают: они лежат внутри контура, и склеенные
+        с ним в одну геометрию дают площадь лота с двойным учётом. Их отдаёт
+        `parts` отдельно, и в KML они становятся отдельными Placemark.
+        """
+        if not self.contours or self.zone is None:
+            return None
+        polygons = [c.to_geojson(self.zone)["coordinates"] for c in self.contours]
+        return {"type": "MultiPolygon", "coordinates": polygons}
 
 
 # --- обход дерева ---------------------------------------------------------
@@ -329,6 +381,9 @@ def extract_geometry_from_root(root: ET.Element,
                                *, source_file: str | None = None) -> ExtractGeometry:
     """Разобрать уже прочитанное дерево выписки."""
     root_tag = _tag(root)
+    requisites = _kid(root, "details_statement", "group_top_requisites")
+    extract_number = _text(requisites, "registration_number")
+    extract_date = _text(requisites, "date_formation")
 
     record_name = _GEOMETRY_ROOTS.get(root_tag)
     if record_name is None:
@@ -344,11 +399,16 @@ def extract_geometry_from_root(root: ET.Element,
                          if root_tag.startswith("extract_about_property_") else root_tag),
             land_cad_numbers=land_numbers,
             source_file=source_file,
+            extract_number=extract_number,
+            extract_date=extract_date,
         )
 
     record = _kid(root, record_name)
     if record is None:
-        return ExtractGeometry(cad_number=None, object_type="land", source_file=source_file)
+        return ExtractGeometry(cad_number=None, object_type="land",
+                               source_file=source_file,
+                               extract_number=extract_number,
+                               extract_date=extract_date)
 
     contours, sk_id = _read_own_contours(record)
     geometry = ExtractGeometry(
@@ -360,6 +420,8 @@ def extract_geometry_from_root(root: ET.Element,
         declared_area_sqm=_number(record, "params", "area", "value"),
         area_inaccuracy_sqm=_number(record, "params", "area", "inaccuracy"),
         source_file=source_file,
+        extract_number=extract_number,
+        extract_date=extract_date,
     )
 
     if contours:
