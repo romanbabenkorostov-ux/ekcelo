@@ -37,7 +37,7 @@ where = ["."]
 include = ["egrn_parser*"]
 
 [tool.setuptools.package-data]
-"egrn_parser" = ["db/schema.sql"]
+"egrn_parser" = ["db/schema.sql", "templates/*.j2"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

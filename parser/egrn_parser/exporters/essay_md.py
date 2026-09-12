@@ -71,19 +71,55 @@ def _rows(conn: sqlite3.Connection, sql: str, *args) -> list[tuple]:
 
 
 def list_objects(conn: sqlite3.Connection) -> list[str]:
-    """КН, по которым в базе есть геометрия — то есть есть о чём писать."""
-    return [r[0] for r in _rows(
-        conn, "SELECT DISTINCT cad_number FROM egrn_contour ORDER BY cad_number")]
+    """КН, по которым есть о чём писать: геометрия либо карточка объекта.
+
+    Геометрии одной недостаточно: выписка на здание её не содержит вовсе
+    (свойство формата, см. ADR-007), а эссе по зданию нужно не меньше, чем по
+    участку. Поэтому список собирается из трёх источников, с дедупликацией.
+    """
+    found: list[str] = []
+    for sql in ("SELECT DISTINCT cad_number FROM egrn_contour",
+                "SELECT cad_number FROM land_objects",
+                "SELECT cad_number FROM building_objects"):
+        found.extend(r[0] for r in _rows(conn, sql) if r[0])
+    return sorted(set(found))
+
+
+# Карточка объекта лежит в одной из двух таблиц: земля в `land_objects`, всё
+# остальное (здание, помещение, сооружение, ОНС) — в `building_objects`. Набор
+# колонок у них разный, поэтому запрос свой на каждую, а не один «универсальный»
+# с COALESCE по несуществующим полям.
+_LAND_SQL = ("SELECT address, area, land_category, permitted_uses, "
+             "       cadastral_value, lifecycle_status_text, registration_date, "
+             "       NULL, NULL, NULL, NULL "
+             "  FROM land_objects WHERE cad_number = ?")
+_BUILD_SQL = ("SELECT address, area, NULL, NULL, "
+              "       cadastral_value, lifecycle_status_text, registration_date, "
+              "       name, purpose, object_type, old_numbers "
+              "  FROM building_objects WHERE cad_number = ?")
+_FACT_KEYS = ("address", "area", "land_category", "permitted_uses",
+              "cadastral_value", "status", "registration_date",
+              "name", "purpose", "object_type", "old_numbers")
+
+# Как называть объект в заголовке эссе.
+OBJECT_TITLES = {
+    "land": "Земельный участок",
+    "building": "Здание",
+    "room": "Помещение",
+    "construction": "Сооружение",
+    "ons": "Объект незавершённого строительства",
+    "parking": "Машино-место",
+}
 
 
 def _object_facts(conn: sqlite3.Connection, cad: str) -> dict[str, Any]:
-    row = _row(conn,
-               "SELECT address, area, land_category, permitted_uses, "
-               "       cadastral_value, lifecycle_status_text, registration_date "
-               "  FROM land_objects WHERE cad_number = ?", cad)
-    keys = ("address", "area", "land_category", "permitted_uses",
-            "cadastral_value", "status", "registration_date")
-    return dict(zip(keys, row)) if row else {}
+    for sql, kind in ((_LAND_SQL, "land"), (_BUILD_SQL, None)):
+        row = _row(conn, sql, cad)
+        if row:
+            facts = dict(zip(_FACT_KEYS, row))
+            facts["object_type"] = facts.get("object_type") or kind or "building"
+            return facts
+    return {}
 
 
 def _summary(conn: sqlite3.Connection, cad: str) -> dict[str, Any]:
@@ -96,39 +132,70 @@ def _summary(conn: sqlite3.Connection, cad: str) -> dict[str, Any]:
     return dict(zip(keys, row)) if row else {}
 
 
+def _extract_requisites(conn: sqlite3.Connection, cad: str,
+                        summary: dict) -> tuple[Optional[str], Optional[str]]:
+    """Номер и дата выписки.
+
+    У объекта с геометрией они уже лежат в §8. У здания геометрии нет вовсе, но
+    выписка была — её реквизиты хранит таблица `extracts`. Без этого шага эссе
+    по зданию печатало «Выписка: — от —», хотя документ в базе есть.
+    """
+    if summary.get("extract_number") or summary.get("extract_date"):
+        return summary.get("extract_number"), summary.get("extract_date")
+    row = _row(conn, "SELECT extract_number, extract_date FROM extracts "
+                     " WHERE cad_number = ? ORDER BY extract_date DESC LIMIT 1", cad)
+    return (row[0], row[1]) if row else (None, None)
+
+
 def _header(cad: str, facts: dict, summary: dict) -> list[str]:
-    lines = [f"# Земельный участок {cad}", ""]
+    title = OBJECT_TITLES.get(facts.get("object_type") or "land", "Объект недвижимости")
+    lines = [f"# {title} {cad}", ""]
+    if facts.get("name"):
+        lines += [f"*{facts['name']}*", ""]
     if facts.get("address"):
         lines += [f"**Адрес:** {facts['address']}", ""]
-    lines += [
-        f"**Выписка:** {summary.get('extract_number') or '—'}"
-        f" от {summary.get('extract_date') or '—'}",
-        "",
-    ]
+    number, day = summary.get("_extract_number"), summary.get("_extract_date")
+    if number or day:
+        lines += [f"**Выписка:** {number or '—'} от {day or '—'}", ""]
     return lines
 
 
 def _characteristics(facts: dict, summary: dict) -> list[str]:
+    """Таблица характеристик. Строки без значения не выводятся вовсе.
+
+    У здания нет категории земель, у участка — назначения; печатать их с
+    прочерком значит заставлять читателя проверять, не потерялись ли данные.
+    """
     declared = facts.get("area") or summary.get("area_declared")
-    return [
-        "## Характеристики по выписке",
-        "",
-        "| Показатель | Значение |",
-        "|---|---|",
-        f"| Площадь | {_num(declared, 0)} кв.м |",
-        f"| Категория земель | {facts.get('land_category') or '—'} |",
-        f"| Разрешённое использование | {facts.get('permitted_uses') or '—'} |",
-        f"| Кадастровая стоимость | {_money(facts.get('cadastral_value'))} |",
-        f"| Статус сведений | {facts.get('status') or '—'} |",
-        f"| Дата постановки на учёт | {(facts.get('registration_date') or '—')[:10]} |",
-        "",
+    rows = [
+        ("Площадь", f"{_num(declared, 0)} кв.м" if declared else None),
+        ("Назначение", facts.get("purpose")),
+        ("Категория земель", facts.get("land_category")),
+        ("Разрешённое использование", facts.get("permitted_uses")),
+        ("Кадастровая стоимость", _money(facts.get("cadastral_value"))
+         if facts.get("cadastral_value") else None),
+        ("Статус сведений", facts.get("status")),
+        ("Дата постановки на учёт", (facts.get("registration_date") or "")[:10] or None),
+        ("Прежние номера", facts.get("old_numbers")),
     ]
+    visible = [(name, value) for name, value in rows if value]
+    if not visible:
+        return []
+    return (["## Характеристики по выписке", "", "| Показатель | Значение |", "|---|---|"]
+            + [f"| {name} | {value} |" for name, value in visible] + [""])
 
 
 def _borders(conn: sqlite3.Connection, cad: str, summary: dict) -> list[str]:
     """Раздел о границах. Стоит раньше прав — см. преамбулу модуля."""
-    if not summary:
-        return ["## Границы", "", "Геометрия по этому объекту в базе отсутствует.", ""]
+    # Признак «геометрии нет» — отсутствие КОНТУРОВ, а не пустота `summary`:
+    # в него перед вызовом кладутся реквизиты выписки, и проверка на пустой
+    # словарь молча уводила раздел в ветку «геометрия есть», где все значения
+    # None — заголовок печатался, текст исчезал.
+    if not summary.get("contours"):
+        return ["## Границы", "",
+                "Контура по этому объекту в базе нет. Для зданий и помещений это "
+                "штатно: выписка на объект капитального строительства координат "
+                "не содержит — они берутся у земельного участка под ним.", ""]
 
     contours = _rows(conn,
                      "SELECT contour_no, contour_cad, area_computed_sqm, accuracy_m, "
@@ -272,33 +339,110 @@ def _restrictions(conn: sqlite3.Connection, cad: str) -> list[str]:
     return lines
 
 
+# Обязательные колонки `rights` и те, которых в старой базе может не быть.
+# Запрос собирается по факту: одна отсутствующая колонка не должна уносить с
+# собой весь раздел «Права» — раздел молча исчезал бы, и заметить это можно
+# было бы только сверив эссе с выпиской.
+_RIGHT_REQUIRED = ("right_type", "right_number", "right_date", "right_category")
+_RIGHT_OPTIONAL = ("beneficiary_name", "beneficiary_inn", "basis")
+
+
+def _right_rows(conn: sqlite3.Connection, cad: str) -> list[dict]:
+    try:
+        present = {r[1] for r in conn.execute("PRAGMA table_info(rights)")}
+    except sqlite3.OperationalError:
+        return []
+    if not present:
+        return []
+    columns = [c for c in _RIGHT_REQUIRED + _RIGHT_OPTIONAL if c in present]
+    if "right_type" not in columns:
+        return []
+    order = "right_category, right_date" if "right_category" in present else "right_date"
+    rows = _rows(conn, f"SELECT {', '.join(columns)} FROM rights "
+                       f" WHERE object_key_value = ? AND is_active = 1 "
+                       f" ORDER BY {order}", cad)
+    return [dict(zip(columns, row)) for row in rows]
+
+
+def _beneficiary(name: Optional[str], inn: Optional[str]) -> Optional[str]:
+    """Кто выгодоприобретатель обременения.
+
+    Юридические лица называются: они публичны по ЕГРЮЛ, и без них обременение
+    нечитаемо («в пользу кого залог?»). Поле в базе часто хранит слипшуюся
+    строку с ИНН, ОГРН, почтой и адресом — в эссе идёт только имя и ИНН,
+    остальное это контактные данные, которым в отчёте не место.
+    """
+    if not name:
+        return f"ИНН {inn}" if inn else None
+    head = name.split(",")[0].strip()
+    if inn and inn in head:
+        head = f"ИНН {inn}"
+    elif inn:
+        head = f"{head} (ИНН {inn})"
+    return head or None
+
+
 def _rights(conn: sqlite3.Connection, cad: str) -> list[str]:
-    """Права. Физлица не называются — см. преамбулу модуля."""
-    rows = _rows(conn,
-                 "SELECT right_type, right_number, right_date, right_category "
-                 "  FROM rights WHERE object_key_value = ? AND is_active = 1 "
-                 " ORDER BY right_category, right_date", cad)
-    if not rows:
+    """Права. Физлица не называются — см. преамбулу модуля.
+
+    Права и обременения разводятся по разным разделам намеренно: «Собственность»
+    и «Запрещение регистрации» в одной таблице читаются как однородные записи,
+    хотя одна говорит, чей объект, а другая — что с ним нельзя сделать.
+    """
+    owned = [r for r in _right_rows(conn, cad)
+             if (r.get("right_category") or "right") == "right"]
+    if not owned:
         return []
     lines = ["## Права", "",
              "| Вид права | Номер регистрации | Дата |", "|---|---|---|"]
-    for right_type, number, right_date, _category in rows:
-        lines.append(f"| {right_type or '—'} | {number or '—'} | "
-                     f"{(right_date or '—')[:10]} |")
+    for row in owned:
+        lines.append(f"| {row.get('right_type') or '—'} | "
+                     f"{row.get('right_number') or '—'} | "
+                     f"{(row.get('right_date') or '—')[:10]} |")
     lines += ["", "> Сведения о правообладателях-физических лицах в эссе не "
                   "приводятся: это персональные данные.", ""]
     return lines
 
 
+def _encumbrances(conn: sqlite3.Connection, cad: str) -> list[str]:
+    """Обременения и ограничения прав из реестра прав (не путать с ЗОУИТ)."""
+    rows = [r for r in _right_rows(conn, cad)
+            if (r.get("right_category") or "right") in ("encumbrance", "restriction")]
+    if not rows:
+        return []
+    lines = ["## Обременения и ограничения прав", "",
+             f"Зарегистрировано записей: **{len(rows)}**.", ""]
+    for row in rows:
+        head = f"**{row.get('right_type') or 'Обременение'}**"
+        right_date = row.get("right_date")
+        details = [f"№ {row['right_number']}" if row.get("right_number") else None,
+                   f"от {right_date[:10]}" if right_date else None]
+        who = _beneficiary(row.get("beneficiary_name"), row.get("beneficiary_inn"))
+        if who:
+            details.append(f"в пользу: {who}")
+        if row.get("basis"):
+            details.append(f"основание: {row['basis']}")
+        tail = "; ".join(d for d in details if d)
+        lines.append(f"- {head} — {tail}" if tail else f"- {head}")
+    lines.append("")
+    return lines
+
+
 def _sources(summary: dict, cad: str) -> list[str]:
-    files = summary.get("extract_number")
-    return [
-        "## Источник сведений",
-        "",
-        f"Все цифры выше взяты из выписки ЕГРН {files or '—'} "
-        f"от {summary.get('extract_date') or '—'} на объект {cad}. "
-        "Геометрия извлечена из XML-раздела выписки, пересчитана из местной "
-        "системы координат в WGS-84 и сверена по площади с той же выпиской.",
+    number = summary.get("_extract_number")
+    day = summary.get("_extract_date")
+    document = (f"выписки ЕГРН {number}" if number else "выписки ЕГРН")
+    if day:
+        document += f" от {day}"
+    lines = ["## Источник сведений", "",
+             f"Все сведения выше взяты из {document} на объект {cad}."]
+    # Абзац про пересчёт координат пишется только там, где координаты были.
+    # У здания их нет, и обещание «сверено по площади» было бы неправдой.
+    if summary.get("contours"):
+        lines.append(
+            "Геометрия извлечена из XML-раздела выписки, пересчитана из местной "
+            "системы координат в WGS-84 и сверена по площади с той же выпиской.")
+    return lines + [
         "",
         "Эссе сформировано автоматически из базы; оценочных суждений не содержит.",
         "",
@@ -309,6 +453,8 @@ def build_essay(conn: sqlite3.Connection, cad_number: str) -> str:
     """Собрать эссе по одному объекту. Детерминировано: только данные из БД."""
     facts = _object_facts(conn, cad_number)
     summary = _summary(conn, cad_number)
+    number, day = _extract_requisites(conn, cad_number, summary)
+    summary["_extract_number"], summary["_extract_date"] = number, day
     lines: list[str] = []
     lines += _header(cad_number, facts, summary)
     lines += _characteristics(facts, summary)
@@ -316,6 +462,7 @@ def build_essay(conn: sqlite3.Connection, cad_number: str) -> str:
     lines += _parts(conn, cad_number)
     lines += _restrictions(conn, cad_number)
     lines += _rights(conn, cad_number)
+    lines += _encumbrances(conn, cad_number)
     lines += _sources(summary, cad_number)
     return "\n".join(lines)
 

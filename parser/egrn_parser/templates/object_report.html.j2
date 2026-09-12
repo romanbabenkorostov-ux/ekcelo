@@ -1,0 +1,330 @@
+{#
+  object_report.html.j2 — отчёт по объектам недвижимости: граф, хронология, эссе.
+
+  Палитра и форма узлов повторяют 04_nspd_graph_v14.py: один и тот же тип
+  объекта обязан выглядеть одинаково в обоих графах системы.
+
+  Данные передаются в шаблон дважды: развёрнутыми переменными — для разметки,
+  и одним `data_json` — для скриптов. Второе нужно, чтобы кнопка выгрузки
+  отдавала ровно тот текст эссе, который показан на экране, а не собранный
+  заново из DOM.
+#}
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }} — {{ generated_on }}</title>
+{% if vis_src %}<script src="{{ vis_src }}"></script>{% endif %}
+{% if vis_inline %}<script>{{ vis_inline }}</script>{% endif %}
+<style>
+  /* Палитра — дизайн-код Ekcelo: тёплый бежево-коричневый, зелёный для
+     главного действия. Новых цветов шаблон не вводит. */
+  :root {
+    --bg: #f4f1ea; --panel: #ffffff; --ink: #2b2b2b; --muted: #7a7264;
+    --line: #ddd6c8; --brown: #6b5b3e; --brown-hi: #7d6b48;
+    --green: #2e8b57; --green-hi: #37a164; --warn: #c9a227; --bad: #c0392b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.5 "Segoe UI", Arial, sans-serif; }
+  header { padding: 14px 20px; background: var(--brown); color: #fff; }
+  header h1 { margin: 0; font-size: 18px; }
+  header .sub { opacity: .85; font-size: 12px; margin-top: 3px; }
+  nav { display: flex; gap: 2px; padding: 0 20px; background: var(--brown);
+        flex-wrap: wrap; }
+  nav button { border: none; border-radius: 6px 6px 0 0; padding: 9px 16px;
+               background: #8a7a5c; color: #f2ece0; cursor: pointer;
+               font: inherit; }
+  nav button:hover { background: var(--brown-hi); }
+  nav button[aria-selected="true"] { background: var(--bg); color: var(--ink);
+                                     font-weight: 600; }
+  main { padding: 16px 20px 28px; }
+  section[hidden] { display: none !important; }
+  .panel { background: var(--panel); border: 1px solid var(--line);
+           border-radius: 8px; padding: 14px; margin-bottom: 14px; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .btn { background: var(--brown); color: #fff; border: none; border-radius: 6px;
+         padding: 7px 12px; cursor: pointer; font: inherit; }
+  .btn:hover { background: var(--brown-hi); }
+  .btn-main { background: var(--green); }
+  .btn-main:hover { background: var(--green-hi); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+  /* Граф */
+  #graph { height: 66vh; min-height: 380px; border: 1px solid var(--line);
+           border-radius: 8px; background: #fbfaf7; }
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px;
+                 font-size: 12px; }
+  .swatch { width: 13px; height: 13px; border-radius: 3px; display: inline-block;
+            border: 1px solid rgba(0,0,0,.25); }
+  #node-info { margin-top: 10px; }
+  #node-info table { width: 100%; }
+
+  /* Хронология */
+  .timeline { position: relative; padding-left: 132px; }
+  .timeline::before { content: ""; position: absolute; left: 116px; top: 6px;
+                      bottom: 6px; width: 2px; background: var(--line); }
+  .event { position: relative; margin-bottom: 14px; }
+  .event .when { position: absolute; left: -132px; width: 100px;
+                 text-align: right; font-variant-numeric: tabular-nums;
+                 color: var(--muted); font-size: 12px; padding-top: 2px; }
+  .event .dot { position: absolute; left: -21px; top: 5px; width: 11px;
+                height: 11px; border-radius: 50%; border: 2px solid #fff; }
+  .event .what { font-weight: 600; }
+  .event .kind { font-size: 11px; text-transform: uppercase;
+                 letter-spacing: .04em; }
+  .event .detail { color: var(--muted); font-size: 12px; }
+
+  /* Таблицы и эссе */
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { border: 1px solid var(--line); padding: 5px 8px; text-align: left;
+           vertical-align: top; }
+  th { background: #f0ebe0; }
+  .essay h2 { font-size: 19px; margin: 0 0 10px; }
+  .essay h3 { font-size: 15px; margin: 18px 0 6px;
+              border-bottom: 1px solid var(--line); padding-bottom: 3px; }
+  .essay blockquote { margin: 8px 0; padding: 8px 12px; background: #f6f2e9;
+                      border-left: 3px solid var(--warn); color: #5a5347; }
+  .essay code { background: #f0ebe0; padding: 1px 4px; border-radius: 3px; }
+  .empty { color: var(--muted); padding: 22px; text-align: center; }
+  @media (max-width: 640px) {
+    .timeline { padding-left: 0; }
+    .timeline::before { display: none; }
+    .event .when { position: static; width: auto; text-align: left;
+                   display: block; }
+    .event .dot { display: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>{{ title }}</h1>
+  <div class="sub">Сформировано из базы ЕГРН {{ generated_on }} ·
+    объектов {{ objects | length }} ·
+    узлов графа {{ graph.nodes | length }} ·
+    событий {{ timeline | length }}</div>
+</header>
+
+<nav role="tablist">
+  <button role="tab" id="tab-graph" aria-selected="true" aria-controls="panel-graph">
+    Права и ограничения</button>
+  <button role="tab" id="tab-time" aria-selected="false" aria-controls="panel-time">
+    Хронология</button>
+  <button role="tab" id="tab-essay" aria-selected="false" aria-controls="panel-essay">
+    Эссе</button>
+</nav>
+
+<main>
+  <section id="panel-graph" role="tabpanel" aria-labelledby="tab-graph">
+    {% if graph.nodes %}
+    <div id="graph"></div>
+    <div class="legend">
+      {% for name, color in legend_types %}
+      <span><i class="swatch" style="background: {{ color.bg }};
+        border-color: {{ color.border }}"></i>{{ name }}</span>
+      {% endfor %}
+    </div>
+    <div class="panel" id="node-info">
+      <div class="muted">Щёлкните узел, чтобы увидеть его данные.</div>
+    </div>
+    {% else %}
+    <div class="panel empty">В базе нет объектов для графа.</div>
+    {% endif %}
+  </section>
+
+  <section id="panel-time" role="tabpanel" aria-labelledby="tab-time" hidden>
+    {% if timeline %}
+    <div class="panel">
+      <div class="muted">События без даты не показаны: «неизвестно когда» на
+        шкале времени изображается только враньём.</div>
+    </div>
+    <div class="panel">
+      <div class="timeline">
+        {% for event in timeline %}
+        <div class="event" data-cad="{{ event.cad_number }}">
+          <div class="when">{{ event.date }}</div>
+          <div class="dot" style="background: {{ event.color }}"></div>
+          <div class="kind" style="color: {{ event.color }}">{{ event.label }}
+            · {{ event.cad_number }}</div>
+          <div class="what">{{ event.title }}</div>
+          {% if event.detail %}<div class="detail">{{ event.detail }}</div>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% else %}
+    <div class="panel empty">Датированных событий по объектам нет.</div>
+    {% endif %}
+  </section>
+
+  <section id="panel-essay" role="tabpanel" aria-labelledby="tab-essay" hidden>
+    {% if essays %}
+    <div class="panel row">
+      <label for="essay-pick">Объект</label>
+      <select id="essay-pick">
+        {% for essay in essays %}
+        <option value="{{ loop.index0 }}">{{ essay.cad_number }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn btn-main" id="essay-download">Скачать .md</button>
+      <button class="btn" id="essay-copy">Скопировать текст</button>
+      <button class="btn" id="essay-print">Печать</button>
+      <span class="muted" id="essay-status"></span>
+    </div>
+    {% for essay in essays %}
+    <div class="panel essay" data-essay="{{ loop.index0 }}"
+         {% if not loop.first %}hidden{% endif %}>{{ essay.html | safe }}</div>
+    {% endfor %}
+    {% else %}
+    <div class="panel empty">Эссе не сформированы: в базе нет объектов.</div>
+    {% endif %}
+  </section>
+</main>
+
+<script>
+const DATA = {{ data_json | safe }};
+
+/* --- вкладки --- */
+const TABS = [["tab-graph","panel-graph"],["tab-time","panel-time"],
+              ["tab-essay","panel-essay"]];
+let graphDrawn = false;
+function showTab(id) {
+  TABS.forEach(([tab, panel]) => {
+    const active = tab === id;
+    document.getElementById(tab).setAttribute("aria-selected", active);
+    document.getElementById(panel).hidden = !active;
+  });
+  /* Граф строится при первом показе, а не на загрузке страницы: vis-network
+     считает раскладку и на холодном старте это заметная задержка, которую
+     незачем платить тому, кто пришёл читать эссе. */
+  if (id === "tab-graph" && !graphDrawn) { drawGraph(); graphDrawn = true; }
+}
+TABS.forEach(([tab]) => document.getElementById(tab)
+  .addEventListener("click", () => showTab(tab)));
+
+/* --- граф --- */
+function drawGraph() {
+  const holder = document.getElementById("graph");
+  if (!holder || typeof vis === "undefined" || !DATA.graph.nodes.length) {
+    if (holder) holder.innerHTML =
+      '<div class="empty">Библиотека графа недоступна — ' +
+      'откройте файл, собранный с вшитой vis-network.</div>';
+    return;
+  }
+  const nodes = new vis.DataSet(DATA.graph.nodes.map(n => ({
+    id: n.id,
+    label: n.label.length > 34 ? n.label.slice(0, 32) + "…" : n.label,
+    title: n.tooltip,
+    shape: n.shape,
+    size: n.size,
+    color: { background: n.color.bg, border: n.color.border,
+             highlight: { background: n.color.bg, border: "#000" } },
+    /* Подписи крупнее, чем у vis по умолчанию: граф на 40+ узлов ужимается
+       при вписывании в окно, и 12px становятся нечитаемыми. */
+    font: { color: n.color.font, size: n.kind === "category" ? 18 : 15,
+            face: "Segoe UI, Arial, sans-serif", strokeWidth: 0 },
+    borderWidth: n.kind === "category" ? 2 : 1.6,
+    _raw: n
+  })));
+  const edges = new vis.DataSet(DATA.graph.edges.map((e, i) => ({
+    id: "e" + i, from: e.from, to: e.to, label: e.label || undefined,
+    color: { color: e.color, highlight: "#000" },
+    dashes: e.dashes,
+    arrows: e.kind === "category" ? "" : "to",
+    width: e.kind === "category" ? 0.8 : 1.4,
+    font: { size: 10, align: "middle", background: "#fbfaf7" }
+  })));
+  const network = new vis.Network(holder, { nodes, edges }, {
+    physics: { stabilization: { iterations: 220 },
+               barnesHut: { gravitationalConstant: -9000, springLength: 150 } },
+    /* Кнопки навигации включены: граф открывают на ноутбуке без мыши, где
+       зум колесом недоступен, а без зума подписи не прочитать. */
+    interaction: { hover: true, tooltipDelay: 150, navigationButtons: true,
+                   keyboard: { enabled: true, bindToWindow: false } },
+    nodes: { shadow: false },
+    edges: { smooth: { type: "dynamic" } }
+  });
+  network.on("click", params => {
+    const info = document.getElementById("node-info");
+    if (!params.nodes.length) {
+      info.innerHTML = '<div class="muted">Щёлкните узел, чтобы увидеть его данные.</div>';
+      return;
+    }
+    const node = nodes.get(params.nodes[0])._raw;
+    const rows = Object.entries(node.attrs || {})
+      .map(([k, v]) => "<tr><th>" + esc(k) + "</th><td>" + esc(String(v)) + "</td></tr>")
+      .join("");
+    info.innerHTML = "<h3 style='margin:0 0 8px'>" + esc(node.label) + "</h3>" +
+      "<div class='muted' style='margin-bottom:8px'>" + esc(node.type) + "</div>" +
+      (rows ? "<table>" + rows + "</table>"
+            : "<div class='muted'>Дополнительных сведений нет.</div>");
+  });
+}
+function esc(s) { return s.replace(/[&<>]/g, c =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
+
+/* --- эссе --- */
+const picker = document.getElementById("essay-pick");
+function currentEssay() { return DATA.essays[picker ? +picker.value : 0]; }
+function showEssay() {
+  const index = picker ? +picker.value : 0;
+  document.querySelectorAll("[data-essay]").forEach(node => {
+    node.hidden = +node.dataset.essay !== index;
+  });
+}
+if (picker) picker.addEventListener("change", showEssay);
+
+function say(message) {
+  const status = document.getElementById("essay-status");
+  if (!status) return;
+  status.textContent = message;
+  setTimeout(() => { status.textContent = ""; }, 2500);
+}
+
+const download = document.getElementById("essay-download");
+if (download) download.addEventListener("click", () => {
+  /* Отдаётся ИСХОДНЫЙ markdown, а не текст со страницы: из DOM обратно в .md
+     возвращается пересказ вёрстки, а не документ, который система написала. */
+  const essay = currentEssay();
+  const blob = new Blob([essay.markdown], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "Эссе_" + essay.cad_number.replace(/:/g, "-") + "_" +
+                  DATA.generated_on + ".md";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  say("Файл сохранён");
+});
+
+const copy = document.getElementById("essay-copy");
+if (copy) copy.addEventListener("click", async () => {
+  const text = currentEssay().markdown;
+  try {
+    await navigator.clipboard.writeText(text);
+    say("Текст скопирован");
+  } catch (err) {
+    /* Буфер обмена недоступен без защищённого контекста — файл открывают с
+       диска по file://, и это штатный случай, а не ошибка. */
+    const area = document.createElement("textarea");
+    area.value = text;
+    document.body.appendChild(area);
+    area.select();
+    try { document.execCommand("copy"); say("Текст скопирован"); }
+    catch (e) { say("Скопировать не удалось — воспользуйтесь кнопкой «Скачать .md»"); }
+    area.remove();
+  }
+});
+
+const printer = document.getElementById("essay-print");
+if (printer) printer.addEventListener("click", () => window.print());
+
+showEssay();
+showTab("tab-graph");
+</script>
+</body>
+</html>

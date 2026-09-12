@@ -74,6 +74,7 @@ class PipelineResult:
     kml_path: Optional[Path] = None
     essays: list[Path] = field(default_factory=list)
     schema_doc: Optional[Path] = None
+    html_report: Optional[Path] = None
     # Объекты, у которых ручная обводка встретилась с контуром из выписки.
     # Проход их НЕ решает: он обязан их показать (ADR-008).
     conflicts: list[dict] = field(default_factory=list)
@@ -166,13 +167,15 @@ def run_pipeline(source: Path | str, db_path: Path | str, *,
                  make_kml: bool = True,
                  make_essays: bool = True,
                  make_schema_doc: bool = True,
+                 make_html: bool = True,
                  with_parts: bool = True,
                  force: bool = False,
                  skip_card: bool = False,
                  generated_on: Optional[str] = None,
                  on_step: Optional[ProgressFn] = None) -> PipelineResult:
     """Прогнать выписки от файлов до готовых выгрузок."""
-    from egrn_parser.exporters import essay_md, kml_exporter, schema_doc
+    from egrn_parser.exporters import (essay_md, html_report,
+                                       kml_exporter, schema_doc)
 
     say: ProgressFn = on_step or (lambda _msg: None)
     db_path = Path(db_path)
@@ -249,6 +252,15 @@ def run_pipeline(source: Path | str, db_path: Path | str, *,
                     conn, cad, Path(out_dir) / essay_md.essay_filename(cad, day))
                 result.essays.append(path)
             say(f"Эссе: {len(result.essays)}")
+
+        if make_html:
+            # Отчёт собирается ПОСЛЕ эссе: третья вкладка показывает их текст,
+            # и собранный раньше отчёт показал бы вчерашние.
+            path = html_report.export_html_report(
+                conn, Path(out_dir) / html_report.report_filename(None, day),
+                generated_on=day)
+            result.html_report = path
+            say(f"Отчёт HTML: {path.name}")
 
         if make_schema_doc:
             path = schema_doc.export_schema_doc(

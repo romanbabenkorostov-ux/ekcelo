@@ -156,8 +156,10 @@ class RunTab(QWidget):
         self.cb_kml = QCheckBox("Создать KML с контурами")
         self.cb_essays = QCheckBox("Написать эссе по каждому объекту (.md)")
         self.cb_schema = QCheckBox("Обновить описание схемы БД (.md)")
+        self.cb_html = QCheckBox("Собрать HTML-отчёт: граф прав, хронология, эссе")
         self.cb_parts = QCheckBox("Показывать в KML части участка (ЧЗУ)")
-        for box in (self.cb_kml, self.cb_essays, self.cb_schema, self.cb_parts):
+        for box in (self.cb_kml, self.cb_essays, self.cb_html, self.cb_schema,
+                    self.cb_parts):
             box.setChecked(True)
             options_layout.addWidget(box)
         self.cb_force = QCheckBox(
@@ -244,6 +246,7 @@ class RunTab(QWidget):
             make_kml=self.cb_kml.isChecked(),
             make_essays=self.cb_essays.isChecked(),
             make_schema_doc=self.cb_schema.isChecked(),
+            make_html=self.cb_html.isChecked(),
             with_parts=self.cb_parts.isChecked(),
             force=self.cb_force.isChecked())
         worker.signals.step.connect(self._on_step)
@@ -312,10 +315,14 @@ class ResultTab(QWidget):
                                                         if self._result else None))
         self.btn_essay = _button("Открыть эссе выбранного объекта", GREEN_CSS)
         self.btn_essay.clicked.connect(self._open_essay)
+        self.btn_html = _button("Открыть отчёт (граф, хронология, эссе)", GREEN_CSS)
+        self.btn_html.clicked.connect(lambda: self._open(self._result.html_report
+                                                         if self._result else None))
         self.btn_schema = _button("Открыть описание схемы БД")
         self.btn_schema.clicked.connect(lambda: self._open(self._result.schema_doc
                                                            if self._result else None))
-        for button in (self.btn_essay, self.btn_kml, self.btn_schema):
+        for button in (self.btn_html, self.btn_essay, self.btn_kml,
+                       self.btn_schema):
             button.setEnabled(False)
             buttons_layout.addWidget(button)
         buttons_layout.addStretch(1)
@@ -329,6 +336,7 @@ class ResultTab(QWidget):
         self.btn_kml.setEnabled(bool(result.kml_path))
         self.btn_schema.setEnabled(bool(result.schema_doc))
         self.btn_essay.setEnabled(bool(result.essays))
+        self.btn_html.setEnabled(bool(result.html_report))
 
     def reload(self) -> None:
         if not self._db_path or not Path(self._db_path).exists():
