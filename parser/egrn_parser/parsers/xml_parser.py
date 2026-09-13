@@ -524,7 +524,7 @@ def _parse_xml_restrict_record(
         code = ENCUMBRANCE_RU_TO_CODE.get((enc_type_str or "").lower(), "other")
         rec["right_type_code"] = code
 
-    # Категория: restriction если нет бенефициара, encumbrance если есть
+    # Категория: restriction если нет бенефициара, encumbrance если есть.
     holders_e = _find(rec_elem, "right_holders")
     has_defined_holder = False
     if holders_e is not None:
@@ -535,15 +535,34 @@ def _parse_xml_restrict_record(
                     break
     rec["right_category"] = "encumbrance" if has_defined_holder else "restriction"
 
+    # В ЧЬЮ ПОЛЬЗУ ОБРЕМЕНЕНИЕ. Раньше здесь только проверяли, ЕСТЬ ли
+    # правообладатель, а самого его не сохраняли: аренда попадала в базу без
+    # арендатора, и отчёт показывал «объект обременён» без ответа на вопрос
+    # «кем». Разбор тот же, что у записей о правах.
+    holders = []
+    for holder_e in _find_all_recursive(rec_elem, "right_holder"):
+        holder_info = _parse_xml_holder(holder_e)
+        if holder_info:
+            holders.append(holder_info)
+    rec["_holders"] = holders
+
     # Дата регистрации
     rec_info = _find(rec_elem, "record_info")
     date_e = _find_recursive(rec_info, "registration_date") if rec_info is not None else None
     if date_e is not None:
         rec["right_date"] = parse_date_any(_text(date_e))
 
-    # Срок
-    start_e = _find_recursive(enc_data, "start_date") or _find_recursive(enc_data, "starting_date")
-    end_e   = _find_recursive(enc_data, "end_date")
+    # Срок аренды. ВНИМАНИЕ: `elem or other` здесь писать нельзя — элемент без
+    # детей в ElementTree ЛОЖЕН, и цепочка `or` пролистывает найденный
+    # `<start_date>` с датой внутри. Из-за этого начало аренды не доходило до
+    # базы: конец был, начала не было.
+    start_e = None
+    for tag in ("start_date", "starting_date"):
+        found = _find_recursive(enc_data, tag)
+        if found is not None:
+            start_e = found
+            break
+    end_e = _find_recursive(enc_data, "end_date")
     if start_e is not None:
         rec["valid_from"] = parse_date_any(_text(start_e))
     if end_e is not None:

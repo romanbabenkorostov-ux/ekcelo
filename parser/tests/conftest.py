@@ -7,6 +7,10 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+# Корень репозитория: часть тестов импортирует `parser.exporters.etp…` —
+# пакетом от корня, а не от каталога `parser/`, откуда их запускает pytest.
+# Без этой строки три модуля не собирались вовсе: «No module named 'parser'».
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 
 @pytest.fixture

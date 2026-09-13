@@ -1,6 +1,14 @@
 """tests/test_smoke_cli.py — end-to-end smoke ЭТП-экспортёра."""
 from __future__ import annotations
 
+import pytest
+
+# Тесты сверяются с эталонами, где падежи согласованы. Без словаря морфологии
+# (`pymorphy3` — зависимость необязательная, см. exporters/etp/morphology.py)
+# фразы остаются в именительном, и сверка падала бы не по существу, а по
+# отсутствию словаря.
+pytest.importorskip("pymorphy3", reason="нужен словарь морфологии pymorphy3")
+
 import json
 from pathlib import Path
 
