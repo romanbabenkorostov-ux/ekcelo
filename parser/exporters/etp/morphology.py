@@ -30,11 +30,26 @@ Singleton MorphAnalyzer — инициализируется лениво, ~100 
 """
 from __future__ import annotations
 
+import logging
 import re
 from functools import lru_cache
 from typing import Any
 
-import pymorphy3
+log = logging.getLogger(__name__)
+
+# ЗАВИСИМОСТЬ НЕОБЯЗАТЕЛЬНАЯ, И ЭТО НЕ ПОБЛАЖКА. `pymorphy3` тянет словарь на
+# сотню мегабайт и нужен ровно одному делу — согласованию падежей в текстах
+# ЭТП. Жёсткий импорт делал модуль обязательным для ВСЕГО парсера: в окружении
+# без словаря переставали собираться шестнадцать тестовых модулей, ни один из
+# которых склонений не касается, а разбор выписок ЕГРН — тем более.
+#
+# Без словаря фразы возвращаются как есть, в именительном падеже, и об этом
+# один раз пишется в лог. Текст с неверным падежом читается коряво, но остаётся
+# верным по существу; упавший экспорт не оставляет ничего.
+try:
+    import pymorphy3
+except ImportError:                                            # pragma: no cover
+    pymorphy3 = None
 
 
 _CASE_MAP = {
@@ -53,11 +68,24 @@ _SKIP_RE = re.compile(r"^[\d\W_]+$|^[A-ZА-ЯЁ]{2,}$")
 _TOKEN_RE = re.compile(r"(\w+|\s+|[^\w\s]+)", re.UNICODE)
 
 
-_morph: pymorphy3.MorphAnalyzer | None = None
+_morph = None
+_warned = False
 
 
-def _analyzer() -> pymorphy3.MorphAnalyzer:
-    global _morph
+def available() -> bool:
+    """Есть ли словарь морфологии. Вызывающий может спросить заранее."""
+    return pymorphy3 is not None
+
+
+def _analyzer():
+    """Анализатор или None. Инициализация ленивая: ~100 МБ на первый вызов."""
+    global _morph, _warned
+    if pymorphy3 is None:
+        if not _warned:
+            log.warning("pymorphy3 не установлен — падежи не согласуются, "
+                        "фразы выводятся в именительном (pip install pymorphy3)")
+            _warned = True
+        return None
     if _morph is None:
         _morph = pymorphy3.MorphAnalyzer()
     return _morph
@@ -103,6 +131,9 @@ def _inflect_word(word: str, target_case: str) -> str:
     Внешние loc/ins/dat применяются к голове, а зависимые в gen остаются.
     """
     morph = _analyzer()
+    if morph is None:
+        # Словаря нет — слово остаётся как есть, в именительном.
+        return word
     parses = morph.parse(word)
     if not parses:
         return word

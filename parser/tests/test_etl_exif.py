@@ -10,6 +10,11 @@ import json
 import sqlite3
 from pathlib import Path
 
+import pytest
+
+# piexif нужен только этим тестам — они строят настоящие JPEG.
+# Без него модуль не собирался вовсе и ронял сбор всей сессии.
+piexif = pytest.importorskip("piexif")
 import piexif
 import pytest
 from piexif.helper import UserComment
