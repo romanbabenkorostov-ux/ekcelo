@@ -15,7 +15,7 @@
 
 | ID | Контракт | Файл | Эмитент | Потребитель |
 |----|----------|------|---------|-------------|
-| **C1** | KMZ wire (2.12.0) | `docs/CONTRACT_KMZ.md` + `KML_INGESTION_SPEC…v2.10.0.md` | parser (08) | фронт (локаль/скачивание), Google Earth Pro |
+| **C1** | KMZ wire (3.0.0) | `docs/CONTRACT_KMZ.md` + `KML_INGESTION_SPEC…v2.10.0.md` | parser (08) | фронт (локаль/скачивание), Google Earth Pro |
 | **C2** | DB-схема §1–§6 | `contracts/db/` ← `schema/egrn_current_schema.sql` | parser (egrn_parser) | backend (импорт) |
 | **C3** | Bundle | `contracts/bundle/BUNDLE_SPEC.md` + `bundle.schema.json` | parser ⇄ backend | обе (round-trip) |
 | **C4** | REST-API + ViewModel | `contracts/api/openapi.yaml` + `viewmodel.schema.json` | backend | фронт |
@@ -50,7 +50,7 @@ ViewModel описывает объект/лот через **4 характер
 `contracts MAJOR.MINOR.PATCH`. Любое изменение контракта = PR в `contracts/` +
 bump SemVer + запись в `contracts/CHANGELOG.md` + ack доменной команды до кода
 (домены: данные→parser/backend, UI/UX→frontend, кросс→обе + арбитр-владелец).
-KMZ-контракт (C1) сохраняет собственный SemVer (сейчас 2.12.0); пакет ссылается
+KMZ-контракт (C1) сохраняет собственный SemVer (сейчас 3.0.0); пакет ссылается
 на него по pin-SHA, как уже описано в `docs/CONTRACT_KMZ.md` §5.
 
 ## Синхронизация во все три базы
