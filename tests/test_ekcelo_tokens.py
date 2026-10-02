@@ -86,3 +86,25 @@ def test_fixture_for_js_parity(tmp_path: pathlib.Path) -> None:
     fx_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     loaded = json.loads(fx_path.read_text(encoding="utf-8"))
     assert loaded == data
+
+
+# --- v3 (contracts/token/TOKEN_SPEC.md §5) ---------------------------------
+
+V3_VECTOR = "eyJ2IjozLCJwayI6Imh0dHBzOi8vZGlzay55YW5kZXgucnUvZC9BYkNkRWYxMjMiLCJrbXoiOiIv0JrQvtC90YLRg9GA0Ytf0JHQntChLmtteiIsImh0bWwiOiIv0J7RgtGH0ZHRgl_QkdCe0KEuaHRtbCIsIm5hbWUiOiLQkdCe0KEg0J_RgtC40YbQtdCy0L7QtNGB0YLQstC-IiwiZXhwIjoiMjAyNi0xMi0zMSJ9.93avUWqHO9XBXYjP4iQ2gA"
+
+
+def test_v3_matches_spec_vector() -> None:
+    tok = et.issue_v3("https://disk.yandex.ru/d/AbCdEf123", "test-secret-0123456789",
+                      kmz="/Контуры_БОС.kmz", html="/Отчёт_БОС.html",
+                      name="БОС Птицеводство", exp="2026-12-31")
+    assert tok == V3_VECTOR
+    assert et.verify_v3(tok, "test-secret-0123456789")["kmz"] == "/Контуры_БОС.kmz"
+    assert et.verify_v3(tok, "другой-секрет-0123456789") is None
+    assert et.decode(tok) is None  # v2-декодер v3 не принимает
+
+
+def test_v3_needs_secret_and_path() -> None:
+    with pytest.raises(ValueError):
+        et.issue_v3("https://disk.yandex.ru/d/x", "короткий", kmz="/a.kmz")
+    with pytest.raises(ValueError):
+        et.issue_v3("https://disk.yandex.ru/d/x", "test-secret-0123456789")

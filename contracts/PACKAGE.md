@@ -11,7 +11,7 @@
 
 ---
 
-## Состав (6 контрактов)
+## Состав (7 контрактов)
 
 | ID | Контракт | Файл | Эмитент | Потребитель |
 |----|----------|------|---------|-------------|
@@ -21,6 +21,7 @@
 | **C4** | REST-API + ViewModel | `contracts/api/openapi.yaml` + `viewmodel.schema.json` | backend | фронт |
 | **C5** | Lot model | `contracts/lot/LOT_SPEC.md` | parser+backend | фронт |
 | **C6** | Роли и шеринг | `contracts/roles/ROLES_SPEC.md` | backend | фронт |
+| **C7** | Токен доставки (v3 с подписью) | `contracts/token/TOKEN_SPEC.md` | `tools/ekcelo_tokens.py`, ekcelo-site `admin-encode.html` | воркер `/token`, лендинг, вьюер |
 
 ## Связующая идея — нормализованная ViewModel
 
