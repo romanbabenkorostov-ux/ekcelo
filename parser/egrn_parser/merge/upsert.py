@@ -331,8 +331,9 @@ def upsert_right(conn: sqlite3.Connection, right: dict) -> Optional[int]:
              lease_partial, lease_partial_measure_type, lease_partial_qty, lease_partial_unit,
              servitude_part_number, servitude_is_public,
              personal_participation_req, claim_records,
-             source_extract_number, source_format, source_file, is_active)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             source_extract_number, source_format, source_file, is_active,
+             restricting_right_number)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 right.get("object_class", "building"),
@@ -365,6 +366,7 @@ def upsert_right(conn: sqlite3.Connection, right: dict) -> Optional[int]:
                 right.get("source_format"),
                 right.get("source_file"),
                 right.get("is_active", 1),
+                right.get("restricting_right_number"),
             ),
         )
         right_id_row = conn.execute("SELECT last_insert_rowid()").fetchone()
