@@ -35,6 +35,7 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: "viewer"
+          retention-days: 1
       - id: deploy
         uses: actions/deploy-pages@v4
       - run: echo "Сайт опубликован → ${{ steps.deploy.outputs.page_url }}"
