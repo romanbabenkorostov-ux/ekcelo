@@ -579,6 +579,19 @@ def _parse_xml_restrict_record(
         ]
         rec["basis"] = ", ".join(p for p in basis_parts if p and not is_absent(p))[:500]
 
+    # Какие права обременение ограничивает: у аренды доли — это арендодатели,
+    # у запрещения — чья доля под ним. Номера через «; ».
+    restricting = []
+    for node in _find_all_recursive(rec_elem, "restricting_right"):
+        num_e = _find(node, "right_number")
+        if num_e is None:
+            num_e = _find(node, "number")
+        num = clean_value(_text(num_e)) if num_e is not None else None
+        if num and num not in restricting:
+            restricting.append(num)
+    if restricting:
+        rec["restricting_right_number"] = "; ".join(restricting)
+
     if not rec.get("right_number"):
         return None
 
@@ -658,6 +671,25 @@ def _parse_xml_right_record(
         if holder_info:
             holders.append(holder_info)
     rec["_holders"] = holders  # временный ключ, убирается при записи в БД
+
+    # Основание права. В выписке «об объекте» его нет, в выписке о переходе
+    # прав — есть; от него зависит, нужно ли согласие супруга при сделке
+    # (личное имущество — дарение, наследство, приватизация, ст. 36 СК).
+    doc_e = _find_recursive(rec_elem, "underlying_document")
+    if doc_e is not None:
+        basis_parts = [
+            _text(_find(doc_e, "document_name")),
+            _text(_find(doc_e, "document_number")),
+            _text(_find(doc_e, "document_date")),
+            _text(_find(doc_e, "document_issuer")),
+        ]
+        rec["basis"] = ", ".join(p for p in basis_parts if p and not is_absent(p))[:500]
+
+    # Заявление о регистрации только при личном участии правообладателя
+    # (ст. 36 218-ФЗ): представитель сделку не зарегистрирует. PDF-разбор
+    # это уже видел, xml — нет.
+    if _find_recursive(rec_elem, "personal_participation") is not None:
+        rec["personal_participation_req"] = 1
 
     # Определить категорию по наличию бенефициара
     if rec["right_category"] == "encumbrance" and holders:
